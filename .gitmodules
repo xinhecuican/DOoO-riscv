@@ -1,0 +1,4 @@
+
+[submodule "utils/difftest"]
+	path = utils/difftest
+	url = https://github.com/xinhecuican/difftest.git

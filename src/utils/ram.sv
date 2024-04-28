@@ -1,0 +1,280 @@
+`include "../defines/defines.svh"
+
+module SPRAM#(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter INIT_VALUE = 0,
+    parameter READ_LATENCY = 0
+)(
+    input logic clk,
+    input logic rst,
+    input logic en,
+    input logic `N(ADDR_WIDTH) addr,
+    input logic we,
+    input logic `N(WIDTH) wdata,
+    output logic `N(WIDTH) rdata
+);
+
+    logic `N(WIDTH) data `N(DEPTH);
+    generate;
+        if(READ_LATENCY == 0)begin
+            assign rdata = data[addr];
+        end
+        else if(READ_LATENCY == 1)begin
+            always_ff @(posedge clk)begin
+                if(en)begin
+                    rdata <= data[addr];
+                end
+            end
+        end
+    endgenerate
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            for(int i=0; i<DEPTH; i++)begin
+                data[i] <= INIT_VALUE;
+            end
+        end
+        else begin
+            if(we)begin
+                data[addr] <= wdata;
+            end
+        end
+    end
+endmodule
+
+module TDPRAM#(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter INIT_VALUE = 0,
+    parameter READ_LATENCY0 = 0,
+    parameter READ_LATENCY1 = 0
+)(
+    input logic clk,
+    input logic rst,
+    input logic en0,
+    input logic en1,
+    input logic `N(ADDR_WIDTH) addr0,
+    input logic `N(ADDR_WIDTH) addr1,
+    input logic we0,
+    input logic we1,
+    input logic `N(WIDTH) wdata0,
+    input logic `N(WIDTH) wdata1,
+    output logic `N(WIDTH) rdata0,
+    output logic `N(WIDTH) rdata1
+);
+
+    logic `N(WIDTH) data `N(DEPTH);
+    generate;
+        if(READ_LATENCY0 == 0)begin
+            assign rdata0 = data[addr0];
+        end
+        else if(READ_LATENCY0 == 1)begin
+            always_ff @(posedge clk)begin
+                if(en0)begin
+                    rdata0 <= data[addr0];
+                end
+
+            end
+        end
+        if(READ_LATENCY1 == 0)begin
+            assign rdata1 = data[addr1];
+        end
+        else if(READ_LATENCY1 == 1)begin
+            always_ff @(posedge clk)begin
+                if(en1)begin
+                    rdata1 <= data[addr1];
+                end
+
+            end
+        end
+    endgenerate
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            for(int i=0; i<DEPTH; i++)begin
+                data[i] <= INIT_VALUE;
+            end
+        end
+        else begin
+            if(we0)begin
+                data[addr0] <= wdata0;
+            end
+            if(we1)begin
+                data[addr1] <= wdata1;
+            end
+        end
+    end
+endmodule
+
+module DPRAM#(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter INIT_VALUE = 0,
+    parameter READ_LATENCY0 = 0,
+    parameter READ_LATENCY1 = 0
+)(
+    input logic clk,
+    input logic rst,
+    input logic en,
+    input logic `N(ADDR_WIDTH) addr0,
+    input logic `N(ADDR_WIDTH) addr1,
+    input logic we,
+    input logic `N(WIDTH) wdata,
+    output logic `N(WIDTH) rdata0,
+    output logic `N(WIDTH) rdata1
+);
+
+    logic `N(WIDTH) data `N(DEPTH);
+    generate;
+        if(READ_LATENCY0 == 0)begin
+            assign rdata0 = data[addr0];
+        end
+        else if(READ_LATENCY0 == 1)begin
+            always_ff @(posedge clk)begin
+                if(en)begin
+                    rdata0 <= data[addr0];
+                end
+
+            end
+        end
+        if(READ_LATENCY1 == 0)begin
+            assign rdata1 = data[addr1];
+        end
+        else if(READ_LATENCY1 == 1)begin
+            always_ff @(posedge clk)begin
+                if(en)begin
+                    rdata1 <= data[addr1];
+                end
+
+            end
+        end
+    endgenerate
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            for(int i=0; i<DEPTH; i++)begin
+                data[i] <= INIT_VALUE;
+            end
+        end
+        else begin
+            if(we)begin
+                data[addr0] <= wdata;
+            end
+        end
+    end
+endmodule
+
+module SDPRAM#(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter INIT_VALUE = 0,
+    parameter READ_LATENCY = 0,
+    parameter BYTE_WRITE = 0,
+    parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
+)(
+    input logic clk,
+    input logic rst,
+    input logic en,
+    input logic `N(ADDR_WIDTH) addr0,
+    input logic `N(ADDR_WIDTH) addr1,
+    input logic [BYTES-1: 0] we,
+    input logic `ARRAY(BYTES, WIDTH / BYTES) wdata,
+    output logic `N(WIDTH) rdata1
+);
+
+    logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
+    generate;
+        if(READ_LATENCY == 0)begin
+            assign rdata1 = data[addr1];
+        end
+        else if(READ_LATENCY == 1)begin
+            always_ff @(posedge clk)begin
+                if(en)begin
+                    rdata1 <= data[addr1];
+                end
+
+            end
+        end
+    endgenerate
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            for(int i=0; i<DEPTH; i++)begin
+                data[i] <= '{default: INIT_VALUE};
+            end
+        end
+        else begin
+            if(|we)begin
+                for(int i=0; i<BYTES; i++)begin
+                    data[addr0][we[i]] <= wdata[i];
+                end
+            end
+        end
+    end
+endmodule
+
+module FIFO#(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter INIT_VALUE = 0,
+    parameter READ_LATENCY = 0
+)(
+    input logic clk,
+    input logic rst,
+    input logic rd_en,
+    input logic wr_en,
+    input logic `N(WIDTH) wdata,
+    output logic `N(WIDTH) rdata,
+    output logic full
+);
+    logic `N(WIDTH) queue `N(DEPTH);
+    logic `N($clog2(DEPTH)) head, tail;
+    logic `N($clog2(DEPTH)+1) remain_count, next_remain_count;
+
+
+    always_comb begin 
+        case({wr_en, rd_en})
+        2'b00, 2'b11: next_remain_count = remain_count;
+        2'b10: next_remain_count = remain_count - 1;
+        2'b01: next_remain_count = remain_count + 1;
+        endcase
+    end
+
+    generate;
+        if(READ_LATENCY == 0)begin
+            assign rdata = data[head];
+        end
+        else if(READ_LATENCY == 1)begin
+            always_ff @(posedge clk)begin
+                rdata <= data[head];
+            end
+        end
+    endgenerate
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            queue <= '{default: INIT_VALUE};
+            head <= 0;
+            tail <= 0;
+            remain_count <= INIT_VALUE;
+            full <= 0;
+        end
+        else begin
+            remain_count <= next_remain_count;
+            full <= next_remain_count == 0;
+            if(wr_en)begin
+                tail <= tail + 1;
+                queue[tail] <= wdata;
+            end
+            if(rd_en)begin
+                head <= head + 1;
+            end
+        end
+    end
+endmodule

@@ -1,0 +1,117 @@
+`include "../../defines/defines.svh"
+
+module HistoryControl(
+    input logic clk,
+    input logic rst,
+    input PredictionResult result,
+    input RedirectCtrl redirect,
+    input logic squash,
+    input SquashInfo squashInfo,
+    output logic `N(`GHIST_WIDTH) ghist_idx,
+    output BranchHistory history
+);
+    logic `N(`GHIST_SIZE) ghist;
+    TageFoldHistory tage_history, tage_input_history, tage_update_history;
+    logic `N(`GHIST_WIDTH) pos;
+    logic `N(`GHIST_WIDTH) we_idx `N(`SLOT_NUM);
+    logic `N(`SLOT_NUM) ghist_we;
+    logic `N(`SLOT_NUM) cond_result;
+    logic prediction_redirect;
+
+    logic [1: 0] squashCondNum;
+    logic [`SLOT_NUM-1: 0] squashCondHist;
+
+    assign prediction_redirect = redirect.s2_redirect | redirect.s3_redirect;
+    assign squashCondNum = {2{squashInfo.btbEntry.en}} & (squashInfo.btbEntry.slots[0].en + squashInfo.btbEntry.tailSlot.en);
+    assign squashCondHist[0] = squashInfo.btbEntry.slots[0].en;
+    assign squashCondHist[1] = squashInfo.btbEntry.tailSlot.en && squashInfo.btbEntry.tailSlot.branch_type == CONDITION;
+    assign ghist_we[0] = (squash & (|squashCondNum)) | 
+                        (~squash & (|result.cond_num));
+    assign ghist_we[1] = (squash & squashCondNum[1]) | 
+                        (~squash & result.cond_num[1]);
+    assign we_idx[0] =  redirect.flush ? squashInfo.redirect_info.ghistIdx : 
+                        prediction_redirect ? result.ghist_idx : pos;
+    assign we_idx[1] = we_idx[0] + 1;
+    assign ghist_idx = redirect.flush ? squashInfo.redirect_info.ghistIdx : 
+                       prediction_redirect ? result.cond_num + result.ghist_idx : pos;
+    assign cond_result = squash ? squashCondHist : result.cond_history;
+    assign tage_input_history = redirect.flush ? squashInfo.redirect_info.tage_history :
+                           prediction_redirect ? result.redirect_info.tage_history : tage_history;
+generate;
+    for(genvar i=0; i<`TAGE_BANK; i++)begin
+        logic [`SLOT_NUM-1: 0] reverse_dir;
+        assign reverse_dir[0] = ghist[ghist_idx-tage_hist_length[i]];
+        assign reverse_dir[1] = ghist[ghist_idx-tage_hist_length[i]+1];
+        CompressHistory #(
+            .COMPRESS_LENGTH(`TAGE_SET_WIDTH),
+            .ORIGIN_LENGTH(tage_hist_length[i])
+        ) compress_tage_index(
+            .origin(tage_input_history.fold_idx[i]),
+            .dir(cond_result),
+            .reverse_dir(reverse_dir),
+            .out(tage_update_history.fold_idx[i])
+        );
+        CompressHistory #(
+            .COMPRESS_LENGTH(`TAGE_TAG_COMPRESS1),
+            .ORIGIN_LENGTH(tage_hist_length[i])
+        ) compress_tage_tag1(
+            .origin(tage_input_history.fold_tag1[i]),
+            .dir(cond_result),
+            .reverse_dir(reverse_dir),
+            .out(tage_update_history.fold_tag1[i])
+        );
+        CompressHistory #(
+            .COMPRESS_LENGTH(`TAGE_TAG_COMPRESS2),
+            .ORIGIN_LENGTH(tage_hist_length[i])
+        ) compress_tage_tag2(
+            .origin(tage_input_history.fold_tag2[i]),
+            .dir(cond_result),
+            .reverse_dir(reverse_dir),
+            .out(tage_update_history.fold_tag2[i])
+        );
+    end
+endgenerate
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            ghist <= 0;
+            pos <= 0;
+            tage_history <= 0;
+        end
+        else begin
+            pos <= squash ? squashCondNum + squashInfo.redirectInfo.ghistIdx :
+                   prediction_redirect ? result.cond_num + result.ghist_idx :
+                   result.en ? result.cond_num + pos : pos;
+            if(|ghist_we | squash)begin
+                tage_history <= tage_update_history;
+            end
+            for(int i=0; i<`SLOT_NUM; i++)begin
+                if(ghist_we[i])begin
+                    ghist[we_idx[i]] <= cond_result;
+                end
+            end
+        end
+    end
+endmodule
+
+module CompressHistory #(
+	parameter COMPRESS_LENGTH=8,
+	parameter ORIGIN_LENGTH=10,
+    parameter HIST_SIZE=1,
+	parameter OUTPUT_POINT=ORIGIN_LENGTH%COMPRESS_LENGTH
+)(
+	inout logic [COMPRESS_LENGTH-1: 0] origin,
+	input logic [HIST_SIZE-1: 0] dir,
+	input logic [HIST_SIZE-1: 0] reverse_dir,
+	output logic [COMPRESS_LENGTH-1: 0] out
+);
+    always_comb begin
+        if(HIST_SIZE == 1)begin
+            out = (origin << 1) ^ dir ^ (reverse_dir << OUTPUT_POINT) ^ origin[0];
+        end
+        else begin
+            out = (origin << 2) ^ dir ^ (reverse_dir << OUTPUT_POINT) ^ origin[1: 0];
+        end
+    end
+	
+endmodule
