@@ -166,16 +166,23 @@ interface PreDecodeIBufferIO;
     logic `N(`ICACHE_BANK) en;
     logic `N($clog2(`ICACHE_BANK)) num;
     logic `ARRAY(`ICACHE_BANK, 32) inst;
+    logic `N(`FSQ_WIDTH) fsqIdx;
 
-    modport predecode(output en, num, inst);
-    modport instbuffer(input en, num, inst);
+    modport predecode(output en, num, inst, fsqIdx);
+    modport instbuffer(input en, num, inst, fsqIdx);
 endinterface
 
-interface IBufferDecodeIO;
-    logic `N(`FETCH_WIDTH) en;
-    logic `ARRAY(`FETCH_WIDTH, 32) inst;
+interface IfuBackendIO;
+    FetchBundle fetchBundle;
 
-    modport instbuffer(output en, inst);
+    modport ifu(output fetchBundle);
+    modport backend(input fetchBundle);
 endinterface
 
+interface DecodeRenameIO;
+    OPBundle `N(`FETCH_WIDTH) opBundles;
+
+    modport decode(output opBundles);
+    modport rename(input opBundles);
+endinterface
 `endif

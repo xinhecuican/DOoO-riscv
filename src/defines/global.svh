@@ -93,4 +93,5 @@ typedef enum logic [1: 0] {
 
 `define FETCH_WIDTH 4
 `define FETCH_WIDTH_LOG $clog2(`FETCH_WIDTH)
+
 `endif

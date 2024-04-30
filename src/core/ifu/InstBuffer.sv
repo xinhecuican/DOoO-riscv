@@ -4,7 +4,7 @@ module InstBuffer (
     input logic clk,
     input logic rst,
     PreDecodeIBufferIO.instbuffer pd_ibuffer_io,
-    IBufferDecodeIO.instbuffer ibuffer_decode_io,
+    output FetchBundle fetchBundle,
     output logic full
 );
     typedef struct {
@@ -40,11 +40,11 @@ module InstBuffer (
                             out_en_shift[`INST_BUFFER_BANK_NUM * 2 - 1: `INST_BUFFER_BANK_NUM];
     generate;
         for(genvar i=0; i<`INST_BUFFER_BANK_NUM; i++)begin
-            InstBufferBank u_InstBufferBank(
+            InstBufferBank #(`FSQ_WIDTH+32) u_InstBufferBank(
                 .clk   (clk   ),
                 .rst   (rst   ),
                 .we    (ibuf[i].we    ),
-                .din   (ibuf[i].din   ),
+                .din   (ibuf[i].wdata   ),
                 .waddr (ibuf[i].windex ),
                 .raddr (ibuf[i].rindex ),
                 .dout  (ibuf[i].rdata  )
@@ -52,12 +52,14 @@ module InstBuffer (
         end
         for(genvar j=0; j<`INST_BUFFER_BANK_NUM; j++)begin
             assign ibuf[j].we = inst_buffer_we[j];
+            assign ibuf[j].wdata = {pd_ibuffer_io.fsqIdx, pd_ibuffer_io.inst[j]};
         end
         for(genvar i=0; i<`FETCH_WIDTH; i++)begin
-            assign ibuffer_decode_io.inst[i] = ibuf[head+i].rdata;
+            assign fetchBundle.inst[i] = ibuf[head+i].rdata[31: 0];
+            assign fetchBundle.fsqIdx[i] = ibuf[head+i].rdata[`FSQ_WIDTH+31: 32];
         end
     endgenerate
-    assign ibuffer_decode_io.en = out_en_compose;
+    assign fetchBundle.en = out_en_compose;
 
 
     always_ff @(posedge clk) begin
@@ -65,7 +67,7 @@ module InstBuffer (
             for(int i=0; i<`INST_BUFFER_BANK_SIZE; i++)begin
                 ibuf[i].we <= 0;
                 ibuf[i].rindex <= 0;
-                ibuf[i].wdata <= 0;
+
             end
             current_bank <= 0;
             inst_num <= 0;
@@ -90,16 +92,18 @@ module InstBuffer (
 
 endmodule
 
-module InstBufferBank(
+module InstBufferBank #(
+    parameter WIDTH = 32
+)(
     input logic clk,
     input logic rst,
     input logic we,
-    input logic `DATA_BUS din,
+    input logic `N(WIDTH) din,
     input logic `N(`INST_BUFFER_BANK_WIDTH) waddr,
     input logic `N(`INST_BUFFER_BANK_WIDTH) raddr,
-    output logic `DATA_BUS dout
+    output logic `N(WIDTH) dout
 );
-    logic `DATA_BUS ram `N(`INST_BUFFER_BANK_SIZE);
+    logic `N(WIDTH) ram `N(`INST_BUFFER_BANK_SIZE);
     
     assign dout = ram[raddr];
     always_ff @(posedge clk)begin

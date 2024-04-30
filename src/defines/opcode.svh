@@ -1,69 +1,102 @@
 `ifndef OPCODE_SVH
 `define OPCODE_SVH
 
+`define INTOP_WIDTH 5
+`define MEMOP_WIDTH 4
+`define BRANCHOP_WIDTH 3
+
+// intop
+
+`define INT_ADD     `INTOP_WIDTH'b00000
+`define INT_LUI     `INTOP_WIDTH'b00001
+`define INT_SLT     `INTOP_WIDTH'b00010
+`define INT_XOR     `INTOP_WIDTH'b00100
+`define INT_OR      `INTOP_WIDTH'b00110
+`define INT_AND     `INTOP_WIDTH'b00101
+`define INT_SL      `INTOP_WIDTH'b01000
+`define INT_SRL     `INTOP_WIDTH'b01001
+`define INT_SRA     `INTOP_WIDTH'b01010
+
+// memop
+
+`define MEM_LB      `MEMOP_WIDTH'b0000
+`define MEM_LH      `MEMOP_WIDTH'b0001
+`define MEM_LW      `MEMOP_WIDTH'b0010
+`define MEM_LBU     `MEMOP_WIDTH'b0100
+`define MEM_LHU     `MEMOP_WIDTH'b0101
+`define MEM_SB      `MEMOP_WIDTH'b1000
+`define MEM_SH      `MEMOP_WIDTH'b1001
+`define MEM_SW      `MEMOP_WIDTH'b1010
+
+// branchop
+
+`define BRANCH_JAL  `BRANCHOP_WIDTH'b100
+`define BRANCH_JALR `BRANCHOP_WIDTH'b101
+`define BRANCH_BEQ  `BRANCHOP_WIDTH'b000
+`define BRANCH_BNE  `BRANCHOP_WIDTH'b001
+`define BRANCH_BLT  `BRANCHOP_WIDTH'b010
+`define BRANCH_BGE  `BRANCHOP_WIDTH'b011
+
+
 // opcode
 
-`define OPCODE_LUI 7'b0110111
-`define OPCODE_AUIPC 7'b0010111
-`define OPCODE_JAL 7'b1101111
-`define OPCODE_JALR 7'b1100111
-`define OPCODE_BRANCH 7'b1100011
-`define OPCODE_LOAD 7'b0000011
-`define OPCODE_STORE 7'b0100011
-`define OPCODE_IMM 7'b0010011
-`define OPCODE_OP 7'b0110011
-`define OPCODE_FENCE 7'b0001111
-`define OPCODE_ECALL 7'b1110011
-`define OPCODE_EBREAK 7'b1110011
+`define OPCODE_LUI      7'b0110111
+`define OPCODE_AUIPC    7'b0010111
+`define OPCODE_JAL      7'b1101111
+`define OPCODE_JALR     7'b1100111
+`define OPCODE_BRANCH   7'b1100011
+`define OPCODE_LOAD     7'b0000011
+`define OPCODE_STORE    7'b0100011
+`define OPCODE_IMM      7'b0010011
+`define OPCODE_OP       7'b0110011
+`define OPCODE_FENCE    7'b0001111
+`define OPCODE_SYSTEM   7'b1110011
 
 // funct3
-`define FUNCT_BEQ 3'b000
-`define FUNCT_BNE 3'b001
-`define FUNCT_BLT 3'b100
-`define FUNCT_BGE 3'b101
-`define FUNCT_BLTU 3'b110
-`define FUNCT_BGEU 3'b111
+`define FUNCT_BEQ   3'b000
+`define FUNCT_BNE   3'b001
+`define FUNCT_BLT   3'b100
+`define FUNCT_BGE   3'b101
+`define FUNCT_BLTU  3'b110
+`define FUNCT_BGEU  3'b111
 
-`define FUNCT_LB 3'b000
-`define FUNCT_LH 3'b001
-`define FUNCT_LW 3'b010
-`define FUNCT_LBU 3'b100
-`define FUNCT_LHU 3'b101
-`define FUNCT_SB 3'b000
-`define FUNCT_SH 3'b001
-`define FUNCT_SW 3'b010
+`define FUNCT_LB    3'b000
+`define FUNCT_LH    3'b001
+`define FUNCT_LW    3'b010
+`define FUNCT_LBU   3'b100
+`define FUNCT_LHU   3'b101
+`define FUNCT_SB    3'b000
+`define FUNCT_SH    3'b001
+`define FUNCT_SW    3'b010
 
-`define FUNCT_ADDI 3'b000
-`define FUNCT_SLTI 3'b010
+`define FUNCT_ADDI  3'b000
+`define FUNCT_SLTI  3'b010
 `define FUNCT_SLTIU 3'b011
-`define FUNCT_XORI 3'b100
-`define FUNCT_ORI 3'b110
-`define FUNCT_ANDI 3'b111
-
+`define FUNCT_XORI  3'b100
+`define FUNCT_ORI   3'b110
+`define FUNCT_ANDI  3'b111
 `define FUNCT_SLLI 3'b001
 `define FUNCT_SRLI 3'b101
 `define FUNCT_SRAI 3'b101
 
-`define FUNCT_ADD 3'b000
-`define FUNCT_SUB 3'b000
-`define FUNCT_SLL 3'b001
-`define FUNCT_SLT 3'b010
-`define FUNCT_SLTU 3'b011
-`define FUNCT_XOR 3'b100
-`define FUNCT_SRL 3'b101
-`define FUNCT_SRA 3'b101
-`define FUNCT_OR 3'b110
-`define FUNCT_AND 3'b111
+`define FUNCT_ADD   3'b000
+`define FUNCT_SUB   3'b000
+`define FUNCT_SLL   3'b001
+`define FUNCT_SLT   3'b010
+`define FUNCT_SLTU  3'b011
+`define FUNCT_XOR   3'b100
+`define FUNCT_SRL   3'b101
+`define FUNCT_SRA   3'b101
+`define FUNCT_OR    3'b110
+`define FUNCT_AND   3'b111
 
 
 // funct7
-`define FUNCT7_SRLI 6'b000000
-`define FUNCT7_SRAI 6'b010000
-
-`define FUNCT7_ADD 6'b000000
-`define FUNCT7_SUB 6'b010000
-
-`define FUNCT7_SRL 6'b000000
-`define FUNCT7_SRA 6'b010000
+`define FUNCT7_SRLI 7'b0000000
+`define FUNCT7_SRAI 7'b0100000
+`define FUNCT7_ADD  7'b0000000
+`define FUNCT7_SUB  7'b0100000
+`define FUNCT7_SRL  7'b0000000
+`define FUNCT7_SRA  7'b0100000
 
 `endif

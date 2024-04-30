@@ -91,7 +91,7 @@ module PreDecoder(
     assign jal = op[6] & op[5] & ~op[4] & op[3] & op[2] & op[1] & op[0];
     assign jalr = op[6] & op[5] & ~op[4] & ~op[3] & op[2] & op[1] & op[0];
     assign branch = op[6] & op[5] & ~op[4] & ~op[3] & ~op[2] & op[1] & op[0];
-    assign offset = {{(`VADDR_SIZE-20){inst[31]}}, inst[31], inst[19: 12], inst[20], inst[30: 21], 1'b0};
+    assign offset = {{(`VADDR_SIZE-21){inst[31]}}, inst[31], inst[19: 12], inst[20], inst[30: 21], 1'b0};
     assign pdBundle.branch = jal | jalr | branch;
     assign pdBundle.target = addr + offset;
     assign pdBundle.direct = jal | jalr;

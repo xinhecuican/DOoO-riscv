@@ -1,7 +1,7 @@
 `ifndef BUNDLES_SVH
 `define BUNDLES_SVH
 `include "global.svh"
-
+`include "opcode.svh"
 
 typedef struct packed {
     logic en;
@@ -103,4 +103,28 @@ typedef struct packed {
     RedirectInfo redirectInfo;
     BTBEntry btbEntry;
 } SquashInfo;
+
+typedef struct packed {
+    logic `N(`FETCH_WIDTH) en;
+    logic `ARRAY(`FETCH_WIDTH, `FSQ_WIDTH) fsqIdx;
+    logic `ARRAY(`FETCH_WIDTH, 32) inst;
+} FetchBundle;
+
+typedef struct packed {
+    logic intv; // int valid
+    logic memv;
+    logic branchv;
+    logic sext;
+    logic `N(`INTOP_WIDTH) intop;
+    logic `N(`MEMOP_WIDTH) memop;
+    logic `N(`BRANCHOP_WIDTH) branchop;
+    logic [4: 0] rs1, rs2, rd;
+    logic `N(`XLEN) imm;
+} DecodeInfo;
+
+typedef struct packed {
+    logic en;
+    logic `N(`FSQ_WIDTH) fsqIdx;
+    DecodeInfo decodeInfo;
+} OPBundle;
 `endif
