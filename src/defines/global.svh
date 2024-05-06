@@ -94,4 +94,17 @@ typedef enum logic [1: 0] {
 `define FETCH_WIDTH 4
 `define FETCH_WIDTH_LOG $clog2(`FETCH_WIDTH)
 
+// rename
+`define RAT_PORT (`FETCH_WIDTH)
+`define PREG_SIZE 128
+`define PREG_WIDTH $clog2(`PREG_SIZE)
+`define FREELIST_DEPTH ((`PREG_SIZE-32) / `FETCH_WIDTH)
+
+// rob
+`define ROB_SIZE 128
+`define ROB_WIDTH $clog2(`ROB_SIZE)
+
+// regfile
+`define REGFILE_READ_PORT (`FETCH_WIDTH * 2)
+`define REGFILE_WRITE_PORT 1
 `endif

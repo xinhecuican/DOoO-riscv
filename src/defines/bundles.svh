@@ -115,6 +115,7 @@ typedef struct packed {
     logic memv;
     logic branchv;
     logic sext;
+    logic we;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(`BRANCHOP_WIDTH) branchop;
@@ -125,6 +126,6 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     logic `N(`FSQ_WIDTH) fsqIdx;
-    DecodeInfo decodeInfo;
+    DecodeInfo di;
 } OPBundle;
 `endif

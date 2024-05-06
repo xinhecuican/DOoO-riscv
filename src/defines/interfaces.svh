@@ -180,9 +180,64 @@ interface IfuBackendIO;
 endinterface
 
 interface DecodeRenameIO;
-    OPBundle `N(`FETCH_WIDTH) opBundles;
+    OPBundle `N(`FETCH_WIDTH) op;
 
-    modport decode(output opBundles);
-    modport rename(input opBundles);
+    modport decode(output op);
+    modport rename(input op);
+endinterface
+
+interface RATIO;
+    logic `ARRAY(`RAT_PORT, 5) vreg;
+    logic `ARRAY(`RAT_PORT, `PREG_WIDTH) preg;
+
+    modport rat(input vreg, output preg);
+    modport rename(output vreg, input preg);
+endinterface
+
+interface FreelistIO;
+    logic `N(`FETCH_WIDTH) rdNum;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
+
+    modport freelist(input rdNum, output prd);
+    modport rename(output rdNum, input prd);
+endinterface
+
+interface ROBRenameIO;
+    logic `N(`ROB_WIDTH) robIdx;
+
+    modport rename(input robIdx);
+    modport rob(output robIdx);
+endinterface
+
+interface RenameDisIO;
+    OPBundle `N(`FETCH_WIDTH) op;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs2;
+    logic `N(`FETCH_WIDTH) wen;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
+    logic `ARRAY(`FETCH_WIDTH, `ROB_WIDTH) robIdx;
+
+    modport rename(output op, prs1, prs2, prd, robIdx);
+    modport dis(input op, prs1, prs2, wen, prd, robIdx);
+    modport rob(input op, prd, robIdx);
+endinterface
+
+interface RegfileIO;
+    logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr;
+    logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata;
+
+    modport regfile (input raddr, output rdata);
+endinterface
+
+interface BusyTableIO;
+    logic `N(`FETCH_WIDTH) dis_en;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) dis_rd;
+
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs1;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2;
+    logic `N(`FETCH_WIDTH) rs1_en;
+    logic `N(`FETCH_WIDTH) rs2_en;
+
+    modport busytable(input dis_en, dis_rd, rs1, rs2, output rs1_en, rs2_en);
 endinterface
 `endif

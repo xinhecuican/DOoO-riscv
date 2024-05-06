@@ -25,7 +25,7 @@ module InstBuffer (
     logic `N(`INST_BUFFER_BANK_NUM) inst_buffer_re;
     logic `N(`FETCH_WIDTH) out_en_compose;
 
-    assign data_valid_shift = pd_ibuffer_io.en << current_bank;
+    assign data_valid_shift = pd_ibuffer_io.en << tail[`INST_BUFFER_BANK_WIDTH-1: 0];
     assign inst_buffer_we = data_valid_shift[`INST_BUFFER_BANK_NUM-1: 0] | 
                             data_valid_shift[`INST_BUFFER_BANK_NUM*2-1: `INST_BUFFER_BANK_NUM];
     assign outNum = inst_num >= `FETCH_WIDTH ? `FETCH_WIDTH : inst_num;
@@ -51,12 +51,16 @@ module InstBuffer (
             );
         end
         for(genvar j=0; j<`INST_BUFFER_BANK_NUM; j++)begin
+            logic `N(`INST_BUFFER_BANK_WIDTH) writeIdx;
+            assign writeIdx = tail[`INST_BUFFER_BANK_WIDTH-1: 0] + j;
             assign ibuf[j].we = inst_buffer_we[j];
-            assign ibuf[j].wdata = {pd_ibuffer_io.fsqIdx, pd_ibuffer_io.inst[j]};
+            assign ibuf[j].wdata = {pd_ibuffer_io.fsqIdx, pd_ibuffer_io.inst[writeIdx]};
         end
         for(genvar i=0; i<`FETCH_WIDTH; i++)begin
-            assign fetchBundle.inst[i] = ibuf[head+i].rdata[31: 0];
-            assign fetchBundle.fsqIdx[i] = ibuf[head+i].rdata[`FSQ_WIDTH+31: 32];
+            logic `N(`INST_BUFFER_BANK_WIDTH) readIdx;
+            assign readIdx = head[`INST_BUFFER_BANK_WIDTH-1: 0] + i;
+            assign fetchBundle.inst[i] = ibuf[readIdx].rdata[31: 0];
+            assign fetchBundle.fsqIdx[i] = ibuf[readIdx].rdata[`FSQ_WIDTH+31: 32];
         end
     endgenerate
     assign fetchBundle.en = out_en_compose;
@@ -69,7 +73,6 @@ module InstBuffer (
                 ibuf[i].rindex <= 0;
 
             end
-            current_bank <= 0;
             inst_num <= 0;
         end 
         else begin
@@ -82,7 +85,7 @@ module InstBuffer (
                 end
             end
             if(pd_ibuffer_io.en[0])begin
-                tail <= pd_ibuffer_io.num;
+                tail <= tail + pd_ibuffer_io.num;
                 for(int i=0; i<`INST_BUFFER_BANK_NUM; i++)begin
                     ibuf[i].windex <= ibuf[i].windex + inst_buffer_we[i];
                 end

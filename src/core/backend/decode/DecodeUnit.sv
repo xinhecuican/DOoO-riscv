@@ -29,6 +29,7 @@ module DecodeUnit(
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg}} & inst[19: 15];
     assign info.rs2 = {5{branch | store | opreg}} & inst[24: 20];
     assign info.rd = {5{lui | jalr | jal | load | opimm | opreg}} & inst[11: 7];
+    assign info.we = info.rd != 0;
 
     logic beq, bne, blt, bge, bltu, bgeu;
     assign beq = branch & ~funct3[2] & ~funct3[1] & ~funct3[0];

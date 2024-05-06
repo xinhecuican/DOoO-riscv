@@ -4,7 +4,7 @@ module Decode(
     input logic clk,
     input logic rst,
     input FetchBundle insts,
-    DecodeRenameIO.decode decode_rename_io
+    DecodeRenameIO.decode dec_rename_io
 );
     DecodeInfo decodeInfo `N(`FETCH_WIDTH);
 
@@ -17,15 +17,16 @@ generate;
     end
 endgenerate
 
+    // TODO: Fusion Decoder，在rob中添加一个funsion位表示为两条指令
     always_ff @(posedge clk)begin
         if(rst)begin
-            decode_rename_io.opBundles <= 0;
+            dec_rename_io.op <= 0;
         end
         else begin
             for(int i=0; i<`FETCH_WIDTH; i++)begin
-                decode_rename_io.opBundles[i].en <= insts.en[i];
-                decode_rename_io.opBundles[i].decodeInfo <= decodeInfo[i];
-                decode_rename_io.opBundles[i].fsqIdx = insts.fsqIdx[i];
+                dec_rename_io.op[i].en <= insts.en[i];
+                dec_rename_io.op[i].di <= decodeInfo[i];
+                dec_rename_io.op[i].fsqIdx = insts.fsqIdx[i];
             end
         end
     end
