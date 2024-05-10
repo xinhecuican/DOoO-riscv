@@ -107,4 +107,13 @@ typedef enum logic [1: 0] {
 // regfile
 `define REGFILE_READ_PORT (`FETCH_WIDTH * 2)
 `define REGFILE_WRITE_PORT 1
+
+// dispatch
+`define INT_DISPATCH_SIZE 16
+`define INT_DISPATCH_PORT 4
+`define BUSYTABLE_PORT `INT_DISPATCH_PORT
+
+// issue
+`define INT_ISSUE_SIZE 32
+`define ALU_SIZE 4
 `endif

@@ -211,11 +211,144 @@ module SDPRAM#(
         else begin
             if(|we)begin
                 for(int i=0; i<BYTES; i++)begin
-                    data[addr0][we[i]] <= wdata[i];
+                    data[addr0][i] <= wdata[i];
                 end
             end
         end
     end
+endmodule
+
+module MPRAM #(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter READ_PORT = 4,
+    parameter WRITE_PORT = 4,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter READ_LATENCY = 1,
+    parameter BYTE_WRITE = 0,
+    parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
+)(
+    input logic clk,
+    input logic `N(READ_PORT) en,
+    input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
+    input logic `ARRAY(WRITE_PORT, ADDR_WIDTH) waddr,
+    input logic [WRITE_PORT-1: 0][BYTES-1: 0] we,
+    input logic [WRITE_PORT-1: 0][BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
+    output logic `ARRAY(READ_PORT, WIDTH) rdata
+);
+    logic `ARRAY(BYTES, WIDTH / BYTES) mem `N(DEPTH);
+    generate;
+        if(READ_LATENCY == 0)begin
+            for(genvar i=0; i<READ_PORT; i++)begin
+                assign rdata[i] = mem[raddr[i]];
+            end
+            
+        end
+        else if(READ_LATENCY == 1)begin
+            always_ff @(posedge clk)begin
+                for(int i=0; i<READ_PORT; i++)begin
+                    if(en[i])begin
+                        rdata[i] <= mem[addr[i]];
+                    end
+                end
+
+
+            end
+        end
+    endgenerate
+
+    always_ff @(posedge clk)begin
+        for(int i=0; i<WRITE_PORT; i++)begin
+            for(int j=0; j<BYTES; j++)begin
+                if(we[i][j])begin
+                    mem[waddr[i]][j] <= wdata[i][j];
+                end
+            end
+        end
+    end
+
+endmodule
+
+// multi bank fifo
+module MBFIFO #(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter BANK = 4,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter INIT_VALUE = 0,
+    parameter READ_LATENCY = 0,
+    parameter BYTE_WRITE = 0,
+    parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
+)(
+    input logic clk,
+    input logic rst,
+    input logic `N(BANK) en,
+    input logic `N(BANK) we,
+    input logic `N($clog2(BANK)) enNum,
+    input logic `N($clog2(BANK)) weNum,
+    input logic `ARRAY(BANK, WIDTH) wdata,
+    output logic `ARRAY(BANK, WIDTH) rdata
+);
+    typedef struct {
+        logic en;
+        logic we;
+        logic `N(ADDR_WIDTH) raddr;
+        logic `N(ADDR_WIDTH) waddr;
+        logic `N(WIDTH) wdata;
+        logic `N(WIDTH) rdata;
+    } BankCtrl;
+    BankCtrl ctrl `N(BANK);
+    logic `N($clog2(BANK)) head, tail;
+    logic `N(BANK * 2) shift_head, shift_tail;
+    assign shift_head = en << head;
+    assign shift_tail = we << tail;
+
+generate
+    for(genvar i=0; i<BANK; i++)begin
+        SDPRAM #(
+            .WIDTH(WIDTH),
+            .DEPTH(DEPTH),
+            .READ_LATENCY(READ_LATENCY)
+        ) ram (
+            .clk(clk),
+            .rst(rst),
+            .addr0(ctrl[i].waddr),
+            .addr1(ctrl[i].raddr),
+            .en(ctrl[i].en),
+            .we(ctrl[i].we),
+            .wdata(ctrl[i].wdata),
+            .rdata1(ctrl[i].rdata)
+        );
+        assign ctrl[i].en = shift_head[i] | shift_head[i + BANK];
+        assign ctrl[i].we = shift_tail[i] | shift_tail[i + BANK];
+        assign ctrl[i].wdata = wdata[tail + i];
+        assign rdata[i] = ctrl[head + i].rdata;
+    end
+endgenerate
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            head <= 0;
+            tail <= 0;
+            for(int i=0; i<BANK; i++)begin
+                ctrl[i].raddr <= 0;
+                ctrl[i].waddr <= 0;
+            end
+        end
+        else begin
+            head <= head + enNum;
+            tail <= tail + weNum;
+            for(int i=0; i<BANK; i++)begin
+                if(ctrl[i].en)begin
+                    ctrl[i].raddr <= ctrl[i].raddr + 1;
+                end
+                if(ctrl[i].we)begin
+                    ctrl[i].waddr <= ctrl[i].waddr + 1;
+                end
+            end
+        end
+    end
+
 endmodule
 
 module FIFO#(

@@ -223,10 +223,14 @@ interface RenameDisIO;
 endinterface
 
 interface RegfileIO;
+    logic `N(`REGFILE_READ_PORT) en;
     logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr;
     logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata;
+    logic `N(`REGFILE_WRITE_PORT) we;
+    logic `ARRAY(`REGFILE_WRITE_PORT, `PREG_WIDTH) waddr;
+    logic `ARRAY(`REGFILE_WRITE_PORT, `XLEN) wdata;
 
-    modport regfile (input raddr, output rdata);
+    modport regfile (input raddr, waddr, wdata, en, we, output rdata);
 endinterface
 
 interface BusyTableIO;
@@ -239,5 +243,39 @@ interface BusyTableIO;
     logic `N(`FETCH_WIDTH) rs2_en;
 
     modport busytable(input dis_en, dis_rd, rs1, rs2, output rs1_en, rs2_en);
+endinterface
+
+interface DisIntIssueIO;
+    logic `N(`INT_DISPATCH_PORT) en;
+    IssueStatusBundle `N(`INT_DISPATCH_PORT) status;
+    IntIssueBundle `N(`INT_DISPATCH_PORT) data;
+    logic full;
+
+    modport issue(input en, status, data, output full);
+endinterface
+
+interface IssueRegfileIO #(
+    parameter PORT_SIZE = 4
+);
+    logic `N(PORT_SIZE) en;
+    logic `ARRAY(PORT_SIZE, `PREG_WIDTH) rs1;
+    logic `ARRAY(PORT_SIZE, `PREG_WIDTH) rs2;
+
+    // 1 stage
+    logic `ARRAY(PORT_SIZE, `XLEN) rs1_data;
+    logic `ARRAY(PORT_SIZE, `XLEN) rs2_data;
+
+    modport issue(output en, rs1, rs2, input rs1_data, rs2_data);
+    modport regfile(input en, rs1, rs2, output rs1_data, rs2_data);
+endinterface
+
+interface IssueAluIO;
+    logic `N(`ALU_SIZE) en;
+    logic `ARRAY(`ALU_SIZE, `XLEN) rs1_data;
+    logic `ARRAY(`ALU_SIZE, `XLEN) rs2_data;
+    IntIssueBundle `N(`ALU_SIZE) bundle;
+
+    modport alu (input en, rs1_data, rs2_data, bundle);
+    modport issue (output en, rs1_data, rs2_data, bundle);
 endinterface
 `endif

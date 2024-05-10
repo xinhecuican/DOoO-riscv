@@ -128,4 +128,19 @@ typedef struct packed {
     logic `N(`FSQ_WIDTH) fsqIdx;
     DecodeInfo di;
 } OPBundle;
+
+typedef struct packed {
+    logic rs1v, rs2v;
+    logic `N(`PREG_WIDTH) rs1, rs2;
+} IssueStatusBundle;
+
+typedef struct packed {
+    logic intv;
+    logic branchv;
+    logic sext;
+    logic `N(`INTOP_WIDTH) intop;
+    logic `N(`BRANCHOP_WIDTH) branchop;
+    logic `N(`PREG_WIDTH) rd;
+    logic `N(`XLEN) imm;
+} IntIssueBundle;
 `endif

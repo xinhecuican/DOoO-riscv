@@ -260,6 +260,23 @@ endgenerate
 
 endmodule
 
+
+module PSelector #(
+	parameter RADIX=16
+)(
+	input logic [RADIX-1: 0] in,
+	output logic [RADIX-1: 0] out
+);
+	logic [RADIX-1: 0] reverse;
+	assign reverse[RADIX-1] = 1'b1;
+	for(genvar i=RADIX-2; i>=0; i--)begin
+		assign reverse[i] = ~in[i+1] & reverse[i+1];
+	end
+	for(genvar i=0; i<RADIX; i++)begin
+		assign out[i] = reverse[i] & in[i];
+	end
+endmodule
+
 module Matcher #(
 	parameter WIDTH = 4
 )(
@@ -356,4 +373,55 @@ module PMux2 #(
 	output logic [WIDTH-1: 0] out
 );
 	assign out = selector[0] ? in1 : in2;
+endmodule
+
+module Sort2 #(
+	parameter WIDTH = 4,
+	parameter DATA_WIDTH = 4
+)(
+	input logic [1: 0][WIDTH-1: 0] origin,
+	input logic [1: 0][DATA_WIDTH-1: 0] data_i,
+	output logic [1: 0][WIDTH-1: 0] sort,
+	output logic [1: 0][DATA_WIDTH-1: 0] data_o
+);
+	logic bigger;
+	assign bigger = origin[1] < origin[0];
+	assign sort = bigger ? {origin[1], origin[0]} : origin;
+	assign data_o = bigger ? {data_o[1], data_o[0]} : data_i;
+endmodule
+
+module Sort4 #(
+	parameter WIDTH = 4,
+	parameter DATA_WIDTH = 4
+)(
+	input logic [3: 0][WIDTH-1: 0] origin,
+	input logic [3: 0][DATA_WIDTH-1: 0] data_i,
+	output logic [3: 0][WIDTH-1: 0] sort,
+	output logic [3: 0][DATA_WIDTH-1: 0] data_o
+);
+	logic [1: 0][WIDTH-1: 0] compare1, compare2;
+	logic [1: 0][DATA_WIDTH-1: 0] data1, data2;
+	Sort2 #(WIDTH, DATA_WIDTH) sort1 (origin[3: 2], data_i[3: 2], compare1, data1);
+	Sort2 #(WIDTH, DATA_WIDTH) sort2 (origin[1: 0], data_i[1: 0], compare2, data2);
+	Sort2 #(WIDTH, DATA_WIDTH) sort3 ({compare1[1], compare2[1]}, {data1[1], data2[1]}, sort[3: 2], data_o[3: 2]);
+	Sort2 #(WIDTH, DATA_WIDTH) sort4 ({compare1[0], compare2[0]}, {data1[0], data2[0]}, sort[1: 0], data_o[1: 0]);
+endmodule
+
+module Sort #(
+	parameter RADIX = 2,
+	parameter WIDTH = 4,
+	parameter DATA_WIDTH = 4
+)(
+	input logic [RADIX-1: 0][WIDTH-1: 0] origin,
+	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
+	output logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_o
+);
+	logic [RADIX-1: 0][WIDTH-1: 0] sort;
+generate
+	case(RADIX)
+	2: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
+	4: Sort4 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
+	default: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
+	endcase
+endgenerate
 endmodule
