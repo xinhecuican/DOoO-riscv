@@ -7,13 +7,19 @@ module InstBuffer (
     output FetchBundle fetchBundle,
     output logic full
 );
+    typedef struct packed {
+        FsqIdxInfo fsqInfo;
+        logic [31: 0] inst;
+    } IBufData;
+
     typedef struct {
         logic we;
         logic `N(`INST_BUFFER_BANK_WIDTH) rindex;
         logic `N(`INST_BUFFER_BANK_WIDTH) windex;
-        logic `DATA_BUS wdata;
-        logic `DATA_BUS rdata;
+        IBufData wdata;
+        IBufData rdata;
     } IBufCtrl;
+
     IBufCtrl ibuf `N(`INST_BUFFER_BANK_NUM);
     logic `N(`INST_BUFFER_BANK_WIDTH) current_bank;
     logic [$clog2(`INST_BUFFER_SIZE): 0] inst_num;
@@ -40,7 +46,7 @@ module InstBuffer (
                             out_en_shift[`INST_BUFFER_BANK_NUM * 2 - 1: `INST_BUFFER_BANK_NUM];
     generate;
         for(genvar i=0; i<`INST_BUFFER_BANK_NUM; i++)begin
-            InstBufferBank #(`FSQ_WIDTH+32) u_InstBufferBank(
+            InstBufferBank #($bits(IBufData)) u_InstBufferBank(
                 .clk   (clk   ),
                 .rst   (rst   ),
                 .we    (ibuf[i].we    ),
@@ -54,13 +60,13 @@ module InstBuffer (
             logic `N(`INST_BUFFER_BANK_WIDTH) writeIdx;
             assign writeIdx = tail[`INST_BUFFER_BANK_WIDTH-1: 0] + j;
             assign ibuf[j].we = inst_buffer_we[j];
-            assign ibuf[j].wdata = {pd_ibuffer_io.fsqIdx, pd_ibuffer_io.inst[writeIdx]};
+            assign ibuf[j].wdata = '{fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: j}, inst: pd_ibuffer_io.inst[writeIdx]};
         end
         for(genvar i=0; i<`FETCH_WIDTH; i++)begin
             logic `N(`INST_BUFFER_BANK_WIDTH) readIdx;
             assign readIdx = head[`INST_BUFFER_BANK_WIDTH-1: 0] + i;
-            assign fetchBundle.inst[i] = ibuf[readIdx].rdata[31: 0];
-            assign fetchBundle.fsqIdx[i] = ibuf[readIdx].rdata[`FSQ_WIDTH+31: 32];
+            assign fetchBundle.fsqInfo[i] = ibuf[readIdx].rdata.fsqInfo;
+            assign fetchBundle.inst[i] = ibuf[readIdx].rdata.inst;
         end
     endgenerate
     assign fetchBundle.en = out_en_compose;

@@ -13,12 +13,12 @@ module Dispatch(
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         DecodeInfo di;
-        assign di = rename_dis_io.di[i];
-        assign int_io.en[i] = rename_dis_io.en[i] & 
+        assign di = rename_dis_io.op[i].di;
+        assign int_io.en[i] = rename_dis_io.op[i].en & 
                               (di.intv | di.branchv);
         assign int_io.rs1[i] = di.rs1;
         assign int_io.rs2[i] = di.rs2;
-        assign int_io.data[i] = {di.intv, di.branchv, di.sext, di.intop, di.branchop, di.rd, di.imm};
+        assign int_io.data[i] = {di.intv, di.branchv, di.sext, di.immv, di.intop, di.branchop, di.rd, di.imm, rename_dis_io.op[i].fsqInfo};
     end
 endgenerate
     DispatchQueue #(

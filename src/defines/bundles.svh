@@ -105,8 +105,13 @@ typedef struct packed {
 } SquashInfo;
 
 typedef struct packed {
+    logic `N(`FSQ_WIDTH) idx;
+    logic `N(`PREDICTION_WIDTH) offset;
+} FsqIdxInfo;
+
+typedef struct packed {
     logic `N(`FETCH_WIDTH) en;
-    logic `ARRAY(`FETCH_WIDTH, `FSQ_WIDTH) fsqIdx;
+    FsqIdxInfo `N(`FETCH_WIDTH) fsqInfo;
     logic `ARRAY(`FETCH_WIDTH, 32) inst;
 } FetchBundle;
 
@@ -116,6 +121,7 @@ typedef struct packed {
     logic branchv;
     logic sext;
     logic we;
+    logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(`BRANCHOP_WIDTH) branchop;
@@ -125,7 +131,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
-    logic `N(`FSQ_WIDTH) fsqIdx;
+    FsqIdxInfo fsqInfo;
     DecodeInfo di;
 } OPBundle;
 
@@ -138,9 +144,16 @@ typedef struct packed {
     logic intv;
     logic branchv;
     logic sext;
+    logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;
     logic `N(`PREG_WIDTH) rd;
     logic `N(`XLEN) imm;
+    FsqIdxInfo fsqInfo;
 } IntIssueBundle;
+
+typedef struct packed {
+    logic `N(`FSQ_WIDTH) fsqIdx;
+    logic `N(`PREDICTION_WIDTH) offset;
+} BackendRediectInfo;
 `endif

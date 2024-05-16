@@ -21,8 +21,9 @@
 // BranchPrediction
 `define PREDICT_STAGE 3
 `define BLOCK_SIZE 32 // max bytes for an instruction block/fetch stream
+`define BLOCK_INST_SIZE (`BLOCK_SIZE / 4)
 `define BLOCK_WIDTH $clog2(`BLOCK_SIZE)
-`define PREDICTION_WIDTH $clog2(`BLOCK_SIZE/4)
+`define PREDICTION_WIDTH $clog2(`BLOCK_INST_SIZE)
 `define SLOT_NUM 2
 
 `define GHIST_SIZE 256

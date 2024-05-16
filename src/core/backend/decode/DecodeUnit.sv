@@ -99,6 +99,7 @@ module DecodeUnit(
     assign branch_imm = {{`XLEN-13{inst[31]}}, inst[31], inst[7], inst[30: 25], inst[11: 8], 1'b0};
     assign imm = inst[31: 20];
     assign sext_imm = {{`XLEN-12{inst[31]}}, imm};
+    assign info.immv = lui | jal | beq | bne | blt | bge | slli | srai | srli | lb | lh | lw | addi | slti | xori | ori | andi | lbu | lhu | sltiu | jalr;
     assign info.imm = lui & lui_imm |
                       jal & jal_imm |
                       {beq | bne | blt | bge} & branch_imm |

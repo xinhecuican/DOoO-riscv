@@ -7,19 +7,19 @@ module PreDecode(
     PreDecodeRedirect.predecode pd_redirect,
     PreDecodeIBufferIO.predecode pd_ibuffer_io
 );
-    PreDecodeBundle bundles`N(`ICACHE_BANK);
-    PreDecodeBundle bundles_next `N(`ICACHE_BANK);
-    logic `N(`ICACHE_BANK) en_next;
+    PreDecodeBundle bundles`N(`BLOCK_INST_SIZE);
+    PreDecodeBundle bundles_next `N(`BLOCK_INST_SIZE);
+    logic `N(`BLOCK_INST_SIZE) en_next;
     logic `N(`FSQ_WIDTH) fsqIdx;
     logic `N(`PREDICTION_WIDTH) tailIdx;
     FetchStream stream_next;
     logic `N(`ICACHE_BANK_WIDTH) selectIdx, jumpSelectIdx;
     PreDecodeBundle selectBundle;
-    logic `ARRAY(`ICACHE_BANK, 32) data_next;
-    logic `N($clog2(`ICACHE_BANK)) instNum, instNumNext;
+    logic `ARRAY(`BLOCK_INST_SIZE, 32) data_next;
+    logic `N($clog2(`BLOCK_INST_SIZE)) instNum, instNumNext;
 
     generate;
-        for(genvar i=0; i<`ICACHE_BANK; i++)begin
+        for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
             PreDecoder predecoder(cache_pd_io.en[i],
                                 cache_pd_io.data[i], 
                                 cache_pd_io.start_addr+(i<<2),
@@ -48,7 +48,7 @@ module PreDecode(
         end
     end
 
-    logic `N(`ICACHE_BANK) jump_en;
+    logic `N(`BLOCK_INST_SIZE) jump_en;
     assign pd_redirect.en = (~stream_next.taken & (|jump_en)) |
                             (stream_next.taken & ((bundles_next[tailIdx].branch_type != stream_next.branch_type) |
                             bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)));
@@ -60,17 +60,17 @@ module PreDecode(
     assign pd_redirect.ras_type = bundles_next[selectIdx].ras_type;
     assign pd_redirect.pc = stream_next.start_addr;
 
-    assign pd_ibuffer_io.en = {`ICACHE_BANK{~pd_redirect.en}} & en_next;
+    assign pd_ibuffer_io.en = {`BLOCK_INST_SIZE{~pd_redirect.en}} & en_next;
     assign pd_ibuffer_io.num = ~pd_redirect.en ? instNumNext : 0;
     assign pd_ibuffer_io.inst = data_next;
 
     generate;
-        for(genvar i=0; i<`ICACHE_BANK; i++)begin
+        for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
             assign jump_en[i] = en_next[i] & bundles_next[i].direct;
             assign instNum = instNum + cache_pd_io.en[i];
         end
     endgenerate
-    PEncoder #(`ICACHE_BANK) encoder_jump_idx(jump_en, jumpSelectIdx);
+    PEncoder #(`BLOCK_INST_SIZE) encoder_jump_idx(jump_en, jumpSelectIdx);
 
 endmodule
 

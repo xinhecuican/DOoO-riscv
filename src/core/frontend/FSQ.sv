@@ -5,7 +5,8 @@ module FSQ (
     input logic rst,
     BpuFsqIO.fsq bpu_fsq_io,
     FsqCacheIO.fsq fsq_cache_io,
-    PreDecodeRedirect.redirect pd_redirect
+    PreDecodeRedirect.redirect pd_redirect,
+    FsqBackendIO.fsq fsq_back_io
 );
     logic `N(`FSQ_WIDTH) search_head, retire_head, tail, write_index, tail_n1;
     logic `N(`FSQ_WIDTH) squashIdx;
@@ -16,22 +17,23 @@ module FSQ (
     logic cache_req_ok;
     BTBEntry oldEntry, updateEntry;
     RedirectInfo u_redirectInfo;
+    logic `N(`BLOCK_INST_SIZE) predErrorVec `N(`FSQ_SIZE);
 
     assign tail_n1 = tail + 1;
     assign queue_we = bpu_fsq_io.en;
     assign write_index = bpu_fsq_io.redirect ? bpu_fsq_io.stream_idx : tail;
-    SDPRAM #(
+    MPRAM #(
         .WIDTH($bits(FetchStream)),
-        .DEPTH(`FSQ_SIZE)
+        .DEPTH(`FSQ_SIZE),
+        .READ_PORT(1+`ALU_SIZE)
     ) fsq_queue(
         .clk(clk),
-        .rst(rst),
         .en(1'b1),
         .we(queue_we),
-        .raddr0(tail),
-        .raddr1(search_head),
+        .waddr(tail),
+        .raddr({search_head, fsq_back_io.fsqIdx}),
         .wdata(bpu_fsq_io.prediction.stream),
-        .rdata1(fsq_cache_io.stream)
+        .rdata({fsq_cache_io.stream, fsq_back_io.streams})
     );
 
     SDPRAM #(

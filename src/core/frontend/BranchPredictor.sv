@@ -122,6 +122,7 @@ module S2Control(
     PMux2 #(`PREDICTION_WIDTH) pmux2_br_size(br_takens, 
                                         entry.slots[0].offset,entry.tailSlot.offset,
                                         br_size);
+    assign tail_size = entry.tailSlot.en ? entry.tailSlot.offset : entry.fthAddr;
     assign tail_target = entry.tailSlot.en ? tail_indirect_target : entry.fthAddr + pc;
     assign br_target = {{(`VADDR_SIZE-`JAL_OFFSET){br_offset[`JAL_OFFSET-1]}}, br_offset} + pc;
     assign predict_pc = |br_takens ? br_target : tail_target;

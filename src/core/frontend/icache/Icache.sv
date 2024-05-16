@@ -10,7 +10,7 @@ module ICache(
     typedef struct {
         logic `N(`ICACHE_SET) index1, index2;
         logic `ARRAY(2, `ICACHE_BANK) expand_en;
-        logic `ARRAY(2, `ICACHE_BANK) expand_en_shift;
+        logic `N(`BLOCK_INST_SIZE) expand_en_shift;
         logic `N(`ICACHE_LINE) start_offset;
         logic span;
         logic multi_tag;
@@ -41,7 +41,8 @@ module ICache(
     MainState main_state;
 
     ICacheWayIO way_io `N(`ICACHE_WAY);
-    logic `N(`ICACHE_BANK * 2) expand_en, expand_en_shift;
+    logic `N(`ICACHE_BANK * 2) expand_en;
+    logic `N(`BLOCK_INST_SIZE) expand_en_shift;
     logic `N(`ICACHE_LINE_WIDTH+1) end_addr, start_addr;
     logic `N(`PREDICTION_WIDTH+1) stream_size;
     logic `N(`ICACHE_BANK) start_addr_mask;
@@ -132,11 +133,11 @@ module ICache(
     assign fsq_cache_io.ready = (main_state == IDLE) ||
                                 (main_state == LOOKUP && (!(|cache_miss)));
     assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss))) | miss_data_en}}
-                             & request_buffer.expand_en_shift[0] & request_buffer.expand_en_shift[1];
+                             & request_buffer.expand_en_shift;
     assign cache_pd_io.start_addr = request_buffer.stream.start_addr;
     assign cache_pd_io.fsqIdx = request_buffer.fsqIdx;
     generate;
-        for(genvar bank=0; bank<`ICACHE_BANK; bank++)begin
+        for(genvar bank=0; bank<`BLOCK_INST_SIZE; bank++)begin
             logic `N($clog2(`ICACHE_BANK+1)) bank_index;
             always_ff @(posedge clk)begin
                 bank_index <= bank + fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
@@ -177,8 +178,7 @@ module ICache(
                     request_buffer.index1 <= index;
                     request_buffer.index2 <= indexp1[`ICACHE_SET_WIDTH-1: 0];
                     request_buffer.expand_en <= expand_en;
-                    request_buffer.expand_en_shift[0] <= expand_en_shift & start_addr_mask;
-                    request_buffer.expand_en_shift[1] <= expand_en_shift & (~start_addr_mask);
+                    request_buffer.expand_en_shift <= expand_en_shift;
                     request_buffer.multi_tag <= indexp1[`ICACHE_SET_WIDTH];
                     request_buffer.fsqIdx <= fsq_cache_io.fsqIdx;
                     request_buffer.stream <= fsq_cache_io.stream;
@@ -228,8 +228,7 @@ module ICache(
                     request_buffer.index1 <= index;
                     request_buffer.index2 <= indexp1[`ICACHE_SET_WIDTH-1: 0];
                     request_buffer.expand_en <= expand_en;
-                    request_buffer.expand_en_shift[0] <= expand_en_shift & start_addr_mask;
-                    request_buffer.expand_en_shift[1] <= expand_en_shift & (~start_addr_mask);
+                    request_buffer.expand_en_shift <= expand_en_shift;
                     request_buffer.multi_tag <= indexp1[`ICACHE_SET_WIDTH];
                     request_buffer.fsqIdx <= fsq_cache_io.fsqIdx;
                     request_buffer.stream <= fsq_cache_io.stream;

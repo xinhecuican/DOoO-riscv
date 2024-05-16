@@ -113,9 +113,19 @@ interface FsqCacheIO;
     modport cache (output ready, input en, stream,fsqIdx, abandon, abandonIdx, flush, stall);
 endinterface
 
+interface FsqBackendIO;
+    FetchStream `N(`ALU_SIZE) streams;
+    logic `ARRAY(`ALU_SIZE, `FSQ_WIDTH) fsqIdx;
+
+    BackendRedirectInfo redirect;
+    
+    modport fsq (input fsqIdx, redirect, output streams);
+    modport backend (output fsqIdx, redirect, input streams);
+endinterface
+
 interface CachePreDecodeIO;
-    logic `N(`ICACHE_BANK) en;
-    logic `ARRAY(`ICACHE_BANK, 32) data;
+    logic `N(`BLOCK_INST_SIZE) en;
+    logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
     FetchStream stream;
     logic `N(`FSQ_WIDTH) fsqIdx;
 
@@ -163,9 +173,9 @@ interface PreDecodeRedirect;
 endinterface
 
 interface PreDecodeIBufferIO;
-    logic `N(`ICACHE_BANK) en;
-    logic `N($clog2(`ICACHE_BANK)) num;
-    logic `ARRAY(`ICACHE_BANK, 32) inst;
+    logic `N(`BLOCK_INST_SIZE) en;
+    logic `N($clog2(`BLOCK_INST_SIZE)) num;
+    logic `ARRAY(`BLOCK_INST_SIZE, 32) inst;
     logic `N(`FSQ_WIDTH) fsqIdx;
 
     modport predecode(output en, num, inst, fsqIdx);
@@ -274,8 +284,9 @@ interface IssueAluIO;
     logic `ARRAY(`ALU_SIZE, `XLEN) rs1_data;
     logic `ARRAY(`ALU_SIZE, `XLEN) rs2_data;
     IntIssueBundle `N(`ALU_SIZE) bundle;
+    FetchStream `N(`ALU_SIZE) streams;
 
-    modport alu (input en, rs1_data, rs2_data, bundle);
-    modport issue (output en, rs1_data, rs2_data, bundle);
+    modport alu (input en, rs1_data, rs2_data, bundle, streams);
+    modport issue (output en, rs1_data, rs2_data, bundle, streams);
 endinterface
 `endif
