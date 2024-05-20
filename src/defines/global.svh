@@ -1,6 +1,6 @@
 `ifndef GLOBAL_SVH
 `define GLOBAL_SVH
-`define RV32I
+`include "arch.svh"
 
 `define N(n) [(n)-1: 0]
 `define ARRAY(height, width) [(height-1): 0][(width-1): 0]
@@ -96,7 +96,6 @@ typedef enum logic [1: 0] {
 `define FETCH_WIDTH_LOG $clog2(`FETCH_WIDTH)
 
 // rename
-`define RAT_PORT (`FETCH_WIDTH)
 `define PREG_SIZE 128
 `define PREG_WIDTH $clog2(`PREG_SIZE)
 `define FREELIST_DEPTH ((`PREG_SIZE-32) / `FETCH_WIDTH)
@@ -104,10 +103,15 @@ typedef enum logic [1: 0] {
 // rob
 `define ROB_SIZE 128
 `define ROB_WIDTH $clog2(`ROB_SIZE)
+`define COMMIT_WIDTH 4
+
+// wb
+`define FU_SIZE (`ALU_SIZE)
+`define WB_SIZE 4
 
 // regfile
 `define REGFILE_READ_PORT (`FETCH_WIDTH * 2)
-`define REGFILE_WRITE_PORT 1
+`define REGFILE_WRITE_PORT `WB_SIZE
 
 // dispatch
 `define INT_DISPATCH_SIZE 16

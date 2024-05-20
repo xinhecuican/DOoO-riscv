@@ -3,9 +3,40 @@
 module ALU(
     input logic clk,
     input logic rst,
-    IssueAluIO.alu issue_alu_io
+    IssueAluIO.alu io,
+    input logic valid,
+    output WBData wbData,
+    output BranchUnitRes branchRes
 );
-
+    logic `N(`XLEN) result, branchResult;
+    ALUModel model(
+        .immv(io.bundle.immv),
+        .sext(io.bundle.sext),
+        .imm(io.bundle.imm),
+        .rs1_data(io.rs1_data),
+        .rs2_data(io.rs2_data),
+        .op(io.bundle.op),
+        .result(result)
+    );
+    BranchModel branchModel(
+        .immv(io.bundle.immv),
+        .sext(io.bundle.sext),
+        .imm(io.bundle.imm),
+        .rs1_data(io.rs1_data),
+        .rs2_data(io.rs2_data),
+        .op(io.bundle.op),
+        .stream(io.stream),
+        .offset(io.bundle.fsqInfo.offset),
+        .br_type(io.br_type),
+        .ras_type(io.ras_type),
+        .BranchUnitRes(branchRes),
+        .result(branchResult)
+    );
+    assign wbData.en = io.en;
+    assign wbData.fsqInfo = io.bundle.fsqInfo;
+    assign wbData.robIdx = io.bundle.robIdx;
+    assign wbData.rd = io.bundle.rd;
+    assign wbDataq.res = io.intv ? result : branchResult;
 endmodule
 
 module BranchModel(
@@ -17,9 +48,9 @@ module BranchModel(
     input logic `N(`BRANCHOP_WIDTH) op,
     input FetchStream stream,
     input logic `N(`PREDICTION_WIDTH) offset,
-    output logic predict,
-    output logic pred_error,
-    output logic `N(`VADDR_SIZE) target,
+    input BranchType br_type,
+    input RasType ras_type,
+    output BranchUnitRes branchRes,
     output logic `N(`XLEN) result
 );
     logic cmp, scmp, cmp_result;
@@ -39,24 +70,24 @@ module BranchModel(
     always_comb begin
         case(op)
         `BRANCH_BEQ: begin
-            predict = equal;
+            branchRes.direction = equal;
         end
         `BRANCH_BNE: begin
-            predict = ~equal;
+            branchRes.direction = ~equal;
         end
         `BRANCH_BLT: begin
-            predict = cmp_result;
+            branchRes.direction = cmp_result;
         end
         `BRANCH_BGE: begin
-            predict = ~cmp_result;
+            branchRes.direction = ~cmp_result;
         end
-        default: predict = 0;
+        default: branchRes.direction = 0;
         endcase
     end
 
     logic `N(`VADDR_SIZE) jalr_target;
     assign jalr_target = rs1_data + imm;
-    assign target = jalr_target;
+    assign branchRes.target = jalr_target;
     logic `N(`PREDICTION_WIDTH+1) addrOffset;
     assign addrOffset = offset + 1;
     assign result = {stream.start_addr[`VADDR_SIZE-1: 2] + addrOffset, 2'b00};
@@ -65,10 +96,12 @@ module BranchModel(
     // cal stream taken offset
     logic streamHit, branchError, indirectError;
     assign streamHit = stream.size == offset;
-    assign branchError = streamHit ? stream.taken ^ predict : predict;
+    assign branchError = streamHit ? stream.taken ^ branchRes.direction : branchRes.direction;
     assign indirectError = stream.target != jalr_target;
-    assign pred_error = op == `BRANCH_JALR ? indirectError :
+    assign branchRes.error = op == `BRANCH_JALR ? indirectError :
                         op != `BRANCH_JAL ? branchError : 0;
+    assign branchRes.br_type = br_type;
+    assign branchRes.ras_type = ras_type;
 endmodule
 
 module ALUModel(

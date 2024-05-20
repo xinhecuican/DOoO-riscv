@@ -5,32 +5,23 @@ module Rename(
     input logic rst,
     DecodeRenameIO.rename dec_rename_io,
     RenameDisIO.rename rename_dis_io,
-    ROBRenameIO.rename rob_rename_io
+    ROBRenameIO.rename rob_rename_io,
+    CommitBus commitBus
 );
 
-    RATIO rs1_io;
-    RATIO rs2_io;
+    RenameTableIO rename_io;
     FreelistIO fl_io;
     logic `N($clog2(`FETCH_WIDTH)) rdNum;
     logic `N(`FETCH_WIDTH) rd_en;
 
-    RAT rs1_rat(.*, .rat_io(rs1_io));
-    RAT rs2_rat(.*, .rat_io(rs2_io));
+    RenameTableIO renameTable(.*);
     assign fl_io.en = rdNum;
+    assign fl_io.old_prd = rename_io.old_prd;
     Freelist(.*);
 
-generate;
-    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
-        assign rdNum = rdNum + rd_en[i];
-        assign rd_en[i] = dec_rename_io.op[i].di.en && dec_rename_io.op[i].di.rd != 0;
-        assign rs1_io.vreg[i] = dec_rename_io.op[i].di.rs1;
-        assign rs2_io.vreg[i] = dec_rename_io.op[i].di.rs2;
-    end
-endgenerate
-
 // conflict
-    logic `ARRAY(`FETCH_WIDTH-1, `FETCH_WIDTH) raw_rs1, raw_rs2; // read after write
-    logic `ARRAY(`FETCH_WIDTH-1, $clog2(`FETCH_WIDTH)) raw_rs1_idx, raw_rs2_idx;
+    logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) raw_rs1, raw_rs2, waw; // read after write
+    logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) raw_rs1_idx, raw_rs2_idx;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1, prs2, prd;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) prdIdx;
 
@@ -41,11 +32,11 @@ generate
     end
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         assign prd[i] = rd_en[i] ? fl_io.prd[prdIdx[i]] : 0;
-        assign prs1[i] = |raw_rs1[i] ? prd[raw_rs1_idx[i]] : rs1_io.preg[i];
-        assign prs2[i] = |raw_rs2[i] ? prd[raw_rs2_idx[i]] : rs2_Io.preg[i];
+        assign prs1[i] = |raw_rs1[i] ? prd[raw_rs1_idx[i]] : rename_io.prs1[i];
+        assign prs2[i] = |raw_rs2[i] ? prd[raw_rs2_idx[i]] : rename_io.prs2[i];
     end
 
-    for(genvar i=0; i<`FETCH_WIDTH-1; i++)begin
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         for(genvar j=0; j<`FETCH_WIDTH; j++)begin
             if(j <= i)begin
                 assign raw_rs1[i][j] = 0;
@@ -55,10 +46,23 @@ generate
             else begin
                 assign raw_rs1[i][j] = rd_en[j] && dec_rename_io.op[i].di.rs1 == dec_rename_io.op[j].di.rd;
                 assign raw_rs2[i][j] = rd_en[j] && dec_rename_io.op[i].di.rs2 == dec_rename_io.op[j].di.rd;
+                assign waw[i][j] = rd_en[i] & rd_en[j] & (dec_rename_io.op[i].di.rd == dec_rename_io.op[j].di.rd);
             end
         end
         PEncoder #(`FETCH_WIDTH) encoder_rs1_idx (raw_rs1[i], raw_rs1_idx[i]);
         PEncoder #(`FETCH_WIDTH) encoder_rs2_idx (raw_rs2[i], raw_rs2_idx[i]);
+    end
+endgenerate
+
+generate;
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
+        assign rdNum = rdNum + rd_en[i];
+        assign rd_en[i] = dec_rename_io.op[i].di.en && dec_rename_io.op[i].di.we;
+        assign rename_io.vrs1[i] = dec_rename_io.op[i].di.rs1;
+        assign rename_io.vrs2[i] = dec_rename_io.op[i].di.rs2;
+        assign rename_io.rename_we[i] = rd_en[i] & ~(|waw[i]);
+        assign rename_io.rename_vrd[i] = dec_rename_io.op[i].di.rd;
+        assign rename_io.rename_prd[i] = prd[i];
     end
 endgenerate
 

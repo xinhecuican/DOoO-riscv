@@ -116,11 +116,12 @@ endinterface
 interface FsqBackendIO;
     FetchStream `N(`ALU_SIZE) streams;
     logic `ARRAY(`ALU_SIZE, `FSQ_WIDTH) fsqIdx;
+    logic `N(`ALU_SIZE) directions;
 
     BackendRedirectInfo redirect;
     
-    modport fsq (input fsqIdx, redirect, output streams);
-    modport backend (output fsqIdx, redirect, input streams);
+    modport fsq (input fsqIdx, redirect, output streams, directions);
+    modport backend (output fsqIdx, redirect, input streams, directions);
 endinterface
 
 interface CachePreDecodeIO;
@@ -196,22 +197,6 @@ interface DecodeRenameIO;
     modport rename(input op);
 endinterface
 
-interface RATIO;
-    logic `ARRAY(`RAT_PORT, 5) vreg;
-    logic `ARRAY(`RAT_PORT, `PREG_WIDTH) preg;
-
-    modport rat(input vreg, output preg);
-    modport rename(output vreg, input preg);
-endinterface
-
-interface FreelistIO;
-    logic `N(`FETCH_WIDTH) rdNum;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
-
-    modport freelist(input rdNum, output prd);
-    modport rename(output rdNum, input prd);
-endinterface
-
 interface ROBRenameIO;
     logic `N(`ROB_WIDTH) robIdx;
 
@@ -279,14 +264,68 @@ interface IssueRegfileIO #(
     modport regfile(input en, rs1, rs2, output rs1_data, rs2_data);
 endinterface
 
-interface IssueAluIO;
+interface IntIssueExuIO;
     logic `N(`ALU_SIZE) en;
     logic `ARRAY(`ALU_SIZE, `XLEN) rs1_data;
     logic `ARRAY(`ALU_SIZE, `XLEN) rs2_data;
     IntIssueBundle `N(`ALU_SIZE) bundle;
     FetchStream `N(`ALU_SIZE) streams;
+    logic `N(`ALU_SIZE) directions; // fsq dir
+    BranchType `N(`ALU_SIZE) br_type;
+    RasType `N(`ALU_SIZE) ras_type;
 
-    modport alu (input en, rs1_data, rs2_data, bundle, streams);
-    modport issue (output en, rs1_data, rs2_data, bundle, streams);
+    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions);
+    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions);
+endinterface
+
+interface IssueAluIO;
+    logic en;
+    logic `N(`XLEN) rs1_data;
+    logic `N(`XLEN) rs2_data;
+    IntIssueBundle bundle;
+    FetchSteram stream;
+    logic direction;
+    RasType ras_type;
+    BranchType br_type;
+
+    modport alu (input en, rs1_data, rs2_data, bundle, stream, direction, ras_type, br_type);
+endinterface
+
+interface IssueBranchIO;
+    logic en;
+    logic `N(`XLEN) rs1_data;
+    logic `N(`XLEN) rs2_data;
+    IntIssueBundle bundle;
+    FetchSteram streams;
+    logic direction;
+
+    modport branch (input en, rs1_data, rs2_data, bundle, streams, direction);
+endinterface
+
+interface WriteBackIO;
+    WBData `N(`FU_SIZE) datas;
+    logic `N(`FU_SIZE) valid;
+    WBData `N(`WB_SIZE) wbData;
+
+    modport wb (input datas, output valid, wbData);
+endinterface
+
+interface WriteBackBus;
+    WBData `N(`WB_SIZE) data;
+
+    modport wb (output data);
+    modport slave (input data);
+endinterface
+
+interface CommitBus;
+    logic `N(`COMMIT_WIDTH) en;
+    logic `N(`COMMIT_WIDTH) we;
+    FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) vrd;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
+    logic `N($clog2(`COMMIT_WIDTH)) num;
+    logic `N($clog2(`COMMIT_WIDTH)) wenum;
+
+    modport rob(output en, fsqInfo, vrd, prd, num, wenum);
 endinterface
 `endif

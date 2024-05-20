@@ -147,13 +147,47 @@ typedef struct packed {
     logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;
+    logic `N(`ROB_WIDTH) robIdx;
     logic `N(`PREG_WIDTH) rd;
     logic `N(`XLEN) imm;
     FsqIdxInfo fsqInfo;
 } IntIssueBundle;
 
 typedef struct packed {
-    logic `N(`FSQ_WIDTH) fsqIdx;
-    logic `N(`PREDICTION_WIDTH) offset;
-} BackendRediectInfo;
+    logic en;
+    logic taken;
+    FsqIdxInfo fsqInfo;
+    logic `N(`VADDR_SIZE) target;
+    BranchType br_type;
+    RasType ras_type;
+} BackendRedirectInfo;
+
+typedef struct packed {
+    logic direction;
+    logic error;
+    logic `N(`VADDR_SIZE) target;
+    RasType ras_type;
+    BranchType br_type;
+} BranchUnitRes;
+
+typedef struct packed {
+    logic en;
+    FsqIdxInfo fsqInfo;
+    BranchUnitRes res;
+} AluBranchBundle;
+
+typedef struct packed {
+    logic en;
+    logic `N(`ROB_WIDTH) robIdx;
+    FsqIdxInfo fsqInfo;
+    logic `N(`PREG_WIDTH) rd;
+    logic `N(`XLEN) res;
+} WBData;
+
+typedef struct packed {
+    logic en;
+    FsqIdxInfo fsqInfo;
+    logic `N(`PREG_WIDTH) vrd;
+    logic `N(`PREG_WIDTH) prd;
+} CommitData;
 `endif

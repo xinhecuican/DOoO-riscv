@@ -1,21 +1,4 @@
 
-// priority reverse selector
-module PRSelector #(
-	parameter RADIX=4
-)(
-	input logic [RADIX-1: 0] in,
-	output logic [RADIX-1: 0] out
-);
-	logic [RADIX-1: 0] reverse;
-	assign reverse[RADIX-1] = 1'b1;
-	for(genvar i=RADIX-2; i>=0; i--)begin
-		assign reverse[i] = ~in[i+1] & reverse[i+1];
-	end
-	for(genvar i=0; i<RADIX; i++)begin
-		assign out[i] = reverse[i] & in[i];
-	end
-endmodule
-
 module Decoder1(
 	input logic [0: 0] A,
 	output logic [1: 0] Y
@@ -78,15 +61,37 @@ module Decoder4(
 	end
 endmodule
 
+module Decoder5(
+	input logic [4: 0] in,
+	output logic [31: 0] out
+);
+	logic [3: 0] de1;
+	logic [7: 0] out1;
+	Decoder2 d1(in[4: 3], de1);
+	Decoder3 d2(in[2: 0], out1);
+	assign out = {{8{de1[3]}} & out1, {8{de1[2]}} & out1, {8{de1[1]}} & out1, {8{de1[0]}} & out1};
+endmodule
+
 module Decoder6(
 	input logic [5: 0] in,
 	output logic [63: 0] out
 );
 	logic [3: 0] de1;
 	logic [15: 0] out1;
-	decoder_2to4 d1(in[5: 4], de1);
-	decoder_4to16 d2(in[3: 0], out1);
+	Decoder2 d1(in[5: 4], de1);
+	Decoder4 d2(in[3: 0], out1);
 	assign out = {{16{de1[3]}} & out1, {16{de1[2]}} & out1, {16{de1[1]}} & out1, {16{de1[0]}} & out1};
+endmodule
+
+module Decoder7(
+	input logic [6: 0] in,
+	output logic [127: 0] out
+);
+	logic [3: 0] de1;
+	logic [31: 0] out1;
+	Decoder2 d1(in[6: 5], de1);
+	Decoder2 d2(in[4: 0], out1);
+	assign out = {{32{de1[3]}} & out1, {32{de1[2]}} & out1, {32{de1[1]}} & out1, {32{de1[0]}} & out1};
 endmodule
 
 module Decoder #(
@@ -102,7 +107,9 @@ module Decoder #(
 		2: Decoder2 decoder(in, out);
 		3: Decoder3 decoder(in, out);
 		4: Decoder4 decoder(in, out);
+		5: Decoder5 decoder(in, out);
 		6: Decoder6 decoder(in, out);
+		7: Decoder7 decoder(in, out);
 		default: Decoder1 decoder(in, out);
 		endcase
 	endgenerate
@@ -277,6 +284,23 @@ module PSelector #(
 	end
 endmodule
 
+// priority reverse selector
+module PRSelector #(
+	parameter RADIX=4
+)(
+	input logic [RADIX-1: 0] in,
+	output logic [RADIX-1: 0] out
+);
+	logic [RADIX-1: 0] reverse;
+	assign reverse[0] = 1'b1;
+	for(genvar i=1; i<RADIX; i++)begin
+		assign reverse[i] = ~in[i-1] & reverse[i-1];
+	end
+	for(genvar i=0; i<RADIX; i++)begin
+		assign out[i] = reverse[i] & in[i];
+	end
+endmodule
+
 module Matcher #(
 	parameter WIDTH = 4
 )(
@@ -423,5 +447,53 @@ generate
 	4: Sort4 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
 	default: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
 	endcase
+endgenerate
+endmodule
+
+module OldestSelect #(
+	parameter RADIX = 2,
+	parameter WIDTH = 4,
+	parameter DATA_WIDTH = 4
+)(
+	input logic [RADIX-1: 0][WIDTH-1: 0] cmp,
+	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
+	output logic [WIDTH-1: 0] cmp_o,
+	output logic [DATA_WIDTH-1: 0] data_o
+);
+generate
+	if(RADIX == 1)begin
+		assign cmp_o = cmp;
+		assign data_o = data_i;
+	end
+	else if(RADIX == 2)begin
+		assign cmp_o = cmp[1] > cmp[0] ? cmp[1] : cmp[0];
+		assign data_o = cmp[1] > cmp[0] ? data_i[1] : data_i[0];
+	end
+	else begin
+		logic [DATA_WIDTH-1: 0] data1, data2;
+		logic [WIDTH-1: 0] cmp1, cmp2;
+		OldestSelect #(
+			.RADIX(RADIX/2),
+			.WIDTH(WIDTH),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select1 (
+			.cmp(cmp[RADIX/2-1: 0]),
+			.data_i(data_i[RADIX/2-1: 0]),
+			.cmp_o(cmp1),
+			.data_o(data1)
+		);
+		OldestSelect #(
+			.RADIX(RADIX-RADIX/2),
+			.WIDTH(WIDTH),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select2 (
+			.cmp(cmp[RADIX-1: RADIX/2]),
+			.data_i(data_i[RADIX-1: RADIX/2]),
+			.cmp_o(cmp2),
+			.data_o(data2)
+		);
+		assign cmp_o = cmp2 > cmp1 ? cmp2 : cmp1;
+		assign data_o = cmp2 > cmp1 ? data2 : data1;
+	end
 endgenerate
 endmodule
