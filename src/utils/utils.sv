@@ -267,7 +267,7 @@ endgenerate
 
 endmodule
 
-
+// select last bit
 module PSelector #(
 	parameter RADIX=16
 )(
@@ -494,6 +494,46 @@ generate
 		);
 		assign cmp_o = cmp2 > cmp1 ? cmp2 : cmp1;
 		assign data_o = cmp2 > cmp1 ? data2 : data1;
+	end
+endgenerate
+endmodule
+
+module UpdateCounter #(
+	parameter WIDTH=2
+) (
+	input logic [WIDTH-1: 0] origin,
+	input logic dir,
+	output logic [WIDTH-1: 0] out
+);
+generate
+	if(WIDTH == 2)begin
+		always_comb begin
+			if(dir)begin
+				case(origin)
+				2'b00: out = 2'b01;
+				2'b01: out = 2'b10;
+				2'b10: out = 2'b11;
+				2'b11: out = 2'b11;
+				endcase
+			end
+			else begin
+				case (origin)
+				2'b00: out = 2'b00;
+				2'b01: out = 2'b00;
+				2'b10: out = 2'b01;
+				2'b11: out = 2'b10;
+				endcase
+			end
+		end
+	end
+	else if(WIDTH == 3)begin
+		logic [WIDTH: 0] add, sub;
+		logic [WIDTH-1: 0] add_res, sub_res;
+		assign add = origin + 1;
+		assign sub = origin - 1;
+		assign add_res = {WIDTH{add[WIDTH]}} ^ add[WIDTH-1: 0];
+		assign sub_res = {WIDTH{sub[WIDTH]}} ^ sub[WIDTH-1: 0];
+		assign out = dir ? add_res : sub_res;
 	end
 endgenerate
 endmodule

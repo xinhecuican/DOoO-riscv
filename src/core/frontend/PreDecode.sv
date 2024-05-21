@@ -42,7 +42,7 @@ module PreDecode(
             en_next <= cache_pd_io.en;
             data_next <= cache_pd_io.data;
             fsqIdx <= cache_pd_io.fsqIdx;
-            tailIdx <= cache_pd_io.stream.size - 1;
+            tailIdx <= cache_pd_io.stream.size;
             stream_next <= cache_pd_io.stream;
             instNumNext <= instNum;
         end
@@ -50,10 +50,10 @@ module PreDecode(
 
     logic `N(`BLOCK_INST_SIZE) jump_en;
     assign pd_redirect.en = (~stream_next.taken & (|jump_en)) |
-                            (stream_next.taken & ((bundles_next[tailIdx].branch_type != stream_next.branch_type) |
+                            (stream_next.taken & ((tailIdx != jumpSelectIdx) |
                             bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)));
     assign pd_redirect.fsqIdx = fsqIdx;
-    assign selectIdx = stream_next.taken ? tailIdx : jumpSelectIdx;
+    assign selectIdx = jumpSelectIdx;
     assign selectBundle = bundles_next[selectIdx];
     assign pd_redirect.offset = selectIdx;
     assign pd_redirect.branch_type = bundles_next[selectIdx].branch_type;
@@ -67,9 +67,9 @@ module PreDecode(
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
             assign jump_en[i] = en_next[i] & bundles_next[i].direct;
-            assign instNum = instNum + cache_pd_io.en[i];
         end
     endgenerate
+    ParallelAdder #(.DEPTH(`BLOCK_INST_SIZE)) adder_instnum (cache_pd_io.en, instNum);
     PEncoder #(`BLOCK_INST_SIZE) encoder_jump_idx(jump_en, jumpSelectIdx);
 
 endmodule

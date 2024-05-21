@@ -34,9 +34,23 @@ typedef struct packed {
 } TageEntry;
 
 typedef struct packed {
-    logic table_hits;
-    logic `N($clog2(`TAGE_BANK)) provider;
+    logic `ARRAY(`TAGE_BANK, `SLOT_NUM) table_hits;
+    logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_CTR_SIZE) tage_ctrs;
+    logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_U_SIZE) u;
+    logic `ARRAY(`TAGE_BASE_CTR, `SLOT_NUM) base_ctr;
+    logic `ARRAY(`SLOT_NUM, `TAGE_BANK) provider;
+    logic `N(`SLOT_NUM) predTaken;
+    logic `N(`SLOT_NUM) altPred;
 } TageMeta;
+
+typedef struct packed {
+    logic `ARRAY(`SLOT_NUM, 2) ctr;
+} UBTBMeta;
+
+typedef struct packed {
+    TageMeta tage;
+    UBTBMeta ubtb;
+} PredictionMeta;
 
 typedef struct packed {
     logic taken;
@@ -77,7 +91,9 @@ typedef struct packed {
     BTBEntry btbEntry;
     logic `N(`PREDICT_STAGE-1) redirect;
     logic `N(2) cond_num;
-    logic [`SLOT_NUM-1: 0] cond_history;
+    logic `N(`SLOT_NUM) cond_valid;
+    logic `N(`SLOT_NUM) predTaken;
+    logic taken;
     logic `N(`FSQ_WIDTH) stream_idx;
     RedirectInfo redirect_info;
 } PredictionResult;
@@ -98,11 +114,28 @@ typedef struct {
 } RedirectCtrl;
 
 typedef struct packed {
-    logic `VADDR_BUS squash_pc;
+    logic `N(2) condNum;
+    logic taken; // last branch is taken
+} CondPredInfo;
+
+typedef struct packed {
+    logic `VADDR_BUS target_pc;
+    RedirectInfo redirectInfo;
+    CondPredInfo predInfo;
+    BranchType br_type;
+    RasType ras_type;
+} SquashInfo;
+
+typedef struct packed {
+    logic taken;
+    logic `N(`SLOT_NUM) realTaken;
+    logic `N(`SLOT_NUM) allocSlot;
+    logic `VADDR_BUS start_addr;
     logic `VADDR_BUS target_pc;
     RedirectInfo redirectInfo;
     BTBEntry btbEntry;
-} SquashInfo;
+    PredictionMeta meta;
+} BranchUpdateInfo;
 
 typedef struct packed {
     logic `N(`FSQ_WIDTH) idx;

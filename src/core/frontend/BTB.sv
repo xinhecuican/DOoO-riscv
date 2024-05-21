@@ -23,9 +23,9 @@ module BTB (
 
     localparam INDEX_POS = `BTB_SET_WIDTH+1+$clog2(`BTB_WAY);
     assign index = btb_io.pc[INDEX_POS: 2+$clog2(`BTB_WAY)];
-    assign updateIdx = btb_io.squashInfo.squash_pc[INDEX_POS: 2+$clog2(`BTB_WAY)];
+    assign updateIdx = btb_io.updateInfo.start_addr[INDEX_POS: 2+$clog2(`BTB_WAY)];
     Decoder #(`BTB_WAY) decoder_bank(btb_io.pc[1+$clog2(`BTB_WAY): 2], bank_en);
-    Decoder #(`BTB_WAY) decoder_we(btb_io.squashInfo.squash_pc[1+$clog2(`BTB_WAY): 2], bank_we);
+    Decoder #(`BTB_WAY) decoder_we(btb_io.updateInfo.start_addr[1+$clog2(`BTB_WAY): 2], bank_we);
 
     generate;
         for(genvar i=0; i<`BTB_WAY; i++)begin
@@ -44,9 +44,9 @@ module BTB (
                 .rdata1(bank_ctrl[i].rdata1)
             );
             assign bank_ctrl[i].addr1 = index;
-            assign bank_ctrl[i].addr0 = btb_io.squashInfo.squash_pc[INDEX_POS: 2+$clog2(`BTB_WAY)];
-            assign bank_ctrl[i].we = btb_io.squash & bank_we[i];
-            assign bank_ctrl[i].wdata = btb_io.squashInfo.btbEntry;
+            assign bank_ctrl[i].addr0 = btb_io.updateInfo.start_addr[INDEX_POS: 2+$clog2(`BTB_WAY)];
+            assign bank_ctrl[i].we = btb_io.update & bank_we[i];
+            assign bank_ctrl[i].wdata = btb_io.updateInfo.btbEntry;
         end
     endgenerate
     assign btb_io.entry = bank_ctrl[s2_bank].rdata1;

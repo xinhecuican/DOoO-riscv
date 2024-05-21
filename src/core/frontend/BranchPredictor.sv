@@ -8,7 +8,9 @@ module BranchPredictor(
     BranchHistory history;
     RedirectCtrl redirect;
     SquashInfo squashInfo;
+    BranchUpdateInfo updateInfo;
     logic squash;
+    logic update;
     BpuBtbIO btb_io(.*);
     BpuTageIO tage_io(.*);
     BpuUBtbIO ubtb_io(.*);
@@ -17,10 +19,14 @@ module BranchPredictor(
 
     PredictionResult s1_result;
     PredictionResult s2_result_in, s2_result_out;
-    PredictionResult s3_result_in, s3_result_out;
+    PredictionMeta s1_meta;
+    PredictionMeta s2_meta_in, s2_meta_out;
+    // PredictionResult s3_result_in, s3_result_out;
 
     assign squash = bpu_fsq_io.squash;
     assign squashInfo = bpu_fsq_io.squashInfo;
+    assign update = bpu_fsq_io.upate;
+    assign updateInfo = bpu_fsq_io.updateInfo;
     assign btb_io.pc = pc;
     assign btb_io.request = 1'b1;
     BTB btb(.*);
@@ -51,31 +57,35 @@ module BranchPredictor(
             pc <= `RESET_PC;
         end
         else begin
-            pc <= redirect.flush ? bpu_fsq_io.flush_pc :
+            pc <= redirect.flush ? squashInfo.target_pc :
                   redirect.stall ? pc :
                   redirect.s2_redirect ? s2_result_out.stream.target :
                     s1_result.stream.target;
         end
 
-        if(rst == `RST || redirect.s2_redirect)begin
+        if(rst == `RST || redirect.s2_redirect || redirect.flush)begin
             s2_result_in <= '{default: 0};
+            s2_meta_in <= 0;
         end
         else if(!redirect.stall)begin
             s2_result_in <= s1_result;
+            s2_meta_in <= s1_meta;
         end
 
-        if(rst == `RST)begin
-            s3_result_in <= '{default: 0};
-        end
-        else if(!redirect.stall)begin
-            s3_result_in <= s2_result_out;
-        end
+        // if(rst == `RST || redirect.flush)begin
+        //     s3_result_in <= '{default: 0};
+        // end
+        // else if(!redirect.stall)begin
+        //     s3_result_in <= s2_result_out;
+        // end
     end
 
     assign bpu_fsq_io.en = bpu_fsq_io.prediction.en;
     assign bpu_fsq_io.prediction = redirect.s2_redirect ? s2_result_out : s1_result;
     assign bpu_fsq_io.redirect = redirect.s2_redirect;
-
+    assign bpu_fsq_io.lastStage = s2_result_out.en;
+    assign bpu_fsq_io.lastStageIdx = s2_result_out.stream_idx;
+    assign bpu_fsq_io.lastStageMeta = s2_meta_out;
     S2Control s2_control(
         .pc(s2_result_in.stream.start_addr),
         .entry(btb_io.entry),
@@ -85,6 +95,9 @@ module BranchPredictor(
         .result_i(s2_result_in),
         .result_o(s2_result_out)
     );
+    assign s1_meta.ubtb = ubtb_io.meta;
+    assign s2_meta_out.ubtb = s2_meta_in.ubtb;
+    assign s2_meta_out.tage = tage_io.meta;
 
 
 endmodule
@@ -92,7 +105,7 @@ endmodule
 module S2Control(
     input logic `VADDR_BUS pc,
     input BTBEntry entry,
-    input logic `N(2) prediction,
+    input logic `N(`SLOT_NUM) prediction,
     input logic `N(`RAS_WIDTH) rasIdx,
     input RasEntry ras_entry,
     input PredictionResult result_i,
@@ -106,6 +119,8 @@ module S2Control(
     logic `N(`PREDICTION_WIDTH) br_size, tail_size;
     logic `VADDR_BUS tail_target, br_target, tail_indirect_target;
     logic [1: 0] cond_num;
+    logic `N(`SLOT_NUM) cond_valid;
+    logic older;
 
     assign hit = entry.en && (pc`BTB_TAG_BUS == entry.tag);
     assign br_takens = isBr & prediction;
@@ -126,7 +141,22 @@ module S2Control(
     assign tail_target = entry.tailSlot.en ? tail_indirect_target : entry.fthAddr + pc;
     assign br_target = {{(`VADDR_SIZE-`JAL_OFFSET){br_offset[`JAL_OFFSET-1]}}, br_offset} + pc;
     assign predict_pc = |br_takens ? br_target : tail_target;
-    assign cond_num = isBr[0] + isBr[1];
+    assign older = entry.slots[0].offset < entry.tailSlot.offset;
+
+    always_comb begin
+        if(br_takens[0] & older)begin
+            cond_num = 2'b1;
+            cond_valid = 2'b1;
+        end
+        else if(br_takens[1] & ~older)begin
+            cond_num = 2'b1;
+            cond_valid = 2'b10;
+        end
+        else begin
+            cond_num = isBr[0] + isBr[1];
+            cond_valid = isBr;
+        end
+    end
     always_comb begin
         case(entry.tailSlot.br_type)
         CONDITION, INDIRECT, DIRECT:begin
@@ -145,7 +175,9 @@ module S2Control(
             result_o.stream.target = predict_pc;
             result_o.redirect = 1;
             result_o.cond_num = cond_num;
-            result_o.cond_history = prediction;
+            result_o.cond_valid = cond_valid;
+            result_o.taken = |br_takens;
+            result_o.predTaken = br_takens;
         end
         else begin
             result_o.stream.taken = result_i.taken;
@@ -155,7 +187,9 @@ module S2Control(
             result_o.stream.size = result_i.stream.size;
             result_o.redirect = result_i.redirect;
             result_o.cond_num = result_i.cond_num;
-            result_o.cond_history = result_i.cond_history;
+            result_o.cond_valid = result_i.cond_valid;
+            result_o.taken = result_i.taken;
+            result_o.predTaken = result_i.predTaken;
         end
         result_o.en = 1'b1;
         result_o.stream.start_addr= result_i.stream.start_addr;

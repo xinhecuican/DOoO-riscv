@@ -19,7 +19,7 @@
 `define RESET_PC `XLEN'h0
 
 // BranchPrediction
-`define PREDICT_STAGE 3
+`define PREDICT_STAGE 2
 `define BLOCK_SIZE 32 // max bytes for an instruction block/fetch stream
 `define BLOCK_INST_SIZE (`BLOCK_SIZE / 4)
 `define BLOCK_WIDTH $clog2(`BLOCK_SIZE)

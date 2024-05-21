@@ -16,8 +16,8 @@ module RAS(
     assign waddr = ras_io.squash && squashType == POP_PUSH ? ras_io.squashInfo.redirectInfo.ras_ctr - 1 :
                    ras_io.squash ? ras_io.squashInfo.redirectInfo.ras_ctr :
                    ras_io.ras_type == POP_PUSH ? top_p1 : top;
-    assign updateEntry.pc = ras_io.squash ? ras_io.squashInfo.btbEntry.target_pc : ras_io.target;
-    assign squashType = ras_io.squashInfo.ras_type.btbEntry.tailSlot.ras_type;
+    assign updateEntry.pc = ras_io.squash ? ras_io.squashInfo.target_pc : ras_io.target;
+    assign squashType = ras_io.squashInfo.ras_type;
     assign we = ~ras_io.squash & ras_io.ras_type[1] | ras_io.squash & squashType[1];
     SDPRAM #(
         .WIDTH($bits(RasEntry)),
@@ -44,6 +44,9 @@ module RAS(
                 end
                 else if(ras_io.ras_type == PUSH)begin
                     top <= ras_io.squashInfo.redirectInfo.ras_ctr + 1;
+                end
+                else begin
+                    top <= ras_io.squashInfo.redirectInfo.ras_ctr;
                 end
             end
             if(ras_io.en)begin

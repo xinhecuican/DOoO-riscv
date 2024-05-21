@@ -33,46 +33,55 @@ endinterface //core_dcache_if
 interface BpuBtbIO(
     input RedirectCtrl redirect,
     input logic squash,
-    input SquashInfo squashInfo
+    input SquashInfo squashInfo,
+    input logic update,
+    input BranchUpdateInfo updateInfo
 );
     logic request;
     logic `VADDR_BUS pc;
     BTBEntry entry;
 
-    modport btb (output entry, input request, pc, redirect, squash, squashInfo);
+    modport btb (output entry, input request, pc, redirect, squash, squashInfo, update, updateInfo);
 endinterface
 
 interface BpuUBtbIO(
     input RedirectCtrl redirect,
     input BranchHistory history,
     input logic squash,
-    input SquashInfo squashInfo
+    input logic update,
+    input SquashInfo squashInfo,
+    input BranchUpdateInfo updateInfo
 );
     logic request;
     logic `VADDR_BUS pc;
     logic `N(`FSQ_WIDTH) fsqIdx;
     logic `N(`GHIST_WIDTH) ghistIdx;
     PredictionResult result;
+    UBTBMeta meta;
 
-    modport ubtb (input request, pc, fsqIdx, history, redirect, squash, squashInfo, output result);
+    modport ubtb (input request, pc, fsqIdx, history, redirect, squash, squashInfo, update, updateInfo, output result, meta);
 endinterface
 
 interface BpuTageIO(
     input BranchHistory history,
-    input RedirectCtrl redirect
+    input RedirectCtrl redirect,
+    input logic update,
+    input BranchUpdateInfo updateInfo
 );
     logic request;
     logic `VADDR_BUS pc;
     logic `N(`SLOT_NUM) prediction;
     TageMeta meta;
 
-    modport tage (input request, pc, history, redirect, output prediction, meta);
+    modport tage (input request, pc, history, redirect, update, updateInfo, output prediction, meta);
 endinterface
 
 interface BpuRASIO(
     input RedirectCtrl redirect,
     input logic squash,
-    input SquashInfo squashInfo
+    input SquashInfo squashInfo,
+    input logic update,
+    input BranchUpdateInfo updateInfo
 );
     logic request;
     RasType ras_type;
@@ -81,22 +90,27 @@ interface BpuRASIO(
     RasEntry entry;
     logic `N(`RAS_WIDTH) rasIdx;
 
-    modport ras (input request, ras_type, redirect, squash, squashInfo, output en, entry, rasIdx);
+    modport ras (input request, ras_type, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasIdx);
 
 endinterface
 
 interface BpuFsqIO;
     PredictionResult prediction;
     logic `N(`FSQ_WIDTH) stream_idx;
+    logic lastStage;
+    logic `N(`FSQ_WIDTH) lastStageIdx;
+    PredictionResult lastStageMeta;
     logic en;
     logic redirect;
     RedirectInfo redirect_info;
     logic squash;
     SquashInfo squashInfo;
     logic stall;
+    logic update;
+    BranchUpdateInfo updateInfo;
 
-    modport fsq (input en, prediction, redirect, redirect_info, output stall, stream_idx);
-    modport bpu (output en, prediction, redirect, redirect_info, input stall, stream_idx);
+    modport fsq (input en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx);
+    modport bpu (output en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx);
 endinterface
 
 interface FsqCacheIO;
