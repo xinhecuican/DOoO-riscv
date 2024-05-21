@@ -93,6 +93,7 @@ endgenerate
         ubtb_io.result.taken = |br_takens;
         ubtb_io.result.predTaken = br_takens;
         ubtb_io.result.stream_idx = ubtb_io.fsqIdx;
+        ubtb_io.result.stream_dir = ubtb_io.stream_dir;
         ubtb_io.result.redirect_info.ghistIdx = ubtb_io.ghistIdx;
         ubtb_io.meta.ctr = br_takens;
     end

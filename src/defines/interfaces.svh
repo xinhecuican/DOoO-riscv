@@ -55,11 +55,12 @@ interface BpuUBtbIO(
     logic request;
     logic `VADDR_BUS pc;
     logic `N(`FSQ_WIDTH) fsqIdx;
+    logic fsqDir;
     logic `N(`GHIST_WIDTH) ghistIdx;
     PredictionResult result;
     UBTBMeta meta;
 
-    modport ubtb (input request, pc, fsqIdx, history, redirect, squash, squashInfo, update, updateInfo, output result, meta);
+    modport ubtb (input request, pc, fsqIdx, fsqDir, history, redirect, squash, squashInfo, update, updateInfo, output result, meta);
 endinterface
 
 interface BpuTageIO(
@@ -97,6 +98,7 @@ endinterface
 interface BpuFsqIO;
     PredictionResult prediction;
     logic `N(`FSQ_WIDTH) stream_idx;
+    logic stream_dir;
     logic lastStage;
     logic `N(`FSQ_WIDTH) lastStageIdx;
     PredictionResult lastStageMeta;
@@ -109,8 +111,8 @@ interface BpuFsqIO;
     logic update;
     BranchUpdateInfo updateInfo;
 
-    modport fsq (input en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx);
-    modport bpu (output en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx);
+    modport fsq (input en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx, stream_dir);
+    modport bpu (output en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx, stream_dir);
 endinterface
 
 interface FsqCacheIO;
@@ -341,5 +343,10 @@ interface CommitBus;
     logic `N($clog2(`COMMIT_WIDTH)) wenum;
 
     modport rob(output en, fsqInfo, vrd, prd, num, wenum);
+endinterface
+
+interface FrontendCtrl;
+    logic ibuf_full;
+    logic redirect;
 endinterface
 `endif

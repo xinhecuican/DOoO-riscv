@@ -95,6 +95,7 @@ typedef struct packed {
     logic `N(`SLOT_NUM) predTaken;
     logic taken;
     logic `N(`FSQ_WIDTH) stream_idx;
+    logic stream_dir;
     RedirectInfo redirect_info;
 } PredictionResult;
 

@@ -10,7 +10,8 @@ module FSQ (
     FsqCacheIO.fsq fsq_cache_io,
     PreDecodeRedirect.redirect pd_redirect,
     FsqBackendIO.fsq fsq_back_io,
-    CommitBus commitBus
+    CommitBus commitBus,
+    FrontendCtrl frontendCtrl
 );
     logic `N(`FSQ_WIDTH) search_head, commit_head, tail, write_index, tail_n1, n_commit_head;
     logic `N(`FSQ_WIDTH) write_tail;
@@ -23,7 +24,7 @@ module FSQ (
     BTBEntry oldEntry, updateEntry;
     logic `N(`BLOCK_INST_SIZE) predErrorVec `N(`FSQ_SIZE);
     logic directionTable `N(`FSQ_SIZE);
-    logic direction;
+    logic direction, hdir;
     FetchStream commitStream;
     logic `ARRAY(2, `PREDICTION_WIDTH) commitVec, streamVec;
     logic `ARRAY(`COMMIT_WIDTH, `PREDICTION_WIDTH * 2) commitOffsetExpand;
@@ -85,7 +86,7 @@ module FSQ (
     ) meta_ram (
         .clk(clk),
         .en(1'b1),
-        .raddr(n_commit_head),
+        .raddr(commit_head),
         .rdata(updateMeta),
         .we(bpu_fsq_io.lastStage),
         .waddr(bpu_fsq_io.lastStageIdx),
@@ -121,8 +122,6 @@ generate
     assign pd_wr_info.offsets[`SLOT_NUM-1] = predEntry.tailSlot.offset;
 endgenerate
 
-    // TODO: 如果该分支此前不在槽中，还有由于slot不遵循从小到大的顺序，所以cond_history更新顺序需要考虑
-    // 如果初始化entry无效，此时出现第一个条件分支跳转
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             predictionInfos <= '{default: 0};
@@ -137,8 +136,10 @@ endgenerate
     assign fsq_cache_io.en = search_head != tail || full;
     assign fsq_cache_io.abandon = bpu_fsq_io.redirect;
     assign fsq_cache_Io.abandonIdx = bpu_fsq_io.prediction.stream_idx;
-    assign fsq_cache_io.flush = pd_redirect.en;
+    assign fsq_cache_io.flush = pd_redirect.en | fsq_back_io.redirect.en;
+    assign fsq_cache_io.stall = frontendCtrl.ibuf_full;
     assign bpu_fsq_io.stream_idx = tail;
+    assign bpu_fsq_io.stream_dir = direction;
     assign bpu_fsq_io.stall = full;
     assign cache_req_ok = fsq_cache_io.en & fsq_cache_io.ready;
 
@@ -178,6 +179,8 @@ endgenerate
         end
     end
 
+    assign n_commit_head = commitValid ? commit_head + 1 : commit_head;
+    assign full = commit_head == tail && (hdir ^ direction);
     always_ff @(posedge clk)begin
         last_search <= search_head == tail && fsq_cache_io.en;
         bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirect.en;
@@ -190,34 +193,35 @@ endgenerate
             search_head <= 0;
             commit_head <= 0;
             tail <= 0;
-            full <= 0;
             predErrorVec <= '{default: 0};
         end
         else begin
-            if(full && dequeue)begin
-                full <= 1'b0;
+            if(fsq_back_io.redirect_en)begin
+                search_head <= fsq_back_io.redirect.fsqInfo.idx;
             end
-            if(!full && enqueue && !dequeue && (tail_n1 == commit_head))begin
-                full <= 1'b1;
+            else if(!frontendCtrl.ibuf_full) begin
+                if(pd_redirect.en)begin
+                    search_head <= pd_redirect.fsqIdx;
+                end
+                else if(cache_req_ok)begin
+                    search_head <= search_head + 1;
+                end
             end
-            if(pd_redirect.en)begin
-                search_head <= pd_redirect.fsqIdx;
-            end
-            else if(cache_req_ok)begin
-                search_head <= search_head + 1;
-            end
+
             if(fsq_back_io.redirect.en)begin
                 tail <= fsq_back_io.redirect.fsqInfo.idx;
             end
-            if(pd_redirect.en)begin
+            else if(pd_redirect.en)begin
                 tail <= pd_redirect.fsqIdx;
             end
             else if(bpu_fsq_io.redirect)begin
-                tail <= bpu_fsq_io.stream_idx;
+                tail <= bpu_fsq_io.stream_idx + 1;
             end
             else if(bpu_fsq_io.en)begin
                 tail <= tail_n1;
             end
+
+            commit_head <= n_commit_head;
 
             if(fsq_back_io.redirect.en)begin
                 predErrorVec[fsq_back_io.redirect.fsqInfo.idx] <= predErrorVec[fsq_back_io.redirect.fsqInfo.idx] | (1 << fsq_back_io.redirect.fsqInfo.offset);
@@ -225,6 +229,8 @@ endgenerate
         end
     end
 
+    logic `N(`FSQ_WIDTH) redirect_dir_idx;
+    assign redirect_dir_idx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx;
     always_ff @(posedge clk)begin
         for(int i=0; i<`ALU_SIZE; i++)begin
             fsq_back_io.directions[i] <= directionTable[fsq_back_io.fsqIdx[i]];
@@ -232,17 +238,21 @@ endgenerate
 
         if(rst == `RST)begin
             direction <= 0;
+            hdir <= 0;
             directionTable <= '{default: 0};
         end
         else begin
-            if(pd_redirect.en)begin
-                direction <= directionTable[pd_redirect.fsqIdx];
+            if(pd_redirect.en | fsq_back_io.redirect.en)begin
+                direction <= directionTable[redirect_dir_idx];
             end
             else if(bpu_fsq_io.redirect)begin
-                direction <= bpu_fsq_Io.stream_idx;
+                direction <= bpu_fsq_Io.stream_dir;
             end
             else if(bpu_fsq_io.en)begin
                 direction <= tail[`FSQ_WIDTH-1] ^ tail_n1[`FSQ_WIDTH-1] ? ~direction : direction;
+            end
+            if(commitValid)begin
+                hdir <= commit_head[`FSQ_WIDTH-1] ^ n_commit_head[`FSQ_WIDTH-1] ? ~hdir : hdir;
             end
 
             if(bpu_fsq_io.en)begin

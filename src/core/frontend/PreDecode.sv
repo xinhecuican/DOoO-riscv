@@ -5,7 +5,8 @@ module PreDecode(
     input logic rst,
     CachePreDecodeIO.pd cache_pd_io,
     PreDecodeRedirect.predecode pd_redirect,
-    PreDecodeIBufferIO.predecode pd_ibuffer_io
+    PreDecodeIBufferIO.predecode pd_ibuffer_io,
+    FrontendCtrl frontendCtrl
 );
     PreDecodeBundle bundles`N(`BLOCK_INST_SIZE);
     PreDecodeBundle bundles_next `N(`BLOCK_INST_SIZE);
@@ -28,7 +29,7 @@ module PreDecode(
     endgenerate
 
     always_ff @(posedge clk)begin
-        if(rst == `RST || pd_redirect.en)begin
+        if(rst == `RST || pd_redirect.en || frontendCtrl.redirect)begin
             bundles_next <= '{default: 0};
             en_next <= 0;
             fsqIdx <= 0;
@@ -37,7 +38,7 @@ module PreDecode(
             data_next <= 0;
             instNumNext <= 0;
         end
-        else begin
+        else if(!frontendCtrl.ibuf_full) begin
             bundles_next <= bundles;
             en_next <= cache_pd_io.en;
             data_next <= cache_pd_io.data;

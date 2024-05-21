@@ -43,6 +43,7 @@ module BranchPredictor(
     
     assign s1_result = ubtb_io.result;
     assign ubtb_io.fsqIdx = bpu_fsq_io.stream_idx;
+    assign ubtb_io.fsqDir = bpu_fsq_io.stream_dir;
     assign ubtb_io.ghistIdx = ghist_idx;
     assign ubtb_io.history = history;
     UBTB ubtb(.*);
@@ -194,6 +195,7 @@ module S2Control(
         result_o.en = 1'b1;
         result_o.stream.start_addr= result_i.stream.start_addr;
         result_o.stream_idx = result_i.stream_idx;
+        result_o.stream_dir = result_i.stream_dir;
         result_o.redirect_info.rasIdx = rasIdx;
         result_o.redirect_info.ras_ctr = ras_entry.ctr;
     end

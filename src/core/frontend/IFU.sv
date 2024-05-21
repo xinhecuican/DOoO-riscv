@@ -4,7 +4,9 @@ module IFU (
     input logic clk,
     input logic rst,
     ICacheAxi.cache axi_io,
-    IfuBackendIO.ifu ifu_backend_io
+    IfuBackendIO.ifu ifu_backend_io,
+    FsqBackendIO.backend fsq_back_io,
+    CommitBus commitBus
 );
     BpuFsqIO bpu_fsq_io;
     FsqCacheIO fsq_cache_io;
@@ -12,11 +14,14 @@ module IFU (
     PreDecodeRedirect pd_redirect;
     PreDecodeIBufferIO pd_ibuffer_io;
     FetchBundle fetchBundle;
+    FrontendCtrl frontendCtrl;
 
     assign ifu_backend_io.fetchBundle = fetchBundle;
+    assign frontendCtrl.redirect = fsq_back_io.redirect.en;
     BranchPredictor branch_predictor(.*);
     FSQ fsq(.*);
     ICache icache(.*);
     PreDecode predecode(.*);
-    InstBuffer instBuffer(.*);
+    InstBuffer instBuffer(.*,
+                          .full(frontendCtrl.ibuf_full));
 endmodule

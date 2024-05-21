@@ -4,6 +4,7 @@ module InstBuffer (
     input logic clk,
     input logic rst,
     PreDecodeIBufferIO.instbuffer pd_ibuffer_io,
+    FrontendCtrl fontendCtrl,
     output FetchBundle fetchBundle,
     output logic full
 );
@@ -70,10 +71,10 @@ module InstBuffer (
         end
     endgenerate
     assign fetchBundle.en = out_en_compose;
-
+    assign full = inst_num == `INST_BUFFER_SIZE;
 
     always_ff @(posedge clk) begin
-        if(rst == `RST)begin
+        if(rst == `RST || frontendCtrl.redirect)begin
             for(int i=0; i<`INST_BUFFER_BANK_SIZE; i++)begin
                 ibuf[i].we <= 0;
                 ibuf[i].rindex <= 0;
