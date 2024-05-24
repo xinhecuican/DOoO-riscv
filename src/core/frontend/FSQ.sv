@@ -290,7 +290,7 @@ endgenerate
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         logic `N(`PREDICTION_WIDTH) commitOffsetDecode;
-        Decoder #($clog2(`PREDICTION_WIDTH)) decoder_commit_offset (commitBus.fsqInfo[i].offset, commitOffsetDecode);
+        Decoder #(`PREDICTION_WIDTH) decoder_commit_offset (commitBus.fsqInfo[i].offset, commitOffsetDecode);
         assign commitOffsetExpand[i] =  {{`PREDICTION_WIDTH{commitBus.fsqInfo[i].idx[0] & commitBus.en[i]}} & commitOffsetDecode,
                                         {`PREDICTION_WIDTH{~commitBus.fsqInfo[i].idx[0] & commitBus.en[i]}} & commitOffsetDecode};
     end
@@ -400,7 +400,7 @@ endgenerate
         .cmp_o(oldestOffset),
         .data_o(oldestIdx)
     );
-    Decoder #($clog2(`SLOT_NUM+1)) decode_oldest(oldestIdx, oldestDecode);
+    Decoder #(`SLOT_NUM+1) decode_oldest(oldestIdx, oldestDecode);
     assign oldest = oldestDecode[`SLOT_NUM-1: 0];
 
 

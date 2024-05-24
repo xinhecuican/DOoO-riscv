@@ -17,7 +17,8 @@ module RenameTable(
     input logic clk,
     input logic rst,
     RenameTableIO.rename rename_io,
-    CommitBus commitBus
+    CommitBus commitBus,
+    CommitWalk commitWalk
 );
 
     RATIO #(`FETCH_WIDTH, `WB_SIZE) rs1_io;
@@ -32,12 +33,12 @@ module RenameTable(
     assign rs2_io.vreg = rename_io.vrs2;
     assign rename_io.prs2 = rs2_io.preg;
 
-    assign rs1_io.we = rename_io.rename_we;
-    assign rs2_io.we = rename_io.rename_we;
-    assign rs1_io.waddr = rename_io.rename_vrd;
-    assign rs2_io.waddr = rename_io.rename_vrd;
-    assign rs1_io.wdata = rename_io.rename_prd;
-    assign rs2_io.wdata = rename_io.rename_prd;
+    assign rs1_io.we = commitWalk.walk ? commitWalk.we : rename_io.rename_we;
+    assign rs2_io.we = commitWalk.walk ? commitWalk.we : rename_io.rename_we;
+    assign rs1_io.waddr = commitWalk.walk ? commitWalk.vrd : rename_io.rename_vrd;
+    assign rs2_io.waddr = commitWalk.walk ? commitWalk.vrd : rename_io.rename_vrd;
+    assign rs1_io.wdata = commitWalk.walk ? commitWalk.prd : rename_io.rename_prd;
+    assign rs2_io.wdata = commitWalk.walk ? commitWalk.prd : rename_io.rename_prd;
 
     logic `ARRAY(`COMMIT_WIDTH, `COMMIT_WIDTH) waw;
     logic `N(`COMMIT_WIDTH) commit_cancel_waw;

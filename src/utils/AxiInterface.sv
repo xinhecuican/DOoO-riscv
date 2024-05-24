@@ -1,0 +1,51 @@
+`include "../defines/defines.svh"
+
+module AxiInterface(
+    input logic clk,
+    input logic rst,
+    ICacheAxi.cache icache_io,
+    AxiIO.master axi
+);
+
+    typedef enum { ICACHE, DCACHE, UNCACHE, IUNCACHE } device_t;
+
+    typedef struct {
+        logic en;
+        device_t device;
+        AxiMAR mar;
+    } ReadController_t;
+
+    ReadController_t read_controller;
+    logic arEnd, ar_en;
+
+    assign arEnd = axi.mar.valid & axi.sar.ready;
+    assign ar_en = (~read_controller.en) | arEnd;
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            read_controller <= '{default: 0};
+        end
+        else begin
+            if(~read_controller.en)begin
+                if(icache_io.mar.valid)begin
+                    read_controller.en <= 1'b1;
+                    read_controller.device <= ICACHE;
+                    read_controller.mar <= icache_io.mar;
+                end
+            end
+            else if(arEnd)begin
+                read_controller.en <= 1'b0;
+                read_controller.mar.valid <= 1'b0;
+            end
+        end
+    end
+
+    assign icache_io.sar.ready = read_controller.en & (read_controller.device == ICACHE) & arEnd;
+    AxiSRCopy icache_sr (axi.sr, axi.sr.id == icache_io.sar.id && axi.sr.valid, icache_io.sr);
+
+    assign axi.mar = read_controller.mar;
+    assign axi.mr.ready = 1'b1;
+    assign axi.maw = 0;
+    assign axi.mw = 0;
+    assign axi.mb = 0;
+
+endmodule

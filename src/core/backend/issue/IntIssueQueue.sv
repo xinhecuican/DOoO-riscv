@@ -7,7 +7,8 @@ module IntIssueQueue(
     IssueRegfileIO.issue int_reg_io,
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
-    WriteBackBus.slave wbBus
+    WriteBackBus.slave wbBus,
+    CommitWalk commitWalk
 );
 
     localparam BANK_SIZE = `INT_ISSUE_SIZE / `ALU_SIZE;
@@ -17,7 +18,7 @@ module IntIssueQueue(
     logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) originOrder, sortOrder;
     logic `N(BANK_NUM) full;
-    logic `N(BANK_NUM) enNext;
+    logic `N(BANK_NUM) enNext, redirectClear;
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin
         IntIssueBank #(BANK_SIZE) issue_bank (
@@ -33,10 +34,12 @@ generate
         assign bank_io[i].data = dis_issue_io.data[order[i]];
         assign full[i] = dis_issue_io.en[order[i]] & bank_io[i].full;
 
-        assign int_reg_io.en[i] = bank_io[i].reg_en;
+        assign int_reg_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
         assign int_reg_io.rs1[i] = bank_io[i].rs1;
         assign int_reg_io.rs2[i] = bank_io[i].rs2;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
+
+        assign redirectClear[i] = backendCtrl.redirect & (bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (bankendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir);
     end
 endgenerate
     assign dis_issue_io.full = |full;
@@ -44,9 +47,9 @@ endgenerate
     always_ff @(posedge clk)begin
         order <= sortOrder;
         for(int i=0; i<BANK_NUM; i++)begin
-            enNext[i] <= bank_io[i].reg_en;
+            enNext[i] <= bank_io[i].reg_en & ~backendCtrl.redirect;
         end
-        issue_exu_io.en <= enNext;
+        issue_exu_io.en <= enNext & ~redirectClear;
         issue_exu_io.rs1_data <= int_reg_io.rs1_data;
         issue_exu_io.rs2_data <= int_reg_io.rs2_data;
         for(int i=0; i<BANK_NUM; i++)begin
@@ -84,7 +87,8 @@ module IntIssueBank #(
     input logic clk,
     input logic rst,
     IntBankIO.bank io,
-    WriteBackBus.slave wbBus
+    WriteBackBus.slave wbBus,
+    CommitWalk walk
 );
     logic `N(DEPTH) en;
     IssueStatusBundle `N(DEPTH) status_ram;
@@ -142,6 +146,15 @@ generate
     end
 endgenerate
 
+    // walk
+    logic `N(DEPTH) bigger, walk_en;
+    assign walk_en = en & bigger;
+generate
+    for(genvar i=0; i<DEPTH; i++)begin
+        assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
+    end
+endgenerate
+
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             status_ram <= 0;
@@ -149,7 +162,13 @@ endgenerate
             io.data_o <= 0;
         end
         else begin
-            en <= (en | ({DEPTH{io.en}} & free_en));
+            if(backendCtrl.redirect)begin
+                en <= walk_en;
+            end
+            else begin
+                en <= (en | ({DEPTH{io.en}} & free_en));
+            end
+            
             if(io.en)begin
                 status_ram[freeIdx] <= io.status;
             end
@@ -162,6 +181,7 @@ endgenerate
         end
     end
 
+    // br type & ras type
     logic push, pop;
     logic `N(`PREG_WIDTH) rd, rs;
     logic `N(`BRANCHOP_WIDTH) op;

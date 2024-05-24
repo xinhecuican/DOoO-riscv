@@ -201,9 +201,10 @@ endinterface
 
 interface IfuBackendIO;
     FetchBundle fetchBundle;
+    logic stall;
 
-    modport ifu(output fetchBundle);
-    modport backend(input fetchBundle);
+    modport ifu(output fetchBundle, input stall);
+    modport backend(input fetchBundle, output stall);
 endinterface
 
 interface DecodeRenameIO;
@@ -214,7 +215,8 @@ interface DecodeRenameIO;
 endinterface
 
 interface ROBRenameIO;
-    logic `N(`ROB_WIDTH) robIdx;
+    RobIdx robIdx;
+    logic `N($clog2(`FETCH_WIDTH)) validNum;
 
     modport rename(input robIdx);
     modport rob(output robIdx);
@@ -226,7 +228,7 @@ interface RenameDisIO;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs2;
     logic `N(`FETCH_WIDTH) wen;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
-    logic `ARRAY(`FETCH_WIDTH, `ROB_WIDTH) robIdx;
+    RobIdx `N(`FETCH_WIDTH) robIdx;
 
     modport rename(output op, prs1, prs2, prd, robIdx);
     modport dis(input op, prs1, prs2, wen, prd, robIdx);
@@ -244,24 +246,13 @@ interface RegfileIO;
     modport regfile (input raddr, waddr, wdata, en, we, output rdata);
 endinterface
 
-interface BusyTableIO;
-    logic `N(`FETCH_WIDTH) dis_en;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) dis_rd;
-
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs1;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2;
-    logic `N(`FETCH_WIDTH) rs1_en;
-    logic `N(`FETCH_WIDTH) rs2_en;
-
-    modport busytable(input dis_en, dis_rd, rs1, rs2, output rs1_en, rs2_en);
-endinterface
-
 interface DisIntIssueIO;
     logic `N(`INT_DISPATCH_PORT) en;
     IssueStatusBundle `N(`INT_DISPATCH_PORT) status;
     IntIssueBundle `N(`INT_DISPATCH_PORT) data;
     logic full;
 
+    modport dis (output en, status, data, input full);
     modport issue(input en, status, data, output full);
 endinterface
 
@@ -282,6 +273,7 @@ endinterface
 
 interface IntIssueExuIO;
     logic `N(`ALU_SIZE) en;
+    logic `N(`ALU_SIZE) valid; // fu valid
     logic `ARRAY(`ALU_SIZE, `XLEN) rs1_data;
     logic `ARRAY(`ALU_SIZE, `XLEN) rs2_data;
     IntIssueBundle `N(`ALU_SIZE) bundle;
@@ -290,12 +282,13 @@ interface IntIssueExuIO;
     BranchType `N(`ALU_SIZE) br_type;
     RasType `N(`ALU_SIZE) ras_type;
 
-    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions);
-    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions);
+    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions, output valid);
+    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions, input valid);
 endinterface
 
 interface IssueAluIO;
     logic en;
+    logic valid; // fu valid
     logic `N(`XLEN) rs1_data;
     logic `N(`XLEN) rs2_data;
     IntIssueBundle bundle;
@@ -304,7 +297,7 @@ interface IssueAluIO;
     RasType ras_type;
     BranchType br_type;
 
-    modport alu (input en, rs1_data, rs2_data, bundle, stream, direction, ras_type, br_type);
+    modport alu (input en, rs1_data, rs2_data, bundle, stream, direction, ras_type, br_type, output valid);
 endinterface
 
 interface IssueBranchIO;
@@ -316,14 +309,6 @@ interface IssueBranchIO;
     logic direction;
 
     modport branch (input en, rs1_data, rs2_data, bundle, streams, direction);
-endinterface
-
-interface WriteBackIO;
-    WBData `N(`FU_SIZE) datas;
-    logic `N(`FU_SIZE) valid;
-    WBData `N(`WB_SIZE) wbData;
-
-    modport wb (input datas, output valid, wbData);
 endinterface
 
 interface WriteBackBus;
@@ -339,14 +324,38 @@ interface CommitBus;
     FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
-    logic `N($clog2(`COMMIT_WIDTH)) num;
-    logic `N($clog2(`COMMIT_WIDTH)) wenum;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) num;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) wenum;
 
-    modport rob(output en, fsqInfo, vrd, prd, num, wenum);
+    modport rob(output en, we, fsqInfo, vrd, prd, num, wenum);
+endinterface
+
+interface CommitWalk;
+    logic walk;
+    logic walkStart;
+    RobIdx walkIdx;
+
+    logic `N(`COMMIT_WIDTH) en;
+    logic `N(`COMMIT_WIDTH) we;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) num;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) weNum;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) vrd;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
+
+    modport rob (output walk, walkStart, walkIdx, en, we, vrd, prd);
 endinterface
 
 interface FrontendCtrl;
     logic ibuf_full;
     logic redirect;
+endinterface
+
+interface BackendCtrl;
+    logic rename_full;
+    logic rob_full;
+    logic dis_full;
+
+    logic redirect;
+    RobIdx redirectIdx;
 endinterface
 `endif

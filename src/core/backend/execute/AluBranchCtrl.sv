@@ -20,6 +20,7 @@ module AluBranchCtrl(
     always_ff @(posedge clk)begin
         io.redirectInfo.en <= bundle_o.en & bundle_o.res.error;
         io.redirectInfo.fsqInfo <= bundle_o.fsqInfo;
+        io.redirectInfo.robIdx <= bundle_o.robIdx;
         io.redirectInfo.taken <= bundle_o.res.taken;
         io.redirectInfo.target <= bundle_o.res.target;
         io.redirectInfo.br_type <= bundle_o.res.br_type;

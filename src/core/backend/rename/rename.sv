@@ -6,17 +6,23 @@ module Rename(
     DecodeRenameIO.rename dec_rename_io,
     RenameDisIO.rename rename_dis_io,
     ROBRenameIO.rename rob_rename_io,
-    CommitBus commitBus
+    CommitBus commitBus,
+    CommitWalk commitWalk,
+    BackendCtrl backendCtrl,
+    output logic full
 );
 
     RenameTableIO rename_io;
     FreelistIO fl_io;
     logic `N($clog2(`FETCH_WIDTH)) rdNum;
     logic `N(`FETCH_WIDTH) rd_en;
+    logic `N(`FETCH_WIDTH) en;
+    logic stall;
 
     RenameTableIO renameTable(.*);
     assign fl_io.en = rdNum;
     assign fl_io.old_prd = rename_io.old_prd;
+    assign full = fl_io.full;
     Freelist(.*);
 
 // conflict
@@ -25,6 +31,7 @@ module Rename(
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1, prs2, prd;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) prdIdx;
 
+    assign stall = backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full;
 generate
     assign prdIdx[0] = 0;
     for(genvar i=1; i<`FETCH_WIDTH; i++)begin
@@ -54,34 +61,41 @@ generate
     end
 endgenerate
 
+    logic `ARRAY(`FETCH_WIDTH, `ROB_WIDTH) robIdx;
 generate;
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         assign rdNum = rdNum + rd_en[i];
+        assign en[i] = dec_rename_io.op[i].di.en;
         assign rd_en[i] = dec_rename_io.op[i].di.en && dec_rename_io.op[i].di.we;
         assign rename_io.vrs1[i] = dec_rename_io.op[i].di.rs1;
         assign rename_io.vrs2[i] = dec_rename_io.op[i].di.rs2;
-        assign rename_io.rename_we[i] = rd_en[i] & ~(|waw[i]);
+        assign rename_io.rename_we[i] = rd_en[i] & ~(|waw[i]) & ~backendCtrl.redirect & ~stall;
         assign rename_io.rename_vrd[i] = dec_rename_io.op[i].di.rd;
         assign rename_io.rename_prd[i] = prd[i];
+        assign robIdx[i] = rob_rename_io.robIdx[i].idx + i;
     end
 endgenerate
 
+    logic `N($clog2(`FETCH_WIDTH)) validNum;
+    ParallelAdder #(1, `FETCH_WIDTH) adder_valid (en, validNum);
+    assign rob_rename_io.validNum = validNum;
     always_ff @(posedge clk)begin
-        if(rst == `RST)begin
+        if(rst == `RST || backendCtrl.redirect)begin
             rename_dis_io.op <= 0;
             rename_dis_io.prs1 <= 0;
             rename_dis_io.prd <= 0;
             rename_dis_io.robIdx <= 0;
             rename_dis_io.wen <= 0;
         end
-        else begin
+        else if(~stall)begin
             rename_dis_io.op <= dec_rename_io.op;
             rename_dis_io.prs1 <= prs1;
             rename_dis_io.prs2 <= prs2;
             rename_dis_io.prd <= prd;
             rename_dis_io.wen <= rd_en;
             for(int i=0; i<`FETCH_WIDTH; i++)begin
-                rename_dis_io.robIdx <= rob_rename_io.robIdx + i;
+                rename_dis_io.robIdx[i].idx <= robIdx[i];
+                rename_dis_io.robIdx[i].dir <= robIdx[i][`FSQ_WIDTH-1] ^ rob_rename_io.robIdx[i].idx[`FSQ_WIDTH-1] ? ~rob_rename_io.robIdx[i].dir : rob_rename_io.robIdx[i].dir;
             end
         end
     end

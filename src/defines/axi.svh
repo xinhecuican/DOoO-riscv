@@ -32,6 +32,19 @@ typedef struct packed {
     logic user; // axi4
 } AxiSR;
 
+task AxiSRCopy (
+    input AxiSR in,
+    input logic en,
+    output AxiSR out
+);
+    assign out.id = in.id;
+    assign out.data = in.data;
+    assign out.resp = in.resp;
+    assign out.last = in.last;
+    assign out.valid = en;
+    assign out.user = in.user;
+endtask
+
 typedef struct packed {
     logic ready;
 } AxiMR;

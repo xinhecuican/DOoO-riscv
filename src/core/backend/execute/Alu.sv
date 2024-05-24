@@ -32,11 +32,14 @@ module ALU(
         .BranchUnitRes(branchRes),
         .result(branchResult)
     );
-    assign wbData.en = io.en;
+    assign wbData.en = io.en & valid & ~(backendCtrl.redirect &
+            ((backendCtrl.redirectIdx.dir ^ io.bundle.robIdx.dir) ^ (io.bundle.robIdx.idx < bankendCtrl.redirectIdx.idx)));
     assign wbData.fsqInfo = io.bundle.fsqInfo;
     assign wbData.robIdx = io.bundle.robIdx;
     assign wbData.rd = io.bundle.rd;
     assign wbDataq.res = io.intv ? result : branchResult;
+
+    assign io.valid = valid;
 endmodule
 
 module BranchModel(

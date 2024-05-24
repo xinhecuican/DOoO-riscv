@@ -3,6 +3,7 @@
 module InstBuffer (
     input logic clk,
     input logic rst,
+    input logic stall,
     PreDecodeIBufferIO.instbuffer pd_ibuffer_io,
     FrontendCtrl fontendCtrl,
     output FetchBundle fetchBundle,
@@ -35,7 +36,7 @@ module InstBuffer (
     assign data_valid_shift = pd_ibuffer_io.en << tail[`INST_BUFFER_BANK_WIDTH-1: 0];
     assign inst_buffer_we = data_valid_shift[`INST_BUFFER_BANK_NUM-1: 0] | 
                             data_valid_shift[`INST_BUFFER_BANK_NUM*2-1: `INST_BUFFER_BANK_NUM];
-    assign outNum = inst_num >= `FETCH_WIDTH ? `FETCH_WIDTH : inst_num;
+    assign outNum = stall ? 0 : inst_num >= `FETCH_WIDTH ? `FETCH_WIDTH : inst_num;
     always_comb begin
         out_en_compose[0] = |inst_num;
         out_en_compose[1] = |inst_num[$clog2(`INST_BUFFER_SIZE): 1];
@@ -85,7 +86,7 @@ module InstBuffer (
         else begin
             // enqueue
             inst_num <= inst_num + pd_ibuffer_io.num - outNum;
-            if(inst_num != 0)begin
+            if(inst_num != 0 && !stall)begin
                 head <= head + outNum;
                 for(int i=0; i<`INST_BUFFER_BANK_NUM; i++)begin
                     ibuf[i].rindex <= ibuf[i].rindex + inst_buffer_re[i];

@@ -23,5 +23,6 @@ module IFU (
     ICache icache(.*);
     PreDecode predecode(.*);
     InstBuffer instBuffer(.*,
-                          .full(frontendCtrl.ibuf_full));
+                          .full(frontendCtrl.ibuf_full),
+                          .stall(ifu_backend_io.stall));
 endmodule

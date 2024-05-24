@@ -170,8 +170,14 @@ typedef struct packed {
 } OPBundle;
 
 typedef struct packed {
+    logic `N(`FSQ_WIDTH) idx;
+    logic dir;
+} RobIdx;
+
+typedef struct packed {
     logic rs1v, rs2v;
     logic `N(`PREG_WIDTH) rs1, rs2;
+    RobIdx robIdx;
 } IssueStatusBundle;
 
 typedef struct packed {
@@ -181,7 +187,7 @@ typedef struct packed {
     logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;
-    logic `N(`ROB_WIDTH) robIdx;
+    RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
     logic `N(`XLEN) imm;
     FsqIdxInfo fsqInfo;
@@ -191,6 +197,7 @@ typedef struct packed {
     logic en;
     logic taken;
     FsqIdxInfo fsqInfo;
+    RobIdx robIdx;
     logic `N(`VADDR_SIZE) target;
     BranchType br_type;
     RasType ras_type;
@@ -207,21 +214,15 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     FsqIdxInfo fsqInfo;
+    RobIdx robIdx;
     BranchUnitRes res;
 } AluBranchBundle;
 
 typedef struct packed {
     logic en;
-    logic `N(`ROB_WIDTH) robIdx;
+    RobIdx robIdx;
     FsqIdxInfo fsqInfo;
     logic `N(`PREG_WIDTH) rd;
     logic `N(`XLEN) res;
 } WBData;
-
-typedef struct packed {
-    logic en;
-    FsqIdxInfo fsqInfo;
-    logic `N(`PREG_WIDTH) vrd;
-    logic `N(`PREG_WIDTH) prd;
-} CommitData;
 `endif
