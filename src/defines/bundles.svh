@@ -167,6 +167,9 @@ typedef struct packed {
     logic en;
     FsqIdxInfo fsqInfo;
     DecodeInfo di;
+`ifdef DIFFTEST
+    logic `N(32) inst;
+`endif
 } OPBundle;
 
 typedef struct packed {

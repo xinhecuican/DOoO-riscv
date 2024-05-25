@@ -49,6 +49,7 @@ generate;
             .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_index(
             .origin(tage_input_history.fold_idx[i]),
+            .condNum(condNum),
             .dir(taken),
             .reverse_dir(reverse_dir),
             .out(tage_update_history.fold_idx[i])
@@ -59,6 +60,7 @@ generate;
             .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_tag1(
             .origin(tage_input_history.fold_tag1[i]),
+            .condNum(condNum),
             .dir(taken),
             .reverse_dir(reverse_dir),
             .out(tage_update_history.fold_tag1[i])
@@ -69,6 +71,7 @@ generate;
             .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_tag2(
             .origin(tage_input_history.fold_tag2[i]),
+            .condNum(condNum),
             .dir(taken),
             .reverse_dir(reverse_dir),
             .out(tage_update_history.fold_tag2[i])

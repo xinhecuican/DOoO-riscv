@@ -19,11 +19,14 @@ module RenameTable(
     RenameTableIO.rename rename_io,
     CommitBus commitBus,
     CommitWalk commitWalk
+`ifdef DIFFTEST
+    ,DiffRAT.rat diff_rat
+`endif
 );
 
-    RATIO #(`FETCH_WIDTH, `WB_SIZE) rs1_io;
-    RATIO #(`FETCH_WIDTH, `WB_SIZE) rs2_io;
-    RATIO #(`COMMIT_WIDTH, `COMMIT_WIDTH) commit_io;
+    RATIO #(`FETCH_WIDTH, `WB_SIZE) rs1_io();
+    RATIO #(`FETCH_WIDTH, `WB_SIZE) rs2_io();
+    RATIO #(`COMMIT_WIDTH, `COMMIT_WIDTH) commit_io();
     RAT #(`FETCH_WIDTH, `WB_SIZE) rs1_rat(.*, .rat_io(rs1_io));
     RAT #(`FETCH_WIDTH, `WB_SIZE) rs2_rat(.*, .rat_io(rs2_io));
     RAT #(`FETCH_WIDTH, `WB_SIZE) commit_rat(.*, .rat_io(commit_io));
@@ -72,4 +75,23 @@ endgenerate
     assign commit_io.we = commit_we & ~commit_cancel_waw;
     assign commit_io.waddr = commitBus.vrd;
     assign commit_io.wdata = commitBus.prd;
+
+`ifdef DIFFTEST
+    logic `ARRAY(5, `PREG_WIDTH) diff_map;
+    assign diff_rat.map = diff_map;
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            for(int i=0; i<32; i++)begin
+                diff_map[i] <= i;
+            end
+        end
+        else begin
+            for(int i=0; i<`COMMIT_WIDTH; i++)begin
+                if(commit_io.we[i])begin
+                    diff_map[commit_io.waddr[i]] <= commit_io.wdata[i];
+                end
+            end
+        end
+    end
+`endif
 endmodule

@@ -108,9 +108,24 @@ interface FsqBackendIO;
     logic `N(`ALU_SIZE) directions;
 
     BackendRedirectInfo redirect;
+
+`ifdef DIFFTEST
+    logic `ARRAY(`COMMIT_WIDTH, $bits(FsqIdxInfo)) diff_fsqInfo;
+    logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) diff_pc;
+`endif
     
-    modport fsq (input fsqIdx, redirect, output streams, directions);
-    modport backend (output fsqIdx, redirect, input streams, directions);
+    modport fsq (input fsqIdx, redirect, output streams, directions
+`ifdef DIFFTEST
+    ,input diff_fsqInfo,
+    output diff_pc
+`endif
+    );
+    modport backend (output fsqIdx, redirect, input streams, directions
+`ifdef DIFFTEST
+    ,output diff_fsqInfo,
+    input diff_pc
+`endif
+    );
 endinterface
 
 interface CachePreDecodeIO;
@@ -334,4 +349,16 @@ interface BackendCtrl;
     logic redirect;
     RobIdx redirectIdx;
 endinterface
+
+`ifdef DIFFTEST
+interface DiffRAT;
+    logic `ARRAY(5, `PREG_WIDTH) map;
+
+    modport rat (output map);
+    modport regfile (input map);
+endinterface
+
+`endif
+
+
 `endif

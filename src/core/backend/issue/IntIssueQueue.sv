@@ -92,7 +92,7 @@ module IntIssueBank #(
     input logic clk,
     input logic rst,
     IntBankIO.bank io,
-    WriteBackBus.slave wbBus,
+    WriteBackBus wbBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl
 );

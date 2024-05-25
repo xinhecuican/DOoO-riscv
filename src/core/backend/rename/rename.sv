@@ -10,6 +10,9 @@ module Rename(
     CommitWalk commitWalk,
     BackendCtrl backendCtrl,
     output logic full
+`ifdef DIFFTEST
+    ,DiffRAT.rat diff_rat
+`endif
 );
 
     RenameTableIO rename_io();

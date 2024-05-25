@@ -28,6 +28,9 @@ endgenerate
                 dec_rename_io.op[i].en <= insts.en[i];
                 dec_rename_io.op[i].di <= decodeInfo[i];
                 dec_rename_io.op[i].fsqInfo = insts.fsqInfo[i];
+`ifdef DIFFTEST
+                dec_rename_io.op[i].inst <= insts.insts[i];
+`endif
             end
         end
     end

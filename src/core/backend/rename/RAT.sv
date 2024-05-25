@@ -35,7 +35,9 @@ endgenerate
 
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
-            rat <= '{default: 0};
+            for(int i=0; i<32; i++)begin
+                rat[i] <= i;
+            end
         end
         else begin
             for(int i=0; i<WRITE_PORT; i++)begin

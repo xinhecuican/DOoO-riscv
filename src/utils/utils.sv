@@ -202,12 +202,12 @@ module Sort #(
 	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
 	output logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_o
 );
-	logic [RADIX-1: 0][WIDTH-1: 0] sort;
+	logic [RADIX-1: 0][WIDTH-1: 0] out;
 generate
 	case(RADIX)
-	2: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
-	4: Sort4 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
-	default: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, sort, data_o);
+	2: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
+	4: Sort4 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
+	default: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
 	endcase
 endgenerate
 endmodule

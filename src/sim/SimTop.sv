@@ -12,7 +12,7 @@ module SimTop(
     output        io_uart_in_valid,
     input  [7:0]  io_uart_in_ch
 );
-    AxiIO cpu_mem_io;
+    AxiIO cpu_mem_io();
 
     CPUCore cpu(
         .clk(clock),

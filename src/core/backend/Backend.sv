@@ -17,6 +17,9 @@ module Backend(
     BackendCtrl backendCtrl();
     CommitWalk commitWalk();
 
+`ifdef DIFFTEST
+    DiffRAT diff_rat();
+`endif
 
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
     assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;

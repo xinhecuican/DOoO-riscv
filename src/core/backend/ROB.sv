@@ -10,6 +10,10 @@ module ROB(
     CommitBus.rob commitBus,
     CommitWalk.rob commitWalk,
     output logic full
+
+`ifdef DIFFTEST
+    ,FsqBackendIO.backend fsq_back_io
+`endif
 );
 
     typedef enum { IDLE, WALK } RobState;
@@ -244,4 +248,56 @@ endgenerate
         end
     end
 
+`ifdef DIFFTEST
+    logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) pc;
+    logic `N(32) insts `N(`ROB_SIZE);
+    logic `N(`XLEN) data `N(`ROB_SIZE);
+    logic `ARRAY(`COMMIT_WIDTH, 32) diff_insts, diff_insts_before;
+
+    logic `N(`COMMIT_WIDTH) diff_valid, diff_wen;
+    logic `ARRAY(`COMMIT_WIDTH, 5) diff_wdest;
+    logic `ARRAY(`COMMIT_WIDTH, `XLEN) diff_data, diff_data_before;
+    always_ff @(posedge clk)begin
+        pc <= fsq_back_io.diff_pc;
+        diff_valid <= commitBus.en;
+        diff_wen <= commitBus.we;
+        diff_wdest <= commitBus.vrd;
+        for(int i=0; i<`FETCH_WIDTH; i++)begin
+            if(data_en[i])begin
+                insts[dataWIdx[i]] <= dis_io.op[i].inst;
+            end
+        end
+        for(int i=0; i<`WB_SIZE; i++)begin
+            if(wbBus.en[i])begin
+                data[wbBus.robIdx[i].idx] <= wbBus.res[i];
+            end
+        end
+        for(int i=0; i<`COMMIT_WIDTH; i++)begin
+            diff_insts_before[i] <= insts[dataRIdx[i]];
+            diff_data_before[i] <= data[dataRIdx[i]];
+        end
+        diff_insts <= diff_insts_before;
+        diff_data <= diff_data_before;
+    end
+generate
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign fsq_back_io.diff_fsqInfo[i] = rob_wdata[i].diff_fsqInfo;
+        DifftestInstrCommit difftest_inst_commit(
+            .clock(clk),
+            .coreid(0),
+            .index(i),
+            .valid(diff_valid[i]),
+            .pc(pc[i]),
+            .instr(diff_insts[i]),
+            .special(1'b0),
+            .skip(1'b0),
+            .isRVC(1'b0),
+            .scFailed(1'b0),
+            .wen(diff_wen[i]),
+            .wdest(diff_wdest[i]),
+            .wdata(diff_data[i])
+        );
+    end
+endgenerate
+`endif
 endmodule

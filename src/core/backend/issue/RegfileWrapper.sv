@@ -5,12 +5,16 @@ module RegfileWrapper(
     input logic rst,
     IssueRegfileIO.regfile int_reg_io,
     WriteBackBus wbBus
+`ifdef DIFFTEST
+    ,DiffRAT.regfile diff_rat
+`endif
 );
     RegfileIO reg_io();
     Regfile regfile(
         .clk(clk),
         .rst(rst),
-        .io(reg_io)
+        .io(reg_io),
+        .*
     );
 
 generate

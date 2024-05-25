@@ -91,7 +91,8 @@ module DispatchQueue #(
     input logic clk,
     input logic rst,
     DispatchQueueIO.dis_queue io,
-    CommitWalk commitWalk
+    CommitWalk commitWalk,
+    BackendCtrl backendCtrl
 );
 
     typedef struct packed {
@@ -134,7 +135,7 @@ generate
         logic `N(DEPTH) headShift, tailShift;
         logic `N(ADDR_WIDTH) validSelect1, validSelect2;
         logic `N(ADDR_WIDTH) walk_tail;
-        loigc `N(ADDR_WIDTH + 1) walkNum;
+        logic `N(ADDR_WIDTH + 1) walkNum;
         assign headShift = (1 << head) - 1;
         assign tailShift = (1 << tail) - 1;
         assign en = tail > head ? headShift ^ tailShift : ~(headShift ^ tailShift);

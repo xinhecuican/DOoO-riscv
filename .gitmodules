@@ -2,3 +2,6 @@
 [submodule "utils/difftest"]
 	path = utils/difftest
 	url = https://github.com/xinhecuican/difftest.git
+[submodule "utils/NEMU"]
+	path = utils/NEMU
+	url = https://github.com/xinhecuican/NEMU

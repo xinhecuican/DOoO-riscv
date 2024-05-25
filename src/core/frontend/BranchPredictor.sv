@@ -41,6 +41,7 @@ module BranchPredictor(
     );
     
     assign s1_result = ubtb_io.result;
+    assign ubtb_io.pc = pc;
     assign ubtb_io.fsqIdx = bpu_fsq_io.stream_idx;
     assign ubtb_io.fsqDir = bpu_fsq_io.stream_dir;
     assign ubtb_io.ghistIdx = ghist_idx;

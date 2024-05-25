@@ -336,6 +336,27 @@ endgenerate
         bpu_fsq_io.update <= commitValid;
         bpu_fsq_io.updateInfo <= updateInfo;
     end
+
+`ifdef DIFFTEST
+    logic `N(`VADDR_SIZE) diff_pcs `N(`FSQ_SIZE);
+generate
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign fsq_back_io.diff_pc[i] = diff_pcs[fsq_back_io.diff_fsqInfo[i].idx] + fsq_back_io.diff_fsqInfo[i].offset;
+    end
+endgenerate
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            diff_pcs <= '{default: 0};
+        end
+        else begin
+            if(queue_we)begin
+                diff_pcs[write_tail] <= fsq_cache_io.stream.start_addr;
+            end
+            
+        end
+    end
+`endif
+
 endmodule
 
 module BTBEntryGen(
