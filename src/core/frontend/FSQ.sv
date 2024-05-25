@@ -171,12 +171,12 @@ endgenerate
             end
             else begin
                 redirectCondInfo.condNum = `SLOT_NUM;
-                fsq_back_io.redirect.taken = 0;
+                redirectCondInfo.taken = 0;
             end
         end
         else begin
             redirectCondInfo.condNum = condSmallNumAll;
-            fsq_back_io.redirect.taken = 0;
+            redirectCondInfo.taken = 0;
         end
     end
 

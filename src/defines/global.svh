@@ -16,7 +16,7 @@
 `define PADDR_BUS [(`PADDR_SIZE)-1: 0]
 `define IALIGN 32
 
-`define RESET_PC `XLEN'h0
+`define RESET_PC `VADDR_SIZE'hbfc00000
 
 // BranchPrediction
 `define PREDICT_STAGE 2

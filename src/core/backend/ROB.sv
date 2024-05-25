@@ -136,6 +136,11 @@ endgenerate
             remainCount_n = remainCount - subNum;
         end
         default: begin
+            addNum = 0;
+            subNum = 0;
+            tail_n = 0;
+            head_n = 0;
+            remainCount_n = 0;
         end
         endcase
     end

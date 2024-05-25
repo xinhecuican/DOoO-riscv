@@ -51,7 +51,7 @@ module BranchPredictor(
     assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect[0];
     assign redirect.flush = bpu_fsq_io.squash;
     assign redirect.stall = bpu_fsq_io.stall;
-    always_ff @(clk)begin
+    always_ff @(posedge clk)begin
         if(rst == `RST)begin
             pc <= `RESET_PC;
         end
@@ -63,7 +63,7 @@ module BranchPredictor(
         end
 
         if(rst == `RST || redirect.s2_redirect || redirect.flush)begin
-            s2_result_in <= '{default: 0};
+            s2_result_in <= 0;
             s2_meta_in <= 0;
         end
         else if(!redirect.stall)begin
