@@ -21,7 +21,7 @@ module AluBranchCtrl(
         io.redirectInfo.en <= bundle_o.en & bundle_o.res.error;
         io.redirectInfo.fsqInfo <= bundle_o.fsqInfo;
         io.redirectInfo.robIdx <= bundle_o.robIdx;
-        io.redirectInfo.taken <= bundle_o.res.taken;
+        io.redirectInfo.taken <= bundle_o.res.direction;
         io.redirectInfo.target <= bundle_o.res.target;
         io.redirectInfo.br_type <= bundle_o.res.br_type;
         io.redirectInfo.ras_type <= bundle_o.res.ras_type;
@@ -46,10 +46,10 @@ generate
                         (bundles[0].fsqInfo.idx < bundles[1].fsqInfo.idx);
         always_comb begin
             case({bundles[1].en, bundles[0].en})
-            2'b00: assign bundle_o = bundles[0];
-            2'b01: assign bundle_o = bundles[0];
-            2'b10: assign bundle_o = bundles[1];
-            2'b11: assign bundle_o = sameLine && bundles[0].fsqInfo.offset < bundles[1].fsqInfo.offset || 
+            2'b00: bundle_o = bundles[0];
+            2'b01: bundle_o = bundles[0];
+            2'b10: bundle_o = bundles[1];
+            2'b11: bundle_o = sameLine && bundles[0].fsqInfo.offset < bundles[1].fsqInfo.offset || 
                                     !sameLine && bigger ? bundles[0] : bundles[1];
             endcase
         end

@@ -5,13 +5,14 @@ module Execute(
     input logic rst,
     IntIssueExuIO.exu int_exu_io,
     WriteBackBus.wb wbBus,
+    BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo
 );
-    AluBranchCtrlIO branch_ctrl_io;
-    WriteBackIO wb_io;
+    AluBranchCtrlIO branch_ctrl_io();
+    WriteBackIO wb_io();
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
-        IssueAluIO issue_alu_io;
+        IssueAluIO issue_alu_io();
         assign issue_alu_io.en = int_exu_io.en[i];
         assign issue_alu_io.rs1_data = int_exu_io.rs1_data[i];
         assign issue_alu_io.rs2_data = int_exu_io.rs2_data[i];
@@ -19,19 +20,20 @@ generate
         assign issue_alu_io.stream = int_exu_io.streams[i];
         assign issue_alu_io.direction = int_exu_io.directions[i];
         assign issue_alu_io.ras_type = int_exu_io.ras_type[i];
-        assign issue_alu_io.br_tyype = int_exu_io.br_type[i];
+        assign issue_alu_io.br_type = int_exu_io.br_type[i];
         assign int_exu_io.valid[i] = issue_alu_io.valid;
-        Alu alu(
+        ALU alu(
             .clk(clk),
             .rst(rst),
-            .issue_alu_io(issue_alu_io),
+            .io(issue_alu_io),
             .wbData(wb_io.datas[i]),
-            .branchRes(branch_ctrl_io.bundles[i].branchRes),
-            .valid(wb_io.valid[i])
+            .branchRes(branch_ctrl_io.bundles[i].res),
+            .valid(wb_io.valid[i]),
+            .backendCtrl(backendCtrl)
         );
 
         assign branch_ctrl_io.bundles[i].en = int_exu_io.en[i] & int_exu_io.bundle[i].branchv & int_exu_io.valid[i];
-        assign branch_ctrl_io.bundles[i].fsqInfo = int_exu_io.streams[i].fsqInfo;
+        assign branch_ctrl_io.bundles[i].fsqInfo = int_exu_io.bundle[i].fsqInfo;
         assign branch_ctrl_io.bundles[i].robIdx = int_exu_io.bundle[i].robIdx;
     end
 endgenerate
@@ -46,7 +48,7 @@ endgenerate
     WriteBack writeBack(
         .clk(clk),
         .rst(rst),
-        .io(wb_io)
+        .io(wb_io),
+        .*
     );
-    assign wbBus.data = wb_io.wbData;
 endmodule

@@ -248,7 +248,7 @@ module MPRAM #(
             always_ff @(posedge clk)begin
                 for(int i=0; i<READ_PORT; i++)begin
                     if(en[i])begin
-                        rdata[i] <= mem[addr[i]];
+                        rdata[i] <= mem[raddr[i]];
                     end
                 end
 
@@ -381,11 +381,11 @@ module FIFO#(
 
     generate;
         if(READ_LATENCY == 0)begin
-            assign rdata = data[head];
+            assign rdata = queue[head];
         end
         else if(READ_LATENCY == 1)begin
             always_ff @(posedge clk)begin
-                rdata <= data[head];
+                rdata <= queue[head];
             end
         end
     endgenerate

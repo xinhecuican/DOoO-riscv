@@ -7,13 +7,14 @@ module IntIssueQueue(
     IssueRegfileIO.issue int_reg_io,
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
-    WriteBackBus.slave wbBus,
-    CommitWalk commitWalk
+    WriteBackBus wbBus,
+    CommitWalk commitWalk,
+    BackendCtrl backendCtrl
 );
 
     localparam BANK_SIZE = `INT_ISSUE_SIZE / `ALU_SIZE;
     localparam BANK_NUM = `ALU_SIZE;
-    IntBankIO #(BANK_SIZE) bank_io `N(BANK_NUM);
+    IntBankIO #(BANK_SIZE) bank_io [BANK_NUM-1: 0]();
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) order;
     logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) originOrder, sortOrder;
@@ -24,7 +25,8 @@ generate
         IntIssueBank #(BANK_SIZE) issue_bank (
             .clk(clk),
             .rst(rst),
-            .io(bank_io[i])
+            .io(bank_io[i]),
+            .*
         );
         assign bankNum[i] = bank_io[i].bankNum;
         assign originOrder[i] = i;
@@ -39,24 +41,27 @@ generate
         assign int_reg_io.rs2[i] = bank_io[i].rs2;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
 
-        assign redirectClear[i] = backendCtrl.redirect & (bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (bankendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir);
+        assign redirectClear[i] = backendCtrl.redirect & (bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir);
     end
 endgenerate
     assign dis_issue_io.full = |full;
-    Sort #(BANK_NUM, $clog2(BANK_SIZE)+1, $clog2(BANK_NUM)) sort_order (bankNUm, originOrder, sortOrder); 
-    always_ff @(posedge clk)begin
-        order <= sortOrder;
-        for(int i=0; i<BANK_NUM; i++)begin
+    Sort #(BANK_NUM, $clog2(BANK_SIZE), $clog2(BANK_NUM)) sort_order (bankNum, originOrder, sortOrder); 
+generate
+    for(genvar i=0; i<BANK_NUM; i++)begin
+        always_ff @(posedge clk)begin
             enNext[i] <= bank_io[i].reg_en & ~backendCtrl.redirect;
-        end
-        issue_exu_io.en <= enNext & ~redirectClear;
-        issue_exu_io.rs1_data <= int_reg_io.rs1_data;
-        issue_exu_io.rs2_data <= int_reg_io.rs2_data;
-        for(int i=0; i<BANK_NUM; i++)begin
             issue_exu_io.bundle[i] <= bank_io[i].data_o;
             issue_exu_io.br_type[i] <= bank_io[i].br_type;
             issue_exu_io.ras_type[i] <= bank_io[i].ras_type;
         end
+    end
+endgenerate
+
+    always_ff @(posedge clk)begin
+        order <= sortOrder;
+        issue_exu_io.en <= enNext & ~redirectClear;
+        issue_exu_io.rs1_data <= int_reg_io.rs1_data;
+        issue_exu_io.rs2_data <= int_reg_io.rs2_data;
         issue_exu_io.streams <= fsq_back_io.streams;
         issue_exu_io.directions <= fsq_back_io.directions;
     end
@@ -88,7 +93,8 @@ module IntIssueBank #(
     input logic rst,
     IntBankIO.bank io,
     WriteBackBus.slave wbBus,
-    CommitWalk walk
+    CommitWalk commitWalk,
+    BackendCtrl backendCtrl
 );
     logic `N(DEPTH) en;
     IssueStatusBundle `N(DEPTH) status_ram;
@@ -117,7 +123,7 @@ module IntIssueBank #(
 
 generate
     for(genvar i=0; i<DEPTH; i++)begin
-        assign ready[i] = en[i] & status_ram[i].rs1v & status_ram[i].sr2v;
+        assign ready[i] = en[i] & status_ram[i].rs1v & status_ram[i].rs2v;
     end
 endgenerate
     DirectionSelector #(DEPTH) selector (
@@ -140,8 +146,8 @@ endgenerate
 generate
     for(genvar i=0; i<DEPTH; i++)begin
         for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs1_cmp[i][j] = wbBus.data[j].en & (wbBus.data[j].rd == status_ram[i].rs1);
-            assign rs2_cmp[i][j] = wbBus.data[j].en & (wbBus.data[j].rd == status_ram[i].rs2);
+            assign rs1_cmp[i][j] = wbBus.en[j] & (wbBus.rd[j] == status_ram[i].rs1);
+            assign rs2_cmp[i][j] = wbBus.en[j] & (wbBus.rd[j] == status_ram[i].rs2);
         end
     end
 endgenerate

@@ -14,13 +14,13 @@ interface ICacheWayIO;
     logic `ARRAY(`ICACHE_BANK, `ICACHE_SET_WIDTH) windex;
     logic `ARRAY(`ICACHE_BANK, 32) data;
     logic `ARRAY(`ICACHE_BANK, 32) wdata;
-    modport way(input en, tagv_en, span, tagv_index, index, we, windex, output tagv, data);
+    modport way(input en, tagv_en, tagv_we, span, tagv_index, tagv_windex, tagv_wdata, index, we, windex, wdata, output tagv, data);
 endinterface
 
 module ICacheWay(
     input logic clk,
     input logic rst,
-    IcacheWayIO.way io
+    ICacheWayIO.way io
 );
     logic `N(`ICACHE_SET_WIDTH) tagv_index_p1;
     logic `N(`ICACHE_TAG+1) tagv `N(`ICACHE_SET);
@@ -46,19 +46,19 @@ module ICacheWay(
 
     generate;
         for(genvar i=0; i<`ICACHE_BANK; i++)begin
-            SDPRAM #(
+            MPRAM #(
                 .WIDTH(32),
                 .DEPTH(`ICACHE_SET),
-                .READ_LATENCY(1)
+                .READ_PORT(1),
+                .WRITE_PORT(1)
             ) bank(
                 .clk(clk),
-                .rst(rst),
                 .en(io.en[i]),
-                .rdata0(io.windex[i]),
-                .raddr1(io.index[i]),
+                .waddr(io.windex[i]),
+                .raddr(io.index[i]),
                 .we(io.we[i]),
                 .wdata(io.wdata[i]),
-                .rdata1(io.data[i])
+                .rdata(io.data[i])
             );
         end
     endgenerate

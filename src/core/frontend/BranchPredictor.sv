@@ -25,18 +25,17 @@ module BranchPredictor(
 
     assign squash = bpu_fsq_io.squash;
     assign squashInfo = bpu_fsq_io.squashInfo;
-    assign update = bpu_fsq_io.upate;
+    assign update = bpu_fsq_io.update;
     assign updateInfo = bpu_fsq_io.updateInfo;
     assign btb_io.pc = pc;
     assign btb_io.request = 1'b1;
     BTB btb(.*);
-    assign tage_io.history = history;
     Tage tage(.*);
 
     HistoryControl history_control(
         .*,
         .result(bpu_fsq_io.prediction),
-        .redirect(bpu_fsq_io.redirect),
+        .redirect(redirect),
         .ghist_idx(ghist_idx),
         .history(history)
     );
@@ -45,7 +44,6 @@ module BranchPredictor(
     assign ubtb_io.fsqIdx = bpu_fsq_io.stream_idx;
     assign ubtb_io.fsqDir = bpu_fsq_io.stream_dir;
     assign ubtb_io.ghistIdx = ghist_idx;
-    assign ubtb_io.history = history;
     UBTB ubtb(.*);
 
     RAS ras(.*);
@@ -133,7 +131,7 @@ module S2Control(
                                         entry.tailSlot.br_type == CONDITION;
     endgenerate
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
-                                        entry.slots[0].offset,entry.tailSlot.offset[`JAL_OFFSET-1: 0],
+                                        entry.slots[0].target,entry.tailSlot.target[`JAL_OFFSET-1: 0],
                                         br_offset);
     PMux2 #(`PREDICTION_WIDTH) pmux2_br_size(br_takens, 
                                         entry.slots[0].offset,entry.tailSlot.offset,
@@ -168,9 +166,9 @@ module S2Control(
             tail_indirect_target = ras_entry.pc;
         end
         endcase
-        if(hit && predict_pc != result_i.target)begin
+        if(hit && predict_pc != result_i.stream.target)begin
             result_o.stream.taken = |br_takens;
-            result_o.stream.br_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
+            result_o.stream.branch_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
             result_o.stream.ras_type = entry.tailSlot.ras_type;
             result_o.stream.size = |br_takens ? br_size : tail_size;
             result_o.stream.target = predict_pc;
@@ -181,10 +179,10 @@ module S2Control(
             result_o.predTaken = br_takens;
         end
         else begin
-            result_o.stream.taken = result_i.taken;
-            result_o.stream.br_type = result_i.br_type;
-            result_o.stream.ras_type = result_i.ras_type;
-            result_o.stream.target = result_i.target;
+            result_o.stream.taken = result_i.stream.taken;
+            result_o.stream.branch_type = result_i.stream.branch_type;
+            result_o.stream.ras_type = result_i.stream.ras_type;
+            result_o.stream.target = result_i.stream.target;
             result_o.stream.size = result_i.stream.size;
             result_o.redirect = result_i.redirect;
             result_o.cond_num = result_i.cond_num;
@@ -197,6 +195,6 @@ module S2Control(
         result_o.stream_idx = result_i.stream_idx;
         result_o.stream_dir = result_i.stream_dir;
         result_o.redirect_info.rasIdx = rasIdx;
-        result_o.redirect_info.ras_ctr = ras_entry.ctr;
+        // result_o.redirect_info.ras_ctr = ras_entry.ctr;
     end
 endmodule

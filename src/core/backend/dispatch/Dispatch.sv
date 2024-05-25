@@ -5,15 +5,15 @@ module Dispatch(
     input logic rst,
     RenameDisIO.dis rename_dis_io,
     DisIntIssueIO.dis dis_intissue_io,
-    WritebackBus wbBus,
+    WriteBackBus wbBus,
     CommitBus commitBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl,
     output logic full
 );
-    BusyTableIO busytable_io;
+    BusyTableIO busytable_io();
 
-    DispatchQueueIO #($bits(IntIssueBundle), `INT_DISPATCH_PORT) int_io;
+    DispatchQueueIO #($bits(IntIssueBundle), `INT_DISPATCH_PORT) int_io();
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         DecodeInfo di;
@@ -49,11 +49,13 @@ endgenerate
 generate
     for(genvar i=0; i<`INT_DISPATCH_PORT; i++)begin
         IssueStatusBundle bundle;
+        IntIssueBundle issueBundle;
+        assign issueBundle = int_io.data_o[i];
         assign bundle.rs1v = busytable_io.rs1_en[i];
         assign bundle.rs2v = busytable_io.rs2_en[i];
         assign bundle.rs1 = int_io.rs1_o[i];
         assign bundle.rs2 = int_io.rs2_o[i];
-        assign bundle.robIdx[i] = int_io.data_o[i].robIdx;
+        assign bundle.robIdx[i] = issueBundle.robIdx;
         assign dis_intissue_io.status[i] = bundle;
     end
 endgenerate

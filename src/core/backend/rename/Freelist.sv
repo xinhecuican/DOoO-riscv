@@ -6,8 +6,8 @@ interface FreelistIO;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) old_prd;
     logic full;
 
-    modport freelist(input rdNum, output prd, full);
-    modport rename(output rdNum, input prd, full);
+    modport freelist(input rdNum, old_prd, output prd, full);
+    modport rename(output rdNum, old_prd, input prd, full);
 endinterface
 
 module Freelist(

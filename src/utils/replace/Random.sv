@@ -11,6 +11,6 @@ module RandomReplace #(
     ReplaceIO.replace replace_io
 );
     logic `N(WAY_NUM) random;
-    LFSRRandom #(WAY_NUM) ranGen(clk, rst, 32'hfc2ab09d, random);
+    LFSRRandom #(WAY_NUM) ranGen(clk, rst, 64'hc043bdaefc2ab09d, random);
     assign replace_io.miss_way = random[WAY_WIDTH-1: 0];
 endmodule

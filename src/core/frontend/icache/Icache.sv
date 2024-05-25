@@ -14,7 +14,7 @@ module ICache(
         logic `N(`ICACHE_LINE) start_offset;
         logic span;
         logic multi_tag;
-        FetchSteram stream;
+        FetchStream stream;
         logic `N(`FSQ_WIDTH) fsqIdx;
     } RequestBuffer;
     RequestBuffer request_buffer;
@@ -40,12 +40,13 @@ module ICache(
     typedef enum { IDLE, LOOKUP, MISS, REFILL } MainState;
     MainState main_state;
 
-    ICacheWayIO way_io `N(`ICACHE_WAY);
+    ICacheWayIO way_io [`ICACHE_WAY-1: 0]();
     logic `N(`ICACHE_BANK * 2) expand_en;
     logic `N(`BLOCK_INST_SIZE) expand_en_shift;
     logic `N(`ICACHE_LINE_WIDTH+1) end_addr, start_addr;
     logic `N(`PREDICTION_WIDTH+1) stream_size;
     logic `N(`ICACHE_BANK) start_addr_mask;
+    logic `ARRAY(`ICACHE_BANK, 32) rdata `N(`ICACHE_WAY);
     logic `N(`ICACHE_SET_WIDTH) index;
     logic `N(`ICACHE_SET_WIDTH+1) indexp1;
     logic `ICACHE_TAG_BUS vtag, ptag1, ptag2;
@@ -69,7 +70,7 @@ module ICache(
     assign indexp1 = index + 1;
     assign vtag = fsq_cache_io.stream.start_addr`ICACHE_TAG_BUS;
     assign refill_en = main_state == REFILL && axi_io.sr.valid && next_stream_index == 0;
-    assign abandon_success = main_state == LOOKUP && request_buffer.stream_index == fsq_cache_io.abandonIdx;
+    assign abandon_success = main_state == LOOKUP && request_buffer.fsqIdx == fsq_cache_io.abandonIdx;
     always_ff @(posedge clk)begin
         ptag1 <= vtag;
         ptag2 <= vtag + indexp1[`ICACHE_SET_WIDTH];
@@ -102,6 +103,8 @@ module ICache(
 
             assign hit[0][i] = way_io[i].tagv[0][`ICACHE_TAG] && (way_io[i].tagv[0][`ICACHE_TAG-1: 0] == ptag1);
             assign hit[1][i] = way_io[i].tagv[1][`ICACHE_TAG] && (way_io[i].tagv[1][`ICACHE_TAG-1: 0] == ptag2);
+
+            assign rdata[i] = way_io[i].data;
         end
     endgenerate
     Encoder #(`ICACHE_WAY) encoder_hit_index0(hit[0], hit_index[0]);
@@ -112,7 +115,7 @@ module ICache(
     assign cache_miss[1] = request_buffer.span && !cache_hit[1];
 
 
-    ReplaceIO #(.DEPTH(`ICACHE_SET),.WAY_NUM(`ICACHE_WAY)) replace_io;
+    ReplaceIO #(.DEPTH(`ICACHE_SET),.WAY_NUM(`ICACHE_WAY)) replace_io();
     logic `N(`ICACHE_WAY) replace_way;
     assign replace_io.hit_en = main_state == LOOKUP && (!cache_miss[0] && !cache_miss[1]);
     assign replace_io.hit_way = hit_index[0];
@@ -134,18 +137,23 @@ module ICache(
                                 (main_state == LOOKUP && (!(|cache_miss)));
     assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss))) | miss_data_en}}
                              & request_buffer.expand_en_shift;
-    assign cache_pd_io.start_addr = request_buffer.stream.start_addr;
+    assign cache_pd_io.stream.start_addr = request_buffer.stream.start_addr;
     assign cache_pd_io.fsqIdx = request_buffer.fsqIdx;
+    assign cache_pd_io.stream.taken = request_buffer.stream.taken;
+    assign cache_pd_io.stream.branch_type = request_buffer.stream.branch_type;
+    assign cache_pd_io.stream.ras_type = request_buffer.stream.ras_type;
+    assign cache_pd_io.stream.size = request_buffer.stream.size;
+    localparam BANK_IDX_SIZE = $clog2(`ICACHE_BANK)+1;
     generate;
         for(genvar bank=0; bank<`BLOCK_INST_SIZE; bank++)begin
-            logic `N($clog2(`ICACHE_BANK+1)) bank_index;
+            logic `N(BANK_IDX_SIZE) bank_index;
             always_ff @(posedge clk)begin
                 bank_index <= bank + fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
             end
             assign cache_pd_io.data[bank] = miss_data_en ? miss_buffer.data[bank] :
-                                            bank_index[`ICACHE_BANK] ? 
-                                            way_io[hit_index[1]].data[bank_index[`ICACHE_BANK-1: 0]] :
-                                            way_io[hit_index[0]].data[bank_index[`ICACHE_BANK-1: 0]];
+                                            bank_index[BANK_IDX_SIZE-1] ? 
+                                            rdata[hit_index[1]][bank_index[BANK_IDX_SIZE-1: 0]] :
+                                            rdata[hit_index[0]][bank_index[BANK_IDX_SIZE-1: 0]];
         end
     endgenerate
     assign axi_io.mar.id = 0;
@@ -224,7 +232,7 @@ module ICache(
                 end
                 else if(fsq_cache_io.en)begin
                     request_buffer.span <= span;
-                    request_buffer.start_offset <= fsq_cache_io.start_addr[`ICACHE_LINE_WIDTH-1: 0];
+                    request_buffer.start_offset <= fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 0];
                     request_buffer.index1 <= index;
                     request_buffer.index2 <= indexp1[`ICACHE_SET_WIDTH-1: 0];
                     request_buffer.expand_en <= expand_en;
@@ -264,12 +272,11 @@ module ICache(
                         miss_buffer.paddr <= miss_buffer.addition_paddr;
                         miss_buffer.length <= 4'h7;
                         miss_buffer.addition_request <= 1'b0;
-                        miss_buffer.current_en <= 1;
                     end
                 end
             end
             endcase
-            if(bpu_fsq_io.flush)begin
+            if(fsq_cache_io.flush)begin
                 if(axi_io.sr.valid & axi_io.sr.last)begin
                     miss_buffer.flush <= 1'b0;
                 end
@@ -278,15 +285,15 @@ module ICache(
                 end
             end
             stall_wait <= miss_data_en ? 1'b0 :
-                          bpu_fsq_io.stall & main_state == REFILL ? 1'b1 : stall_wait;
+                          fsq_cache_io.stall & main_state == REFILL ? 1'b1 : stall_wait;
             miss_data_en <= ((main_state == REFILL) & 
                             axi_io.sr.valid & 
                             axi_io.sr.last &
                             (~miss_buffer.addition_request) |
                             stall_wait) &
                             ~miss_buffer.flush &
-                            ~bpu_fsq_io.flush &
-                            ~bpu_fsq_io.stall;
+                            ~fsq_cache_io.flush &
+                            ~fsq_cache_io.stall;
         end
     end
 endmodule

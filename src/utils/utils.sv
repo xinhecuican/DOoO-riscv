@@ -8,15 +8,16 @@ module Decoder #(
 	output logic [RADIX-1: 0] out
 );
 	generate;
-		case(WIDTH)
-		1: Decoder1 decoder(in, out);
+		case(RADIX)
 		2: Decoder2 decoder(in, out);
 		3: Decoder3 decoder(in, out);
 		4: Decoder4 decoder(in, out);
-		5: Decoder5 decoder(in, out);
-		6: Decoder6 decoder(in, out);
-		7: Decoder7 decoder(in, out);
-		default: Decoder1 decoder(in, out);
+		8: Decoder8 decoder(in, out);
+		16: Decoder16 decoder(in, out);
+		32: Decoder32 decoder(in, out);
+		64: Decoder64 decoder(in, out);
+		128: Decoder128 decoder(in, out);
+		default: Decoder2 decoder(in, out);
 		endcase
 	endgenerate
 endmodule
@@ -50,11 +51,11 @@ module PEncoder #(
 
 generate;
 	case(RADIX)
-	4: PEncoder4(in, out);
-	8: PEncoder8(in, out);
-	16: PEncoder16(in, out);
-	32: PEncoder32(in, out);
-	default: PEncoder4(in, out);
+	4: PEncoder4 pencoder(in, out);
+	8: PEncoder8 pencoder(in, out);
+	16: PEncoder16 pencoder(in, out);
+	32: PEncoder32 pencoder(in, out);
+	default: PEncoder4 pencoder(in, out);
 	endcase
 endgenerate
 
@@ -267,7 +268,10 @@ module UpdateCounter #(
 	output logic [WIDTH-1: 0] out
 );
 generate
-	if(WIDTH == 2)begin
+	if(WIDTH == 1)begin
+		assign out = dir;
+	end
+	else if(WIDTH == 2)begin
 		always_comb begin
 			if(dir)begin
 				case(origin)

@@ -26,8 +26,8 @@ module FSQ (
     logic directionTable `N(`FSQ_SIZE);
     logic direction, hdir;
     FetchStream commitStream;
-    logic `ARRAY(2, `PREDICTION_WIDTH) commitVec, streamVec;
-    logic `ARRAY(`COMMIT_WIDTH, `PREDICTION_WIDTH * 2) commitOffsetExpand;
+    logic `ARRAY(2, `BLOCK_INST_SIZE) commitVec, streamVec;
+    logic `ARRAY(`COMMIT_WIDTH, `BLOCK_INST_SIZE * 2) commitOffsetExpand;
     logic commitValid;
     BTBEntry commitUpdateEntry;
     
@@ -39,10 +39,11 @@ module FSQ (
     MPRAM #(
         .WIDTH($bits(FetchStream)),
         .DEPTH(`FSQ_SIZE),
-        .READ_PORT(1+`ALU_SIZE + 1)
+        .READ_PORT(1+`ALU_SIZE + 1),
+        .WRITE_PORT(1)
     ) fs_queue(
         .clk(clk),
-        .en(1'b1),
+        .en({(1+`ALU_SIZE+1){1'b1}}),
         .we(queue_we),
         .waddr(write_tail),
         .raddr({search_head, fsq_back_io.fsqIdx, n_commit_head}),
@@ -111,7 +112,7 @@ module FSQ (
     PredictionInfo u_predInfo;
 
     assign pd_wr_info.condNum = bpu_fsq_io.prediction.cond_num;
-    assign pd_wr_info.cond_history = bpu_fsq_io.prediction.predTaken;
+    assign pd_wr_info.condHist = bpu_fsq_io.prediction.predTaken;
     BTBEntry predEntry;
     assign predEntry = bpu_fsq_io.prediction.btbEntry;
 generate
@@ -135,7 +136,7 @@ endgenerate
 
     assign fsq_cache_io.en = search_head != tail || full;
     assign fsq_cache_io.abandon = bpu_fsq_io.redirect;
-    assign fsq_cache_Io.abandonIdx = bpu_fsq_io.prediction.stream_idx;
+    assign fsq_cache_io.abandonIdx = bpu_fsq_io.prediction.stream_idx;
     assign fsq_cache_io.flush = pd_redirect.en | fsq_back_io.redirect.en;
     assign fsq_cache_io.stall = frontendCtrl.ibuf_full;
     assign bpu_fsq_io.stream_idx = tail;
@@ -143,8 +144,8 @@ endgenerate
     assign bpu_fsq_io.stall = full;
     assign cache_req_ok = fsq_cache_io.en & fsq_cache_io.ready;
 
-    logic `N(`SLOT_NUM) condFree;
-    PEncoder #(`SLOT_NUM) encoder_condFree({~oldEntry.slots[0].en, ~oldEntry.tailSlot.en}, condFree);
+    // logic `N(`SLOT_NUM) condFree;
+    // PEncoder #(`SLOT_NUM) encoder_condFree({~oldEntry.slots[0].en, ~oldEntry.tailSlot.en}, condFree);
 
     assign enqueue = bpu_fsq_io.en;
     assign dequeue = pd_redirect.en | cache_req_ok | (bpu_fsq_io.redirect && (tail != bpu_fsq_io.stream_idx));
@@ -154,7 +155,7 @@ endgenerate
     assign redirectPredInfo = predictionInfos[fsq_back_io.redirect.fsqInfo.idx];
 
     assign pd_condInfo.condNum = pd_predInfo.condNum;
-    assign pd_condInfo.taken = pd_predInfo.taken;
+    assign pd_condInfo.taken = |(pd_predInfo.condValid & pd_predInfo.condHist);
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
         assign condSmallNum[i] = redirectPredInfo.condValid[i] & (redirectPredInfo.offsets[i] < fsq_back_io.redirect.fsqInfo.offset);
@@ -196,7 +197,7 @@ endgenerate
             predErrorVec <= '{default: 0};
         end
         else begin
-            if(fsq_back_io.redirect_en)begin
+            if(fsq_back_io.redirect.en)begin
                 search_head <= fsq_back_io.redirect.fsqInfo.idx;
             end
             else if(!frontendCtrl.ibuf_full) begin
@@ -246,7 +247,7 @@ endgenerate
                 direction <= directionTable[redirect_dir_idx];
             end
             else if(bpu_fsq_io.redirect)begin
-                direction <= bpu_fsq_Io.stream_dir;
+                direction <= bpu_fsq_io.stream_dir;
             end
             else if(bpu_fsq_io.en)begin
                 direction <= tail[`FSQ_WIDTH-1] ^ tail_n1[`FSQ_WIDTH-1] ? ~direction : direction;
@@ -289,10 +290,10 @@ endgenerate
                          ((streamVec & predErrorVec[tail]) != 0);
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        logic `N(`PREDICTION_WIDTH) commitOffsetDecode;
-        Decoder #(`PREDICTION_WIDTH) decoder_commit_offset (commitBus.fsqInfo[i].offset, commitOffsetDecode);
-        assign commitOffsetExpand[i] =  {{`PREDICTION_WIDTH{commitBus.fsqInfo[i].idx[0] & commitBus.en[i]}} & commitOffsetDecode,
-                                        {`PREDICTION_WIDTH{~commitBus.fsqInfo[i].idx[0] & commitBus.en[i]}} & commitOffsetDecode};
+        logic `N(`BLOCK_INST_SIZE) commitOffsetDecode;
+        Decoder #(`BLOCK_INST_SIZE) decoder_commit_offset (commitBus.fsqInfo[i].offset, commitOffsetDecode);
+        assign commitOffsetExpand[i] =  {{`BLOCK_INST_SIZE{commitBus.fsqInfo[i].idx[0] & commitBus.en[i]}} & commitOffsetDecode,
+                                        {`BLOCK_INST_SIZE{~commitBus.fsqInfo[i].idx[0] & commitBus.en[i]}} & commitOffsetDecode};
     end
 endgenerate
 
@@ -333,7 +334,7 @@ endgenerate
     assign updateInfo.allocSlot = allocSlot;
     always_ff @(posedge clk)begin
         bpu_fsq_io.update <= commitValid;
-        bpu_fsq_io.udpateInfo <= updateInfo;
+        bpu_fsq_io.updateInfo <= updateInfo;
     end
 endmodule
 
@@ -395,7 +396,7 @@ endgenerate
         .WIDTH(`PREDICTION_WIDTH),
         .DATA_WIDTH($clog2(`SLOT_NUM+1))
     ) oldest_select (
-        .cmp(offset),
+        .cmp(offsets),
         .data_i(idx),
         .cmp_o(oldestOffset),
         .data_o(oldestIdx)
@@ -422,14 +423,14 @@ endgenerate
             for(int i=0; i<`SLOT_NUM-1; i++)begin
                 updateEntry.slots[i].en = we[i] | oldEntry.slots[i].en;
                 updateEntry.slots[i].carry = (updateEntry.slots[i].carry | free_p[i]) & ~equal[i];
-                updateEntry.slots[i].offset = we[i] ? offset : oldEntry.slots[i].offset;
+                updateEntry.slots[i].offset = we[i] ? offsets[i] : oldEntry.slots[i].offset;
                 updateEntry.slots[i].target = we[i] ? target : oldEntry.slots[i].target;
             end
             updateEntry.tailSlot.en = we[`SLOT_NUM-1] ? 1'b1 : oldEntry.tailSlot.en;
-            updateEntry.tailSlot.carry = (updateEntry.slots[`SLOT_NUM-1].carry | free_p[`SLOT_NUM-1]) & ~equal[`SLOT_NUM-1];
-            updateEntry.tailSlot.br_type = we[`SLOT_NUM-1] ? br_type : oldEntry.br_type;
-            updateEntry.tailSlot.ras_type = we[`SLOT_NUM-1] ? ras_type : oldEntry.ras_type;
-            updateEntry.tailSlot.offset = we[`SLOT_NUM-1] ? offset : oldEntry.tailSlot.offset;
+            updateEntry.tailSlot.carry = (updateEntry.tailSlot.carry | free_p[`SLOT_NUM-1]) & ~equal[`SLOT_NUM-1];
+            updateEntry.tailSlot.br_type = we[`SLOT_NUM-1] ? br_type : oldEntry.tailSlot.br_type;
+            updateEntry.tailSlot.ras_type = we[`SLOT_NUM-1] ? ras_type : oldEntry.tailSlot.ras_type;
+            updateEntry.tailSlot.offset = we[`SLOT_NUM-1] ? offsets[`SLOT_NUM-1] : oldEntry.tailSlot.offset;
             updateEntry.tailSlot.target = we[`SLOT_NUM-1] ? target : oldEntry.tailSlot.target;
 
             updateEntry.en = 1'b1;

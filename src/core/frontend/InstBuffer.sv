@@ -5,7 +5,7 @@ module InstBuffer (
     input logic rst,
     input logic stall,
     PreDecodeIBufferIO.instbuffer pd_ibuffer_io,
-    FrontendCtrl fontendCtrl,
+    FrontendCtrl frontendCtrl,
     output FetchBundle fetchBundle,
     output logic full
 );

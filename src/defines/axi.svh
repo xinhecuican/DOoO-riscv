@@ -37,12 +37,12 @@ task AxiSRCopy (
     input logic en,
     output AxiSR out
 );
-    assign out.id = in.id;
-    assign out.data = in.data;
-    assign out.resp = in.resp;
-    assign out.last = in.last;
-    assign out.valid = en;
-    assign out.user = in.user;
+    out.id = in.id;
+    out.data = in.data;
+    out.resp = in.resp;
+    out.last = in.last;
+    out.valid = en;
+    out.user = in.user;
 endtask
 
 typedef struct packed {

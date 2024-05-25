@@ -4,6 +4,7 @@ module ALU(
     input logic clk,
     input logic rst,
     IssueAluIO.alu io,
+    BackendCtrl backendCtrl,
     input logic valid,
     output WBData wbData,
     output BranchUnitRes branchRes
@@ -15,7 +16,7 @@ module ALU(
         .imm(io.bundle.imm),
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
-        .op(io.bundle.op),
+        .op(io.bundle.intop),
         .result(result)
     );
     BranchModel branchModel(
@@ -24,20 +25,20 @@ module ALU(
         .imm(io.bundle.imm),
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
-        .op(io.bundle.op),
+        .op(io.bundle.branchop),
         .stream(io.stream),
         .offset(io.bundle.fsqInfo.offset),
         .br_type(io.br_type),
         .ras_type(io.ras_type),
-        .BranchUnitRes(branchRes),
+        .branchRes(branchRes),
         .result(branchResult)
     );
     assign wbData.en = io.en & valid & ~(backendCtrl.redirect &
-            ((backendCtrl.redirectIdx.dir ^ io.bundle.robIdx.dir) ^ (io.bundle.robIdx.idx < bankendCtrl.redirectIdx.idx)));
+            ((backendCtrl.redirectIdx.dir ^ io.bundle.robIdx.dir) ^ (io.bundle.robIdx.idx < backendCtrl.redirectIdx.idx)));
     assign wbData.fsqInfo = io.bundle.fsqInfo;
     assign wbData.robIdx = io.bundle.robIdx;
     assign wbData.rd = io.bundle.rd;
-    assign wbDataq.res = io.intv ? result : branchResult;
+    assign wbData.res = io.bundle.intv ? result : branchResult;
 
     assign io.valid = valid;
 endmodule

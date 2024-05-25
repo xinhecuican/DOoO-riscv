@@ -40,7 +40,9 @@ module AxiInterface(
     end
 
     assign icache_io.sar.ready = read_controller.en & (read_controller.device == ICACHE) & arEnd;
-    AxiSRCopy icache_sr (axi.sr, axi.sr.id == icache_io.sar.id && axi.sr.valid, icache_io.sr);
+    always_comb begin
+        AxiSRCopy(axi.sr, axi.sr.id == icache_io.mar.id && axi.sr.valid, icache_io.sr);
+    end
 
     assign axi.mar = read_controller.mar;
     assign axi.mr.ready = 1'b1;

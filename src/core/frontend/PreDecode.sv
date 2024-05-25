@@ -21,9 +21,9 @@ module PreDecode(
 
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
-            PreDecoder predecoder(cache_pd_io.en[i],
+            PreDecoder predecoder(
                                 cache_pd_io.data[i], 
-                                cache_pd_io.start_addr+(i<<2),
+                                cache_pd_io.stream.start_addr+(i<<2),
                                 bundles[i]);
         end
     endgenerate
@@ -57,7 +57,7 @@ module PreDecode(
     assign selectIdx = jumpSelectIdx;
     assign selectBundle = bundles_next[selectIdx];
     assign pd_redirect.offset = selectIdx;
-    assign pd_redirect.branch_type = bundles_next[selectIdx].branch_type;
+    assign pd_redirect.br_type = bundles_next[selectIdx].br_type;
     assign pd_redirect.ras_type = bundles_next[selectIdx].ras_type;
     assign pd_redirect.pc = stream_next.start_addr;
 

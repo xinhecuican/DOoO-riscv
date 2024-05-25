@@ -9,10 +9,10 @@ module BTB (
 
     typedef struct {
         logic we;
-        logic `N(`BTB_SET_WIDTH) addr0;
-        logic `N(`BTB_SET_WIDTH) addr1;
+        logic `N(`BTB_SET_WIDTH) waddr;
+        logic `N(`BTB_SET_WIDTH) raddr;
         BTBEntry wdata;
-        BTBEntry rdata1;
+        BTBEntry rdata;
     } BankCtrl;
 
     BankCtrl bank_ctrl `N(`BTB_WAY);
@@ -29,27 +29,27 @@ module BTB (
 
     generate;
         for(genvar i=0; i<`BTB_WAY; i++)begin
-            SDPRAM #(
+            MPRAM #(
                 .WIDTH($bits(BTBEntry)),
-                .DEPTH(`BTB_SET_WIDTH),
-                .READ_LATENCY(1)
+                .DEPTH(`BTB_SET),
+                .READ_PORT(1),
+                .WRITE_PORT(1)
             ) btb_bank(
                 .clk(clk),
-                .rst(rst),
                 .en(bank_en[i] & ~btb_io.redirect.stall),
                 .we(bank_ctrl[i].we),
-                .addr0(bank_ctrl[i].addr0),
-                .addr1(bank_ctrl[i].addr1),
+                .waddr(bank_ctrl[i].waddr),
+                .raddr(bank_ctrl[i].raddr),
                 .wdata(bank_ctrl[i].wdata),
-                .rdata1(bank_ctrl[i].rdata1)
+                .rdata(bank_ctrl[i].rdata)
             );
-            assign bank_ctrl[i].addr1 = index;
-            assign bank_ctrl[i].addr0 = btb_io.updateInfo.start_addr[INDEX_POS: 2+$clog2(`BTB_WAY)];
+            assign bank_ctrl[i].raddr = index;
+            assign bank_ctrl[i].waddr = btb_io.updateInfo.start_addr[INDEX_POS: 2+$clog2(`BTB_WAY)];
             assign bank_ctrl[i].we = btb_io.update & bank_we[i];
             assign bank_ctrl[i].wdata = btb_io.updateInfo.btbEntry;
         end
     endgenerate
-    assign btb_io.entry = bank_ctrl[s2_bank].rdata1;
+    assign btb_io.entry = bank_ctrl[s2_bank].rdata;
 
     always_ff @(posedge clk)begin
         if(~btb_io.redirect.stall)begin

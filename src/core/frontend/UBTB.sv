@@ -3,7 +3,7 @@
 module UBTB(
     input logic clk,
     input logic rst,
-    BpuUBtbIO.btb ubtb_io
+    BpuUBtbIO.ubtb ubtb_io
 );
 
     BTBEntry entrys `N(`UBTB_SIZE);
@@ -23,7 +23,7 @@ module UBTB(
     logic `N(`SLOT_NUM) cond_history;
     logic older;
 
-    ReplaceIO #(.DEPTH(1),.WAY_NUM(`UBTB_SIZE)) replace_io;
+    ReplaceIO #(.DEPTH(1),.WAY_NUM(`UBTB_SIZE)) replace_io();
 
     Encoder #(`UBTB_SIZE) encoder_lookup(lookup_hits, lookup_index);
     Encoder #(`UBTB_SIZE) encoder_update(updateHits, updateIdx);
@@ -33,19 +33,17 @@ module UBTB(
     assign updateSelectIdx = updateHit ? updateIdx : replace_io.miss_way;
     assign lookup_entry = entrys[lookup_index];
     assign lookup_ctr = ctrs[lookup_index];
-    assign tail_target = lookup_entry.tailSlot.en ? {{(`VADDR_SIZE-`JALR_OFFSET){lookup_entry.tailSlot.offset[`JALR_OFFSET-1]}}, 
+    assign tail_target = lookup_entry.tailSlot.en ? {{(`VADDR_SIZE-`JALR_OFFSET){lookup_entry.tailSlot.target[`JALR_OFFSET-1]}}, 
                         lookup_entry.tailSlot.target} + ubtb_io.pc : lookup_entry.fthAddr + ubtb_io.pc;
     assign tail_size = lookup_entry.tailSlot.en ? lookup_entry.tailSlot.offset : lookup_entry.fthAddr;
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
                                         lookup_entry.slots[0].target,lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0],
                                         br_offset);
     PMux2 #(`PREDICTION_WIDTH) pmux2_br_size(br_takens, 
-                                        lookup_entry.slots[0].target,lookup_entry.tailSlot.target,
+                                        lookup_entry.slots[0].offset,lookup_entry.tailSlot.offset,
                                         br_size);
     assign br_target = {{(`VADDR_SIZE-`JAL_OFFSET){br_offset[`JAL_OFFSET-1]}}, br_offset} + ubtb_io.pc;
     assign older = lookup_entry.slots[0].offset < lookup_entry.tailSlot.offset;
-    assign br_num = lookup_entry.slots[0].en + 
-                    (lookup_entry.tailSlot.en & (lookup_entry.tailSlot.br_type == CONDITION));
 generate;
     for(genvar i=0; i<`UBTB_SIZE; i++)begin
         assign lookup_hits[i] = entrys[i].en && entrys[i].tag == lookup_tag;
@@ -78,7 +76,7 @@ endgenerate
     end
 
     always_comb begin
-        ubtb_io.result.en = ~ubtb_io.flush & ~ubtb_io.s2_redirect;
+        ubtb_io.result.en = ~ubtb_io.redirect.flush & ~ubtb_io.redirect.s2_redirect;
         ubtb_io.result.stream.taken = lookup_hit & (|br_takens);
         ubtb_io.result.stream.branch_type = |br_takens ? CONDITION : lookup_entry.tailSlot.br_type;
         ubtb_io.result.stream.ras_type = NONE;
@@ -93,7 +91,7 @@ endgenerate
         ubtb_io.result.taken = |br_takens;
         ubtb_io.result.predTaken = br_takens;
         ubtb_io.result.stream_idx = ubtb_io.fsqIdx;
-        ubtb_io.result.stream_dir = ubtb_io.stream_dir;
+        ubtb_io.result.stream_dir = ubtb_io.fsqDir;
         ubtb_io.result.redirect_info.ghistIdx = ubtb_io.ghistIdx;
         ubtb_io.meta.ctr = br_takens;
     end

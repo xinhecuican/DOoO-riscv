@@ -1,4 +1,4 @@
-module Decoder1(
+module Decoder2(
 	input logic [0: 0] A,
 	output logic [1: 0] Y
 );
@@ -6,7 +6,16 @@ module Decoder1(
 	assign Y[0] = ~A;
 endmodule
 
-module Decoder2(
+module Decoder3(
+	input logic [1: 0] in,
+	output logic [2: 0] out
+);
+	assign out[0] = ~in[0] & ~in[1];
+	assign out[1] = in[0] & ~in[1];
+	assign out[2] = in[1];
+endmodule
+
+module Decoder4(
 	input logic [1: 0] A,
 	output logic [3: 0] Y
 );
@@ -16,7 +25,7 @@ module Decoder2(
 		nd3(Y[2], nA0, A[1]), nd4(Y[3], A[1], A[0]);
 endmodule
 
-module Decoder3(
+module Decoder8(
 	input logic [2: 0] in,
 	output logic [7: 0] out
 );
@@ -34,7 +43,7 @@ module Decoder3(
 	end
 endmodule
 
-module Decoder4(
+module Decoder16(
 	input logic [3: 0] in,
 	output logic [15: 0] out
 );
@@ -60,36 +69,36 @@ module Decoder4(
 	end
 endmodule
 
-module Decoder5(
+module Decoder32(
 	input logic [4: 0] in,
 	output logic [31: 0] out
 );
 	logic [3: 0] de1;
 	logic [7: 0] out1;
-	Decoder2 d1(in[4: 3], de1);
-	Decoder3 d2(in[2: 0], out1);
+	Decoder4 d1(in[4: 3], de1);
+	Decoder8 d2(in[2: 0], out1);
 	assign out = {{8{de1[3]}} & out1, {8{de1[2]}} & out1, {8{de1[1]}} & out1, {8{de1[0]}} & out1};
 endmodule
 
-module Decoder6(
+module Decoder64(
 	input logic [5: 0] in,
 	output logic [63: 0] out
 );
 	logic [3: 0] de1;
 	logic [15: 0] out1;
-	Decoder2 d1(in[5: 4], de1);
-	Decoder4 d2(in[3: 0], out1);
+	Decoder4 d1(in[5: 4], de1);
+	Decoder16 d2(in[3: 0], out1);
 	assign out = {{16{de1[3]}} & out1, {16{de1[2]}} & out1, {16{de1[1]}} & out1, {16{de1[0]}} & out1};
 endmodule
 
-module Decoder7(
+module Decoder128(
 	input logic [6: 0] in,
 	output logic [127: 0] out
 );
 	logic [3: 0] de1;
 	logic [31: 0] out1;
-	Decoder2 d1(in[6: 5], de1);
-	Decoder2 d2(in[4: 0], out1);
+	Decoder4 d1(in[6: 5], de1);
+	Decoder32 d2(in[4: 0], out1);
 	assign out = {{32{de1[3]}} & out1, {32{de1[2]}} & out1, {32{de1[1]}} & out1, {32{de1[0]}} & out1};
 endmodule
 
@@ -122,8 +131,8 @@ module Encoder16(
 	output logic [3: 0] out
 );
 	logic [2: 0] out_high, out_low;
-	encoder_8to3 high(in[7: 0], out_low);
-	encoder_8to3 low(in[15: 8], out_high);
+	Encoder8 high(in[7: 0], out_low);
+	Encoder8 low(in[15: 8], out_high);
 	assign out[3] = |in[15: 8];
 	assign out[2: 0] = out[3] ? out_high : out_low;
 endmodule
@@ -133,16 +142,16 @@ module Encoder64(
 	output logic [5: 0] out
 );
 	logic [3: 0] out1, out2, out3, out4;
-	encoder_16to4 part1(in[15: 0], out1);
-	encoder_16to4 part2(in[31: 16], out2);
-	encoder_16to4 part3(in[47: 32], out3);
-	encoder_16to4 part4(in[63: 48], out4);
+	Encoder16 part1(in[15: 0], out1);
+	Encoder16 part2(in[31: 16], out2);
+	Encoder16 part3(in[47: 32], out3);
+	Encoder16 part4(in[63: 48], out4);
 	logic [3: 0] select;
 	assign select[0] = |in[15: 0];
 	assign select[1] = |in[31: 16];
 	assign select[2] = |in[47: 32];
 	assign select[3] = |in[63: 48];
-	encoder_4to2 encoder(select, out[5: 4]);
+	Encoder4 encoder(select, out[5: 4]);
 	assign out[3: 0] = {4{select[0]}} & out1 | {4{select[1]}} & out2 | {4{select[2]}} & out3 | {4{select[3]}} & out4;
 endmodule
 

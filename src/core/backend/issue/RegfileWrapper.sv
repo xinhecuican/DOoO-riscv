@@ -4,9 +4,9 @@ module RegfileWrapper(
     input logic clk,
     input logic rst,
     IssueRegfileIO.regfile int_reg_io,
-    WriteBackBus.slave wbBus
+    WriteBackBus wbBus
 );
-    RegfileIO reg_io;
+    RegfileIO reg_io();
     Regfile regfile(
         .clk(clk),
         .rst(rst),
@@ -20,13 +20,13 @@ generate
         assign reg_io.raddr[i*2] = int_reg_io.rs1[i];
         assign reg_io.raddr[i*2+1] = int_reg_io.rs2[i];
         
-        assign int_reg_io[i].rs1_data = reg_io.rdata[i*2];
-        assign int_reg_io[i].rs2_data = reg_io.rdata[i*2+1];
+        assign int_reg_io.rs1_data[i] = reg_io.rdata[i*2];
+        assign int_reg_io.rs2_data[i] = reg_io.rdata[i*2+1];
     end
     for(genvar i=0; i<`WB_SIZE; i++)begin
-        assign reg_io.we[i] = wbBus.data[i].en & (wbBus.data[i].rd != 0);
-        assign reg_io.waddr[i] = wbBus.data[i].rd;
-        assign reg_io.wdata[i] = wbBus.data[i].res;
+        assign reg_io.we[i] = wbBus.en[i] & (wbBus.rd[i] != 0);
+        assign reg_io.waddr[i] = wbBus.rd[i];
+        assign reg_io.wdata[i] = wbBus.res[i];
     end
 endgenerate
 

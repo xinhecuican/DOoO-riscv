@@ -6,7 +6,7 @@ module ROB(
     input BackendRedirectInfo backendRedirect,
     RenameDisIO.dis dis_io,
     ROBRenameIO.rob rob_rename_io,
-    WriteBackBus.slave wbBus,
+    WriteBackBus wbBus,
     CommitBus.rob commitBus,
     CommitWalk.rob commitWalk,
     output logic full
@@ -32,8 +32,8 @@ module ROB(
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
     logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en;
-    logic `ARRAY(`FETCH_WIDTH, $clog2(ROB_BANK_SIZE)) dataWIdx;
-    logic `ARRAY(`FETCH_WIDTH, $clog2(ROB_BANK_SIZE)) dataRIdx;
+    logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataWIdx;
+    logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataRIdx;
     logic `N(`FETCH_WIDTH) data_en;
     logic `N(`ROB_WIDTH) head, tail, tail_n, head_n;
     logic `N(`ROB_WIDTH) commitHead `N(`COMMIT_WIDTH);
@@ -48,12 +48,10 @@ module ROB(
     RobData `N(`FETCH_WIDTH) robData, rob_wdata;
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
-        logic `N($clog2(`FETCH_WIDTH)) bank_widx;
-        assign bank_widx = dis_io.robIdx.idx[$clog2(`FETCH_WIDTH)-1: 0];
-        assign rob_wdata[i].we = dis_io.op[bank_widx].di.we;
-        assign rob_wdata[i].fsqInfo = dis_io.op[bank_widx].fsqInfo;
-        assign rob_wdata[i].rd = dis_io.op[bank_widx].di.rd;
-        assign rob_wdata[i].prd = dis_io.prd[bank_widx];
+        assign rob_wdata[i].we = dis_io.op[i].di.we;
+        assign rob_wdata[i].fsqInfo = dis_io.op[i].fsqInfo;
+        assign rob_wdata[i].vrd = dis_io.op[i].di.rd;
+        assign rob_wdata[i].prd = dis_io.prd[i];
     end
 endgenerate
     MPRAM #(
@@ -63,7 +61,7 @@ endgenerate
         .WRITE_PORT(`FETCH_WIDTH)
     ) rob_data_ram (
         .clk(clk),
-        .en(1'b1),
+        .en({`COMMIT_WIDTH{1'b1}}),
         .raddr(dataRIdx),
         .rdata(robData),
         .we(data_en),
@@ -105,10 +103,9 @@ generate
         assign commitBus.vrd[i] = robData[commitHead[i][$clog2(`COMMIT_WIDTH)-1: 0]].vrd;
         assign commitBus.prd[i] = robData[commitHead[i][$clog2(`COMMIT_WIDTH)-1: 0]].prd;
     end
-endgenerate
-    always_ff @(posedge clk)begin
-        commitBus.num <= commitNum;
-        for(int i=0; i<`COMMIT_WIDTH; i++)begin
+
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        always_ff @(posedge clk)begin
             if(state == IDLE && !(backendRedirect.en))begin
                 commitBus.en[i] <= commit_en[i];
             end
@@ -117,12 +114,16 @@ endgenerate
             end
         end
     end
+endgenerate
+    always_ff @(posedge clk)begin
+        commitBus.num <= commitNum;
+    end
 
     always_comb begin
         case(state)
         IDLE:begin
             addNum = commitNum;
-            subNum = {`ROB_WIDTH{~full & ~backendRedirect.en}} & rename_dis_io.validNum;
+            subNum = {`ROB_WIDTH{~full & ~backendRedirect.en}} & rob_rename_io.validNum;
             tail_n = tail + subNum;
             head_n = head + addNum;
             remainCount_n = remainCount + addNum - subNum;
@@ -134,10 +135,12 @@ endgenerate
             tail_n = tail - subNum;
             remainCount_n = remainCount - subNum;
         end
+        default: begin
+        end
         endcase
     end
 
-    assign full = remainCount < rename_dis_io.validNum;
+    assign full = remainCount < rob_rename_io.validNum;
     assign rob_rename_io.robIdx.idx = tail;
     assign rob_rename_io.robIdx.dir = tdir;
     always_ff @(posedge clk)begin
@@ -163,14 +166,9 @@ endgenerate
                     dataWIdx[i] <= dataWIdx[i] + dis_validNum;
                 end
             end
-            if(|commit_en)begin
-                for(int i=0; i<`FETCH_WIDTH; i++)begin
-                    dataRIdx[i] <= dataRIdx[i] + commitNum;
-                end
-            end
             for(int i=0; i<`WB_SIZE; i++)begin
-                if(wbBus.data[i].en)begin
-                    wb[wbBus.data[i].robIdx.idx] <= 1'b1;
+                if(wbBus.en[i])begin
+                    wb[wbBus.robIdx[i].idx] <= 1'b1;
                 end
             end
         end
@@ -179,7 +177,7 @@ endgenerate
     // walk
     logic `N(`FSQ_WIDTH + 1) walk_remainCount_n, ext_tail;
     logic `N(`FETCH_WIDTH) walk_en;
-    logic `N($clog2(`FSQ_WIDTH) + 1) walk_num, walk_we_num;
+    logic `N($clog2(`COMMIT_WIDTH)+1) walk_num, walk_we_num;
     assign ext_tail = {tdir ^ backendRedirect.robIdx.dir, tail};
     assign walk_remainCount_n = ext_tail - backendRedirect.robIdx + 1;
     assign walk_num = walk_remainCount_n < `COMMIT_WIDTH ? walk_remainCount_n : `COMMIT_WIDTH;
@@ -194,7 +192,7 @@ endgenerate
         if(rst == `RST)begin
             state <= IDLE;
             walkInfo <= '{default: 0};
-            commitWalk.en <= 0;
+            commitWalk.en <= `COMMIT_WIDTH'b0;
             for(int i=0; i<`FETCH_WIDTH; i++)begin
                 dataRIdx[i] <= i;
             end
@@ -216,13 +214,15 @@ endgenerate
                     end
                 end
                 else begin
-                    for(int i=0; i<`FETCH_WIDTH; i++)begin
-                        dataRIdx[i] <= dataRIdx[i] + commitNum;
+                    if(|commit_en)begin
+                        for(int i=0; i<`FETCH_WIDTH; i++)begin
+                            dataRIdx[i] <= dataRIdx[i] + commitNum;
+                        end
                     end
                 end
             end
             WALK: begin
-                if(commitWalk.remainCount == 0)begin
+                if(walkInfo.remainCount == 0)begin
                     state <= IDLE;
                     for(int i=0; i<`FETCH_WIDTH; i++)begin
                         dataRIdx[i] <= head + i;

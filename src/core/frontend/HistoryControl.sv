@@ -21,24 +21,22 @@ module HistoryControl(
     logic [1: 0] squashCondNum;
     logic `N(2) condNum;
     logic taken;
-    logic [`SLOT_NUM-1: 0] squashCondHist;
 
     assign prediction_redirect = redirect.s2_redirect | redirect.s3_redirect;
     assign squashCondNum = squashInfo.predInfo.condNum;
     assign condNum = squash ? squashCondNum : result.cond_num;
     assign taken = squash ? squashInfo.predInfo.taken : result.taken;
-    assign squashCondHist = squashInfo.predInfo.condHist ^ squashInfo.predInfo.error;
     assign ghist_we[0] = (squash & (|squashCondNum)) | 
                         (~squash & (|result.cond_num));
     assign ghist_we[1] = (squash & squashCondNum[1]) | 
                         (~squash & result.cond_num[1]);
-    assign we_idx[0] =  redirect.flush ? squashInfo.redirect_info.ghistIdx : 
-                        prediction_redirect ? result.ghist_idx : pos;
+    assign we_idx[0] =  redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
+                        prediction_redirect ? result.redirect_info.ghistIdx : pos;
     assign we_idx[1] = we_idx[0] + 1;
-    assign ghist_idx = redirect.flush ? squashInfo.redirect_info.ghistIdx : 
-                       prediction_redirect ? result.cond_num + result.ghist_idx : pos;
+    assign ghist_idx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
+                       prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
     assign cond_result = taken << (condNum - 1);
-    assign tage_input_history = redirect.flush ? squashInfo.redirect_info.tage_history :
+    assign tage_input_history = redirect.flush ? squashInfo.redirectInfo.tage_history :
                            prediction_redirect ? result.redirect_info.tage_history : tage_history;
 generate;
     for(genvar i=0; i<`TAGE_BANK; i++)begin
@@ -47,7 +45,8 @@ generate;
         assign reverse_dir[1] = ghist[ghist_idx-tage_hist_length[i]+1];
         CompressHistory #(
             .COMPRESS_LENGTH(`TAGE_SET_WIDTH),
-            .ORIGIN_LENGTH(tage_hist_length[i])
+            .ORIGIN_LENGTH(tage_hist_length[i]),
+            .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_index(
             .origin(tage_input_history.fold_idx[i]),
             .dir(taken),
@@ -56,7 +55,8 @@ generate;
         );
         CompressHistory #(
             .COMPRESS_LENGTH(`TAGE_TAG_COMPRESS1),
-            .ORIGIN_LENGTH(tage_hist_length[i])
+            .ORIGIN_LENGTH(tage_hist_length[i]),
+            .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_tag1(
             .origin(tage_input_history.fold_tag1[i]),
             .dir(taken),
@@ -65,7 +65,8 @@ generate;
         );
         CompressHistory #(
             .COMPRESS_LENGTH(`TAGE_TAG_COMPRESS2),
-            .ORIGIN_LENGTH(tage_hist_length[i])
+            .ORIGIN_LENGTH(tage_hist_length[i]),
+            .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_tag2(
             .origin(tage_input_history.fold_tag2[i]),
             .dir(taken),
@@ -83,7 +84,7 @@ endgenerate
         end
         else begin
             pos <= squash ? squashCondNum + squashInfo.redirectInfo.ghistIdx :
-                   prediction_redirect ? result.cond_num + result.ghist_idx :
+                   prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx :
                    result.en ? result.cond_num + pos : pos;
             if(|ghist_we)begin
                 tage_history <= tage_update_history;
@@ -103,7 +104,7 @@ module CompressHistory #(
     parameter HIST_SIZE=1,
 	parameter OUTPUT_POINT=ORIGIN_LENGTH%COMPRESS_LENGTH
 )(
-	inout logic [COMPRESS_LENGTH-1: 0] origin,
+	input logic [COMPRESS_LENGTH-1: 0] origin,
     input logic [HIST_SIZE-1: 0] condNum,
 	input logic dir,
 	input logic [HIST_SIZE-1: 0] reverse_dir,

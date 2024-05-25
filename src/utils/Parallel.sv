@@ -3,8 +3,8 @@ module ParallelAdder #(
     parameter WIDTH=1,
     parameter DEPTH=4
 )(
-    logic [DEPTH-1: 0][WIDTH-1: 0] data,
-    logic [WIDTH+$clog2(DEPTH)-1: 0] out
+    input logic [DEPTH-1: 0][WIDTH-1: 0] data,
+    output logic [WIDTH+$clog2(DEPTH)-1: 0] out
 );
 generate
     if(DEPTH == 1)begin

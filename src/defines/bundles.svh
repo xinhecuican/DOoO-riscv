@@ -76,7 +76,7 @@ typedef struct packed {
     logic `N(`GHIST_WIDTH) ghistIdx;
     TageFoldHistory tage_history;
     logic `N(`RAS_WIDTH) rasIdx;
-    logic `N(`RAS_CTR_SIZE) ras_ctr;
+    // logic `N(`RAS_CTR_SIZE) ras_ctr;
 } RedirectInfo;
 
 typedef struct packed {
@@ -102,12 +102,12 @@ typedef struct packed {
 typedef struct packed {
     logic branch;
     logic direct;
-    BranchType branch_type;
+    BranchType br_type;
     RasType ras_type;
     logic `VADDR_BUS target;
 } PreDecodeBundle;
 
-typedef struct {
+typedef struct packed {
     logic s2_redirect;
     logic s3_redirect;
     logic flush;

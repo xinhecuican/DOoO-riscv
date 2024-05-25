@@ -5,7 +5,7 @@
 `define N(n) [(n)-1: 0]
 `define ARRAY(height, width) [(height-1): 0][(width-1): 0]
 
-`define RST 1'b1
+`define RST 1'b0
 `ifdef RV32I
 `define XLEN 32
 `endif
@@ -50,6 +50,7 @@
 `define TAGE_TAG_COMPRESS1 12
 `define TAGE_TAG_COMPRESS2 10
 `define TAGE_BASE_SIZE 4096
+`define TAGE_BASE_WIDTH $clog2(`TAGE_BASE_SIZE)
 `define TAGE_BASE_CTR 2
 parameter [8: 0] tage_hist_length `N(`TAGE_BANK) = {9'd8, 9'd13, 9'd32, 9'd119};
 parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd4096, 13'd4096, 13'd4096, 13'd4096};

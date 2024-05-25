@@ -3,33 +3,6 @@
 `include "bundles.svh"
 `include "axi.svh"
 
-interface core_icache_if;
-    logic ready; // cache can receive req
-    logic req;
-    logic valid; // data valid
-    logic `N(`FETCH_WIDTH_LOG) req_size;
-    logic `N(`VADDR_SIZE) addr;
-    logic `N(`FETCH_WIDTH) rdata_valid;
-    logic `ARRAY(`FETCH_WIDTH, `XLEN) rdata;
-
-    modport cache (input req, req_size, addr, output ready, valid, rdata_valid, rdata);
-    modport core (output req, req_size, addr, input ready, valid, rdata_valid, rdata);
-    modport data (input ready, valid, rdata_valid, rdata);
-endinterface //CoreCacheItf
-
-interface core_dcache_if;
-    logic ready;
-    logic req;
-    logic wr;
-    logic `N(2) req_size;
-    logic `N(`VADDR_SIZE) addr;
-    logic `ARRAY(`FETCH_WIDTH, `XLEN) rdata;
-    logic `ARRAY(`FETCH_WIDTH, `XLEN) wdata;
-
-    modport cache (input req, wr, req_size, addr, wdata, output ready, rdata);
-    modport core (output req, wr, req_size, addr, wdata, output ready, rdata);
-endinterface //core_dcache_if
-
 interface BpuBtbIO(
     input RedirectCtrl redirect,
     input logic squash,
@@ -60,7 +33,7 @@ interface BpuUBtbIO(
     PredictionResult result;
     UBTBMeta meta;
 
-    modport ubtb (input request, pc, fsqIdx, fsqDir, history, redirect, squash, squashInfo, update, updateInfo, output result, meta);
+    modport ubtb (input request, pc, fsqIdx, ghistIdx, fsqDir, history, redirect, squash, squashInfo, update, updateInfo, output result, meta);
 endinterface
 
 interface BpuTageIO(
@@ -91,7 +64,7 @@ interface BpuRASIO(
     RasEntry entry;
     logic `N(`RAS_WIDTH) rasIdx;
 
-    modport ras (input request, ras_type, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasIdx);
+    modport ras (input request, ras_type, target, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasIdx);
 
 endinterface
 
@@ -101,11 +74,11 @@ interface BpuFsqIO;
     logic stream_dir;
     logic lastStage;
     logic `N(`FSQ_WIDTH) lastStageIdx;
-    PredictionResult lastStageMeta;
+    PredictionMeta lastStageMeta;
     logic en;
-    logic redirect;
+    logic redirect; // s2 redirect s1
     RedirectInfo redirect_info;
-    logic squash;
+    logic squash; // backend redirect
     SquashInfo squashInfo;
     logic stall;
     logic update;
@@ -182,11 +155,11 @@ interface PreDecodeRedirect;
     logic `N(`FSQ_WIDTH) fsqIdx;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `VADDR_BUS redirect_addr;
-    BranchType branch_type;
+    BranchType br_type;
     RasType ras_type;
 
-    modport predecode(output en, fsqIdx, redirect_addr, pc, offset, branch_type, ras_type);
-    modport redirect(input en, fsqIdx, redirect_addr, pc, offset, branch_type, ras_type);
+    modport predecode(output en, fsqIdx, redirect_addr, pc, offset, br_type, ras_type);
+    modport redirect(input en, fsqIdx, redirect_addr, pc, offset, br_type, ras_type);
 endinterface
 
 interface PreDecodeIBufferIO;
@@ -218,8 +191,8 @@ interface ROBRenameIO;
     RobIdx robIdx;
     logic `N($clog2(`FETCH_WIDTH)) validNum;
 
-    modport rename(input robIdx);
-    modport rob(output robIdx);
+    modport rename(input robIdx, output validNum);
+    modport rob(output robIdx, input validNum);
 endinterface
 
 interface RenameDisIO;
@@ -230,7 +203,7 @@ interface RenameDisIO;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
     RobIdx `N(`FETCH_WIDTH) robIdx;
 
-    modport rename(output op, prs1, prs2, prd, robIdx);
+    modport rename(output op, prs1, prs2, wen, prd, robIdx);
     modport dis(input op, prs1, prs2, wen, prd, robIdx);
     modport rob(input op, prd, robIdx);
 endinterface
@@ -282,8 +255,8 @@ interface IntIssueExuIO;
     BranchType `N(`ALU_SIZE) br_type;
     RasType `N(`ALU_SIZE) ras_type;
 
-    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions, output valid);
-    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions, input valid);
+    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions, br_type, ras_type, output valid);
+    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions, br_type, ras_type, input valid);
 endinterface
 
 interface IssueAluIO;
@@ -292,7 +265,7 @@ interface IssueAluIO;
     logic `N(`XLEN) rs1_data;
     logic `N(`XLEN) rs2_data;
     IntIssueBundle bundle;
-    FetchSteram stream;
+    FetchStream stream;
     logic direction;
     RasType ras_type;
     BranchType br_type;
@@ -305,17 +278,20 @@ interface IssueBranchIO;
     logic `N(`XLEN) rs1_data;
     logic `N(`XLEN) rs2_data;
     IntIssueBundle bundle;
-    FetchSteram streams;
+    FetchStream streams;
     logic direction;
 
     modport branch (input en, rs1_data, rs2_data, bundle, streams, direction);
 endinterface
 
 interface WriteBackBus;
-    WBData `N(`WB_SIZE) data;
+    logic `N(`WB_SIZE) en;
+    RobIdx `N(`WB_SIZE) robIdx;
+    FsqIdxInfo `N(`WB_SIZE) fsqInfo;
+    logic `ARRAY(`WB_SIZE, `PREG_WIDTH) rd;
+    logic `ARRAY(`WB_SIZE, `XLEN) res;
 
-    modport wb (output data);
-    modport slave (input data);
+    modport wb (output en, robIdx, fsqInfo, rd, res);
 endinterface
 
 interface CommitBus;
@@ -342,7 +318,7 @@ interface CommitWalk;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
 
-    modport rob (output walk, walkStart, walkIdx, en, we, vrd, prd);
+    modport rob (output walk, walkStart, walkIdx, en, we, vrd, prd, num, weNum);
 endinterface
 
 interface FrontendCtrl;

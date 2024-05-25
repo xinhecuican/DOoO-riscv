@@ -12,7 +12,7 @@ module Tage(
 		logic `N(`TAGE_TAG_SIZE) lookup_tag;
 		logic `N(`SLOT_NUM) update_en;
 		logic `N(`SLOT_NUM) realTaken;
-		logic `N(`SLOT_NUM) udpate_u_en;
+		logic `N(`SLOT_NUM) update_u_en;
 		logic `N(`SLOT_NUM) provider;
 		logic `N(`SLOT_NUM) alloc;
 		logic `N(`SLOT_NUM) predError;
@@ -44,9 +44,9 @@ module Tage(
 				.INDEX_SIZE(`TAGE_SET_WIDTH),
 				.TAG_SIZE(`TAGE_TAG_SIZE)
 			) get_tag(
-				.pc(pc),
+				.pc(tage_io.pc),
 				// .path_hist(tage_io.history.phist),
-				.compress_index1(i == 0 ? 0 : tage_io.history.tage_history.fold_idx[i-1]),
+				.compress_index1(i == 0 ? `TAGE_SET_WIDTH'b0 : tage_io.history.tage_history.fold_idx[i-1]),
 				.compress_index2(tage_io.history.tage_history.fold_idx[i]),
 				.compress1(tage_io.history.tage_history.fold_tag1[i]),
 				.compress2(tage_io.history.tage_history.fold_tag2[i]),
@@ -72,7 +72,7 @@ module Tage(
 				.update_idx(bank_ctrl[i].update_idx),
 				.update_tag(bank_ctrl[i].update_tag),
 				.lookup_match(table_hits[i]),
-				.lookup_u(table_u[i]),
+				.u(table_u[i]),
 				.taken(prediction[i])
 			);
         end
@@ -80,7 +80,8 @@ module Tage(
 
 	logic base_we;
 	logic `N($clog2(`TAGE_BASE_SIZE)) base_lookup_idx, base_update_idx;
-	logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr, base_update_ctr;
+	logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr, base_update_ctr, base_ctr_inc;
+	assign base_lookup_idx = tage_io.pc[`TAGE_BASE_WIDTH+1: 2] ^ tage_io.pc[`TAGE_BASE_WIDTH * 2 + 1 : `TAGE_BASE_WIDTH + 2];
 	MPRAM #(
 		.WIDTH(`TAGE_BASE_CTR * `SLOT_NUM),
 		.DEPTH(`TAGE_BASE_SIZE),
@@ -88,12 +89,11 @@ module Tage(
 		.WRITE_PORT(1)
 	) base_table (
 		.clk(clk),
-		.rst(rst),
 		.en(!tage_io.redirect.stall),
 		.we(base_we),
-		.addr0(base_update_idx),
-		.addr1(base_lookup_idx),
-		.rdata1(base_ctr),
+		.waddr(base_update_idx),
+		.raddr(base_lookup_idx),
+		.rdata(base_ctr),
 		.wdata(base_update_ctr)
 	);
 
@@ -110,7 +110,7 @@ module Tage(
 	logic `N(`SLOT_NUM) u_slot_en;
 	logic `N(`SLOT_NUM) update_en;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) u_provider;
-	logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_U_SIZE) update_u_origin, update_u;
+	logic [`TAGE_BANK-1: 0][`SLOT_NUM-1: 0][`TAGE_U_SIZE-1: 0] update_u_origin, update_u;
 	logic `ARRAY(`TAGE_BANK, `SLOT_NUM) update_u_en;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) update_u_valid;
 	BTBEntry btbEntry;
@@ -132,6 +132,13 @@ module Tage(
 	assign dec_use = altPred ^ predTaken;
 	assign u_ctrs = meta.tage_ctrs;
 generate
+	for(genvar i=0; i<`SLOT_NUM; i++)begin
+		UpdateCounter #(`TAGE_BASE_CTR) updateCounter (meta.base_ctr[i], tage_io.updateInfo.realTaken[i], base_ctr_inc[i]);
+		assign base_update_ctr[i] = u_slot_en[i] ? base_ctr_inc[i] : meta.base_ctr[i];
+	end
+	assign base_we = |u_slot_en;
+	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: 2] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * 2 + 1 : `TAGE_BASE_WIDTH + 2];
+
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
 		assign u_slot_en[i] = btbEntry.slots[i].en & ~btbEntry.slots[i].carry;
 	end
@@ -149,7 +156,7 @@ generate
 		for(genvar j=0; j<`TAGE_BANK; j++)begin
 			logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
 			assign bank_u = update_u_origin[j];
-			UpdateCounter updateCounter (bank_u[i], alloc_combine[i], update_u[j][i]);
+			UpdateCounter #(`TAGE_U_SIZE) updateCounter (bank_u[i], alloc_combine[i], update_u[j][i]);
 			assign update_u_en[j][i] = (~(alloc_combine[i]) & predError[i]) |
 									   (u_provider[i][j] & dec_use[i]);
 		end
@@ -157,7 +164,7 @@ generate
 
 
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
-		assign bank_ctrl[i].update_en = {`SLOT_NUM{tage_io.udpate}} & update_en;
+		assign bank_ctrl[i].update_en = {`SLOT_NUM{tage_io.update}} & update_en;
 		assign bank_ctrl[i].provider = {u_provider[1][i], u_provider[0][i]};
 		assign bank_ctrl[i].alloc = {alloc[1][i], alloc[0][i]};
 		assign bank_ctrl[i].predError = predError;
@@ -181,9 +188,9 @@ generate
 			.INDEX_SIZE(`TAGE_SET_WIDTH),
 			.TAG_SIZE(`TAGE_TAG_SIZE)
 		) get_tag(
-			.pc(pc),
+			.pc(tage_io.updateInfo.start_addr),
 			// .path_hist(tage_io.history.phist),
-			.compress_index1(i == 0 ? 0 : tage_io.updateInfo.redirectInfo.tage_history.fold_idx[i-1]),
+			.compress_index1(i == 0 ? `TAGE_SET_WIDTH'b0 : tage_io.updateInfo.redirectInfo.tage_history.fold_idx[i-1]),
 			.compress_index2(tage_io.updateInfo.redirectInfo.tage_history.fold_idx[i]),
 			.compress1(tage_io.updateInfo.redirectInfo.tage_history.fold_tag1[i]),
 			.compress2(tage_io.updateInfo.redirectInfo.tage_history.fold_tag2[i]),
@@ -231,41 +238,41 @@ module TageTable #(
 			assign u[i] = lookup_u[i] != 0;
 			assign taken[i] = lookup_ctr[i][`TAGE_CTR_SIZE-1];
 			assign update_ctr[i] = alloc[i] ? (realTaken[i] ? (1 << (`TAGE_CTR_SIZE - 1)) : (1 << (`TAGE_CTR_SIZE - 2))) : update_ctr_provider[i];
-			UpdateCounter updateCtr (update_origin_ctr[i], realTaken[i], update_ctr_provider[i]);
+			UpdateCounter #(`TAGE_CTR_SIZE) updateCtr (update_origin_ctr[i], realTaken[i], update_ctr_provider[i]);
 		end
 	endgenerate
 
 	for(genvar i=0; i<`SLOT_NUM; i++)begin
-	MPRAM #(
-		.WIDTH((`TAGE_CTR_SIZE+`TAGE_TAG_SIZE)),
-		.DEPTH(HEIGHT),
-		.READ_PORT(1),
-		.WRITE_PORT(1)
-	)tage_bank(
-		.clk(clk),
-		.en(en),
-		.we(update_en[i] & (provider[i] | alloc[i])),
-		.waddr(update_idx),
-		.raddr(lookup_idx),
-		.rdata({search_tag[i], lookup_ctr[i]}),
-		.wdata({{`SLOT_NUM{update_tag}}, update_ctr[i]})
-	);
+		MPRAM #(
+			.WIDTH((`TAGE_CTR_SIZE+`TAGE_TAG_SIZE)),
+			.DEPTH(HEIGHT),
+			.READ_PORT(1),
+			.WRITE_PORT(1)
+		)tage_bank(
+			.clk(clk),
+			.en(en),
+			.we(update_en[i] & (provider[i] | alloc[i])),
+			.waddr(update_idx),
+			.raddr(lookup_idx),
+			.rdata({search_tag[i], lookup_ctr[i]}),
+			.wdata({update_tag, update_ctr[i]})
+		);
 
-	MPRAM #(
-		.WIDTH(`TAGE_U_SIZE),
-		.DEPTH(HEIGHT),
-		.READ_PORT(1),
-		.WRITE_PORT(1)
-	) u_bank (
-		.clk(clk),
-		.en(en),
-		.we(update_en[i] & (update_u_en[i] | alloc[i])),
-		.waddr(update_idx),
-		.raddr(lookup_idx),
-		.rdata(lookup_u[i]),
-		.wdata(update_u[i])
-	);
-	end
+		MPRAM #(
+			.WIDTH(`TAGE_U_SIZE),
+			.DEPTH(HEIGHT),
+			.READ_PORT(1),
+			.WRITE_PORT(1)
+		) u_bank (
+			.clk(clk),
+			.en(en),
+			.we(update_en[i] & (update_u_en[i] | alloc[i])),
+			.waddr(update_idx),
+			.raddr(lookup_idx),
+			.rdata(lookup_u[i]),
+			.wdata(update_u[i])
+		);
+		end
 
 endmodule
 

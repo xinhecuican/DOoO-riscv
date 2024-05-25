@@ -16,7 +16,7 @@ module BusyTable(
     input logic clk,
     input logic rst,
     BusyTableIO.busytable io,
-    WritebackBus wbBus,
+    WriteBackBus wbBus,
     CommitBus commitBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl
@@ -42,8 +42,8 @@ endgenerate
 generate
     for(genvar i=0; i<`WB_SIZE; i++)begin
         logic `N(`PREG_SIZE) rd_decode;
-        Decoder #(`PREG_SIZE) decoder_rd (wbBus.data[i].rd, rd_decode);
-        assign wb_valids[i] = (rd_decode & {`PREG_SIZE{wbBus.data[i].en & (wbBus.data[i].rd != 0)}});
+        Decoder #(`PREG_SIZE) decoder_rd (wbBus.rd[i], rd_decode);
+        assign wb_valids[i] = (rd_decode & {`PREG_SIZE{wbBus.en[i] & (wbBus.rd[i] != 0)}});
     end
     assign wb_valid = |wb_valids;
 endgenerate
