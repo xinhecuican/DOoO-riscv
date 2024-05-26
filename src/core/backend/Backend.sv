@@ -5,7 +5,7 @@ module Backend(
     input logic rst,
     IfuBackendIO.backend ifu_backend_io,
     FsqBackendIO.backend fsq_back_io,
-    CommitBus.rob commitBus
+    CommitBus.rob commitBus_out
 );
     DecodeRenameIO dec_rename_io();
     RenameDisIO rename_dis_io();
@@ -15,12 +15,14 @@ module Backend(
     IssueRegfileIO #(.PORT_SIZE(`ALU_SIZE)) int_reg_io();
     IntIssueExuIO int_exu_io();
     BackendCtrl backendCtrl();
+    CommitBus commitBus();
     CommitWalk commitWalk();
 
 `ifdef DIFFTEST
     DiffRAT diff_rat();
 `endif
 
+    assign commitBus_out = commitBus.rob;
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
     assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
     assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full;

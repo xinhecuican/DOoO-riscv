@@ -3,7 +3,7 @@
 module AxiInterface(
     input logic clk,
     input logic rst,
-    ICacheAxi.cache icache_io,
+    ICacheAxi.axi icache_io,
     AxiIO.master axi
 );
 
@@ -22,7 +22,9 @@ module AxiInterface(
     assign ar_en = (~read_controller.en) | arEnd;
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
-            read_controller <= '{default: 0};
+            read_controller.en <= 1'b0;
+            read_controller.device <= ICACHE;
+            read_controller.mar <= 0;
         end
         else begin
             if(~read_controller.en)begin

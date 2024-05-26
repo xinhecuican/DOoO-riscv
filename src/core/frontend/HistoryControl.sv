@@ -12,6 +12,7 @@ module HistoryControl(
     logic `N(`GHIST_SIZE) ghist;
     TageFoldHistory tage_history, tage_input_history, tage_update_history;
     logic `N(`GHIST_WIDTH) pos;
+    /* verilator lint_off UNOPTFLAT */
     logic `N(`GHIST_WIDTH) we_idx `N(`SLOT_NUM);
     logic `N(`SLOT_NUM) ghist_we;
     logic `N(`SLOT_NUM) cond_result;
@@ -35,7 +36,7 @@ module HistoryControl(
     assign cond_result = taken << (condNum - 1);
     assign tage_input_history = redirect.flush ? squashInfo.redirectInfo.tage_history :
                            prediction_redirect ? result.redirect_info.tage_history : tage_history;
-
+    /* verilator lint_off UNOPTFLAT */
     assign history.ghistIdx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
                        prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
     assign history.tage_history = tage_history;

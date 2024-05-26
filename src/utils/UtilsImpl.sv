@@ -134,7 +134,7 @@ module Encoder16(
 	Encoder8 high(in[7: 0], out_low);
 	Encoder8 low(in[15: 8], out_high);
 	assign out[3] = |in[15: 8];
-	assign out[2: 0] = out[3] ? out_high : out_low;
+	assign out[2: 0] = out_high | out_low;
 endmodule
 
 module Encoder64(
@@ -152,7 +152,7 @@ module Encoder64(
 	assign select[2] = |in[47: 32];
 	assign select[3] = |in[63: 48];
 	Encoder4 encoder(select, out[5: 4]);
-	assign out[3: 0] = {4{select[0]}} & out1 | {4{select[1]}} & out2 | {4{select[2]}} & out3 | {4{select[3]}} & out4;
+	assign out[3: 0] = out1 | out2 | out3 | out4;
 endmodule
 
 module PEncoder4 (
@@ -240,6 +240,7 @@ module Sort4 #(
 	output logic [3: 0][DATA_WIDTH-1: 0] data_o
 );
 	logic [1: 0][WIDTH-1: 0] compare1, compare2;
+	/* verilator lint_off UNOPTFLAT */
 	logic [1: 0][DATA_WIDTH-1: 0] data1, data2;
 	Sort2 #(WIDTH, DATA_WIDTH) sort1 (origin[3: 2], data_i[3: 2], compare1, data1);
 	Sort2 #(WIDTH, DATA_WIDTH) sort2 (origin[1: 0], data_i[1: 0], compare2, data2);

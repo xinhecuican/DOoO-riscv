@@ -6,7 +6,7 @@ module Rename(
     DecodeRenameIO.rename dec_rename_io,
     RenameDisIO.rename rename_dis_io,
     ROBRenameIO.rename rob_rename_io,
-    CommitBus commitBus,
+    CommitBus.in commitBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl,
     output logic full
@@ -32,6 +32,7 @@ module Rename(
     logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) raw_rs1, raw_rs2, waw; // read after write
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) raw_rs1_idx, raw_rs2_idx;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1, prs2, prd;
+    /* verilator lint_off UNOPTFLAT */
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) prdIdx;
 
     assign stall = backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full;

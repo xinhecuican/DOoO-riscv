@@ -10,7 +10,7 @@ module FSQ (
     FsqCacheIO.fsq fsq_cache_io,
     PreDecodeRedirect.redirect pd_redirect,
     FsqBackendIO.fsq fsq_back_io,
-    CommitBus commitBus,
+    CommitBus.in commitBus,
     FrontendCtrl frontendCtrl
 );
     logic `N(`FSQ_WIDTH) search_head, commit_head, tail, write_index, tail_n1, n_commit_head;

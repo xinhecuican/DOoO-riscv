@@ -35,6 +35,7 @@ module ROB(
     logic `N(`ROB_SIZE) wb; // set to 0 when commit, set to 1 when write back
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
+    /* verilator lint_off UNOPTFLAT */
     logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataWIdx;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataRIdx;
@@ -281,7 +282,7 @@ endgenerate
     end
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign fsq_back_io.diff_fsqInfo[i] = rob_wdata[i].diff_fsqInfo;
+        assign fsq_back_io.diff_fsqInfo[i] = rob_wdata[i].fsqInfo;
         DifftestInstrCommit difftest_inst_commit(
             .clock(clk),
             .coreid(0),

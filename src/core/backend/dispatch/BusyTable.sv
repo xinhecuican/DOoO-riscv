@@ -17,7 +17,7 @@ module BusyTable(
     input logic rst,
     BusyTableIO.busytable io,
     WriteBackBus wbBus,
-    CommitBus commitBus,
+    CommitBus.in commitBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl
 );

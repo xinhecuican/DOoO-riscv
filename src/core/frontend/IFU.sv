@@ -6,7 +6,7 @@ module IFU (
     ICacheAxi.cache axi_io,
     IfuBackendIO.ifu ifu_backend_io,
     FsqBackendIO.fsq fsq_back_io,
-    CommitBus commitBus
+    CommitBus.in commitBus
 );
     BpuFsqIO bpu_fsq_io();
     FsqCacheIO fsq_cache_io();

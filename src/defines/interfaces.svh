@@ -84,8 +84,8 @@ interface BpuFsqIO;
     logic update;
     BranchUpdateInfo updateInfo;
 
-    modport fsq (input en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx, stream_dir);
-    modport bpu (output en, prediction, redirect, redirect_info, squash, squashInfo, update, updateInfo, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx, stream_dir);
+    modport fsq (input en, prediction, redirect, redirect_info, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
+    modport bpu (output en, prediction, redirect, redirect_info, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
 endinterface
 
 interface FsqCacheIO;
@@ -110,7 +110,7 @@ interface FsqBackendIO;
     BackendRedirectInfo redirect;
 
 `ifdef DIFFTEST
-    logic `ARRAY(`COMMIT_WIDTH, $bits(FsqIdxInfo)) diff_fsqInfo;
+    FsqIdxInfo `N(`COMMIT_WIDTH) diff_fsqInfo;
     logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) diff_pc;
 `endif
     
@@ -158,7 +158,9 @@ interface ReplaceIO #(
     logic miss_en;
     logic `N(WAY_WIDTH) hit_way;
     logic `N(WAY_WIDTH) miss_way;
+    /* verilator lint_off ASCRANGE */
     logic `N(ADDR_WIDTH) hit_index;
+    /* verilator lint_off ASCRANGE */
     logic `N(ADDR_WIDTH) miss_index;
 
     modport replace(input hit_en, miss_en, hit_way, hit_index, miss_index, output miss_way);
@@ -319,6 +321,7 @@ interface CommitBus;
     logic `N($clog2(`COMMIT_WIDTH) + 1) wenum;
 
     modport rob(output en, we, fsqInfo, vrd, prd, num, wenum);
+    modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
 endinterface
 
 interface CommitWalk;
@@ -352,10 +355,10 @@ endinterface
 
 `ifdef DIFFTEST
 interface DiffRAT;
-    logic `ARRAY(5, `PREG_WIDTH) map;
+    logic `ARRAY(5, `PREG_WIDTH) map_reg;
 
-    modport rat (output map);
-    modport regfile (input map);
+    modport rat (output map_reg);
+    modport regfile (input map_reg);
 endinterface
 
 `endif

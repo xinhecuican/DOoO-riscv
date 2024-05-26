@@ -14,6 +14,7 @@ module CPUCore (
     CommitBus commitBus();
 
     IFU ifu(.*, .axi_io(icache_io));
-    Backend backend(.*);
+    Backend backend(.*,
+                    .commitBus_out(commitBus));
     AxiInterface axi_interface(.*);
 endmodule

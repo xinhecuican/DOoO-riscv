@@ -27,9 +27,9 @@ endgenerate
             for(int i=0; i<`FETCH_WIDTH; i++)begin
                 dec_rename_io.op[i].en <= insts.en[i];
                 dec_rename_io.op[i].di <= decodeInfo[i];
-                dec_rename_io.op[i].fsqInfo = insts.fsqInfo[i];
+                dec_rename_io.op[i].fsqInfo <= insts.fsqInfo[i];
 `ifdef DIFFTEST
-                dec_rename_io.op[i].inst <= insts.insts[i];
+                dec_rename_io.op[i].inst <= insts.inst[i];
 `endif
             end
         end

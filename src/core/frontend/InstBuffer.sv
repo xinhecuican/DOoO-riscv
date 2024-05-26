@@ -14,7 +14,7 @@ module InstBuffer (
         logic [31: 0] inst;
     } IBufData;
 
-    typedef struct {
+    typedef struct packed{
         logic we;
         logic `N(`INST_BUFFER_BANK_WIDTH) rindex;
         logic `N(`INST_BUFFER_BANK_WIDTH) windex;
@@ -51,7 +51,7 @@ module InstBuffer (
             InstBufferBank #($bits(IBufData)) u_InstBufferBank(
                 .clk   (clk   ),
                 .rst   (rst   ),
-                .we    (ibuf[i].we    ),
+                .we    (inst_buffer_we[i]    ),
                 .din   (ibuf[i].wdata   ),
                 .waddr (ibuf[i].windex ),
                 .raddr (ibuf[i].rindex ),
@@ -76,12 +76,13 @@ module InstBuffer (
 
     always_ff @(posedge clk) begin
         if(rst == `RST || frontendCtrl.redirect)begin
-            for(int i=0; i<`INST_BUFFER_BANK_SIZE; i++)begin
-                ibuf[i].we <= 0;
+            for(int i=0; i<`INST_BUFFER_BANK_NUM; i++)begin
                 ibuf[i].rindex <= 0;
-
+                ibuf[i].windex <= 0;
             end
             inst_num <= 0;
+            head <= 0;
+            tail <= 0;
         end 
         else begin
             // enqueue
@@ -112,6 +113,7 @@ module InstBufferBank #(
     input logic `N(WIDTH) din,
     input logic `N(`INST_BUFFER_BANK_WIDTH) waddr,
     input logic `N(`INST_BUFFER_BANK_WIDTH) raddr,
+    /* verilator lint_off UNOPTFLAT */
     output logic `N(WIDTH) dout
 );
     logic `N(WIDTH) ram `N(`INST_BUFFER_BANK_SIZE);

@@ -13,14 +13,14 @@ module SimRam(
     logic [7: 0] awlen;
     logic [7: 0] awsize;
 
-    assign wmask = {{8{axi.maw.wstrb[7]}},
-                    {8{axi.maw.wstrb[6]}},
-                    {8{axi.maw.wstrb[5]}},
-                    {8{axi.maw.wstrb[4]}},
-                    {8{axi.maw.wstrb[3]}},
-                    {8{axi.maw.wstrb[2]}},
-                    {8{axi.maw.wstrb[1]}},
-                    {8{axi.maw.wstrb[0]}}};
+    assign wmask = {{8{axi.mw.wstrb[7]}},
+                    {8{axi.mw.wstrb[6]}},
+                    {8{axi.mw.wstrb[5]}},
+                    {8{axi.mw.wstrb[4]}},
+                    {8{axi.mw.wstrb[3]}},
+                    {8{axi.mw.wstrb[2]}},
+                    {8{axi.mw.wstrb[1]}},
+                    {8{axi.mw.wstrb[0]}}};
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             axi.sar.ready <= 1'b1;
@@ -72,11 +72,11 @@ module SimRam(
                 axi.sr.valid <= 1'b1;
             end
 
-            if(axi.mar.valid && axi.mar.ready)begin
+            if(axi.maw.valid && axi.saw.ready)begin
                 wIdx <= axi.maw.addr;
                 axi.saw.ready <= 1'b0;
                 axi.sw.ready <= 1'b1;
-                axi.sb.id <= axi.saw.id;
+                axi.sb.id <= axi.maw.id;
                 case(axi.maw.size)
                 3'b000: awsize <= 1;
                 3'b001: awsize <= 2;

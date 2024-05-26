@@ -14,7 +14,7 @@ module Freelist(
     input logic clk,
     input logic rst,
     FreelistIO.freelist fl_io,
-    CommitBus commitBus,
+    CommitBus.in commitBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl
 );

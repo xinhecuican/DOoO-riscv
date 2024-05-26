@@ -34,7 +34,7 @@ module Regfile(
             end
         end
         for(int i=0; i<32; i++)begin
-            diff_data[i] <= data[diff_rat.map[i]];
+            diff_data[i] <= data[diff_rat.map_reg[i]];
         end
     end
     DifftestArchIntRegState diff_int_reg(

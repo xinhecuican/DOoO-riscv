@@ -6,7 +6,7 @@ module Dispatch(
     RenameDisIO.dis rename_dis_io,
     DisIntIssueIO.dis dis_intissue_io,
     WriteBackBus wbBus,
-    CommitBus commitBus,
+    CommitBus.in commitBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl,
     output logic full
@@ -71,10 +71,12 @@ interface DispatchQueueIO #(
     logic `N(`PREG_WIDTH) rs2;
     logic `ARRAY(`FETCH_WIDTH, $bits(RobIdx)) robIdx;
     logic `ARRAY(`FETCH_WIDTH, DATA_WIDTH) data;
+    /* verilator lint_off UNOPTFLAT */
     logic `N(OUT_WIDTH) en_o;
     logic `N(`PREG_WIDTH) rs1_o;
     logic `N(`PREG_WIDTH) rs2_o;
     logic `ARRAY(OUT_WIDTH, DATA_WIDTH) data_o;
+    /* verilator lint_off UNOPTFLAT */
     logic full;
     logic issue_full;
 
@@ -99,6 +101,7 @@ module DispatchQueue #(
         logic `N(`PREG_WIDTH) rs1, rs2;
         logic `N(DATA_WIDTH) data;
     } Entry;
+    /* verilator lint_off UNOPTFLAT */
     logic `N(ADDR_WIDTH) index `N(`FETCH_WIDTH);
     RobIdx robIdx `N(DEPTH);
     logic `N($bits(Entry)) entrys `N(DEPTH);

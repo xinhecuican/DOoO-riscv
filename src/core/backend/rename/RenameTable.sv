@@ -17,7 +17,7 @@ module RenameTable(
     input logic clk,
     input logic rst,
     RenameTableIO.rename rename_io,
-    CommitBus commitBus,
+    CommitBus.in commitBus,
     CommitWalk commitWalk
 `ifdef DIFFTEST
     ,DiffRAT.rat diff_rat
@@ -78,7 +78,7 @@ endgenerate
 
 `ifdef DIFFTEST
     logic `ARRAY(5, `PREG_WIDTH) diff_map;
-    assign diff_rat.map = diff_map;
+    assign diff_rat.map_reg = diff_map;
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             for(int i=0; i<32; i++)begin

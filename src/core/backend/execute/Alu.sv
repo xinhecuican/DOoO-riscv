@@ -98,6 +98,7 @@ module BranchModel(
 
     // predict error
     // cal stream taken offset
+    /* verilator lint_off UNOPTFLAT */
     logic streamHit, branchError, indirectError;
     assign streamHit = stream.size == offset;
     assign branchError = streamHit ? stream.taken ^ branchRes.direction : branchRes.direction;
