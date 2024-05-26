@@ -7,7 +7,6 @@ module HistoryControl(
     input RedirectCtrl redirect,
     input logic squash,
     input SquashInfo squashInfo,
-    output logic `N(`GHIST_WIDTH) ghist_idx,
     output BranchHistory history
 );
     logic `N(`GHIST_SIZE) ghist;
@@ -22,7 +21,7 @@ module HistoryControl(
     logic `N(2) condNum;
     logic taken;
 
-    assign prediction_redirect = redirect.s2_redirect | redirect.s3_redirect;
+    assign prediction_redirect = redirect.s2_redirect;
     assign squashCondNum = squashInfo.predInfo.condNum;
     assign condNum = squash ? squashCondNum : result.cond_num;
     assign taken = squash ? squashInfo.predInfo.taken : result.taken;
@@ -33,16 +32,18 @@ module HistoryControl(
     assign we_idx[0] =  redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
                         prediction_redirect ? result.redirect_info.ghistIdx : pos;
     assign we_idx[1] = we_idx[0] + 1;
-    assign ghist_idx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
-                       prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
     assign cond_result = taken << (condNum - 1);
     assign tage_input_history = redirect.flush ? squashInfo.redirectInfo.tage_history :
                            prediction_redirect ? result.redirect_info.tage_history : tage_history;
+
+    assign history.ghistIdx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
+                       prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
+    assign history.tage_history = tage_history;
 generate;
     for(genvar i=0; i<`TAGE_BANK; i++)begin
         logic [`SLOT_NUM-1: 0] reverse_dir;
-        assign reverse_dir[0] = ghist[ghist_idx-tage_hist_length[i]];
-        assign reverse_dir[1] = ghist[ghist_idx-tage_hist_length[i]+1];
+        assign reverse_dir[0] = ghist[history.ghistIdx-tage_hist_length[i]];
+        assign reverse_dir[1] = ghist[history.ghistIdx-tage_hist_length[i]+1];
         CompressHistory #(
             .COMPRESS_LENGTH(`TAGE_SET_WIDTH),
             .ORIGIN_LENGTH(tage_hist_length[i]),

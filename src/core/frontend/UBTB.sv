@@ -92,8 +92,10 @@ endgenerate
         ubtb_io.result.predTaken = br_takens;
         ubtb_io.result.stream_idx = ubtb_io.fsqIdx;
         ubtb_io.result.stream_dir = ubtb_io.fsqDir;
-        ubtb_io.result.redirect_info.ghistIdx = ubtb_io.ghistIdx;
-        ubtb_io.meta.ctr = br_takens;
+        ubtb_io.result.redirect_info.ghistIdx = ubtb_io.history.ghistIdx;
+        ubtb_io.result.redirect_info.tage_history = ubtb_io.history.tage_history;
+        ubtb_io.result.btbEntry = lookup_entry;
+        ubtb_io.meta.ctr = lookup_ctr;
     end
 
     RandomReplace #(

@@ -80,8 +80,9 @@ typedef struct packed {
 } RedirectInfo;
 
 typedef struct packed {
-    logic `N(`GHIST_SIZE) ghist;
-    logic `N(`PHIST_SIZE) phist;
+    logic `N(`GHIST_WIDTH) ghistIdx;
+    // logic `N(`GHIST_SIZE) ghist;
+    // logic `N(`PHIST_SIZE) phist;
     TageFoldHistory tage_history;
 } BranchHistory;
 
@@ -109,7 +110,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic s2_redirect;
-    logic s3_redirect;
+    // logic s3_redirect;
     logic flush;
     logic stall;
 } RedirectCtrl;

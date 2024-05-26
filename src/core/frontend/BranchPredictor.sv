@@ -15,7 +15,6 @@ module BranchPredictor(
     BpuTageIO tage_io(.*);
     BpuUBtbIO ubtb_io(.*);
     BpuRASIO ras_io(.*);
-    logic `N(`GHIST_WIDTH) ghist_idx;
 
     PredictionResult s1_result;
     PredictionResult s2_result_in, s2_result_out;
@@ -36,7 +35,6 @@ module BranchPredictor(
         .*,
         .result(bpu_fsq_io.prediction),
         .redirect(redirect),
-        .ghist_idx(ghist_idx),
         .history(history)
     );
     
@@ -44,7 +42,6 @@ module BranchPredictor(
     assign ubtb_io.pc = pc;
     assign ubtb_io.fsqIdx = bpu_fsq_io.stream_idx;
     assign ubtb_io.fsqDir = bpu_fsq_io.stream_dir;
-    assign ubtb_io.ghistIdx = ghist_idx;
     UBTB ubtb(.*);
 
     RAS ras(.*);
@@ -178,6 +175,7 @@ module S2Control(
             result_o.cond_valid = cond_valid;
             result_o.taken = |br_takens;
             result_o.predTaken = br_takens;
+            result_o.btbEntry = entry;
         end
         else begin
             result_o.stream.taken = result_i.stream.taken;
@@ -190,6 +188,7 @@ module S2Control(
             result_o.cond_valid = result_i.cond_valid;
             result_o.taken = result_i.taken;
             result_o.predTaken = result_i.predTaken;
+            result_o.btbEntry = result_i.btbEntry;
         end
         result_o.en = 1'b1;
         result_o.stream.start_addr= result_i.stream.start_addr;

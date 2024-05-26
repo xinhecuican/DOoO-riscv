@@ -19,7 +19,6 @@ module FSQ (
     logic full, enqueue, dequeue;
     logic queue_we;
     logic last_search;
-    logic empty;
     logic cache_req_ok;
     BTBEntry oldEntry, updateEntry;
     logic `N(`BLOCK_INST_SIZE) predErrorVec `N(`FSQ_SIZE);
@@ -286,7 +285,9 @@ endgenerate
     end
 
     assign streamVec = (1 << (commitStream.size + 1)) - 1;
-    assign commitValid = ((streamVec & commitVec[tail[0]]) == streamVec) |
+    // because streamVec is not init
+    assign commitValid = ~(|commitVec[tail[0]]) ? 0 :
+                         ((streamVec & commitVec[tail[0]]) == streamVec) |
                          ((streamVec & predErrorVec[tail]) != 0);
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
