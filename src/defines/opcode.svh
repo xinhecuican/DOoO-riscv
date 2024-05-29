@@ -16,6 +16,7 @@
 `define INT_SL      `INTOP_WIDTH'b01000
 `define INT_SRL     `INTOP_WIDTH'b01001
 `define INT_SRA     `INTOP_WIDTH'b01010
+`define INT_AUIPC   `INTOP_WIDTH'b01100
 
 // memop
 

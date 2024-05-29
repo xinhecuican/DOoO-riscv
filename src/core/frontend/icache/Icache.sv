@@ -7,7 +7,11 @@ module ICache(
     CachePreDecodeIO.cache cache_pd_io,
     ICacheAxi.cache axi_io
 );
+`ifdef DIFFTEST
+    typedef struct packed {
+`else
     typedef struct {
+`endif
         logic `N(`ICACHE_SET) index1, index2;
         logic `ARRAY(2, `ICACHE_BANK) expand_en;
         logic `N(`BLOCK_INST_SIZE) expand_en_shift;
@@ -18,8 +22,11 @@ module ICache(
         logic `N(`FSQ_WIDTH) fsqIdx;
     } RequestBuffer;
     RequestBuffer request_buffer;
-
+`ifdef DIFFTEST
+    typedef struct packed {
+`else
     typedef struct {
+`endif
         logic `N(`ICACHE_TAG + `ICACHE_SET_WIDTH) paddr;
         logic `N(`ICACHE_TAG + `ICACHE_SET_WIDTH) addition_paddr;
         logic addition_request;
@@ -62,7 +69,7 @@ module ICache(
     assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
     assign stream_size = fsq_cache_io.stream.size + 1;
     assign end_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + {stream_size, 2'b00};
-    assign span = end_addr[`ICACHE_LINE_WIDTH];
+    assign span = end_addr[`ICACHE_LINE_WIDTH] & (|end_addr[`ICACHE_LINE_WIDTH-1: 0]);
     assign start_addr_mask = (1 << start_addr) - 1;
     assign expand_en = ((1 << end_addr) - 1) ^ start_addr_mask;
     assign expand_en_shift = expand_en >> start_addr;
@@ -70,7 +77,9 @@ module ICache(
     assign indexp1 = index + 1;
     assign vtag = fsq_cache_io.stream.start_addr`ICACHE_TAG_BUS;
     assign refill_en = main_state == REFILL && axi_io.sr.valid && next_stream_index == 0;
-    assign abandon_success = main_state == LOOKUP && request_buffer.fsqIdx == fsq_cache_io.abandonIdx;
+    assign abandon_success = main_state == LOOKUP && 
+                             fsq_cache_io.abandon &&
+                             request_buffer.fsqIdx == fsq_cache_io.abandonIdx;
     always_ff @(posedge clk)begin
         ptag1 <= vtag;
         ptag2 <= vtag + indexp1[`ICACHE_SET_WIDTH];
@@ -84,6 +93,9 @@ module ICache(
                 .io(way_io[i])
             );
             assign way_io[i].tagv_en = fsq_cache_io.en & ~fsq_cache_io.stall;
+            assign way_io[i].tagv_we = {`ICACHE_BANK{miss_buffer.replace_way[i] & refill_en}};
+            assign way_io[i].tagv_windex = miss_buffer.windex;
+            assign way_io[i].tagv_wdata = {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
             assign way_io[i].tagv_index = index;
             assign way_io[i].span = span;
             // assign way_io[i].en = {`ICACHE_BANK{fsq_cache_io.en}} &
@@ -143,6 +155,7 @@ module ICache(
     assign cache_pd_io.stream.branch_type = request_buffer.stream.branch_type;
     assign cache_pd_io.stream.ras_type = request_buffer.stream.ras_type;
     assign cache_pd_io.stream.size = request_buffer.stream.size;
+    assign cache_pd_io.stream.target = request_buffer.stream.target;
     localparam BANK_IDX_SIZE = $clog2(`ICACHE_BANK)+1;
     generate;
         for(genvar bank=0; bank<`BLOCK_INST_SIZE; bank++)begin

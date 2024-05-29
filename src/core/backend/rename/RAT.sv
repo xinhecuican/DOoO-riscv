@@ -12,8 +12,8 @@ interface RATIO #(
     logic `ARRAY(WRITE_PORT, 5) waddr;
     logic `ARRAY(WRITE_PORT, `PREG_WIDTH) wdata;
 
-    modport rat(input vreg, output preg);
-    modport rename(output vreg, input preg);
+    modport rat(input vreg, we, waddr, wdata, output preg);
+    modport rename(output vreg, we, waddr, wdata, input preg);
 endinterface
 
 module RAT #(
@@ -25,7 +25,7 @@ module RAT #(
     RATIO.rat rat_io
 );
 
-    logic `N(`PREG_WIDTH) rat `N(5);
+    logic `N(`PREG_WIDTH) rat `N(32);
 
 generate;
     for(genvar i=0; i<READ_PORT; i++)begin

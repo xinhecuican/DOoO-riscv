@@ -17,7 +17,7 @@ module PreDecode(
     logic `N(`ICACHE_BANK_WIDTH) selectIdx, jumpSelectIdx;
     PreDecodeBundle selectBundle;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data_next;
-    logic `N($clog2(`BLOCK_INST_SIZE)) instNum, instNumNext;
+    logic `N($clog2(`BLOCK_INST_SIZE)+1) instNum, instNumNext;
 
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
@@ -60,10 +60,12 @@ module PreDecode(
     assign pd_redirect.br_type = bundles_next[selectIdx].br_type;
     assign pd_redirect.ras_type = bundles_next[selectIdx].ras_type;
     assign pd_redirect.pc = stream_next.start_addr;
+    assign pd_redirect.redirect_addr = bundles_next[selectIdx].target;
 
     assign pd_ibuffer_io.en = {`BLOCK_INST_SIZE{~pd_redirect.en}} & en_next;
-    assign pd_ibuffer_io.num = ~pd_redirect.en ? instNumNext : 0;
+    assign pd_ibuffer_io.num = instNumNext;
     assign pd_ibuffer_io.inst = data_next;
+    assign pd_ibuffer_io.fsqIdx = fsqIdx;
 
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin

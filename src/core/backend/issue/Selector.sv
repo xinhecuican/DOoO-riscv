@@ -61,7 +61,7 @@ generate
         for(genvar j=0; j<DEPTH; j++)begin
             assign bigger_mask[i][j] = (bigger[i][j] | (~ready[j])) & ready[i];
         end
-        assign select[i] = &bigger_mask;
+        assign select[i] = &bigger_mask[i];
     end
 endgenerate
 

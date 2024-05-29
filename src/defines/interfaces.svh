@@ -42,12 +42,12 @@ interface BpuTageIO(
     input logic update,
     input BranchUpdateInfo updateInfo
 );
-    logic request;
+    logic ready;
     logic `VADDR_BUS pc;
     logic `N(`SLOT_NUM) prediction;
     TageMeta meta;
 
-    modport tage (input request, pc, history, redirect, update, updateInfo, output prediction, meta);
+    modport tage (input pc, history, redirect, update, updateInfo, output prediction, meta, ready);
 endinterface
 
 interface BpuRASIO(
@@ -77,15 +77,14 @@ interface BpuFsqIO;
     PredictionMeta lastStageMeta;
     logic en;
     logic redirect; // s2 redirect s1
-    RedirectInfo redirect_info;
     logic squash; // backend redirect
     SquashInfo squashInfo;
     logic stall;
     logic update;
     BranchUpdateInfo updateInfo;
 
-    modport fsq (input en, prediction, redirect, redirect_info, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
-    modport bpu (output en, prediction, redirect, redirect_info, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
+    modport fsq (input en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
+    modport bpu (output en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
 endinterface
 
 interface FsqCacheIO;
@@ -152,15 +151,13 @@ interface ReplaceIO #(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
     parameter WAY_WIDTH = $clog2(WAY_NUM),
-    parameter ADDR_WIDTH = $clog2(DEPTH)
+    parameter ADDR_WIDTH = DEPTH <= 1 ? 1 : $clog2(DEPTH)
 );
     logic hit_en;
     logic miss_en;
     logic `N(WAY_WIDTH) hit_way;
     logic `N(WAY_WIDTH) miss_way;
-    /* verilator lint_off ASCRANGE */
     logic `N(ADDR_WIDTH) hit_index;
-    /* verilator lint_off ASCRANGE */
     logic `N(ADDR_WIDTH) miss_index;
 
     modport replace(input hit_en, miss_en, hit_way, hit_index, miss_index, output miss_way);
@@ -181,7 +178,7 @@ endinterface
 
 interface PreDecodeIBufferIO;
     logic `N(`BLOCK_INST_SIZE) en;
-    logic `N($clog2(`BLOCK_INST_SIZE)) num;
+    logic `N($clog2(`BLOCK_INST_SIZE)+1) num;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) inst;
     logic `N(`FSQ_WIDTH) fsqIdx;
 
@@ -206,7 +203,7 @@ endinterface
 
 interface ROBRenameIO;
     RobIdx robIdx;
-    logic `N($clog2(`FETCH_WIDTH)) validNum;
+    logic `N($clog2(`FETCH_WIDTH) + 1) validNum;
 
     modport rename(input robIdx, output validNum);
     modport rob(output robIdx, input validNum);
@@ -303,19 +300,20 @@ endinterface
 
 interface WriteBackBus;
     logic `N(`WB_SIZE) en;
+    logic `N(`WB_SIZE) we;
     RobIdx `N(`WB_SIZE) robIdx;
     FsqIdxInfo `N(`WB_SIZE) fsqInfo;
     logic `ARRAY(`WB_SIZE, `PREG_WIDTH) rd;
     logic `ARRAY(`WB_SIZE, `XLEN) res;
 
-    modport wb (output en, robIdx, fsqInfo, rd, res);
+    modport wb (output en, we, robIdx, fsqInfo, rd, res);
 endinterface
 
 interface CommitBus;
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
     FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
-    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) vrd;
+    logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
     logic `N($clog2(`COMMIT_WIDTH) + 1) num;
     logic `N($clog2(`COMMIT_WIDTH) + 1) wenum;
@@ -333,7 +331,7 @@ interface CommitWalk;
     logic `N(`COMMIT_WIDTH) we;
     logic `N($clog2(`COMMIT_WIDTH) + 1) num;
     logic `N($clog2(`COMMIT_WIDTH) + 1) weNum;
-    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) vrd;
+    logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
 
     modport rob (output walk, walkStart, walkIdx, en, we, vrd, prd, num, weNum);

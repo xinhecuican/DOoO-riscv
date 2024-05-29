@@ -17,12 +17,12 @@ module Rename(
 
     RenameTableIO rename_io();
     FreelistIO fl_io();
-    logic `N($clog2(`FETCH_WIDTH)) rdNum;
+    logic `N($clog2(`FETCH_WIDTH)+1) rdNum;
     logic `N(`FETCH_WIDTH) rd_en;
     logic `N(`FETCH_WIDTH) en;
     logic stall;
 
-    RenameTableIO renameTable(.*);
+    RenameTable renameTable(.*);
     assign fl_io.rdNum = rdNum;
     assign fl_io.old_prd = rename_io.old_prd;
     assign full = fl_io.full;
@@ -80,7 +80,7 @@ generate;
     end
 endgenerate
 
-    logic `N($clog2(`FETCH_WIDTH)) validNum;
+    logic `N($clog2(`FETCH_WIDTH) + 1) validNum;
     ParallelAdder #(1, `FETCH_WIDTH) adder_valid (en, validNum);
     assign rob_rename_io.validNum = validNum;
     always_ff @(posedge clk)begin

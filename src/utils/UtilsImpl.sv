@@ -227,7 +227,7 @@ module Sort2 #(
 	logic bigger;
 	assign bigger = origin[1] < origin[0];
 	assign sort = bigger ? {origin[1], origin[0]} : origin;
-	assign data_o = bigger ? {data_o[1], data_o[0]} : data_i;
+	assign data_o = bigger ? {data_i[1], data_i[0]} : data_i;
 endmodule
 
 module Sort4 #(

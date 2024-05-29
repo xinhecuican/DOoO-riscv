@@ -22,7 +22,13 @@ module Backend(
     DiffRAT diff_rat();
 `endif
 
-    assign commitBus_out = commitBus.rob;
+    assign commitBus_out.en = commitBus.en;
+    assign commitBus_out.we = commitBus.we;
+    assign commitBus_out.fsqInfo = commitBus.fsqInfo;
+    assign commitBus_out.vrd = commitBus.vrd;
+    assign commitBus_out.prd = commitBus.prd;
+    assign commitBus_out.num = commitBus.num;
+    assign commitBus_out.wenum = commitBus.wenum;
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
     assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
     assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full;

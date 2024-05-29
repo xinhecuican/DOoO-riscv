@@ -41,14 +41,14 @@ module ROB(
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataRIdx;
     logic `N(`FETCH_WIDTH) data_en;
     logic `N(`ROB_WIDTH) head, tail, tail_n, head_n;
-    logic `N(`ROB_WIDTH) commitHead `N(`COMMIT_WIDTH);
     logic `N(`COMMIT_WIDTH) commit_we;
     logic tdir; // tail direction
-    logic `N(`FSQ_WIDTH+1) remainCount, remainCount_n;
+    logic `N(`ROB_WIDTH+1) remainCount, remainCount_n;
 
     logic `N(`FETCH_WIDTH) dis_en;
     logic `N(`FETCH_WIDTH * 2) dis_en_shift;
     logic `N($clog2(`FETCH_WIDTH) + 1) dis_validNum, addNum, subNum;
+    logic initReady;
 
     RobData `N(`FETCH_WIDTH) robData, rob_wdata;
 generate
@@ -63,15 +63,18 @@ endgenerate
         .WIDTH($bits(RobData)),
         .DEPTH(`ROB_SIZE),
         .READ_PORT(`COMMIT_WIDTH),
-        .WRITE_PORT(`FETCH_WIDTH)
+        .WRITE_PORT(`FETCH_WIDTH),
+        .RESET(1)
     ) rob_data_ram (
         .clk(clk),
+        .rst(rst),
         .en({`COMMIT_WIDTH{1'b1}}),
         .raddr(dataRIdx),
         .rdata(robData),
         .we(data_en),
         .waddr(dataWIdx),
-        .wdata(rob_wdata)
+        .wdata(rob_wdata),
+        .ready(initReady)
     );
 
 generate
@@ -97,21 +100,21 @@ generate
     end
 endgenerate
 
-    logic `N($clog2(`COMMIT_WIDTH)) commitNum, commitWeNum;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) commitNum, commitWeNum;
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_num (commit_en, commitNum);
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_we_num (commitBus.en & commit_we, commitWeNum);
     assign commitBus.wenum = commitWeNum;
     assign commitBus.we = commit_we;
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign commitBus.fsqInfo[i] = robData[commitHead[i][$clog2(`COMMIT_WIDTH)-1: 0]].fsqInfo;
-        assign commitBus.vrd[i] = robData[commitHead[i][$clog2(`COMMIT_WIDTH)-1: 0]].vrd;
-        assign commitBus.prd[i] = robData[commitHead[i][$clog2(`COMMIT_WIDTH)-1: 0]].prd;
+        assign commitBus.fsqInfo[i] = robData[i].fsqInfo;
+        assign commitBus.vrd[i] = robData[i].vrd;
+        assign commitBus.prd[i] = robData[i].prd;
     end
 
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         always_ff @(posedge clk)begin
-            if(state == IDLE && !(backendRedirect.en))begin
+            if(state == IDLE && !(backendRedirect.en) && initReady)begin
                 commitBus.en[i] <= commit_en[i];
             end
             else begin
@@ -167,7 +170,7 @@ endgenerate
         else begin
             tail <= tail_n;
             remainCount <= remainCount_n;
-            if(tail[`ROB_WIDTH-1] ^ tail_n[`ROB_WIDTH-1])begin
+            if(tail[`ROB_WIDTH-1] & ~tail_n[`ROB_WIDTH-1])begin
                 tdir <= ~tdir;
             end
             head <= head_n;
@@ -203,6 +206,7 @@ endgenerate
             state <= IDLE;
             walkInfo <= '{default: 0};
             commitWalk.en <= `COMMIT_WIDTH'b0;
+            commitWalk.walk <= 1'b0;
             for(int i=0; i<`FETCH_WIDTH; i++)begin
                 dataRIdx[i] <= i;
             end

@@ -33,9 +33,9 @@ module ICacheWay(
         else begin
             if(io.tagv_en)begin
                 io.tagv[0] <= tagv[io.tagv_index];
-                if(io.span)begin
+                // if(io.span)begin
                     io.tagv[1] <= tagv[tagv_index_p1];
-                end
+                // end
             end
 
             if(io.tagv_we)begin
@@ -53,6 +53,7 @@ module ICacheWay(
                 .WRITE_PORT(1)
             ) bank(
                 .clk(clk),
+                .rst(rst),
                 .en(io.en[i]),
                 .waddr(io.windex[i]),
                 .raddr(io.index[i]),

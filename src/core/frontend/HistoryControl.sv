@@ -36,7 +36,6 @@ module HistoryControl(
     assign cond_result = taken << (condNum - 1);
     assign tage_input_history = redirect.flush ? squashInfo.redirectInfo.tage_history :
                            prediction_redirect ? result.redirect_info.tage_history : tage_history;
-    /* verilator lint_off UNOPTFLAT */
     assign history.ghistIdx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
                        prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
     assign history.tage_history = tage_history;

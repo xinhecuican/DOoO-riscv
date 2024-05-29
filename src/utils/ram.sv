@@ -94,9 +94,7 @@ module TDPRAM#(
 
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
-            for(int i=0; i<DEPTH; i++)begin
-                data[i] <= INIT_VALUE;
-            end
+            data <= '{default: INIT_VALUE};
         end
         else begin
             if(we0)begin
@@ -226,17 +224,65 @@ module MPRAM #(
     parameter ADDR_WIDTH = $clog2(DEPTH),
     parameter READ_LATENCY = 1,
     parameter BYTE_WRITE = 0,
+    parameter RESET = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
+    input logic rst,
     input logic `N(READ_PORT) en,
     input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
     input logic `ARRAY(WRITE_PORT, ADDR_WIDTH) waddr,
     input logic [WRITE_PORT-1: 0][BYTES-1: 0] we,
     input logic [WRITE_PORT-1: 0][BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
-    output logic `ARRAY(READ_PORT, WIDTH) rdata
+    output logic `ARRAY(READ_PORT, WIDTH) rdata,
+    output logic ready
 );
     logic `ARRAY(BYTES, WIDTH / BYTES) mem `N(DEPTH);
+    logic `N(ADDR_WIDTH) resetAddr;
+    logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
+generate
+    if(RESET)begin
+        logic `N(ADDR_WIDTH+1) counter;
+        logic resetState;
+        assign resetAddr = resetState ? counter : waddr[0];
+        assign resetData = resetState ? 0 : wdata[0];
+        always_ff @(posedge clk)begin
+            if(rst == `RST)begin
+                counter <= 0;
+                resetState <= 1'b1;
+                ready <= 1'b0;
+            end
+            else begin
+                if(resetState)begin
+                    counter <= counter + 1;
+                    if(counter == DEPTH)begin
+                        resetState <= 1'b0;
+                        ready <= 1'b1;
+                    end
+                end
+            end
+            for(int i=0; i<BYTES; i++)begin
+                if(we[0][i] | resetState)begin
+                    mem[resetAddr][i] <= resetData[i];
+                end
+            end
+        end
+        
+    end
+    else begin
+        assign resetAddr = waddr[0];
+        assign resetData = wdata[0];
+        assign ready = 1'b1;
+        always_ff @(posedge clk)begin
+            for(int i=0; i<BYTES; i++)begin
+                if(we[0][i])begin
+                    mem[resetAddr][i] <= resetData[i];
+                end
+            end
+        end
+    end
+endgenerate
+
     generate;
         if(READ_LATENCY == 0)begin
             for(genvar i=0; i<READ_PORT; i++)begin
@@ -258,7 +304,7 @@ module MPRAM #(
     endgenerate
 
     always_ff @(posedge clk)begin
-        for(int i=0; i<WRITE_PORT; i++)begin
+        for(int i=1; i<WRITE_PORT; i++)begin
             for(int j=0; j<BYTES; j++)begin
                 if(we[i][j])begin
                     mem[waddr[i]][j] <= wdata[i][j];

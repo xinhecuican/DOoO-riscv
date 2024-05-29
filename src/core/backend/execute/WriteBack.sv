@@ -23,6 +23,7 @@ endgenerate
     always_ff @(posedge clk)begin
         for(int i=0; i<`WB_SIZE; i++)begin
             wbBus.en[i] <= io.datas[i].en;
+            wbBus.we[i] <= io.datas[i].rd != 0;
             wbBus.robIdx[i] <= io.datas[i].robIdx;
             wbBus.fsqInfo[i] <= io.datas[i].fsqInfo;
             wbBus.rd[i] <= io.datas[i].rd;

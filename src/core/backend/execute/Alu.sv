@@ -17,6 +17,8 @@ module ALU(
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
         .op(io.bundle.intop),
+        .stream(io.stream),
+        .offset(io.bundle.fsqInfo.offset),
         .result(result)
     );
     BranchModel branchModel(
@@ -116,6 +118,8 @@ module ALUModel(
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
     input logic `N(`INTOP_WIDTH) op,
+    input FetchStream stream,
+    input logic `N(`PREDICTION_WIDTH) offset,
     output logic `N(`XLEN) result
 );
     logic `N(`XLEN) data1, data2;
@@ -126,6 +130,13 @@ module ALUModel(
     assign data2 = immv ? imm : rs2_data;
     assign add_result = data1 + data2;
     assign cmp = data1 < data2;
+
+
+    logic `N(`XLEN) imm_shift;
+    logic `N(`PREDICTION_WIDTH+2) br_offset;
+    assign br_offset = {offset, 2'b00};
+    assign imm_shift = {imm[`XLEN-13: 0], 12'b0};
+
     always_comb begin
         case({data2[`XLEN-1], data1[`XLEN-1]})
         2'b00: scmp = cmp;
@@ -172,6 +183,9 @@ module ALUModel(
         `INT_SRA: begin
             // TODO: remove $signed
             result = $signed(data1) >> data2[$clog2(`XLEN)-1: 0];
+        end
+        `INT_AUIPC: begin
+            result = stream.start_addr + br_offset + imm_shift;
         end
         default: result = 0;
         endcase

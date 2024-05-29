@@ -18,6 +18,7 @@ module BranchPredictor(
 
     PredictionResult s1_result;
     PredictionResult s2_result_in, s2_result_out;
+    PredictionResult redirect_result;
     PredictionMeta s1_meta;
     PredictionMeta s2_meta_in, s2_meta_out;
     // PredictionResult s3_result_in, s3_result_out;
@@ -29,11 +30,12 @@ module BranchPredictor(
     assign btb_io.pc = pc;
     assign btb_io.request = 1'b1;
     BTB btb(.*);
+    assign tage_io.pc = pc;
     Tage tage(.*);
 
     HistoryControl history_control(
         .*,
-        .result(bpu_fsq_io.prediction),
+        .result(redirect_result),
         .redirect(redirect),
         .history(history)
     );
@@ -47,8 +49,10 @@ module BranchPredictor(
     RAS ras(.*);
     
     assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect[0];
+    assign redirect.tage_ready = tage_io.ready;
     assign redirect.flush = bpu_fsq_io.squash;
-    assign redirect.stall = bpu_fsq_io.stall;
+    assign redirect.stall = bpu_fsq_io.stall | ~tage_io.ready;
+    assign redirect_result = redirect.s2_redirect ? s2_result_out : 0;
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             pc <= `RESET_PC;
@@ -112,8 +116,11 @@ module S2Control(
     logic hit;
     logic `N(`SLOT_NUM) isBr;
     logic `N(`SLOT_NUM) br_takens;
-    logic `N(`JAL_OFFSET) br_offset;
-    logic `N(`PREDICTION_WIDTH) br_size, tail_size;
+    logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
+    logic `N(`PREDICTION_WIDTH) br_size, tail_size, br_size_normal;
+    TargetState br_tar_state, tail_tar_state, br_tar_state_normal;
+    logic [`VADDR_SIZE-`JAL_OFFSET-2: 0] br_target_high;
+    logic [`VADDR_SIZE-`JALR_OFFSET-2: 0] tail_target_high;
     logic `VADDR_BUS tail_target, br_target, tail_indirect_target;
     logic [1: 0] cond_num;
     logic `N(`SLOT_NUM) cond_valid;
@@ -130,28 +137,40 @@ module S2Control(
     endgenerate
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
                                         entry.slots[0].target,entry.tailSlot.target[`JAL_OFFSET-1: 0],
-                                        br_offset);
+                                        br_offset_normal);
     PMux2 #(`PREDICTION_WIDTH) pmux2_br_size(br_takens, 
                                         entry.slots[0].offset,entry.tailSlot.offset,
-                                        br_size);
+                                        br_size_normal);
+    PMux2 #(2) pmux2_br_tar(br_takens,
+                            entry.slots[0].tar_state, entry.tailSlot.tar_state,
+                            br_tar_state_normal);
     assign tail_size = entry.tailSlot.en ? entry.tailSlot.offset : entry.fthAddr;
+    assign tail_tar_state = entry.tailSlot.tar_state;
+    assign tail_target_high = tail_tar_state == TAR_OV ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
+                            tail_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
+                                                     ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
     assign tail_target = entry.tailSlot.en ? tail_indirect_target : entry.fthAddr + pc;
+    assign br_target_high = br_tar_state == TAR_OV ? ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
+                            br_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
+                                                     ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
     assign br_target = {{(`VADDR_SIZE-`JAL_OFFSET){br_offset[`JAL_OFFSET-1]}}, br_offset} + pc;
     assign predict_pc = |br_takens ? br_target : tail_target;
     assign older = entry.slots[0].offset < entry.tailSlot.offset;
 
     always_comb begin
-        if(br_takens[0] & older)begin
-            cond_num = 2'b1;
-            cond_valid = 2'b1;
-        end
-        else if(br_takens[1] & ~older)begin
+        if(br_takens[1] & ~older)begin
             cond_num = 2'b1;
             cond_valid = 2'b10;
+            br_size = entry.tailSlot.offset;
+            br_offset = entry.tailSlot.target[`JAL_OFFSET-1: 0];
+            br_tar_state = entry.tailSlot.tar_state;
         end
         else begin
             cond_num = isBr[0] + isBr[1];
             cond_valid = isBr;
+            br_size = br_size_normal;
+            br_offset = br_offset_normal;
+            br_tar_state = br_tar_state_normal;
         end
     end
     always_comb begin
@@ -190,10 +209,12 @@ module S2Control(
             result_o.predTaken = result_i.predTaken;
             result_o.btbEntry = result_i.btbEntry;
         end
-        result_o.en = 1'b1;
+        result_o.en = result_i.en;
         result_o.stream.start_addr= result_i.stream.start_addr;
         result_o.stream_idx = result_i.stream_idx;
         result_o.stream_dir = result_i.stream_dir;
+        result_o.redirect_info.ghistIdx = result_i.redirect_info.ghistIdx;
+        result_o.redirect_info.tage_history = result_i.redirect_info.tage_history;
         result_o.redirect_info.rasIdx = rasIdx;
         // result_o.redirect_info.ras_ctr = ras_entry.ctr;
     end

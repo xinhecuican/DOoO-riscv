@@ -5,8 +5,11 @@ module Tage(
     input logic rst,
     BpuTageIO.tage tage_io
 );
-
+`ifdef DIFFTEST
+	typedef struct packed {
+`else
 	typedef struct {
+`endif
 		logic en;
 		logic `N(`TAGE_SET_WIDTH) lookup_idx;
 		logic `N(`TAGE_TAG_SIZE) lookup_tag;
@@ -23,8 +26,10 @@ module Tage(
 	} BankCtrl;
 	BankCtrl bank_ctrl `N(`TAGE_BANK);
 	logic `N(`SLOT_NUM) table_hits `N(`TAGE_BANK);
+	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) table_hits_reorder;
 	logic `N(`SLOT_NUM) table_u `N(`TAGE_BANK);
 	logic `N(`SLOT_NUM) prediction `N(`TAGE_BANK);
+	logic `ARRAY(`SLOT_NUM, `TAGE_ALT_CTR) altCtr;
 
     generate;
         for(genvar i=0; i<`TAGE_BANK; i++)begin
@@ -52,7 +57,7 @@ module Tage(
 				.compress2(tage_io.history.tage_history.fold_tag2[i]),
 				.tag(bank_ctrl[i].lookup_tag)
 			);
-
+			assign bank_ctrl[i].en = 1'b1;
 			TageTable #(
 				.HEIGHT(tage_set_size[i])
 			)tage_table(
@@ -73,7 +78,9 @@ module Tage(
 				.update_tag(bank_ctrl[i].update_tag),
 				.lookup_match(table_hits[i]),
 				.u(table_u[i]),
-				.taken(prediction[i])
+				.taken(prediction[i]),
+				.lookup_ctr(tage_io.meta.tage_ctrs[i]),
+				.lookup_u(tage_io.meta.u[i])
 			);
         end
     endgenerate
@@ -86,24 +93,33 @@ module Tage(
 		.WIDTH(`TAGE_BASE_CTR * `SLOT_NUM),
 		.DEPTH(`TAGE_BASE_SIZE),
 		.READ_PORT(1),
-		.WRITE_PORT(1)
+		.WRITE_PORT(1),
+		.RESET(1)
 	) base_table (
 		.clk(clk),
+		.rst(rst),
 		.en(!tage_io.redirect.stall),
 		.we(base_we),
 		.waddr(base_update_idx),
 		.raddr(base_lookup_idx),
 		.rdata(base_ctr),
-		.wdata(base_update_ctr)
+		.wdata(base_update_ctr),
+		.ready(tage_io.ready)
 	);
 
 	generate;
 		for(genvar br=0; br<`SLOT_NUM; br++)begin
-			assign tage_io.prediction[br] = |({prediction[br], base_ctr[br][`TAGE_BASE_CTR-1]} &
-										   {table_hits[br], 1'b1});
-			assign tage_io.meta.table_hits = |prediction[br];
+			for(genvar bank=0; bank<`TAGE_BANK; bank++)begin
+				assign table_hits_reorder[br][bank] = table_hits[bank][br];
+			end
+			PSelector #(`TAGE_BANK) selector_provider(table_hits_reorder[br], tage_io.meta.provider[br]);
+			assign tage_io.prediction[br] = |tage_io.meta.provider[br] ? |(prediction[br] & tage_io.meta.provider[br]) :
+																		 base_ctr[br][`TAGE_BASE_CTR-1];
+			assign tage_io.meta.altPred = base_ctr[br][`TAGE_BASE_CTR-1];
 		end
 	endgenerate
+	assign tage_io.meta.base_ctr = base_ctr;
+	assign tage_io.meta.predTaken = tage_io.prediction;
 
 	// update
 	logic `N(`SLOT_NUM) predError, predTaken;
@@ -222,15 +238,16 @@ module TageTable #(
 	input logic `N(ADDR_WIDTH) update_idx,
 	output logic `N(`SLOT_NUM) lookup_match,
 	output logic `N(`SLOT_NUM) u,
-	output logic `N(`SLOT_NUM) taken
+	output logic `N(`SLOT_NUM) taken,
+	// meta
+	output logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) lookup_ctr,
+	output logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) lookup_u
 );
 	logic `ARRAY(`SLOT_NUM, `TAGE_TAG_SIZE) match_tag;
 	always_ff @(posedge clk)begin
 		match_tag <= {`SLOT_NUM{lookup_tag}};
 	end
 	logic `ARRAY(`SLOT_NUM, `TAGE_TAG_SIZE) search_tag;
-	logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) lookup_ctr;
-	logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) lookup_u;
 	logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr, update_ctr_provider;
 	generate;
 		for(genvar i=0; i<`SLOT_NUM; i++)begin
@@ -247,9 +264,11 @@ module TageTable #(
 			.WIDTH((`TAGE_CTR_SIZE+`TAGE_TAG_SIZE)),
 			.DEPTH(HEIGHT),
 			.READ_PORT(1),
-			.WRITE_PORT(1)
+			.WRITE_PORT(1),
+			.RESET(1)
 		)tage_bank(
 			.clk(clk),
+			.rst(rst),
 			.en(en),
 			.we(update_en[i] & (provider[i] | alloc[i])),
 			.waddr(update_idx),
@@ -262,9 +281,11 @@ module TageTable #(
 			.WIDTH(`TAGE_U_SIZE),
 			.DEPTH(HEIGHT),
 			.READ_PORT(1),
-			.WRITE_PORT(1)
+			.WRITE_PORT(1),
+			.RESET(1)
 		) u_bank (
 			.clk(clk),
+			.rst(rst),
 			.en(en),
 			.we(update_en[i] & (update_u_en[i] | alloc[i])),
 			.waddr(update_idx),

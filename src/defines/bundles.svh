@@ -8,6 +8,7 @@ typedef struct packed {
     logic carry;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `N(`JAL_OFFSET) target;
+    TargetState tar_state;
 } BranchSlot;
 
 typedef struct packed {
@@ -17,6 +18,7 @@ typedef struct packed {
     RasType ras_type;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `N(`JALR_OFFSET) target;
+    TargetState tar_state;
 } TailSlot;
 
 typedef struct packed {
@@ -34,7 +36,6 @@ typedef struct packed {
 } TageEntry;
 
 typedef struct packed {
-    logic `ARRAY(`TAGE_BANK, `SLOT_NUM) table_hits;
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_CTR_SIZE) tage_ctrs;
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_U_SIZE) u;
     logic `ARRAY(`TAGE_BASE_CTR, `SLOT_NUM) base_ctr;
@@ -109,6 +110,7 @@ typedef struct packed {
 } PreDecodeBundle;
 
 typedef struct packed {
+    logic tage_ready;
     logic s2_redirect;
     // logic s3_redirect;
     logic flush;
@@ -148,6 +150,7 @@ typedef struct packed {
     logic `N(`FETCH_WIDTH) en;
     FsqIdxInfo `N(`FETCH_WIDTH) fsqInfo;
     logic `ARRAY(`FETCH_WIDTH, 32) inst;
+    logic `ARRAY(`FETCH_WIDTH, `VADDR_SIZE) addr;
 } FetchBundle;
 
 typedef struct packed {
@@ -174,7 +177,7 @@ typedef struct packed {
 } OPBundle;
 
 typedef struct packed {
-    logic `N(`FSQ_WIDTH) idx;
+    logic `N(`ROB_WIDTH) idx;
     logic dir;
 } RobIdx;
 

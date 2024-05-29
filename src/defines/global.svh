@@ -16,7 +16,7 @@
 `define PADDR_BUS [(`PADDR_SIZE)-1: 0]
 `define IALIGN 32
 
-`define RESET_PC `VADDR_SIZE'hbfc00000
+`define RESET_PC `VADDR_SIZE'h80000000
 
 // BranchPrediction
 `define PREDICT_STAGE 2
@@ -52,6 +52,7 @@
 `define TAGE_BASE_SIZE 4096
 `define TAGE_BASE_WIDTH $clog2(`TAGE_BASE_SIZE)
 `define TAGE_BASE_CTR 2
+`define TAGE_ALT_CTR 7
 parameter [8: 0] tage_hist_length `N(`TAGE_BANK) = {9'd8, 9'd13, 9'd32, 9'd119};
 parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd4096, 13'd4096, 13'd4096, 13'd4096};
 `define TAGE_SET_WIDTH 12
@@ -61,6 +62,12 @@ typedef enum logic [1: 0] {
     INDIRECT, 
     CALL 
 } BranchType;
+
+typedef enum logic [1: 0] { 
+    TAR_NONE,
+    TAR_OV,
+    TAR_UN
+} TargetState;
 
 `define RAS_SIZE 32
 `define RAS_WIDTH $clog2(`RAS_SIZE)
@@ -88,10 +95,10 @@ typedef enum logic [1: 0] {
 `define ICACHE_SET_BUS [`ICACHE_SET_WIDTH+`ICACHE_LINE_WIDTH-1: `ICACHE_LINE_WIDTH]
 
 // InstBuffer
-`define INST_BUFFER_SIZE 32
-`define INST_BUFFER_BANK_NUM 8
-`define INST_BUFFER_BANK_SIZE (`INST_BUFFER_SIZE / `INST_BUFFER_BANK_NUM)
-`define INST_BUFFER_BANK_WIDTH $clog2(`INST_BUFFER_BANK_SIZE)
+`define IBUF_SIZE 32
+`define IBUF_BANK_NUM 8
+`define IBUF_BANK_SIZE (`IBUF_SIZE / `IBUF_BANK_NUM)
+`define IBUF_BANK_WIDTH $clog2(`IBUF_BANK_SIZE)
 
 `define FETCH_WIDTH 4
 `define FETCH_WIDTH_LOG $clog2(`FETCH_WIDTH)
@@ -99,7 +106,7 @@ typedef enum logic [1: 0] {
 // rename
 `define PREG_SIZE 128
 `define PREG_WIDTH $clog2(`PREG_SIZE)
-`define FREELIST_DEPTH ((`PREG_SIZE-32) / `FETCH_WIDTH)
+`define FREELIST_DEPTH ((`PREG_SIZE-32))
 
 // rob
 `define ROB_SIZE 128

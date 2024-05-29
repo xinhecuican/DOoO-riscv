@@ -76,13 +76,12 @@ interface IntBankIO #(parameter DEPTH=8);
     logic `N($clog2(DEPTH)+1) bankNum;
     logic reg_en;
     logic `N(`PREG_WIDTH) rs1, rs2;
-    logic stall;
     IntIssueBundle data_o;
     logic `N(`FSQ_WIDTH) fsqIdx;
     BranchType br_type;
     RasType ras_type;
 
-    modport bank(input en, status, data, stall, output full, bankNum, reg_en, rs1, rs2, data_o, fsqIdx, br_type, ras_type);
+    modport bank(input en, status, data, output full, bankNum, reg_en, rs1, rs2, data_o, fsqIdx, br_type, ras_type);
 endinterface
 
 module IntIssueBank #(
@@ -108,8 +107,7 @@ module IntIssueBank #(
 
     SDPRAM #(
         .WIDTH($bits(IntIssueBundle)),
-        .DEPTH(DEPTH),
-        .READ_LATENCY(1)
+        .DEPTH(DEPTH)
     ) data_ram (
         .clk(clk),
         .rst(rst),
@@ -143,11 +141,12 @@ endgenerate
     PSelector #(DEPTH) selector_free_idx (~en, free_en);
     Encoder #(DEPTH) encoder_free_idx (free_en, freeIdx);
     Encoder #(DEPTH) encoder_select_idx (select_en, selectIdx);
+    ParallelAdder #(.DEPTH(DEPTH)) adder_bankNum(en, io.bankNum);
 generate
     for(genvar i=0; i<DEPTH; i++)begin
         for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs1_cmp[i][j] = wbBus.en[j] & (wbBus.rd[j] == status_ram[i].rs1);
-            assign rs2_cmp[i][j] = wbBus.en[j] & (wbBus.rd[j] == status_ram[i].rs2);
+            assign rs1_cmp[i][j] = wbBus.en[j] & wbBus.we[j] & (wbBus.rd[j] == status_ram[i].rs1);
+            assign rs2_cmp[i][j] = wbBus.en[j] & wbBus.we[j] & (wbBus.rd[j] == status_ram[i].rs2);
         end
     end
 endgenerate
@@ -162,6 +161,7 @@ generate
 endgenerate
 
     always_ff @(posedge clk)begin
+        selectIdxNext <= selectIdx;
         if(rst == `RST)begin
             status_ram <= 0;
             en <= 0;
@@ -172,16 +172,27 @@ endgenerate
                 en <= walk_en;
             end
             else begin
-                en <= (en | ({DEPTH{io.en}} & free_en));
+                en <= (en | ({DEPTH{io.en}} & free_en)) &
+                      ~(select_en);
             end
             
             if(io.en)begin
-                status_ram[freeIdx] <= io.status;
+                status_ram[freeIdx].rs1v <= io.status.rs1v;
+                status_ram[freeIdx].rs2v <= io.status.rs2v;
+                status_ram[freeIdx].rs1 <= io.status.rs1;
+                status_ram[freeIdx].rs2 <= io.status.rs2;
+                status_ram[freeIdx].robIdx <= io.status.robIdx;
             end
 
             for(int i=0; i<DEPTH; i++)begin
-                status_ram[i].rs1v <= status_ram[i].rs1v | (|rs1_cmp);
-                status_ram[i].rs2v <= status_ram[i].rs2v | (|rs2_cmp);
+                if(io.en && free_en[i])begin
+                    status_ram[i].rs1v <= io.status.rs1v;
+                    status_ram[i].rs2v <= io.status.rs2v;
+                end
+                else begin
+                    status_ram[i].rs1v <= (status_ram[i].rs1v | (|rs1_cmp[i]));
+                    status_ram[i].rs2v <= status_ram[i].rs2v | (|rs2_cmp[i]);
+                end
             end
             io.data_o <= data_o;
         end
@@ -191,9 +202,9 @@ endgenerate
     logic push, pop;
     logic `N(`PREG_WIDTH) rd, rs;
     logic `N(`BRANCHOP_WIDTH) op;
-    assign rd = data_o.rd;
+    assign rd = io.data_o.rd;
     assign rs = status_ram[selectIdxNext].rs1;
-    assign op = data_o.branchop;
+    assign op = io.data_o.branchop;
     assign push = rd == 5'h1 || rd == 5'h5;
     assign pop = rs == 5'h1 || rs == 5'h5;
     always_comb begin
@@ -203,11 +214,11 @@ endgenerate
         2'b10: io.ras_type = PUSH;
         2'b11: io.ras_type = POP_PUSH;
         endcase
-        unique if(op == `BRANCH_JAL)begin
+        if(op == `BRANCH_JAL)begin
             io.br_type = DIRECT;
         end
         else if(op == `BRANCH_JALR)begin
-            unique if(push | pop)begin
+            if(push | pop)begin
                 io.br_type = CALL;
             end
             else begin

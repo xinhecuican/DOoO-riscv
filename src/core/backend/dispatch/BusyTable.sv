@@ -34,7 +34,7 @@ generate
         assign io.rs1_en[i] = valid[io.rs1[i]];
         assign io.rs2_en[i] = valid[io.rs2[i]];
     end
-    assign dis_valid = |dis_valids;
+    ParallelOR #(`PREG_SIZE, `FETCH_WIDTH) or_dis_valid (dis_valids, dis_valid);
 endgenerate
 
     logic `ARRAY(`WB_SIZE, `PREG_SIZE) wb_valids;
@@ -45,7 +45,7 @@ generate
         Decoder #(`PREG_SIZE) decoder_rd (wbBus.rd[i], rd_decode);
         assign wb_valids[i] = (rd_decode & {`PREG_SIZE{wbBus.en[i] & (wbBus.rd[i] != 0)}});
     end
-    assign wb_valid = |wb_valids;
+    ParallelOR #(`PREG_SIZE, `WB_SIZE) or_wb_valid (wb_valids, wb_valid);
 endgenerate
 
     logic `ARRAY(`WB_SIZE, `PREG_SIZE) walk_valids;
@@ -56,7 +56,7 @@ generate
         Decoder #(`PREG_SIZE) decoder_rd (commitWalk.prd[i], rd_decode);
         assign walk_valids[i] = (rd_decode & {`PREG_SIZE{commitWalk.walk & commitWalk.we[i]}});
     end
-    assign walk_valid = |walk_valids;
+    ParallelOR #(`PREG_SIZE, `COMMIT_WIDTH) or_walk_valid (walk_valids, walk_valid);
 endgenerate
 
     always_ff @(posedge clk)begin

@@ -6,8 +6,11 @@ module BTB (
     BpuBtbIO.btb btb_io
 );
 
-
+`ifdef DIFFTEST
+    typedef struct packed {
+`else
     typedef struct {
+`endif
         logic we;
         logic `N(`BTB_SET_WIDTH) waddr;
         logic `N(`BTB_SET_WIDTH) raddr;
@@ -33,9 +36,11 @@ module BTB (
                 .WIDTH($bits(BTBEntry)),
                 .DEPTH(`BTB_SET),
                 .READ_PORT(1),
-                .WRITE_PORT(1)
+                .WRITE_PORT(1),
+                .RESET(1)
             ) btb_bank(
                 .clk(clk),
+                .rst(rst),
                 .en(bank_en[i] & ~btb_io.redirect.stall),
                 .we(bank_ctrl[i].we),
                 .waddr(bank_ctrl[i].waddr),

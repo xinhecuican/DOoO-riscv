@@ -10,7 +10,7 @@ interface RenameTableIO;
     logic `ARRAY(`FETCH_WIDTH, 5) rename_vrd;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rename_prd;
 
-    modport rename (input vrs1, vrs2, output prs1, prs2, old_prd);
+    modport rename (input vrs1, vrs2, rename_we, rename_vrd, rename_prd, output prs1, prs2, old_prd);
 endinterface
 
 module RenameTable(
@@ -29,7 +29,7 @@ module RenameTable(
     RATIO #(`COMMIT_WIDTH, `COMMIT_WIDTH) commit_io();
     RAT #(`FETCH_WIDTH, `WB_SIZE) rs1_rat(.*, .rat_io(rs1_io));
     RAT #(`FETCH_WIDTH, `WB_SIZE) rs2_rat(.*, .rat_io(rs2_io));
-    RAT #(`FETCH_WIDTH, `WB_SIZE) commit_rat(.*, .rat_io(commit_io));
+    RAT #(`FETCH_WIDTH, `COMMIT_WIDTH) commit_rat(.*, .rat_io(commit_io));
 
     assign rs1_io.vreg = rename_io.vrs1;
     assign rename_io.prs1 = rs1_io.preg;
@@ -67,7 +67,7 @@ generate
         PRSelector #(`COMMIT_WIDTH) prselector_waw (waw[i], waw_select);
         Encoder #(`COMMIT_WIDTH) encoder_waw (waw_select, waw_replaceIdx[i]);
 
-        assign rename_io.old_prd[i] = commit_cancel_waw[i] ? commitBus.prd[waw_replaceIdx[i]] : commit_io.preg;
+        assign rename_io.old_prd[i] = commit_cancel_waw[i] ? commitBus.prd[waw_replaceIdx[i]] : commit_io.preg[i];
     end
 endgenerate
 

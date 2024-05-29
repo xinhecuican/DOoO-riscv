@@ -15,7 +15,7 @@ module Dispatch(
 
     DispatchQueueIO #($bits(IntIssueBundle), `INT_DISPATCH_PORT) int_io();
 generate
-    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin : int_in
         DecodeInfo di;
         assign di = rename_dis_io.op[i].di;
         assign int_io.en[i] = rename_dis_io.op[i].en & 
@@ -23,8 +23,10 @@ generate
                               (~(backendCtrl.redirect | backendCtrl.dis_full));
         assign int_io.rs1[i] = di.rs1;
         assign int_io.rs2[i] = di.rs2;
-        assign int_io.data[i] = {di.intv, di.branchv, di.sext, di.immv, di.intop, di.branchop, di.rd, di.imm, rename_dis_io.op[i].fsqInfo};
+        assign int_io.data[i] = {di.intv, di.branchv, di.sext, di.immv, di.intop, di.branchop,
+            rename_dis_io.robIdx[i], rename_dis_io.prd[i], di.imm, rename_dis_io.op[i].fsqInfo};
     end
+    assign int_io.robIdx = rename_dis_io.robIdx;
 endgenerate
     DispatchQueue #(
         .DATA_WIDTH($bits(IntIssueBundle)),
@@ -47,7 +49,7 @@ endgenerate
     assign dis_intissue_io.data = int_io.data_o;
     assign int_io.issue_full = dis_intissue_io.full;
 generate
-    for(genvar i=0; i<`INT_DISPATCH_PORT; i++)begin
+    for(genvar i=0; i<`INT_DISPATCH_PORT; i++)begin : int_out
         IssueStatusBundle bundle;
         IntIssueBundle issueBundle;
         assign issueBundle = int_io.data_o[i];
@@ -55,7 +57,7 @@ generate
         assign bundle.rs2v = busytable_io.rs2_en[i];
         assign bundle.rs1 = int_io.rs1_o[i];
         assign bundle.rs2 = int_io.rs2_o[i];
-        assign bundle.robIdx[i] = issueBundle.robIdx;
+        assign bundle.robIdx = issueBundle.robIdx;
         assign dis_intissue_io.status[i] = bundle;
     end
 endgenerate
@@ -67,14 +69,14 @@ interface DispatchQueueIO #(
     parameter OUT_WIDTH = 4
 );
     logic `N(`FETCH_WIDTH) en;
-    logic `N(`PREG_WIDTH) rs1;
-    logic `N(`PREG_WIDTH) rs2;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs1;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2;
     logic `ARRAY(`FETCH_WIDTH, $bits(RobIdx)) robIdx;
     logic `ARRAY(`FETCH_WIDTH, DATA_WIDTH) data;
     /* verilator lint_off UNOPTFLAT */
     logic `N(OUT_WIDTH) en_o;
-    logic `N(`PREG_WIDTH) rs1_o;
-    logic `N(`PREG_WIDTH) rs2_o;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs1_o;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2_o;
     logic `ARRAY(OUT_WIDTH, DATA_WIDTH) data_o;
     /* verilator lint_off UNOPTFLAT */
     logic full;
@@ -107,7 +109,7 @@ module DispatchQueue #(
     logic `N($bits(Entry)) entrys `N(DEPTH);
     logic `N(ADDR_WIDTH) head, tail;
     logic `N(ADDR_WIDTH+1) num;
-    logic `N($clog2(`FETCH_WIDTH)) addNum, subNum;
+    logic `N($clog2(`FETCH_WIDTH)+1) addNum, subNum;
 
     ParallelAdder #(1, `FETCH_WIDTH) adder (io.en, addNum);
     assign subNum = io.issue_full ? 0 : 

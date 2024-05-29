@@ -13,9 +13,11 @@ module Regfile(
         .WIDTH(`XLEN),
         .DEPTH(`PREG_SIZE),
         .READ_PORT(`REGFILE_READ_PORT),
-        .WRITE_PORT(`REGFILE_WRITE_PORT)
+        .WRITE_PORT(`REGFILE_WRITE_PORT),
+        .RESET(1)
     ) ram (
         .clk(clk),
+        .rst(rst),
         .en(io.en),
         .raddr(io.raddr),
         .rdata(io.rdata),
