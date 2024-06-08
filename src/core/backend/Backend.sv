@@ -11,12 +11,18 @@ module Backend(
     RenameDisIO rename_dis_io();
     ROBRenameIO rob_rename_io();
     WriteBackBus wbBus();
-    DisIntIssueIO dis_intissue_io();
-    IssueRegfileIO #(.PORT_SIZE(`ALU_SIZE)) int_reg_io();
+    DisIssueIO #(.PORT_NUM(`INT_DIS_PORT), .DATA_SIZE($bits(IntIssueBundle))) dis_intissue_io();
+    DisIssueIO #(.PORT_NUM(`LOAD_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_load_io();
+    DisIssueIO #(.PORT_NUM(`STORE_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_store_io();
+    IssueRegfileIO #(.PORT_SIZE(`ALU_SIZE * 2)) int_reg_io();
     IntIssueExuIO int_exu_io();
     BackendCtrl backendCtrl();
     CommitBus commitBus();
     CommitWalk commitWalk();
+    BackendRedirectIO backendRedirect();
+    WriteBackIO #(`ALU_SIZE) alu_wb_io();
+    WriteBackIO #(`LSU_SIZE) lsu_wb_io();
+    StoreWBData `N(`STORE_PIPELINE) storeWBData;
 
 `ifdef DIFFTEST
     DiffRAT diff_rat();
@@ -32,6 +38,8 @@ module Backend(
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
     assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
     assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full;
+    assign fsq_back_io.redirect = backendRedirect.out;
+    assign fsq_back_io.redirectBr = backendRedirect.branchOut;
 
     Decode decode(.*,
                   .insts(ifu_backend_io.fetchBundle));
@@ -40,7 +48,7 @@ module Backend(
     ROB rob(.*,
             .dis_io(rename_dis_io),
             .full(backendCtrl.rob_full),
-            .backendRedirect(fsq_back_io.redirect));
+            .backendRedirect(backendRedirect.out));
     Dispatch dispatch(.*,
                       .full(backendCtrl.dis_full));
     IntIssueQueue int_issue_queue(
@@ -48,7 +56,14 @@ module Backend(
         .dis_issue_io(dis_intissue_io),
         .issue_exu_io(int_exu_io)
     );
+    LSU lsu(
+        .*,
+        .memRedirect(backendRedirect.memRedirect)
+    );
     RegfileWrapper regfile_wrapper(.*);
     Execute execute(.*,
-                    .backendRedirectInfo(fsq_back_io.redirect));
+                    .backendRedirectInfo(backendRedirect.branchRedirect),
+                    .branchRedirectInfo(backendRedirect.branchInfo));
+    BackendRedirectCtrl backend_redirect_ctrl(.*,.io(backendRedirect));
+    WriteBack write_back(.*);
 endmodule

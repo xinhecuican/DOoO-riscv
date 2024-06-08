@@ -4,12 +4,13 @@ module Execute(
     input logic clk,
     input logic rst,
     IntIssueExuIO.exu int_exu_io,
+    WriteBackIO.fu alu_wb_io,
     WriteBackBus.wb wbBus,
     BackendCtrl backendCtrl,
-    output BackendRedirectInfo backendRedirectInfo
+    output BackendRedirectInfo backendRedirectInfo,
+    output BranchRedirectInfo branchRedirectInfo
 );
     AluBranchCtrlIO branch_ctrl_io();
-    WriteBackIO wb_io();
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
         IssueAluIO issue_alu_io();
@@ -26,9 +27,9 @@ generate
             .clk(clk),
             .rst(rst),
             .io(issue_alu_io),
-            .wbData(wb_io.datas[i]),
+            .wbData(alu_wb_io.datas[i]),
             .branchRes(branch_ctrl_io.bundles[i].res),
-            .valid(wb_io.valid[i]),
+            .valid(alu_wb_io.valid[i]),
             .backendCtrl(backendCtrl)
         );
 
@@ -39,16 +40,10 @@ generate
 endgenerate
 
     assign backendRedirectInfo = branch_ctrl_io.redirectInfo;
+    assign branchRedirectInfo = branch_ctrl_io.branchRedirectInfo;
     AluBranchCtrl branch_ctrl(
         .clk(clk),
         .rst(rst),
         .io(branch_ctrl_io)
-    );
-
-    WriteBack writeBack(
-        .clk(clk),
-        .rst(rst),
-        .io(wb_io),
-        .*
     );
 endmodule

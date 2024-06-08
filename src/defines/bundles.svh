@@ -201,14 +201,27 @@ typedef struct packed {
 } IntIssueBundle;
 
 typedef struct packed {
+    logic sext;
+    logic `N(`MEMOP_WIDTH) memop;
+    RobIdx robIdx;
+    logic `N(`PREG_WIDTH) rd;
+    logic `N(12) imm;
+    FsqIdxInfo fsqInfo;
+} MemIssueBundle;
+
+typedef struct packed {
     logic en;
-    logic taken;
     FsqIdxInfo fsqInfo;
     RobIdx robIdx;
+} BackendRedirectInfo;
+
+typedef struct packed {
+    logic en;
+    logic taken;
     logic `N(`VADDR_SIZE) target;
     BranchType br_type;
     RasType ras_type;
-} BackendRedirectInfo;
+} BranchRedirectInfo;
 
 typedef struct packed {
     logic direction;
@@ -228,8 +241,66 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     RobIdx robIdx;
-    FsqIdxInfo fsqInfo;
     logic `N(`PREG_WIDTH) rd;
     logic `N(`XLEN) res;
 } WBData;
+
+typedef struct packed {
+    logic `N(`LOAD_QUEUE_WIDTH) idx;
+    logic dir;
+} LoadIdx;
+
+typedef struct packed {
+    logic `N(`STORE_QUEUE_WIDTH) idx;
+    logic dir;
+} StoreIdx;
+
+typedef struct packed {
+    logic sext;
+    logic [1: 0] size;
+    logic [11: 0] imm;
+    logic `N(`PREG_WIDTH) rd;
+    LoadIdx lqIdx;
+    StoreIdx sqIdx;
+    RobIdx robIdx;
+    FsqIdxInfo fsqInfo;
+} LoadIssueData;
+
+typedef struct packed {
+    logic sext;
+    logic [1: 0] size;
+    logic [11: 0] imm;
+    StoreIdx sqIdx;
+    LoadIdx lqIdx;
+    RobIdx robIdx;
+    FsqIdxInfo fsqInfo;
+} StoreIssueData;
+
+typedef struct packed {
+    logic en;
+    logic `N(`VADDR_SIZE) addr;
+    logic `N(4) mask;
+    LoadIdx lqIdx;
+    RobIdx robIdx;
+    FsqIdxInfo fsqInfo;
+} ViolationData;
+
+typedef struct packed {
+    logic en;
+    StoreIdx sqIdx;
+    logic `N(`TLB_OFFSET) vaddrOffset;
+    logic `N(`TLB_TAG) ptag;
+} LoadFwdData;
+
+typedef struct packed {
+    logic en;
+    logic [1: 0] reason;
+    logic `N(`LOAD_ISSUE_BANK_WIDTH) issue_idx;
+} LoadReplyRequest;
+
+typedef struct packed {
+    logic en;
+    RobIdx robIdx;
+} StoreWBData;
+
 `endif

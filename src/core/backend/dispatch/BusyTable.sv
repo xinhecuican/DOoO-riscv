@@ -6,10 +6,10 @@ interface BusyTableIO;
 
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs1;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2;
-    logic `N(`FETCH_WIDTH) rs1_en;
-    logic `N(`FETCH_WIDTH) rs2_en;
+    logic `ARRAY(`BUSYTABLE_PORT, `PREG_WIDTH) preg;
+    logic `N(`BUSYTABLE_PORT) reg_en;
 
-    modport busytable(input dis_en, dis_rd, rs1, rs2, output rs1_en, rs2_en);
+    modport busytable(input dis_en, dis_rd, preg, output reg_en);
 endinterface
 
 module BusyTable(
@@ -31,8 +31,7 @@ generate
         logic `N(`PREG_SIZE) rd_decode;
         Decoder #(`PREG_SIZE) decoder_rd (io.dis_rd[i], rd_decode);
         assign dis_valids[i] = (rd_decode & {`PREG_SIZE{io.dis_en[i] & ~backendCtrl.redirect}});
-        assign io.rs1_en[i] = valid[io.rs1[i]];
-        assign io.rs2_en[i] = valid[io.rs2[i]];
+        assign io.reg_en[i] = valid[io.preg[i]];
     end
     ParallelOR #(`PREG_SIZE, `FETCH_WIDTH) or_dis_valid (dis_valids, dis_valid);
 endgenerate

@@ -4,41 +4,36 @@ module SPRAM#(
     parameter WIDTH = 32,
     parameter DEPTH = 8,
     parameter ADDR_WIDTH = $clog2(DEPTH),
-    parameter INIT_VALUE = 0,
-    parameter READ_LATENCY = 0
+    parameter READ_LATENCY = 0,
+    parameter BYTE_WRITE = 0,
+    parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
-    input logic rst,
     input logic en,
     input logic `N(ADDR_WIDTH) addr,
-    input logic we,
-    input logic `N(WIDTH) wdata,
+    input logic [BYTES-1: 0] we,
+    input logic [BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
     output logic `N(WIDTH) rdata
 );
 
-    logic `N(WIDTH) data `N(DEPTH);
+    logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
     generate;
         if(READ_LATENCY == 0)begin
             assign rdata = data[addr];
         end
         else if(READ_LATENCY == 1)begin
             always_ff @(posedge clk)begin
-                if(en)begin
+                if(en & ~(|we))begin
                     rdata <= data[addr];
                 end
             end
         end
     endgenerate
 
-    always_ff @(posedge clk)begin
-        if(rst == `RST)begin
-            for(int i=0; i<DEPTH; i++)begin
-                data[i] <= INIT_VALUE;
-            end
-        end
-        else begin
-            if(we)begin
-                data[addr] <= wdata;
+    for(genvar j=0; j<BYTES; j++)begin
+        always_ff @(posedge clk)begin
+            if(we[j])begin
+                data[addr][j] <= wdata[j];
             end
         end
     end
@@ -283,35 +278,38 @@ generate
     end
 endgenerate
 
-    generate;
-        if(READ_LATENCY == 0)begin
-            for(genvar i=0; i<READ_PORT; i++)begin
-                assign rdata[i] = mem[raddr[i]];
-            end
-            
+generate;
+    if(READ_LATENCY == 0)begin
+        for(genvar i=0; i<READ_PORT; i++)begin
+            assign rdata[i] = mem[raddr[i]];
         end
-        else if(READ_LATENCY == 1)begin
-            always_ff @(posedge clk)begin
-                for(int i=0; i<READ_PORT; i++)begin
-                    if(en[i])begin
-                        rdata[i] <= mem[raddr[i]];
-                    end
+        
+    end
+    else if(READ_LATENCY == 1)begin
+        always_ff @(posedge clk)begin
+            for(int i=0; i<READ_PORT; i++)begin
+                if(en[i])begin
+                    rdata[i] <= mem[raddr[i]];
                 end
-
-
             end
-        end
-    endgenerate
 
-    always_ff @(posedge clk)begin
-        for(int i=1; i<WRITE_PORT; i++)begin
-            for(int j=0; j<BYTES; j++)begin
+
+        end
+    end
+endgenerate
+
+generate
+    for(genvar i=1; i<WRITE_PORT; i++)begin
+        for(genvar j=0; j<BYTES; j++)begin
+            always_ff @(posedge clk)begin
                 if(we[i][j])begin
                     mem[waddr[i]][j] <= wdata[i][j];
                 end
             end
         end
     end
+endgenerate
+
 
 endmodule
 

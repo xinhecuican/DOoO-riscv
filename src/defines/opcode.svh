@@ -23,8 +23,6 @@
 `define MEM_LB      `MEMOP_WIDTH'b0000
 `define MEM_LH      `MEMOP_WIDTH'b0001
 `define MEM_LW      `MEMOP_WIDTH'b0010
-`define MEM_LBU     `MEMOP_WIDTH'b0100
-`define MEM_LHU     `MEMOP_WIDTH'b0101
 `define MEM_SB      `MEMOP_WIDTH'b1000
 `define MEM_SH      `MEMOP_WIDTH'b1001
 `define MEM_SW      `MEMOP_WIDTH'b1010

@@ -6,6 +6,7 @@
 interface AluBranchCtrlIO;
     AluBranchBundle `N(`ALU_SIZE) bundles;
     BackendRedirectInfo redirectInfo;
+    BranchRedirectInfo branchInfo;
 
     modport ctrl (input bundles, output redirectInfo);
 endinterface
@@ -17,14 +18,15 @@ module AluBranchCtrl(
 );
     AluBranchBundle bundle_o;
     BranchCtrlCmp #(`ALU_SIZE) cmp (io.bundles, bundle_o);
-    always_ff @(posedge clk)begin
-        io.redirectInfo.en <= bundle_o.en & bundle_o.res.error;
-        io.redirectInfo.fsqInfo <= bundle_o.fsqInfo;
-        io.redirectInfo.robIdx <= bundle_o.robIdx;
-        io.redirectInfo.taken <= bundle_o.res.direction;
-        io.redirectInfo.target <= bundle_o.res.target;
-        io.redirectInfo.br_type <= bundle_o.res.br_type;
-        io.redirectInfo.ras_type <= bundle_o.res.ras_type;
+    always_comb begin
+        io.redirectInfo.en = bundle_o.en & bundle_o.res.error;
+        io.redirectInfo.fsqInfo = bundle_o.fsqInfo;
+        io.redirectInfo.robIdx = bundle_o.robIdx;
+        io.branchInfo.en = 1'b0;
+        io.branchInfo.taken = bundle_o.res.direction;
+        io.branchInfo.target = bundle_o.res.target;
+        io.branchInfo.br_type = bundle_o.res.br_type;
+        io.branchInfo.ras_type = bundle_o.res.ras_type;
     end
 endmodule
 

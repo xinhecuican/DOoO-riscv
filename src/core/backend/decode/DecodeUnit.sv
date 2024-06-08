@@ -89,7 +89,7 @@ module DecodeUnit(
     assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sra | srai;
     assign info.intop[0] = lui | andi | _and | srl | srli;
 
-    assign info.sext = blt | bge | lb | lh | lw | slti | slt;
+    assign info.sext = blt | bge | lb | lh | slti | slt;
     logic [11: 0] imm;
     logic `N(`XLEN) lui_imm;
     logic `N(`XLEN) jal_imm;

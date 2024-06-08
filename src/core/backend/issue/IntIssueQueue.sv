@@ -3,7 +3,7 @@
 module IntIssueQueue(
     input logic clk,
     input logic rst,
-    DisIntIssueIO.issue dis_issue_io,
+    DisIssueIO.issue dis_issue_io,
     IssueRegfileIO.issue int_reg_io,
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
@@ -37,8 +37,8 @@ generate
         assign full[i] = dis_issue_io.en[order[i]] & bank_io[i].full;
 
         assign int_reg_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
-        assign int_reg_io.rs1[i] = bank_io[i].rs1;
-        assign int_reg_io.rs2[i] = bank_io[i].rs2;
+        assign int_reg_io.preg[i] = bank_io[i].rs1;
+        assign int_reg_io.preg[BANK_NUM+i] = bank_io[i].rs2;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
 
         assign redirectClear[i] = backendCtrl.redirect & (bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir);
@@ -60,8 +60,8 @@ endgenerate
     always_ff @(posedge clk)begin
         order <= sortOrder;
         issue_exu_io.en <= enNext & ~redirectClear;
-        issue_exu_io.rs1_data <= int_reg_io.rs1_data;
-        issue_exu_io.rs2_data <= int_reg_io.rs2_data;
+        issue_exu_io.rs1_data <= int_reg_io.data[BANK_NUM-1: 0];
+        issue_exu_io.rs2_data <= int_reg_io.data[BANK_NUM*2-1: BANK_NUM];
         issue_exu_io.streams <= fsq_back_io.streams;
         issue_exu_io.directions <= fsq_back_io.directions;
     end

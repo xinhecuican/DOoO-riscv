@@ -37,7 +37,6 @@ module ALU(
     );
     assign wbData.en = io.en & valid & ~(backendCtrl.redirect &
             ((backendCtrl.redirectIdx.dir ^ io.bundle.robIdx.dir) ^ (io.bundle.robIdx.idx < backendCtrl.redirectIdx.idx)));
-    assign wbData.fsqInfo = io.bundle.fsqInfo;
     assign wbData.robIdx = io.bundle.robIdx;
     assign wbData.rd = io.bundle.rd;
     assign wbData.res = io.bundle.intv ? result : branchResult;

@@ -175,13 +175,13 @@ generate
         assign condSmallNum[i] = redirectPredInfo.condValid[i] & (redirectPredInfo.offsets[i] < fsq_back_io.redirect.fsqInfo.offset);
     end
 endgenerate
-    assign redirectIsCond = fsq_back_io.redirect.en & fsq_back_io.redirect.br_type == CONDITION;
+    assign redirectIsCond = fsq_back_io.redirectBr.en & fsq_back_io.redirectBr.br_type == CONDITION;
     assign condSmallNumAll = condSmallNum[0] + condSmallNum[1];
     always_comb begin
         if(redirectIsCond)begin
             if(condSmallNumAll < `SLOT_NUM)begin
                 redirectCondInfo.condNum = condSmallNumAll + 1;
-                redirectCondInfo.taken = fsq_back_io.redirect.taken;
+                redirectCondInfo.taken = fsq_back_io.redirectBr.taken;
             end
             else begin
                 redirectCondInfo.condNum = `SLOT_NUM;
@@ -199,12 +199,12 @@ endgenerate
     assign bpu_fsq_io.squashInfo.redirectInfo = u_redirectInfo;
     always_ff @(posedge clk)begin
         last_search <= search_head == tail && fsq_cache_io.en;
-        bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirect.en;
+        bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirectBr.en;
         // bpu_fsq_io.squashInfo.redirectInfo <= u_redirectInfo;
-        bpu_fsq_io.squashInfo.target_pc <= fsq_back_io.redirect.en ? fsq_back_io.redirect.target : pd_redirect.redirect_addr;
-        bpu_fsq_io.squashInfo.predInfo <= fsq_back_io.redirect.en ? redirectPredInfo : pd_predInfo;
-        bpu_fsq_io.squashInfo.br_type <= fsq_back_io.redirect.en ? fsq_back_io.redirect.br_type : DIRECT;
-        bpu_fsq_io.squashInfo.ras_type <= fsq_back_io.redirect.en ? fsq_back_io.redirect.ras_type : NONE;
+        bpu_fsq_io.squashInfo.target_pc <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.target : pd_redirect.redirect_addr;
+        bpu_fsq_io.squashInfo.predInfo <= fsq_back_io.redirectBr.en ? redirectPredInfo : pd_predInfo;
+        bpu_fsq_io.squashInfo.br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : DIRECT;
+        bpu_fsq_io.squashInfo.ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : NONE;
         if(rst == `RST)begin
             search_head <= 0;
             commit_head <= 0;
@@ -224,7 +224,7 @@ endgenerate
                 end
             end
 
-            if(fsq_back_io.redirect.en)begin
+            if(fsq_back_io.redirectBr.en)begin
                 tail <= fsq_back_io.redirect.fsqInfo.idx;
             end
             else if(pd_redirect.en)begin
@@ -239,14 +239,14 @@ endgenerate
 
             commit_head <= n_commit_head;
 
-            if(fsq_back_io.redirect.en)begin
+            if(fsq_back_io.redirectBr.en)begin
                 predErrorVec[fsq_back_io.redirect.fsqInfo.idx] <= predErrorVec[fsq_back_io.redirect.fsqInfo.idx] | (1 << fsq_back_io.redirect.fsqInfo.offset);
             end
         end
     end
 
     logic `N(`FSQ_WIDTH) redirect_dir_idx;
-    assign redirect_dir_idx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx;
+    assign redirect_dir_idx = fsq_back_io.redirectBr.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx;
     always_ff @(posedge clk)begin
         for(int i=0; i<`ALU_SIZE; i++)begin
             fsq_back_io.directions[i] <= directionTable[fsq_back_io.fsqIdx[i]];
@@ -258,7 +258,7 @@ endgenerate
             directionTable <= '{default: 0};
         end
         else begin
-            if(pd_redirect.en | fsq_back_io.redirect.en)begin
+            if(pd_redirect.en | fsq_back_io.redirectBr.en)begin
                 direction <= directionTable[redirect_dir_idx];
             end
             else if(bpu_fsq_io.redirect)begin
@@ -286,15 +286,15 @@ endgenerate
     } WBInfo;
 
     WBInfo wbInfos `N(`RAS_SIZE);
-    BackendRedirectInfo rd;
-    assign rd = fsq_back_io.redirect;
+    BranchRedirectInfo rd;
+    assign rd = fsq_back_io.redirectBr;
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             wbInfos <= '{default: 0};
         end
         else begin
             if(rd.en)begin
-                wbInfos[rd.fsqInfo.idx] <= {rd.taken, rd.br_type, rd.ras_type, rd.target, rd.fsqInfo.offset};
+                wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {rd.taken, rd.br_type, rd.ras_type, rd.target, fsq_back_io.redirect.fsqInfo.offset};
             end
         end
     end

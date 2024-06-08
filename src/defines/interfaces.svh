@@ -107,6 +107,7 @@ interface FsqBackendIO;
     logic `N(`ALU_SIZE) directions;
 
     BackendRedirectInfo redirect;
+    BranchRedirectInfo redirectBr;
 
 `ifdef DIFFTEST
     FsqIdxInfo `N(`COMMIT_WIDTH) diff_fsqInfo;
@@ -150,17 +151,17 @@ endinterface
 interface ReplaceIO #(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
+    parameter READ_PORT = 1,
     parameter WAY_WIDTH = $clog2(WAY_NUM),
     parameter ADDR_WIDTH = DEPTH <= 1 ? 1 : $clog2(DEPTH)
 );
-    logic hit_en;
-    logic miss_en;
-    logic `N(WAY_WIDTH) hit_way;
+    logic `N(READ_PORT) hit_en;
+    logic `ARRAY(READ_PORT, WAY_WIDTH) hit_way;
     logic `N(WAY_WIDTH) miss_way;
-    logic `N(ADDR_WIDTH) hit_index;
     logic `N(ADDR_WIDTH) miss_index;
+    logic `ARRAY(READ_PORT, ADDR_WIDTH) hit_index;
 
-    modport replace(input hit_en, miss_en, hit_way, hit_index, miss_index, output miss_way);
+    modport replace(input hit_en, hit_way, hit_index, miss_index, output miss_way);
 endinterface
 
 interface PreDecodeRedirect;
@@ -233,10 +234,13 @@ interface RegfileIO;
     modport regfile (input raddr, waddr, wdata, en, we, output rdata);
 endinterface
 
-interface DisIntIssueIO;
-    logic `N(`INT_DISPATCH_PORT) en;
-    IssueStatusBundle `N(`INT_DISPATCH_PORT) status;
-    IntIssueBundle `N(`INT_DISPATCH_PORT) data;
+interface DisIssueIO #(
+    parameter PORT_NUM = 4,
+    parameter DATA_SIZE = 32
+);
+    logic `N(PORT_NUM) en;
+    IssueStatusBundle `N(PORT_NUM) status;
+    logic `ARRAY(PORT_NUM, DATA_SIZE) data;
     logic full;
 
     modport dis (output en, status, data, input full);
@@ -247,15 +251,13 @@ interface IssueRegfileIO #(
     parameter PORT_SIZE = 4
 );
     logic `N(PORT_SIZE) en;
-    logic `ARRAY(PORT_SIZE, `PREG_WIDTH) rs1;
-    logic `ARRAY(PORT_SIZE, `PREG_WIDTH) rs2;
+    logic `ARRAY(PORT_SIZE, `PREG_WIDTH) preg;
 
     // 1 stage
-    logic `ARRAY(PORT_SIZE, `XLEN) rs1_data;
-    logic `ARRAY(PORT_SIZE, `XLEN) rs2_data;
+    logic `ARRAY(PORT_SIZE, `XLEN) data;
 
-    modport issue(output en, rs1, rs2, input rs1_data, rs2_data);
-    modport regfile(input en, rs1, rs2, output rs1_data, rs2_data);
+    modport issue(output en, preg, input data);
+    modport regfile(input en, preg, output data);
 endinterface
 
 interface IntIssueExuIO;
@@ -302,11 +304,10 @@ interface WriteBackBus;
     logic `N(`WB_SIZE) en;
     logic `N(`WB_SIZE) we;
     RobIdx `N(`WB_SIZE) robIdx;
-    FsqIdxInfo `N(`WB_SIZE) fsqInfo;
     logic `ARRAY(`WB_SIZE, `PREG_WIDTH) rd;
     logic `ARRAY(`WB_SIZE, `XLEN) res;
 
-    modport wb (output en, we, robIdx, fsqInfo, rd, res);
+    modport wb (output en, we, robIdx, rd, res);
 endinterface
 
 interface CommitBus;
@@ -318,8 +319,12 @@ interface CommitBus;
     logic `N($clog2(`COMMIT_WIDTH) + 1) num;
     logic `N($clog2(`COMMIT_WIDTH) + 1) wenum;
 
-    modport rob(output en, we, fsqInfo, vrd, prd, num, wenum);
+    logic `N($clog2(`COMMIT_WIDTH)+1) loadNum;
+    logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
+
+    modport rob(output en, we, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum);
     modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
+    modport mem(input loadNum, storeNum);
 endinterface
 
 interface CommitWalk;
@@ -349,6 +354,90 @@ interface BackendCtrl;
 
     logic redirect;
     RobIdx redirectIdx;
+endinterface
+
+interface BackendRedirectIO;
+    BackendRedirectInfo branchRedirect;
+    BackendRedirectInfo memRedirect;
+    BranchRedirectInfo branchInfo;
+
+    BackendRedirectInfo out;
+    BranchRedirectInfo branchOut;
+
+    modport redirect(input branchRedirect, memRedirect, branchInfo, output out, branchOut);
+endinterface
+
+interface DCacheLoadIO;
+    logic `N(`LOAD_PIPELINE) req;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) vaddr;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) ptag;
+
+    logic `N(`LOAD_PIPELINE) hit;
+    logic `N(`LOAD_PIPELINE) conflict;
+    logic `N(`LOAD_PIPELINE) full;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) rdata;
+
+    logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lq_en;
+    logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
+    logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
+
+    modport dcache (input req, vaddr, lqIdx, ptag, output hit, rdata, conflict, full, lq_en, lqData, lqIdx_o);
+    modport queue (input lq_en, lqData, lqIdx_o);
+endinterface
+
+interface DCacheStoreIO;
+    logic req;
+    logic `N(`STORE_COMMIT_WIDTH) scIdx;
+    logic `N(`VADDR_SIZE) paddr;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) data;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) mask;
+
+    logic valid;
+    logic success;
+    logic conflict;
+    logic `N(`STORE_COMMIT_WIDTH) conflictIdx;
+
+    modport dcache (input req, scIdx, paddr, data, mask, output valid, success, conflict, conflictIdx);
+    modport buffer (output req, scIdx, paddr, data, mask, input valid, success, conflict, conflictIdx);
+endinterface
+
+interface LoadForwardIO;
+    LoadFwdData `N(`LOAD_PIPELINE) fwdData;
+    logic `N(`DCACHE_BYTE) mask;
+    logic `N(`DCACHE_BITS) data;
+
+    modport queue(input fwdData, output mask, data);
+endinterface
+
+interface StoreCommitIO;
+    logic `N(`STORE_PIPELINE) en;
+    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE-2) addr;
+    logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) mask;
+    logic `ARRAY(`STORE_PIPELINE, `DCACHE_BITS) data;
+
+    logic  conflict;
+
+    modport queue (output en, addr, mask, data, input conflict);
+    modport buffer (input en, addr, mask, data, output conflict);
+endinterface
+
+interface DCacheAxi;
+    AxiMAR mar;
+    AxiSAR sar;
+    AxiMR mr;
+    AxiSR sr;
+    AxiMAW maw;
+    AxiSAW saw;
+    AxiMW mw;
+    AxiSW sw;
+    AxiMB mb;
+    AxiSB sb;
+
+    modport cache(output mar, mr, maw, mw, mb, input sar, sr, saw, sw, sb);
+    modport replace(output maw, mw, mb, input saw, sw, sb);
+    modport miss(output mar, mr, input sar, sr);
+    modport axi(input mar, mr, maw, mw, mb, output sar, sr, saw, sw, sb);
 endinterface
 
 `ifdef DIFFTEST

@@ -4,6 +4,7 @@ module ROB(
     input logic clk,
     input logic rst,
     input BackendRedirectInfo backendRedirect,
+    input StoreWBData `N(`STORE_PIPELINE) storeWBData,
     RenameDisIO.dis dis_io,
     ROBRenameIO.rob rob_rename_io,
     WriteBackBus wbBus,
@@ -24,6 +25,8 @@ module ROB(
 
     typedef struct packed {
         logic we;
+        logic mem;
+        logic store;
         FsqIdxInfo fsqInfo;
         logic `N(5) vrd;
         logic `N(`PREG_WIDTH) prd;
@@ -49,11 +52,14 @@ module ROB(
     logic `N(`FETCH_WIDTH * 2) dis_en_shift;
     logic `N($clog2(`FETCH_WIDTH) + 1) dis_validNum, addNum, subNum;
     logic initReady;
+    logic `N(`COMMIT_WIDTH) commit_store, commit_mem;
 
     RobData `N(`FETCH_WIDTH) robData, rob_wdata;
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         assign rob_wdata[i].we = dis_io.op[i].di.we;
+        assign rob_wdata[i].mem = dis_io.op[i].memv;
+        assign rob_wdata[i].store = dis_io.op[i].memop[`MEMOP_WIDTH-1];
         assign rob_wdata[i].fsqInfo = dis_io.op[i].fsqInfo;
         assign rob_wdata[i].vrd = dis_io.op[i].di.rd;
         assign rob_wdata[i].prd = dis_io.prd[i];
@@ -90,6 +96,8 @@ generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign wbValid[i] = wb[dataRIdx[i]];
         assign commit_we[i] = robData[i].we;
+        assign commit_store[i] = robData[i].store;
+        assign commit_mem[i] = robData[i].mem;
     end
     assign commit_en_num = remainCount < `COMMIT_WIDTH ? remainCount : `COMMIT_WIDTH;
     assign commitValid = (1 << commit_en_num) - 1;
@@ -100,9 +108,11 @@ generate
     end
 endgenerate
 
-    logic `N($clog2(`COMMIT_WIDTH) + 1) commitNum, commitWeNum;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) commitNum, commitWeNum, commitLoadNum, commitStoreNum;
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_num (commit_en, commitNum);
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_we_num (commitBus.en & commit_we, commitWeNum);
+    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_load (commitBus.en & commit_mem & ~commit_store, commitLoadNum);
+    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_store (commitBus.en & commit_mem & commit_store, commitStoreNum);
     assign commitBus.wenum = commitWeNum;
     assign commitBus.we = commit_we;
 generate
@@ -125,6 +135,8 @@ generate
 endgenerate
     always_ff @(posedge clk)begin
         commitBus.num <= commitNum;
+        commitBus.loadNum <= commitLoadNum;
+        commitBus.storeNum <= commitStoreNum;
     end
 
     always_comb begin
@@ -182,6 +194,16 @@ endgenerate
             for(int i=0; i<`WB_SIZE; i++)begin
                 if(wbBus.en[i])begin
                     wb[wbBus.robIdx[i].idx] <= 1'b1;
+                end
+            end
+            for(int i=0; i<`STORE_PIPELINE; i++)begin
+                if(storeWBData[i].en)begin
+                    wb[wbBus.robIdx[i].idx] <= 1'b1;
+                end
+            end
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                if(dis_en[i])begin
+                    wb[dis_io.robIdx[i]] <= 1'b1;
                 end
             end
         end

@@ -155,6 +155,13 @@ module Encoder64(
 	assign out[3: 0] = out1 | out2 | out3 | out4;
 endmodule
 
+module PEncoder2(
+	input logic [1: 0] in,
+	output logic [0: 0] out
+);
+	assign out = in[1];
+endmodule
+
 module PEncoder4 (
 	input logic [3: 0] in,
 	output logic [1: 0] out
@@ -163,7 +170,6 @@ module PEncoder4 (
 		if(in[3]) out = 2'b11;
 		else if(in[2]) out = 2'b10;
 		else if(in[1]) out = 2'b01;
-		else if(in[0]) out = 2'b00;
 		else out = 2'b00;
 	end
 endmodule
@@ -215,6 +221,67 @@ module PEncoder32(
 	assign out[2: 0] = out[4: 3] == 2'b11 ? out4 : out[4: 3] == 2'b10 ? out3 : out[4: 3] == 2'b01 ? out2 : out1;
 endmodule
 
+module PREncoder2(
+	input logic [1: 0] in,
+	output logic [0: 0] out
+);
+	assign out = in[0];
+endmodule
+
+module PREncoder4 (
+	input logic [3: 0] in,
+	output logic [1: 0] out
+);
+	always_comb begin
+		if(in[0]) out = 2'b00;
+		else if(in[1]) out = 2'b01;
+		else if(in[2]) out = 2'b10;
+		else out = 2'b11;
+	end
+endmodule
+
+module PREncoder8 (
+	input logic [7: 0] in,
+	output logic [2: 0] out
+);
+	always_comb begin
+		if(in[0]) out = 3'b000;
+		else if(in[1]) out = 3'b001;
+		else if(in[2]) out = 3'b010;
+		else if(in[3]) out = 3'b011;
+		else if(in[4]) out = 3'b100;
+		else if(in[5]) out = 3'b101;
+		else if(in[6]) out = 3'b110;
+		else out = 3'b111;
+	end
+endmodule
+
+module PREncoder16(
+	input logic [15: 0] in,
+	output logic [3: 0] out
+);
+	logic [2: 0] out1, out2;
+	logic is_low;
+	PREncoder8 high(in[15: 8], out1);
+	PREncoder8 low(in[7: 0], out2);
+	assign is_low = |in[7: 0];
+	assign out[3] = ~is_low;
+	assign out[2: 0] = is_low ? out2 : out1;
+endmodule
+
+module PREncoder32(
+	input logic [31: 0] in,
+	output logic [4: 0] out
+);
+	logic [3: 0] out1, out2;
+	logic is_low;
+	PREncoder16 low(in[15: 0], out1);
+	PREncoder16 high(in[31: 16], out2);
+	assign is_low = |in[15: 0];
+	assign out[4] = ~is_low;
+	assign out[3: 0] = is_low ? out2 : out1;
+endmodule
+
 module Sort2 #(
 	parameter WIDTH = 4,
 	parameter DATA_WIDTH = 4
@@ -252,8 +319,8 @@ module MaskGen2(
 	input logic in,
 	output logic [1: 0] out
 );
-	assign out[0] = 1'b1;
-	assign out[1] = in;
+	assign out[0] = in;
+	assign out[1] = 1'b0;
 endmodule
 
 module MaskGen4(
@@ -262,10 +329,40 @@ module MaskGen4(
 );
 	always_comb begin
 		case(in)
-		2'b00: out = 4'b0001;
-		2'b01: out = 4'b0011;
-		2'b10: out = 4'b0111;
-		2'b11: out = 4'b1111;
+		2'b00: out = 4'b0000;
+		2'b01: out = 4'b0001;
+		2'b10: out = 4'b0011;
+		2'b11: out = 4'b0111;
 		endcase
 	end
+endmodule
+
+module MaskGen8(
+	input logic [2: 0] in,
+	output logic [7: 0] out
+);
+	logic [3: 0] low;
+	MaskGen4 gen_low (in[1: 0], low);
+	assign out[7: 4] = low & {4{in[2]}};
+	assign out[3: 0] = low | {4{in[2]}};
+endmodule
+
+module MaskGen16(
+	input logic [3: 0] in,
+	output logic [15: 0] out
+);
+	logic [7: 0] low;
+	MaskGen8 gen_low (in[2: 0], low);
+	assign out[15: 8] = low & {8{in[3]}};
+	assign out[7: 0] = low | {8{in[3]}};
+endmodule
+
+module MaskGen32(
+	input logic [4: 0] in,
+	output logic [31: 0] out
+);
+	logic [15: 0] low;
+	MaskGen16 gen_low (in[3: 0], low);
+	assign out[31: 16] = low & {16{in[4]}};
+	assign out[15: 0] = low | {16{in[4]}};
 endmodule

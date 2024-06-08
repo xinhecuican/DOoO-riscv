@@ -51,11 +51,33 @@ module PEncoder #(
 
 generate;
 	case(RADIX)
+	2: PEncoder2 pencoder(in, out);
 	4: PEncoder4 pencoder(in, out);
 	8: PEncoder8 pencoder(in, out);
 	16: PEncoder16 pencoder(in, out);
 	32: PEncoder32 pencoder(in, out);
-	default: PEncoder4 pencoder(in, out);
+	default: PEncoder2 pencoder(in, out);
+	endcase
+endgenerate
+
+endmodule
+
+module PREncoder #(
+	parameter RADIX=16,
+	parameter WIDTH=$clog2(RADIX)
+)(
+	input logic [RADIX-1: 0] in,
+	output logic [WIDTH-1: 0] out
+);
+
+generate;
+	case(RADIX)
+	2: PREncoder2 pencoder(in, out);
+	4: PREncoder4 pencoder(in, out);
+	8: PREncoder8 pencoder(in, out);
+	16: PREncoder16 pencoder(in, out);
+	32: PREncoder32 pencoder(in, out);
+	default: PREncoder2 pencoder(in, out);
 	endcase
 endgenerate
 
@@ -316,7 +338,35 @@ generate
 	case(RADIX)
 	2: MaskGen2 mask_gen(in, out);
 	4: MaskGen4 mask_gen(in, out);
+	8: MaskGen8 mask_gen(in, out);
+	16: MaskGen16 mask_gen(in, out);
+	32: MaskGen32 mask_gen(in, out);
 	default MaskGen2 mask_gen(in, out);
 	endcase
+endgenerate
+endmodule
+
+module LoopCompare #(
+	parameter WIDTH=4
+)(
+	input logic [WIDTH: 0] in1,
+	input logic [WIDTH: 0] in2,
+	output logic bigger,
+	output logic [WIDTH: 0] out
+);
+	assign bigger = (in1[0] ^ in2[0]) ^ (in1[WIDTH: 1] < in2[WIDTH: 1]);
+	assign out = bigger ? in1 : in2;
+endmodule
+
+module MaskExpand #(
+	parameter WIDTH=4
+)(
+	input logic [WIDTH-1: 0] mask,
+	output logic [WIDTH*8-1: 0] out
+);
+generate
+	for(genvar i=0; i<WIDTH; i++)begin
+		assign out[(i+1)*8-1: i*8] = {8{mask[i]}};
+	end
 endgenerate
 endmodule

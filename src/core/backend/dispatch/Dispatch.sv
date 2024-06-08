@@ -4,7 +4,9 @@ module Dispatch(
     input logic clk,
     input logic rst,
     RenameDisIO.dis rename_dis_io,
-    DisIntIssueIO.dis dis_intissue_io,
+    DisIssueIO.dis dis_intissue_io,
+    DisIssueIO.dis dis_load_io,
+    DisIssueIO.dis dis_store_io,
     WriteBackBus wbBus,
     CommitBus.in commitBus,
     CommitWalk commitWalk,
@@ -13,7 +15,7 @@ module Dispatch(
 );
     BusyTableIO busytable_io();
 
-    DispatchQueueIO #($bits(IntIssueBundle), `INT_DISPATCH_PORT) int_io();
+    DispatchQueueIO #($bits(IntIssueBundle), `INT_DIS_PORT) int_io();
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : int_in
         DecodeInfo di;
@@ -30,35 +32,110 @@ generate
 endgenerate
     DispatchQueue #(
         .DATA_WIDTH($bits(IntIssueBundle)),
-        .DEPTH(`INT_DISPATCH_SIZE),
-        .OUT_WIDTH(`INT_DISPATCH_PORT),
+        .DEPTH(`INT_DIS_SIZE),
+        .OUT_WIDTH(`INT_DIS_PORT),
         .NEED_WALK(0)
     ) int_dispatch_queue(
         .*,
         .io(int_io)
     );
-    assign full = int_io.full;
+
+    DispatchQueueIO #($bits(MemIssueBundle), `LOAD_DIS_PORT) load_io();
+    DispatchQueueIO #($bits(MemIssueBundle), `STORE_DIS_PORT) store_io();
+generate
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin : load_in
+        DecodeInfo di;
+        MemIssueBundle data;
+        assign data.sext = di.sext;
+        assign data.memop = di.memop;
+        assign data.robIdx = rename_dis_io.robIdx[i];
+        assign data.rd = rename_dis_io.prd[i];
+        assign data.imm = di.imm[11: 0];
+        assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
+        assign di = rename_dis_io.op[i].di;
+        assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
+                               (~(backendCtrl.redirect | backendCtrl.dis_full));
+        assign load_io.rs1[i] = di.rs1;
+        assign load_io.rs2[i] = di.rs2;
+        assign load_io.data[i] = data;
+        assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
+                                (~(backendCtrl.redirect | backendCtrl.dis_full));
+        assign store_io.rs1[i] = di.rs1;
+        assign store_io.rs2[i] = di.rs2;
+        assign store_io.data[i] = data;
+    end
+endgenerate
+    DispatchQueue #(
+        .DATA_WIDTH($bits(MemIssueBundle)),
+        .DEPTH(`LOAD_DIS_SIZE),
+        .OUT_WIDTH(`LOAD_DIS_PORT)
+    ) load_dispatch_queue(
+        .*,
+        .io(load_io)
+    );
+    DispatchQueue #(
+        .DATA_WIDTH($bits(MemIssueBundle)),
+        .DEPTH(`STORE_DIS_SIZE),
+        .OUT_WIDTH(`STORE_DIS_PORT)
+    ) store_dispatch_queue(
+        .*,
+        .io(store_io)
+    );
+
+    assign full = int_io.full | load_io.full | store_io.full;
 
     assign busytable_io.dis_en = rename_dis_io.wen & ~backendCtrl.dis_full;
     assign busytable_io.dis_rd = rename_dis_io.prd;
-    assign busytable_io.rs1 = int_io.rs1_o;
-    assign busytable_io.rs2 = int_io.rs2_o;
+    assign busytable_io.preg = {store_io.rs2_o, store_io.rs1_o, load_io.rs1_o,
+                                int_io.rs2_o, int_io.rs1_o};
     BusyTable busy_table(.*, .io(busytable_io.busytable));
 
     assign dis_intissue_io.en = int_io.en_o;
     assign dis_intissue_io.data = int_io.data_o;
     assign int_io.issue_full = dis_intissue_io.full;
 generate
-    for(genvar i=0; i<`INT_DISPATCH_PORT; i++)begin : int_out
+    for(genvar i=0; i<`INT_DIS_PORT; i++)begin : int_out
         IssueStatusBundle bundle;
         IntIssueBundle issueBundle;
         assign issueBundle = int_io.data_o[i];
-        assign bundle.rs1v = busytable_io.rs1_en[i];
-        assign bundle.rs2v = busytable_io.rs2_en[i];
+        assign bundle.rs1v = busytable_io.reg_en[i];
+        assign bundle.rs2v = busytable_io.reg_en[`INT_DIS_PORT+i];
         assign bundle.rs1 = int_io.rs1_o[i];
         assign bundle.rs2 = int_io.rs2_o[i];
         assign bundle.robIdx = issueBundle.robIdx;
         assign dis_intissue_io.status[i] = bundle;
+    end
+endgenerate
+
+    assign dis_load_io.en = load_io.en_o;
+    assign dis_load_io.data = load_io.data_o;
+    assign load_io.issue_full = dis_load_io.full;
+    assign dis_store_io.en = store_io.en_o;
+    assign dis_store_io.data = store_io.data_o;
+    assign store_io.issue_full = dis_store_io.full;
+generate
+    for(genvar i=0; i<`LOAD_DIS_PORT; i++)begin
+        IssueStatusBundle bundle;
+        MemIssueBundle issueBundle;
+        assign issueBundle = load_io.data_o[i];
+        assign bundle.rs1v = busytable_io.reg_en[`INT_DIS_PORT*2+i];
+        assign bundle.rs2v = 0;
+        assign bundle.rs1 = load_io.rs1_o[i];
+        assign bundle.rs2 = load_io.rs2_o[i];
+        assign bundle.robIdx = issueBundle.robIdx;
+        assign dis_load_io.status[i] = bundle;
+    end
+    for(genvar i=0; i<`STORE_DIS_PORT; i++)begin
+        IssueStatusBundle bundle;
+        MemIssueBundle issueBundle;
+        assign issueBundle = store_io.data_o[i];
+        assign bundle.rs1v = busytable_io.reg_en[`INT_DIS_PORT*2+`LOAD_DIS_PORT+i];
+        assign bundle.rs2v = busytable_io.reg_en[`INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT+i];
+        assign bundle.rs1 = store_io.rs1_o[i];
+        assign bundle.rs2 = store_io.rs2_o[i];
+        assign bundle.robIdx = issueBundle.robIdx;
+        assign dis_store_io.status[i] = bundle;
+        assign dis_store_io.status[i] = bundle;
     end
 endgenerate
 
@@ -192,8 +269,6 @@ generate
     end
 
 endgenerate
-
-
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             entrys <= '{default: 0};
