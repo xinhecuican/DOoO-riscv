@@ -4,6 +4,7 @@ interface DCacheMissIO;
     logic `N(`LOAD_PIPELINE) ren;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) raddr;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
+    RobIdx `N(`LOAD_PIPELINE) robIdx;
     logic `N(`LOAD_PIPELINE) rfull;
 
     logic wen;
@@ -37,9 +38,11 @@ module DCacheMiss(
     input logic rst,
     DCacheMissIO.miss io,
     ReplaceQueueIO.miss replace_queue_io,
-    DCacheAxi.miss r_axi_io
+    DCacheAxi.miss r_axi_io,
+    BackendCtrl backendCtrl
 );
     typedef struct {
+        RobIdx robIdx; // for redirect
         logic `N(`DCACHE_MISS_WIDTH) missIdx;
         logic `N(`LOAD_QUEUE_WIDTH) lqIdx;
         logic `N(`DCACHE_BANK_WIDTH) offset;
@@ -62,6 +65,8 @@ module DCacheMiss(
     logic req_start, req_next;
     logic req_last, rlast;
     logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `XLEN) cache_eq_data;
+
+
 //load enqueue
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
     logic `ARRAY(`LOAD_PIPELINE+1, $clog2(`LOAD_PIPELINE+1)+1) req_order;
@@ -164,6 +169,21 @@ generate
     end
 endgenerate
 
+// mshr redirect
+    logic `N(`DCACHE_MSHR_SIZE) redirect_valid, redirect_valid_n;
+    logic redirect_n;
+generate
+    for(genvar i=0; i<`DCACHE_MSHR_SIZE; i++)begin
+        logic older;
+        LoopCompare #(`ROB_WIDTH) compare_rob (mshr[i].robIdx, backendCtrl.redirectIdx, older);
+        assign redirect_valid[i] = older & mshr_en[i];
+    end
+endgenerate
+    always_ff @(posedge clk)begin
+        redirect_n <= backendCtrl.redirect;
+        redirect_valid_n <= redirect_valid;
+    end
+
     ParallelAdder #(1, `LOAD_PIPELINE+1) adder_free (free_en, free_num);
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
@@ -192,6 +212,7 @@ endgenerate
 
                 if(io.ren[i] & (mshr_remain_valid[i] & remain_valid[i] | rhit_combine[i]))begin
                     mshr_en[mshrFreeIdx[i]] <= 1'b1;
+                    mshr[mshrFreeIdx[i]].robIdx <= io.robIdx[i];
                     mshr[mshrFreeIdx[i]].missIdx <= ridx[i];
                     mshr[mshrFreeIdx[i]].lqIdx <= io.lqIdx[i];
                     mshr[mshrFreeIdx[i]].offset <= io.raddr[i][`DCACHE_BANK_WIDTH+1: 2];
@@ -202,6 +223,10 @@ endgenerate
                 if(io.lq_en[i])begin
                     mshr_en[mshrIdx[i]] <= 1'b0;
                 end
+            end
+
+            if(redirect_n)begin
+                mshr_en <= redirect_valid_n;
             end
 
             if(io.wen & ~rlast & ~req_last & (write_remain_valid & ~whit_combine))begin

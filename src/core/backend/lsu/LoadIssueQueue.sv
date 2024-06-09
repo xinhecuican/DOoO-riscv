@@ -6,13 +6,18 @@ interface LoadUnitIO;
     logic `N($clog2(`LOAD_DIS_PORT)+1) eqNum;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx;
 
+    logic `N(`LOAD_DIS_PORT) dis_en;
+    RobIdx `N(`LOAD_DIS_PORT) dis_rob_idx;
+    LoadIdx `N(`LOAD_DIS_PORT) dis_lq_idx;
+
     LoadReplyRequest `N(`LOAD_PIPELINE) reply_fast;
     LoadReplyRequest `N(`LOAD_PIPELINE) reply_slow;
     logic `N(`LOAD_PIPELINE) success;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) success_idx;
 
-    modport load (output en, loadIssueData, eqNum, issue_idx, 
+    modport load (output en, loadIssueData, eqNum, issue_idx, dis_en, dis_rob_idx, dis_lq_idx,
                   input reply_fast, reply_slow, success, success_idx);
+    modport queue (input dis_en, dis_rob_idx, dis_lq_idx);
 endinterface
 
 module LoadIssueQueue(
@@ -23,7 +28,8 @@ module LoadIssueQueue(
     DisIssueIO.issue dis_load_io,
     IssueRegfileIO.issue load_reg_io,
     WriteBackBus wbBus,
-    LoadUnitIO.load load_io
+    LoadUnitIO.load load_io,
+    BackendCtrl backendCtrl
 );
 
     LoadIssueBankIO bank_io [`LOAD_ISSUE_BANK_NUM-1: 0]();
@@ -56,10 +62,13 @@ generate
         assign load_reg_io.preg[i] = bank_io[i].rs1;
         assign load_io.loadIssueData[i] = bank_io[i].data_o;
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
+        assign load_io.dis_rob_idx[i] = dis_laod_io.data[i].robIdx;
+        assign load_io.dis_lq_idx[i] = lqIdx[i];
     end
 endgenerate
     assign dis_load_io.full = |full;
     Sort #(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_SIZE), $clog2(`LOAD_ISSUE_BANK_NUM)) sort_order (bankNum, originOrder, sortOrder); 
+    assign load_io.dis_en = full ? 0 : dis_load_io.en;
     ParallelAdder #(1, `LOAD_ISSUE_BANK_NUM) adder_dis_num (dis_load_io.en, disNum);
     assign load_io.eqNum = full ? 0 : disNum;
     always_ff @(posedge clk)begin
@@ -92,7 +101,8 @@ endinterface
 module LoadIssueBank(
     input logic clk,
     input logic rst,
-    LoadIssueBankIO.bank io
+    LoadIssueBankIO.bank io,
+    BackendCtrl backendCtrl
 );
     typedef struct packed {
         logic rs1v;
@@ -154,7 +164,7 @@ generate
         end
     end
 endgenerate
-    // walk
+    // redirect
     logic `N(`LOAD_ISSUE_BANK_SIZE) bigger, walk_en;
     assign walk_en = en & bigger;
 generate
@@ -162,6 +172,7 @@ generate
         assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
     end
 endgenerate
+
     logic `N(`LOAD_ISSUE_BANK_SIZE) success_idx_decode;
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
     always_ff @(posedge clk)begin

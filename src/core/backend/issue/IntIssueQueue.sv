@@ -151,7 +151,7 @@ generate
     end
 endgenerate
 
-    // walk
+    // redirect
     logic `N(DEPTH) bigger, walk_en;
     assign walk_en = en & bigger;
 generate

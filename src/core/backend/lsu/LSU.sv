@@ -36,6 +36,7 @@ module LSU(
     WriteBackIO.fu lsu_wb_io,
     WriteBackBus wbBus,
     CommitBus.mem commitBus,
+    BackendCtrl backendCtrl,
     DCacheAxi.cache axi_io,
     output BackendRedirectInfo memRedirect,
     output StoreWBData `N(`STORE_PIPELINE) storeWBData
@@ -130,11 +131,22 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lpaddr, loadAddrNext;
     logic `ARRAY(`LOAD_PIPELINE, 4) lmask, lmaskNext;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) load_issue_idx;
+    logic `N(`LOAD_PIPELINE) redirect_clear_req;
+
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        logic older;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_io.loadIssueData[i].robIdx, older);
+        assign redirect_clear_req[i] = backendCtrl.redirect & older;
+    end
+endgenerate
+    assign rio.req_cancel = redirect_clear_req;
+
     always_ff @(posedge clk)begin
         loadAddrNext <= loadVAddr;
         load_issue_data <= load_io.loadIssueData;
         lmask <= lmask_pre;
-        load_en <= load_io.en;
+        load_en <= load_io.en & ~redirect_clear_req;
         load_issue_idx <= load_io.issue_idx;
         for(int i=0; i<`LOAD_PIPELINE; i++)begin
             lptag[i] <= loadVAddr[i]`TLB_TAG_BUS;
@@ -143,7 +155,8 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign lpaddr[i] = {lptag[i], loadAddrNext[i][11: 0]};
-        assign rio.lqIdx[i] = load_issue_data[i].lqIdx;
+        assign rio.lqIdx[i] = load_issue_data[i].lqIdx.idx;
+        assign rio.robIdx[i] = load_issue_data[i].robIdx;
     end
 endgenerate
     assign rio.ptag = lptag;
@@ -171,26 +184,43 @@ generate
 endgenerate
 
     // load enqueue
-    LoadIssueData `N(`STORE_PIPELINE) leq_data;
-    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) lpaddrNext;
-    logic `N(`STORE_PIPELINE) leq_en;
+    LoadIssueData `N(`LOAD_PIPELINE) leq_data;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lpaddrNext;
+    logic `N(`LOAD_PIPELINE) leq_en, leq_valid;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_next;
+
+    logic `N(`LOAD_PIPELINE) redirect_clear_s2, redirect_clear_s3;
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        logic older;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_issue_data[i].robIdx, older);
+        assign redirect_clear_s2[i] = backendCtrl.redirect & older;
+    end
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        logic older;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, leq_data[i].robIdx, older);
+        assign redirect_clear_s3[i] = backendCtrl.redirect & older;
+    end
+endgenerate
+    assign rio.req_cancel_s2 = redirect_clear_s2;
+
     always_ff @(posedge clk)begin
         lpaddrNext <= lpaddr;
         leq_data <= load_issue_data;
-        leq_en <= load_en & ~rio.conflict;
+        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2;
         lmaskNext <= lmask;
         issue_idx_next <= load_issue_idx;
     end
+    assign leq_valid = leq_en & ~fwd_data_invalid & ~rio.full & ~redirect_clear_s3;
     assign load_queue_io.disNum = load_io.eqNum;
-    assign load_queue_io.en = leq_en & ~fwd_data_invalid & ~rio.full;
+    assign load_queue_io.en = leq_valid;
     assign load_queue_io.data = leq_data;
     assign load_queue_io.paddr = lpaddrNext;
     assign load_queue_io.mask = lmaskNext;
     assign load_queue_io.rdata = rio.rdata;
     assign load_queue_io.miss = ~rio.hit;
     
-    assign load_io.success = leq_en & ~fwd_data_invalid & ~rio.full;
+    assign load_io.success = leq_valid;
     assign load_io.success_idx = issue_idx_next;
 
     // reply slow
@@ -198,7 +228,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign load_io.reply_slow[i].en = leq_en[i] & (fwd_data_invalid[i] | rio.full);
         assign load_io.reply_slow[i].issue_idx = issue_idx_next[i];
-        assign load_io.reply_slow[i].reason = 2'b01;
+        assign load_io.reply_slow[i].reason = rio.full ? 2'b10 : 2'b01;
     end
 endgenerate
     
@@ -210,9 +240,9 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         always_ff @(posedge clk)begin
-            lsu_wb_io.datas[i].en <= leq_en[i] & ~fwd_data_invalid[i] & ~rio.full |
+            lsu_wb_io.datas[i].en <= leq_valid[i] |
                                      load_queue_io.wbData[i].en;
-            from_issue[i] <= leq_en[i] & ~fwd_data_invalid[i] & ~rio.full;
+            from_issue[i] <= leq_valid[i];
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
             ldata_n[i] <= rdata[i];
@@ -230,6 +260,19 @@ endgenerate
     logic `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) dis_sl_older;
     logic `N(`STORE_PIPELINE) store_en;
     StoreIssueData `N(`STORE_PIPELINE) store_issue_data;
+
+    logic `N(`STORE_PIPELINE) store_redirect_clear_req;
+    logic `N(`STORE_PIPELINE) store_redirect_s2;
+
+generate
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        logic older;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_io.storeIssueData[i].robIdx, older);
+        assign store_redirect_clear_req[i] = backendCtrl.redirect & older;
+    end
+endgenerate
+
+
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign sqIdxs[i].idx = store_queue_io.lqIdx.idx + i;
@@ -257,7 +300,7 @@ generate
             .addr(storeVAddr[i])
         );
         always_ff @(posedge clk)begin
-            store_en <= store_io.en;
+            store_en <= store_io.en & ~store_redirect_clear_req;
             store_issue_data <= store_io.storeIssueData;
             sptag[i] <= storeVAddr[i]`TLB_TAG_BUS;
             storeAddrNext[i] <= storeVAddr;
@@ -267,9 +310,16 @@ generate
         end
         assign spaddr[i] = {sptag, storeAddrNext[11: 0]};
     end
+
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        logic older;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_issue_data[i].robIdx, older);
+        assign store_redirect_s2[i] = backendCtrl.redirect & older;
+    end
 endgenerate
+
     //store enqueue
-    assign store_queue_io.en = store_en;
+    assign store_queue_io.en = store_en & ~store_redirect_s2;
     assign store_queue_io.data = store_issue_data;
     assign store_queue_io.paddr = spaddr;
     assign store_queue_io.mask = smask;
@@ -278,7 +328,7 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         always_ff @(posedge clk)begin
-            storeWBData[i].en <= store_en[i];
+            storeWBData[i].en <= store_en[i] & ~store_redirect_s2[i];
             storeWBData[i].robIdx <= store_issue_data[i].robIdx;
         end
     end

@@ -5,7 +5,8 @@ module DCache(
     input logic rst,
     DCacheLoadIO.dcache rio,
     DCacheStoreIO.dcache wio,
-    DCacheAxi.cache axi_io
+    DCacheAxi.cache axi_io,
+    BackendCtrl backendCtrl
 );
 
     DCacheWayIO way_io [`ICACHE_WAY-1: 0]();
@@ -77,7 +78,7 @@ generate
         end
         Encoder #(`DCACHE_BANK) encoder_hit_way (wayHit[i], hitWay_encode[i]);
         always_ff @(posedge clk)begin
-            r_req[i] <= rio.req[i];
+            r_req[i] <= rio.req[i] & ~rio.req_cancel;
             rvaddr[i] <= rio.vaddr[i];
             rio.rdata[i] <= rdata[hitWay_encode[i]][s2_loadBank[i]];
         end
@@ -97,7 +98,7 @@ endgenerate
     end
     assign rio.full = miss_io.rfull;
 
-    assign miss_io.ren = r_req & ~rio.hit;
+    assign miss_io.ren = r_req & ~rio.hit & ~rio.req_cancel_s2;
     assign miss_io.lqIdx = rio.lqIdx;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin

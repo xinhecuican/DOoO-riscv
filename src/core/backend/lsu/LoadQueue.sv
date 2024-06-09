@@ -24,7 +24,9 @@ module LoadQueue(
     input logic clk,
     input logic rst,
     LoadQueueIO.queue io,
+    LoadUnitIO.queue load_io,
     CommitBus.mem commitBus,
+    BakcendCtrl backendCtrl,
     DCacheLoadIO.queue rio
 );
     typedef struct packed {
@@ -35,25 +37,49 @@ module LoadQueue(
     } LoadQueueData;
 
     logic `N(`LOAD_QUEUE_WIDTH) head, tail, head_n, tail_n;
-    logic hdir, tdir;
+    logic hdir, tdir, hdir_n;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) eqIdx;
     logic violation;
     logic `N(`LOAD_QUEUE_WIDTH) violation_idx;
     logic `ARRAY(`COMMIT_WIDTH, `LOAD_QUEUE_WIDTH) commitIdx;
+    logic `N(`LOAD_QUEUE_WIDTH) redirectIdx;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) redirectRobIdx;
+    LoadIdx `N(`LOAD_PIPELINE) redirectLqIdx;
+    logic redirect_next;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign eqIdx[i] = io.data[i].lqIdx.idx;
+        assign redirectRobIdx[i] = io.data[i].robIdx.idx;
+        assign redirectLqIdx[i] = io.data[i].lqIdx;
     end
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitIdx[i] = head + i;
     end
 endgenerate
 
+    MPRAM #(
+        .WIDTH($bits(LoadIdx)),
+        .DEPTH(`ROB_SIZE),
+        .READ_PORT(1),
+        .WRITE_PORT(`LOAD_PIPELINE)
+    ) rob_redirect_ram (
+        .clk(clk),
+        .rst(rst),
+        .en(backendCtrl.redirect),
+        .raddr(backendCtrl.redirectIdx.idx),
+        .rdata(redirectIdx),
+        .we(load_io.dis_en),
+        .waddr(load_io.dis_rob_idx),
+        .wdata(load_io.dis_lq_idx)
+    );
+
     assign io.lqIdx = tail;
     assign head_n = head + commitBus.loadNum;
     assign tail_n = tail + io.disNum;
+    assign hdir_n = head[`LOAD_QUEUE_WIDTH-1] & ~head_n[`LOAD_QUEUE_WIDTH-1] ? ~hdir : hdir;
     always_ff @(posedge clk)begin
+        redirect_next <= backendCtrl.redirect;
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -62,15 +88,23 @@ endgenerate
         end
         else begin
             head <= head_n;
-            hdir <= head[`LOAD_QUEUE_WIDTH-1] & ~head_n[`LOAD_QUEUE_WIDTH-1] ? ~hdir : hdir;
-            tail <= tail_n;
-            tdir <= tail[`LOAD_QUEUE_WIDTH-1] & ~tail_n[`LOAD_QUEUE_WIDTH-1] ? ~tdir : tdir;
+            hdir <= hdir_n;
+            if(redirect_next)begin
+                tail <= redirectIdx.idx;
+                tdir <= redirectIdx.dir;
+            end
+            else begin
+                tail <= tail_n;
+                tdir <= tail[`LOAD_QUEUE_WIDTH-1] & ~tail_n[`LOAD_QUEUE_WIDTH-1] ? ~tdir : tdir;
+            end
+
         end
     end
 
     logic `N(`LOAD_QUEUE_SIZE) valid, miss, dataValid, writeback;
     logic `N(`DCACHE_BITS) data `N(`LOAD_QUEUE_SIZE);
     logic `N(`DCACHE_BYTE) mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`LOAD_QUEUE_SIZE) head_mask, head_n_mask, redirect_mask;
 
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) refillData, refillDataCombine;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BYTE) refillMask;
@@ -104,6 +138,8 @@ generate
     end
 endgenerate
 
+    MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_redirect (redirectIdx.idx, redirect_mask);
+    MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_head_n (head_n, head_n_mask);
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             valid <= 0;
@@ -112,9 +148,13 @@ endgenerate
             writeback <= 0;
         end
         else begin
+            for(int i=0; i<`LOAD_DIS_PORT; i++)begin
+                if(io.dis_en[i])begin
+                    valid[load_io.lqIdx[i].idx] <= 1'b1;
+                end
+            end
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
                 if(io.en[i])begin
-                    valid[eqIdx[i]] <= 1'b1;
                     miss[eqIdx[i]] <= io.miss[i];
                     dataValid[eqIdx[i]] <= ~io.miss[i];
                     writeback[eqIdx[i]] <= ~io.miss[i];
@@ -129,6 +169,9 @@ endgenerate
                 if(i < commitBus.loadNum)begin
                     valid[commitIdx[i]] <= 1'b0;
                 end
+            end
+            if(redirect_next)begin
+                valid <= hdir_n ^ redirectIdx.dir ? ~(head_n_mask ^ redirect_mask) : head_n_mask ^ redirect_mask;
             end
             for(int i=0; i<`LOAD_REFILL_SIZE; i++)begin
                 if(rio.lq_en[i])begin
@@ -181,7 +224,6 @@ endgenerate
 // violation detect
     logic `ARRAY(`STORE_PIPELINE, `LOAD_QUEUE_SIZE) cmp_vec, valid_vec, violation_vec;
     logic `N(`LOAD_QUEUE_SIZE) violation_vec_combine, violation_vec_mask;
-    logic `N(`LOAD_QUEUE_SIZE) head_mask;
     logic `N(`LOAD_QUEUE_WIDTH) violation_encode, violation_mask_encode;
     logic `N(`LOAD_QUEUE_WIDTH) vio_enc_next, vio_mask_next;
     logic `N(`STORE_PIPELINE) span;

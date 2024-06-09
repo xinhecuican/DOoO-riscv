@@ -5,7 +5,8 @@ module Backend(
     input logic rst,
     IfuBackendIO.backend ifu_backend_io,
     FsqBackendIO.backend fsq_back_io,
-    CommitBus.rob commitBus_out
+    CommitBus.rob commitBus_out,
+    DCacheAxi.cache axi_io
 );
     DecodeRenameIO dec_rename_io();
     RenameDisIO rename_dis_io();
@@ -15,6 +16,8 @@ module Backend(
     DisIssueIO #(.PORT_NUM(`LOAD_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_load_io();
     DisIssueIO #(.PORT_NUM(`STORE_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_store_io();
     IssueRegfileIO #(.PORT_SIZE(`ALU_SIZE * 2)) int_reg_io();
+    IssueRegfileIO #(.PORT_SIZE(`LOAD_PIPELINE)) load_reg_io();
+    IssueRegfileIO #(.PORT_SIZE(`STORE_PIPELINE * 2)) store_reg_io();
     IntIssueExuIO int_exu_io();
     BackendCtrl backendCtrl();
     CommitBus commitBus();

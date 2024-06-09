@@ -369,8 +369,11 @@ endinterface
 
 interface DCacheLoadIO;
     logic `N(`LOAD_PIPELINE) req;
+    logic `N(`LOAD_PIPELINE) req_cancel;
+    logic `N(`LOAD_PIPELINE) req_cancel_s2;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) vaddr;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
+    RobIdx `N(`LOAD_PIPELINE) robIdx;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) ptag;
 
     logic `N(`LOAD_PIPELINE) hit;

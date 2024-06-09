@@ -4,11 +4,13 @@ interface StoreUnitIO;
     logic `N(`STORE_ISSUE_BANK_NUM) en;
     StoreIssueData `N(`STORE_ISSUE_BANK_NUM) storeIssueData;
     logic `N(`STORE_DIS_PORT) dis_en;
+    RobIdx `N(`STORE_DIS_PORT) dis_rob_idx;
+    StoreIdx `N(`STORE_DIS_PORT) dis_sq_idx;
     logic `N(`STORE_ISSUE_BANK_NUM) data_en;
     StoreIdx `N(`STORE_ISSUE_BANK_NUM) data_sqIdx;
 
-    modport store (output en, storeIssueData, dis_en, data_en, data_sqIdx);
-    modport queue (input data_en, dis_en, data_sqIdx);
+    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx);
+    modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx);
 endinterface
 
 module StoreIssueQueue(
@@ -19,6 +21,7 @@ module StoreIssueQueue(
     DisIssueIO.issue dis_store_io,
     IssueRegfileIO.issue store_reg_io,
     WriteBackBus wbBus,
+    BackendCtrl backendCtrl,
     StoreUnitIO.store store_io
 );
     StoreAddrBankIO addr_io [`STORE_ISSUE_BANK_NUM-1: 0]();
@@ -53,11 +56,14 @@ generate
         assign data_io[i].status = addr_io[i].status;
         assign data_io[i].free_en = addr_io[i].free_en;
         assign data_io[i].freeIdx = addr_io[i].freeIdx;
+        assign data_io[i].walk_en = addr_io[i].walk_en;
         assign data_io[i].sqIdx = addr_io[i].sqIdx;
         
         assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en & ~backendCtrl.redirect;
         assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
+        assign store_io.dis_rob_idx[i] = dis_store_io.data[i].robIdx;
+        assign store_io.dis_sq_idx[i] = sqIdx[i];
     end
 endgenerate
     assign dis_store_io.full = |full;
@@ -76,6 +82,7 @@ interface StoreAddrBankIO;
     MemIssueBundle data;
     logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
+    logic `N(`STORE_ISSUE_BANK_SIZE) walk_en;
     StoreIdx sqIdx;
     LoadIdx lqIdx;
     logic reg_en;
@@ -84,13 +91,14 @@ interface StoreAddrBankIO;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)+1) bankNum;
     StoreIssueData data_o;
 
-    modport bank(input en, status, data, sqIdx, output full, free_en, freeIdx, reg_en, rs1, bankNum, data_o);
+    modport bank(input en, status, data, sqIdx, output full, free_en, freeIdx, walk_en, reg_en, rs1, bankNum, data_o);
 endinterface
 
 module StoreAddrBank(
     input logic clk,
     input logic rst,
-    StoreIssueBankIO.bank io
+    StoreIssueBankIO.bank io,
+    BackendCtrl backendCtrl
 );
     typedef struct packed {
         logic rs1v;
@@ -157,6 +165,7 @@ endgenerate
     // walk
     logic `N(`STORE_ISSUE_BANK_SIZE) bigger, walk_en;
     assign walk_en = en & bigger;
+    assign io.walk_en = walk_en;
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
         assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
@@ -201,18 +210,20 @@ interface StoreDataBankIO;
     IssueStatusBundle status;
     logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
+    logic `N(`STORE_ISSUE_BANK_SIZE) walk_en;
     StoreIdx sqIdx;
     logic reg_en;
     logic `N(`PREG_WIDTH) rs2;
     StoreIdx sqIdx_o;
 
-    modport bank(input en, status, sqIdx, free_en, freeIdx, output reg_en, rs2, sqIdx_o);
+    modport bank(input en, status, sqIdx, free_en, freeIdx, walk_en, output reg_en, rs2, sqIdx_o);
 endinterface
 
 module StoreDataBank(
     input logic clk,
     input logic rst,
-    StoreIssueBankIO.bank io
+    StoreIssueBankIO.bank io,
+    BackendCtrl backendCtrl
 );
     typedef struct packed {
         logic rs2v;
@@ -251,14 +262,7 @@ generate
         end
     end
 endgenerate
-    // walk
-    logic `N(`STORE_ISSUE_BANK_SIZE) bigger, walk_en;
-    assign walk_en = en & bigger;
-generate
-    for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
-        assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
-    end
-endgenerate
+
     always_ff @(posedge clk)begin
         if(io.en)begin
             sqIdxs[io.freeIdx] <= io.sqIdx;
@@ -270,7 +274,7 @@ endgenerate
         end
         else begin
             if(backendCtrl.redirect)begin
-                en <= walk_en;
+                en <= io.walk_en;
             end
             else begin
                 en <= (en | ({`STORE_ISSUE_BANK_SIZE{io.en}} & io.free_en)) &
