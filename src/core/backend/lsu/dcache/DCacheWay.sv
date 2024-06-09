@@ -63,12 +63,11 @@ generate
             .BYTE_WRITE(1)
         ) bank (
             .clk(clk),
-            .rst(rst),
             .en(io.en[i]),
             .addr(((|io.we[i]) ? io.windex[i] : io.index[i])),
             .we(io.we[i]),
             .wdata(io.wdata[i]),
-            .rdata(io.rdata[i])
+            .rdata(io.data[i])
         );
     end
 endgenerate

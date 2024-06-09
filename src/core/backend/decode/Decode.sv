@@ -13,7 +13,6 @@ generate;
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         DecodeUnit decodeUnit(
             .inst(insts.inst[i]),
-            .addr(insts.addr[i]),
             .info(decodeInfo[i])
         );
     end

@@ -8,7 +8,7 @@ interface LoadQueueIO;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) paddr;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) mask;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) rdata;
-    logic `N(`LOAD_QUEUE_WIDTH) lqIdx;
+    LoadIdx lqIdx;
     ViolationData `N(`STORE_PIPELINE) write_violation;
     ViolationData lq_violation;
 
@@ -16,7 +16,7 @@ interface LoadQueueIO;
     logic `N(`LOAD_PIPELINE) wb_valid;
 
 
-    modport queue(input en, disNum, data, paddr, rdata, mask, write_violation, wb_valid,
+    modport queue(input en, miss, disNum, data, paddr, rdata, mask, write_violation, wb_valid,
                   output lqIdx, lq_violation, wbData);
 endinterface
 
@@ -26,7 +26,7 @@ module LoadQueue(
     LoadQueueIO.queue io,
     LoadUnitIO.queue load_io,
     CommitBus.mem commitBus,
-    BakcendCtrl backendCtrl,
+    BackendCtrl backendCtrl,
     DCacheLoadIO.queue rio
 );
     typedef struct packed {
@@ -42,10 +42,11 @@ module LoadQueue(
     logic violation;
     logic `N(`LOAD_QUEUE_WIDTH) violation_idx;
     logic `ARRAY(`COMMIT_WIDTH, `LOAD_QUEUE_WIDTH) commitIdx;
-    logic `N(`LOAD_QUEUE_WIDTH) redirectIdx;
+    LoadIdx redirectIdx;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) redirectRobIdx;
     LoadIdx `N(`LOAD_PIPELINE) redirectLqIdx;
     logic redirect_next;
+    logic `ARRAY(`LOAD_PIPELINE, `ROB_WIDTH) dis_rob_idx;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -55,6 +56,9 @@ generate
     end
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitIdx[i] = head + i;
+    end
+    for(genvar i=0; i<`LOAD_DIS_PORT; i++)begin
+        assign dis_rob_idx[i] = load_io.dis_rob_idx[i].idx;
     end
 endgenerate
 
@@ -70,11 +74,12 @@ endgenerate
         .raddr(backendCtrl.redirectIdx.idx),
         .rdata(redirectIdx),
         .we(load_io.dis_en),
-        .waddr(load_io.dis_rob_idx),
+        .waddr(dis_rob_idx),
         .wdata(load_io.dis_lq_idx)
     );
 
-    assign io.lqIdx = tail;
+    assign io.lqIdx.idx = tail;
+    assign io.lqIdx.dir = tdir;
     assign head_n = head + commitBus.loadNum;
     assign tail_n = tail + io.disNum;
     assign hdir_n = head[`LOAD_QUEUE_WIDTH-1] & ~head_n[`LOAD_QUEUE_WIDTH-1] ? ~hdir : hdir;
@@ -124,8 +129,8 @@ endgenerate
 
     assign waiting_wb = valid & miss & dataValid & ~writeback;
     /* UNPRARM */
-    PEncoder pencoder_wb_idx (waiting_wb, wbIdx[0]);
-    PREncoder prencoder_wb_idx (waiting_wb, wbIdx[1]);
+    PEncoder #(`LOAD_QUEUE_SIZE) pencoder_wb_idx (waiting_wb, wbIdx[0]);
+    PREncoder #(`LOAD_QUEUE_SIZE) prencoder_wb_idx (waiting_wb, wbIdx[1]);
     assign io.wbData[0].en = |waiting_wb;
     assign io.wbData[1].en = wbIdx[0] != wbIdx[1];
 generate
@@ -149,8 +154,8 @@ endgenerate
         end
         else begin
             for(int i=0; i<`LOAD_DIS_PORT; i++)begin
-                if(io.dis_en[i])begin
-                    valid[load_io.lqIdx[i].idx] <= 1'b1;
+                if(load_io.dis_en[i])begin
+                    valid[load_io.dis_lq_idx[i].idx] <= 1'b1;
                 end
             end
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
@@ -198,7 +203,8 @@ endgenerate
         .READ_PORT(`LOAD_PIPELINE+1),
         .WRITE_PORT(`STORE_PIPELINE)
     ) load_queue_data (
-        .*,
+        .clk(clk),
+        .rst(rst),
         .en({2'b11, violation}),
         .raddr({wbIdx, violation_idx}),
         .rdata({wb_queue_data, vio_storeData}),
@@ -236,8 +242,8 @@ generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_QUEUE_SIZE; j++)begin
             assign cmp_vec[i][j] = io.write_violation[i].en & 
-                                   (io.write_violation[i].addr[`VADDR_SIZE-1: 2] == addr_mask[`VADDR_SIZE+1: 4]) &
-                                   (|(io.write_violation[i].mask & addr_mask[3: 0]));
+                                   (io.write_violation[i].addr[`VADDR_SIZE-1: 2] == addr_mask[j][`VADDR_SIZE+1: 4]) &
+                                   (|(io.write_violation[i].mask & addr_mask[j][3: 0]));
         end
         logic `N(`LOAD_QUEUE_SIZE) store_mask;
         assign span[i] = hdir ^ io.write_violation[i].lqIdx.dir;
@@ -248,7 +254,7 @@ generate
     ParallelOR #(`LOAD_QUEUE_SIZE, `STORE_PIPELINE) or_violation_vec(violation_vec, violation_vec_combine);
     ParallelOR #(1, `STORE_PIPELINE) or_span (span, span_combine);
     assign violation_vec_mask = violation_vec_combine & ~head_mask;
-    PREncoder #(`LOAD_QUEUE_SIZE) encoder_violation(violation_vec, violation_encode);
+    PREncoder #(`LOAD_QUEUE_SIZE) encoder_violation(violation_vec_combine, violation_encode);
     PREncoder #(`LOAD_QUEUE_SIZE) encoder_violation_mask(violation_vec_mask, violation_mask_encode);
 endgenerate
     always_ff @(posedge clk)begin

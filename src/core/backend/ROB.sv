@@ -58,8 +58,8 @@ module ROB(
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         assign rob_wdata[i].we = dis_io.op[i].di.we;
-        assign rob_wdata[i].mem = dis_io.op[i].memv;
-        assign rob_wdata[i].store = dis_io.op[i].memop[`MEMOP_WIDTH-1];
+        assign rob_wdata[i].mem = dis_io.op[i].di.memv;
+        assign rob_wdata[i].store = dis_io.op[i].di.memop[`MEMOP_WIDTH-1];
         assign rob_wdata[i].fsqInfo = dis_io.op[i].fsqInfo;
         assign rob_wdata[i].vrd = dis_io.op[i].di.rd;
         assign rob_wdata[i].prd = dis_io.prd[i];

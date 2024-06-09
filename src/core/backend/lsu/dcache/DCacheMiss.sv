@@ -29,7 +29,8 @@ interface DCacheMissIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
-    modport miss (input ren, raddr, lqIdx, req_success, write_ready, replaceWay, refill_valid,
+    modport miss (input ren, raddr, lqIdx, robIdx, req_success, write_ready, replaceWay, refill_valid,
+                        wen, waddr, wdata, wmask,
                   output rfull, req, req_addr, wfull, refill_en, refillWay, refillAddr, refillData, lq_en, lqData, lqIdx_o);
 endinterface
 
@@ -41,7 +42,11 @@ module DCacheMiss(
     DCacheAxi.miss r_axi_io,
     BackendCtrl backendCtrl
 );
+`ifdef DIFFTEST
+    typedef struct packed {
+`else
     typedef struct {
+`endif
         RobIdx robIdx; // for redirect
         logic `N(`DCACHE_MISS_WIDTH) missIdx;
         logic `N(`LOAD_QUEUE_WIDTH) lqIdx;
@@ -139,7 +144,7 @@ endgenerate
 // refill
     assign io.refill_en = en[head] & we[head] & dataValid[head];
     assign io.refillWay = way[head];
-    assign io.refilAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
+    assign io.refillAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign io.refillData = data[head];
 
 // mshr refill
@@ -206,7 +211,7 @@ endgenerate
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
                 if(io.ren[i] & (mshr_remain_valid[i] & remain_valid[i] & ~rhit_combine[i]))begin
                     en[freeIdx[i]] <= 1'b1;
-                    addr[freeIdx[i]] <= io.raddr`DCACHE_BLOCK_BUS;
+                    addr[freeIdx[i]] <= io.raddr[i]`DCACHE_BLOCK_BUS;
                     dataValid[freeIdx[i]] <= 1'b0;
                 end
 

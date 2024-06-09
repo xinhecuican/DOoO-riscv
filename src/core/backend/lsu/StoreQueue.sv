@@ -5,7 +5,7 @@ interface StoreQueueIO;
     StoreIssueData `N(`STORE_PIPELINE) data;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) paddr;
     logic `ARRAY(`STORE_PIPELINE, 4) mask;
-    logic `N(`STORE_QUEUE_WIDTH) sqIdx;
+    StoreIdx sqIdx;
 
     modport queue(input en, data, paddr, mask, output sqIdx);
 endinterface
@@ -31,7 +31,7 @@ module StoreQueue(
     logic `ARRAY(`COMMIT_WIDTH, `STORE_QUEUE_WIDTH) commitIdx;
     logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_WIDTH) headCommitIdx;
 
-    logic `N(`STORE_PIPELINE) redirectIdx;
+    StoreIdx redirectIdx;
     logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_WIDTH) redirectRobIdx;
     StoreIdx `N(`STORE_PIPELINE) redirectSqIdx;
     logic `N(`STORE_QUEUE_SIZE) head_n_mask, redirect_mask;
@@ -53,7 +53,8 @@ endgenerate
 
     ParallelAdder #(1, `STORE_DIS_PORT) adder_dis_num (issue_queue_io.dis_en, disNum);
     ParallelAdder #(1, `STORE_PIPELINE) addr_commit_num (queue_commit_io.en, commitNum);
-    assign io.sqIdx = tail;
+    assign io.sqIdx.idx = tail;
+    assign io.sqIdx.dir = tdir;
     assign head_n = queue_commit_io.conflict ? head : head + commitNum;
     assign tail_n = tail + disNum;
     assign hdir_n = head[`STORE_QUEUE_WIDTH-1] & ~head_n[`STORE_QUEUE_WIDTH-1] ? ~hdir : hdir;
@@ -85,7 +86,7 @@ endgenerate
 
     logic `N(`VADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
     logic `N(`STORE_QUEUE_SIZE) data_dir;
-    logic `N(32) data `N(`LOAD_QUEUE_SIZE);
+    logic `ARRAY(`LOAD_QUEUE_SIZE, `DCACHE_BITS) data;
     always_ff @(posedge clk)begin
         redirect_next <= backendCtrl.redirect;
         if(rst == `RST)begin
@@ -133,6 +134,12 @@ endgenerate
 
     MaskGen #(`STORE_QUEUE_SIZE) mask_gen_redirect (redirectIdx.idx, redirect_mask);
     MaskGen #(`STORE_QUEUE_SIZE) mask_gen_head (head_n, head_n_mask);
+    logic `ARRAY(`STORE_DIS_PORT, `ROB_WIDTH) dis_rob_idx;
+generate
+    for(genvar i=0; i<`STORE_DIS_PORT; i++)begin
+        assign dis_rob_idx[i] = issue_queue_io.dis_rob_idx[i].idx;
+    end
+endgenerate
     MPRAM #(
         .WIDTH($bits(StoreIdx)),
         .DEPTH(`ROB_SIZE),
@@ -144,9 +151,9 @@ endgenerate
         .en(backendCtrl.redirect),
         .raddr(backendCtrl.redirectIdx.idx),
         .rdata(redirectIdx),
-        .we(io.dis_en),
-        .waddr(store_io.dis_rob_idx),
-        .wdata(store_io.dis_sq_idx)
+        .we(issue_queue_io.dis_en),
+        .waddr(dis_rob_idx),
+        .wdata(issue_queue_io.dis_sq_idx)
     );
 
 // write to commit
@@ -155,8 +162,8 @@ generate
         logic `N(`STORE_QUEUE_WIDTH) queue_idx;
         assign queue_idx = head + i;
         assign queue_commit_io.en[i] = valid[queue_idx] & addrValid[queue_idx] & dataValid[queue_idx] & commited[queue_idx];
-        assign queue_commit_io.addr[i] = addr_mask[queue_idx][`VADDR_SIZE+1: 4];
-        assign queue_commit_io.mask[i] = addr_mask[queue_idx][3: 0];
+        assign queue_commit_io.addr[i] = addr_mask[queue_idx][`VADDR_SIZE+1: `DCACHE_BYTE];
+        assign queue_commit_io.mask[i] = addr_mask[queue_idx][`DCACHE_BYTE-1: 0];
         assign queue_commit_io.data[i] = data[queue_idx];
     end
 endgenerate
@@ -165,16 +172,16 @@ endgenerate
     logic `N(`STORE_QUEUE_SIZE) head_mask;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_QUEUE_SIZE) valid_vec, offset_vec, fwd_offset_vec;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_QUEUE_SIZE) ptag_vec, forward_vec;
-    logic [`LOAD_PIPELINE-1: 0][`STORE_QUEUE_SIZE-1: 0][3: 0] forward_mask;
-    logic `ARRAY(`LOAD_PIPELINE, 4) forward_mask_o, forward_data_valid_o;
-    logic `ARRAY(`LOAD_PIPELINE, 32) forward_data_o;
+    logic [`LOAD_PIPELINE-1: 0][`STORE_QUEUE_SIZE-1: 0][`DCACHE_BYTE-1: 0] forward_mask;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) forward_mask_o, forward_data_valid_o;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) forward_data_o;
 
     MaskGen #(`STORE_QUEUE_SIZE) maskgen_head (head, head_mask);
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
             assign offset_vec[i][j] = loadFwd.fwdData[i].en &
-                                      (loadFwd.fwdData[i].vaddrOffset[`TLB_TAG-1: 2] == addr_mask[j][`TLB_TAG+1: 4]);
+                                      (loadFwd.fwdData[i].vaddrOffset[11: 2] == addr_mask[j][`DCACHE_BYTE+9: `DCACHE_BYTE]);
         end
         logic `N(`STORE_QUEUE_SIZE) store_mask;
         MaskGen #(`STORE_QUEUE_SIZE) maskgen_store (loadFwd.fwdData[i].sqIdx.idx, store_mask);
@@ -197,9 +204,9 @@ generate
             .mask(forward_mask[i]),
             .data(data),
             .dataValid(dataValid),
-            .mask_o(forward_mask_o),
-            .data_o(forward_data_o),
-            .dataValid_o(forward_data_valid_o)
+            .mask_o(forward_mask_o[i]),
+            .data_o(forward_data_o[i]),
+            .dataValid_o(forward_data_valid_o[i])
         );
     end
     always_ff @(posedge clk)begin
@@ -218,13 +225,13 @@ module ForwardSelect #(
     parameter DEPTH = 32
 )(
     input logic `N(DEPTH) dir,
-    input logic `ARRAY(DEPTH, 4) mask,
-    input logic `ARRAY(DEPTH, 32) data,
+    input logic `ARRAY(DEPTH, `DCACHE_BYTE) mask,
+    input logic `ARRAY(DEPTH, `DCACHE_BITS) data,
     input logic `N(DEPTH) dataValid,
     output logic dir_o,
-    output logic `N(4) mask_o,
-    output logic `N(32) data_o,
-    output logic `N(4) dataValid_o
+    output logic `N(`DCACHE_BYTE) mask_o,
+    output logic `N(`DCACHE_BITS) data_o,
+    output logic `N(`DCACHE_BYTE) dataValid_o
 );
 generate
     if(DEPTH == 1)begin
@@ -238,7 +245,7 @@ generate
         assign dir_o = older ? dir[1] : dir[0];
         for(genvar i=0; i<4; i++)begin
             assign mask_o[i] = ((older | (~mask[0][i])) & mask[1][i]) | ((~older | (~mask[1][i])) & mask[0][i]);
-            assign data_o[i*8-1: i*8] = ({8{older | (~mask[0][i])}} & data[1][(i+1)*8-1: i*8]) |
+            assign data_o[(i+1)*8-1: i*8] = ({8{older | (~mask[0][i])}} & data[1][(i+1)*8-1: i*8]) |
                                     ({8{~older | (~mask[1][i])}} & data[0][(i+1)*8-1: i*8]);
             assign dataValid_o[i] = ((older | (~mask[0][i])) & dataValid[1]) | ((~older | (~mask[1][i])) & dataValid[0]);
         end
@@ -273,7 +280,7 @@ generate
         assign dir_o = older ? dir1[1] : dir1[0];
         for(genvar i=0; i<4; i++)begin
             assign mask_o[i] = ((older | (~mask1[0][i])) & mask1[1][i]) | ((~older | (~mask1[1][i])) & mask1[0][i]);
-            assign data_o[i*8-1: i*8] = ({8{older | (~mask1[0][i])}} & data1[1][(i+1)*8-1: i*8]) |
+            assign data_o[(i+1)*8-1: i*8] = ({8{older | (~mask1[0][i])}} & data1[1][(i+1)*8-1: i*8]) |
                                     ({8{~older | (~mask1[1][i])}} & data1[0][(i+1)*8-1: i*8]);
             assign dataValid_o[i] = ((older | (~mask1[0][i])) & dataValid1[1][i]) | ((~older | (~mask1[1][i])) & dataValid1[0][i]);
         end

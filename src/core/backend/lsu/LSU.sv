@@ -62,12 +62,10 @@ module LSU(
     LoadIssueQueue load_issue_queue(
         .*, 
         .lqIdx(lqIdxs),
-        .sqIdx(l_sqIdxs),
-        .write_violation(violation_io.wdata),
-        .lq_violation(violation_io.lq_data)
+        .sqIdx(l_sqIdxs)
     );
     DCache dcache(.*);
-    LoadQueue load_queue(.*);
+    LoadQueue load_queue(.*, .io(load_queue_io));
     StoreIssueQueue store_issue_queue(
         .*,
         .sqIdx(sqIdxs), 
@@ -78,7 +76,8 @@ module LSU(
         .io(store_queue_io),
         .issue_queue_io(store_io),
         .queue_commit_io(store_commit_io),
-        .loadFwd(store_queue_fwd)
+        .loadFwd(store_queue_fwd),
+        .store_data(store_reg_io.data[`STORE_PIPELINE*2-1: `STORE_PIPELINE])
     );
     StoreCommitBuffer store_commit_buffer (
         .*,
@@ -88,12 +87,12 @@ module LSU(
     ViolationDetect violation_detect(.*, .io(violation_io));
 
 // load
-    logic `N(`LOAD_PIPELINE) lmask_pre;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) lmask_pre;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_PIPELINE) dis_ls_older;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign lqIdxs[i].idx = load_queue_io.lqIdx.idx + i;
-        assign lqIdxs[i].dir = load_queue_io.lqIdx.idx[`LOAD_QUEUE_WIDTH-1] & ~lqIdxs[i].idx[`LOAD_QUEUE_WIDTH] ? ~load_queue_io.lqIdx.dir : load_queue_io.lqIdx.dir;
+        assign lqIdxs[i].dir = load_queue_io.lqIdx.idx[`LOAD_QUEUE_WIDTH-1] & ~lqIdxs[i].idx[`LOAD_QUEUE_WIDTH-1] ? ~load_queue_io.lqIdx.dir : load_queue_io.lqIdx.dir;
     end
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : load_sqIdx
@@ -275,8 +274,8 @@ endgenerate
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        assign sqIdxs[i].idx = store_queue_io.lqIdx.idx + i;
-        assign sqIdxs[i].dir = store_queue_io.lqIdx.idx[`STORE_QUEUE_WIDTH-1] & ~sqIdxs[i].idx[`STORE_QUEUE_WIDTH] ? ~store_queue_io.lqIdx.dir : store_queue_io.lqIdx.dir;
+        assign sqIdxs[i].idx = store_queue_io.sqIdx.idx + i;
+        assign sqIdxs[i].dir = store_queue_io.sqIdx.idx[`STORE_QUEUE_WIDTH-1] & ~sqIdxs[i].idx[`STORE_QUEUE_WIDTH-1] ? ~store_queue_io.sqIdx.dir : store_queue_io.sqIdx.dir;
     end
 
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin : store_lqIdx
@@ -300,15 +299,15 @@ generate
             .addr(storeVAddr[i])
         );
         always_ff @(posedge clk)begin
-            store_en <= store_io.en & ~store_redirect_clear_req;
-            store_issue_data <= store_io.storeIssueData;
+            store_en[i] <= store_io.en[i] & ~store_redirect_clear_req;
+            store_issue_data[i] <= store_io.storeIssueData[i];
             sptag[i] <= storeVAddr[i]`TLB_TAG_BUS;
-            storeAddrNext[i] <= storeVAddr;
+            storeAddrNext[i] <= storeVAddr[i];
         end
         always_comb begin
             getMask(storeAddrNext[i][1: 0], store_issue_data[i].size, smask[i]);
         end
-        assign spaddr[i] = {sptag, storeAddrNext[11: 0]};
+        assign spaddr[i] = {sptag[i], storeAddrNext[i][11: 0]};
     end
 
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
@@ -336,6 +335,8 @@ endgenerate
 
 
 // store load detect
+    assign violation_io.lq_data = load_queue_io.lq_violation;
+    assign load_queue_io.write_violation = violation_io.wdata;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign violation_io.wdata[i].en = store_en[i];
@@ -369,7 +370,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign fwdData[i].en = load_io.en[i];
         assign fwdData[i].sqIdx = load_io.loadIssueData[i].sqIdx;
-        assign fwdData[i].vaddrOffset = loadVAddr[`TLB_OFFSET-1: 0];
+        assign fwdData[i].vaddrOffset = loadVAddr[i][`TLB_OFFSET-1: 0];
         assign fwdData[i].ptag = lptag[i];
     end
 endgenerate
@@ -424,9 +425,9 @@ endgenerate
     end
     ViolationData out;
     ViolationOlderCompare cmp_out (pipeline_o, io.lq_data, out);
-    assign memInfo.en = out.en;
-    assign memInfo.robIdx = out.robIdx;
-    assign memInfo.fsqInfo =out.fsqInfo;
+    assign io.memInfo.en = out.en;
+    assign io.memInfo.robIdx = out.robIdx;
+    assign io.memInfo.fsqInfo =out.fsqInfo;
 endmodule
 
 module ViolationCompare(
@@ -438,7 +439,11 @@ module ViolationCompare(
     LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older);
     assign conflict = (cmp1.addr[`VADDR_SIZE-1: 2] == cmp2.addr[`VADDR_SIZE-1: 2]) &&
                       (|(cmp1.mask & cmp2.mask));
-    assign out = cmp2;
+    assign out.addr = cmp2.addr;
+    assign out.mask = cmp2.mask;
+    assign out.lqIdx = cmp2.lqIdx;
+    assign out.robIdx = cmp2.robIdx;
+    assign out.fsqInfo = cmp2.fsqInfo;
     assign out.en = cmp1.en & cmp2.en & older & conflict;
 endmodule
 

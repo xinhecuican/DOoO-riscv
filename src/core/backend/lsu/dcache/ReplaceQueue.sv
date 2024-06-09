@@ -10,7 +10,7 @@ interface ReplaceQueueIO;
     logic wend;
     logic `N(`DCACHE_MISS_WIDTH) missIdx_o;
 
-    modport queue (input en, missIdx, addr, data, output wend, missIdx_o);
+    modport queue (input en, missIdx, addr, data, output wend, missIdx_o, full);
     modport miss (input full, wend, missIdx_o, output missIdx);
 endinterface
 
@@ -123,7 +123,7 @@ module ReplaceQueue(
     assign w_axi_io.maw.len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign w_axi_io.maw.size = $clog2(`DATA_BYTE);
     assign w_axi_io.maw.burst = 2'b01;
-    assign w_axi_io.maw.block = 2'b0;
+    assign w_axi_io.maw.lock = 2'b0;
     assign w_axi_io.maw.cache = 4'b0;
     assign w_axi_io.maw.prot = 0;
 

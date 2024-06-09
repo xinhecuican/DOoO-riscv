@@ -38,6 +38,8 @@ generate
             .*,
             .io(addr_io[i])
         );
+        MemIssueBundle mem_issue_bundle;
+        assign mem_issue_bundle = dis_store_io.data[i];
         assign bankNum[i] = addr_io[i].bankNum;
         assign originOrder[i] = i;
 
@@ -62,7 +64,7 @@ generate
         assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en & ~backendCtrl.redirect;
         assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
-        assign store_io.dis_rob_idx[i] = dis_store_io.data[i].robIdx;
+        assign store_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
         assign store_io.dis_sq_idx[i] = sqIdx[i];
     end
 endgenerate
@@ -91,13 +93,14 @@ interface StoreAddrBankIO;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)+1) bankNum;
     StoreIssueData data_o;
 
-    modport bank(input en, status, data, sqIdx, output full, free_en, freeIdx, walk_en, reg_en, rs1, bankNum, data_o);
+    modport bank(input en, status, data, sqIdx, lqIdx, output full, free_en, freeIdx, walk_en, reg_en, rs1, bankNum, data_o);
 endinterface
 
 module StoreAddrBank(
     input logic clk,
     input logic rst,
-    StoreIssueBankIO.bank io,
+    StoreAddrBankIO.bank io,
+    WriteBackBus wbBus,
     BackendCtrl backendCtrl
 );
     typedef struct packed {
@@ -222,7 +225,8 @@ endinterface
 module StoreDataBank(
     input logic clk,
     input logic rst,
-    StoreIssueBankIO.bank io,
+    StoreDataBankIO.bank io,
+    WriteBackBus wbBus,
     BackendCtrl backendCtrl
 );
     typedef struct packed {

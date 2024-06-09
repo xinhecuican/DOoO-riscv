@@ -46,6 +46,8 @@ generate
             .io(bank_io[i]),
             .*
         );
+        MemIssueBundle mem_issue_bundle;
+        assign mem_issue_bundle = dis_load_io.data[i];
         assign bankNum[i] = bank_io[i].bankNum;
         assign originOrder[i] = i;
 
@@ -62,7 +64,7 @@ generate
         assign load_reg_io.preg[i] = bank_io[i].rs1;
         assign load_io.loadIssueData[i] = bank_io[i].data_o;
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
-        assign load_io.dis_rob_idx[i] = dis_laod_io.data[i].robIdx;
+        assign load_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
         assign load_io.dis_lq_idx[i] = lqIdx[i];
     end
 endgenerate
@@ -94,7 +96,7 @@ interface LoadIssueBankIO;
     logic success;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) success_idx;
 
-    modport bank(input en, status, data, lqIdx, reply_fast, reply_slow, success, success_idx,
+    modport bank(input en, status, data, lqIdx, sqIdx, reply_fast, reply_slow, success, success_idx,
                  output full, reg_en, rs1, bankNum, data_o, issue_idx);
 endinterface
 
@@ -102,6 +104,7 @@ module LoadIssueBank(
     input logic clk,
     input logic rst,
     LoadIssueBankIO.bank io,
+    WriteBackBus wbBus,
     BackendCtrl backendCtrl
 );
     typedef struct packed {

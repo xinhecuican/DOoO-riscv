@@ -33,7 +33,7 @@ endgenerate
 
 generate
     // store don't in wbBus
-    for(genvar i=0; i<`LSU_SIZE; i++)begin
+    for(genvar i=`ALU_SIZE; i<`ALU_SIZE+`LSU_SIZE; i++)begin
         assign lsu_wb_io.valid[i] = 1'b1;
         // always_ff @(posedge clk)begin
             // control by lsu

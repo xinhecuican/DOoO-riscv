@@ -18,17 +18,17 @@ module PLRU#(
 
 generate
     for(genvar i=0; i<READ_PORT; i++)begin
-        assign rdata[i] = plru[io.hit_index[i]];
-        PLRUUpdate #(WAY_NUM) update (rdata[i], io.hit_way[i], updateData[i]);
+        assign rdata[i] = plru[replace_io.hit_index[i]];
+        PLRUUpdate #(WAY_NUM) update (rdata[i], replace_io.hit_way[i], updateData[i]);
     end
 endgenerate
 
     logic `N(WAY_NUM-1) replaceData;
     logic `N(WAY_WIDTH) replaceOut;
-    assign replaceData = plru[io.miss_index];
+    assign replaceData = plru[replace_io.miss_index];
     PLRUReplace #(WAY_NUM) replace (replaceData, replaceOut);
     always_ff @(posedge clk)begin
-        io.miss_way <= replaceOut;
+        replace_io.miss_way <= replaceOut;
     end
 
 
@@ -38,8 +38,8 @@ endgenerate
         end
         else begin
             for(int i=0; i<READ_PORT; i++)begin
-                if(io.hit_en[i])begin
-                    plru[io.hit_index[i]] <= updateData[i];
+                if(replace_io.hit_en[i])begin
+                    plru[replace_io.hit_index[i]] <= updateData[i];
                 end
             end
         end

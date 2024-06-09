@@ -40,7 +40,7 @@ generate
 endgenerate
 
     assign backendRedirectInfo = branch_ctrl_io.redirectInfo;
-    assign branchRedirectInfo = branch_ctrl_io.branchRedirectInfo;
+    assign branchRedirectInfo = branch_ctrl_io.branchInfo;
     AluBranchCtrl branch_ctrl(
         .clk(clk),
         .rst(rst),

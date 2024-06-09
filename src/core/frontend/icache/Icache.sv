@@ -132,7 +132,6 @@ module ICache(
     assign replace_io.hit_en = main_state == LOOKUP && (!cache_miss[0] && !cache_miss[1]);
     assign replace_io.hit_way = hit_index[0];
     assign replace_io.hit_index = request_buffer.index1;
-    assign replace_io.miss_en = main_state == LOOKUP && (|cache_miss);
     assign replace_io.miss_index = cache_miss[0] ? request_buffer.index1 : request_buffer.index2;
     PLRU #(
         .DEPTH(`ICACHE_SET),

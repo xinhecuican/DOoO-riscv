@@ -114,13 +114,13 @@ interface FsqBackendIO;
     logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) diff_pc;
 `endif
     
-    modport fsq (input fsqIdx, redirect, output streams, directions
+    modport fsq (input fsqIdx, redirect, redirectBr, output streams, directions
 `ifdef DIFFTEST
     ,input diff_fsqInfo,
     output diff_pc
 `endif
     );
-    modport backend (output fsqIdx, redirect, input streams, directions
+    modport backend (output fsqIdx, redirect, redirectBr, input streams, directions
 `ifdef DIFFTEST
     ,output diff_fsqInfo,
     input diff_pc
@@ -385,7 +385,7 @@ interface DCacheLoadIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
-    modport dcache (input req, vaddr, lqIdx, ptag, output hit, rdata, conflict, full, lq_en, lqData, lqIdx_o);
+    modport dcache (input req, vaddr, lqIdx, ptag, req_cancel, req_cancel_s2, output hit, rdata, conflict, full, lq_en, lqData, lqIdx_o);
     modport queue (input lq_en, lqData, lqIdx_o);
 endinterface
 
@@ -407,8 +407,8 @@ endinterface
 
 interface LoadForwardIO;
     LoadFwdData `N(`LOAD_PIPELINE) fwdData;
-    logic `N(`DCACHE_BYTE) mask;
-    logic `N(`DCACHE_BITS) data;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) mask;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) data;
 
     modport queue(input fwdData, output mask, data);
 endinterface

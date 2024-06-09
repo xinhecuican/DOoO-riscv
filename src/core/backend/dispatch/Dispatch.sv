@@ -198,12 +198,14 @@ generate
         assign index[i] = index[i-1] + io.en[i];
     end
 
-    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
+    for(genvar i=0; i<OUT_WIDTH; i++)begin
         logic `N(ADDR_WIDTH) raddr;
+        logic bigger;
         Entry entry;
         assign entry = entrys[raddr];
         assign raddr = head + i;
-        assign io.en_o[i] = (num > i) & ~io.issue_full;
+        assign bigger = num > i;
+        assign io.en_o[i] = bigger & ~io.issue_full;
         assign io.rs1_o[i] = entry.rs1;
         assign io.rs2_o[i] = entry.rs2;
         assign io.data_o[i] = entry.data;
@@ -227,8 +229,8 @@ generate
             assign bigger[i] = (robIdx[i].dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > robIdx[i].idx);
             logic `N(ADDR_WIDTH) i_n;
             assign i_n = i + 1;
-            assign validStart[i] = valid[i] & ~valid[i+1]; // valid[i] == 1 && valid[i + 1] == 0
-            assign validEnd[i] = ~valid[i] & valid[i+1];
+            assign validStart[i] = valid[i] & ~valid[i_n]; // valid[i] == 1 && valid[i + 1] == 0
+            assign validEnd[i] = ~valid[i] & valid[i_n];
         end
         Encoder #(DEPTH) encoder1 (validStart, validSelect1);
         Encoder #(DEPTH) encoder2 (validEnd, validSelect2);

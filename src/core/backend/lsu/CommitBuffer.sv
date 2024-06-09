@@ -54,8 +54,8 @@ endgenerate
     logic `N(`STORE_PIPELINE) free_valid;
     assign full = &addr_en;
     /* UNPARAM */
-    PEncoder #(`STORE_COMMIT_WIDTH) encoder_free (~addr_en, free_idx[0]);
-    PREncoder #(`STORE_COMMIT_WIDTH) encoder_free_rev (~addr_en, free_idx[1]);
+    PEncoder #(`STORE_COMMIT_SIZE) encoder_free (~addr_en, free_idx[0]);
+    PREncoder #(`STORE_COMMIT_SIZE) encoder_free_rev (~addr_en, free_idx[1]);
     assign free_valid[0] = ~full;
     assign free_valid[1] = free_idx[0] != free_idx[1];
 
@@ -125,24 +125,26 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_COMMIT_SIZE; j++)begin
             assign offset_vec[i][j] = loadFwd.fwdData[i].en &
-                                      (loadFwd.fwdData[i].vaddrOffset[`TLB_TAG-1: 2+`DCACHE_BANK_WIDTH] == addrs[`TLB_TAG-3-`DCACHE_BANK_WIDTH: 0]);
+                                      (loadFwd.fwdData[i].vaddrOffset == addrs[j][11: 0]);
         end
     end
 endgenerate 
     always_ff @(posedge clk)begin
         fwd_offset_vec <= offset_vec;
-        fwd_bank <= loadFwd.fwdData[i].vaddrOffset[`DCACHE_BANK_WIDTH+1: 2];
+        for(int i=0; i<`LOAD_PIPELINE; i++)begin
+            fwd_bank[i] <= loadFwd.fwdData[i].vaddrOffset[`DCACHE_BANK_WIDTH+1: `DCACHE_BYTE_WIDTH];
+        end
     end
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_COMMIT_SIZE; j++)begin
-            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addrs[j][`VADDR_SIZE-`DCACHE_BANK_WIDTH-2: `TLB_TAG-2-`DCACHE_BANK_WIDTH];
+            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addrs[j][`DCACHE_BLOCK_SIZE-1: `TLB_TAG-`DCACHE_BYTE_WIDTH-`DCACHE_BANK_WIDTH];
         end
         assign forward_vec[i] = ptag_vec[i] & fwd_offset_vec[i] & addr_en;
     end
 
-    Encoder #(`STORE_COMMIT_SIZE) encoder_fwd_idx (forward_vec[i], fwd_idx[i]);
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        Encoder #(`STORE_COMMIT_SIZE) encoder_fwd_idx (forward_vec[i], fwd_idx[i]);
         assign data_io.fwd_req[i] = |forward_vec[i];
         assign data_io.fwd_idx[i] = fwd_idx[i];
         assign data_io.fwd_bank[i] = fwd_bank[i];
@@ -209,7 +211,7 @@ module SCDataModule(
     input logic rst,
     SCDataIO.data io
 );
-    logic `TENSOR(`DCACHE_BANK, `DCACHE_BYTE, 8) data `N(`STORE_COMMIT_SIZE);
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data `N(`STORE_COMMIT_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`STORE_COMMIT_SIZE);
 
 
@@ -217,11 +219,13 @@ module SCDataModule(
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         Decoder #(`DCACHE_BANK) decoder_bank(io.wbank[i], wbank_decode[i]);
+        logic `N(`DCACHE_BITS) expand_mask;
+        MaskExpand #(`DCACHE_BYTE) expand_wmask (io.wmask[i], expand_mask);
         always_ff @(posedge clk)begin
             if(io.wen)begin
                 for(int j=0; j<`DCACHE_BYTE; j++)begin
                     if(io.wmask[i][j])begin
-                        data[io.windex[i]][io.wbank[i]][j] <= io.wdata[i][(j+1)*8-1: j*8];
+                        data[io.windex[i]][io.wbank[i]] <= io.wdata[i] & expand_mask | data[io.windex[i]][io.wbank[i]] & ~expand_mask;
                     end
                 end
                 for(int j=0; j<`DCACHE_BANK; j++)begin

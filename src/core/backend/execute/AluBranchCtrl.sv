@@ -8,7 +8,7 @@ interface AluBranchCtrlIO;
     BackendRedirectInfo redirectInfo;
     BranchRedirectInfo branchInfo;
 
-    modport ctrl (input bundles, output redirectInfo);
+    modport ctrl (input bundles, output redirectInfo, branchInfo);
 endinterface
 
 module AluBranchCtrl(
