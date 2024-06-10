@@ -180,7 +180,8 @@ endgenerate
 generate
     for(genvar i=0; i<`DCACHE_MSHR_SIZE; i++)begin
         logic older;
-        LoopCompare #(`ROB_WIDTH) compare_rob (mshr[i].robIdx, backendCtrl.redirectIdx, older);
+        RobIdx rob_out;
+        LoopCompare #(`ROB_WIDTH) compare_rob (mshr[i].robIdx, backendCtrl.redirectIdx, older, rob_out);
         assign redirect_valid[i] = older & mshr_en[i];
     end
 endgenerate

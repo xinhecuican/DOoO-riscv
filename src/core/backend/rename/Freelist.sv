@@ -37,10 +37,18 @@ endgenerate
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             for(int i=0; i<`FREELIST_DEPTH; i++)begin
+`ifdef DIFFTEST
+                freelist[i] = i + 32;
+`else
                 freelist[i] <= i + 32;
+`endif
             end
             for(int i=`FREELIST_DEPTH; i<`PREG_SIZE; i++)begin
+`ifdef DIFFTEST
+                freelist[i] = 0;
+`else
                 freelist[i] <= 0;
+`endif
             end
             head <= `FREELIST_DEPTH;
             tail <= 0;

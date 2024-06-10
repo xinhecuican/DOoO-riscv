@@ -107,19 +107,21 @@ module Tage(
 		.ready(tage_io.ready)
 	);
 
+	logic `N(`SLOT_NUM) tage_prediction;
 	generate;
 		for(genvar br=0; br<`SLOT_NUM; br++)begin
 			for(genvar bank=0; bank<`TAGE_BANK; bank++)begin
 				assign table_hits_reorder[br][bank] = table_hits[bank][br];
 			end
 			PSelector #(`TAGE_BANK) selector_provider(table_hits_reorder[br], tage_io.meta.provider[br]);
-			assign tage_io.prediction[br] = |tage_io.meta.provider[br] ? |(prediction[br] & tage_io.meta.provider[br]) :
+			assign tage_prediction[br] = |tage_io.meta.provider[br] ? |(prediction[br] & tage_io.meta.provider[br]) :
 																		 base_ctr[br][`TAGE_BASE_CTR-1];
+			assign tage_io.prediction[br] = tage_prediction[br];
 			assign tage_io.meta.altPred = base_ctr[br][`TAGE_BASE_CTR-1];
 		end
 	endgenerate
 	assign tage_io.meta.base_ctr = base_ctr;
-	assign tage_io.meta.predTaken = tage_io.prediction;
+	assign tage_io.meta.predTaken = tage_prediction;
 
 	// update
 	logic `N(`SLOT_NUM) predError, predTaken;
@@ -274,7 +276,8 @@ module TageTable #(
 			.waddr(update_idx),
 			.raddr(lookup_idx),
 			.rdata({search_tag[i], lookup_ctr[i]}),
-			.wdata({update_tag, update_ctr[i]})
+			.wdata({update_tag, update_ctr[i]}),
+			.ready()
 		);
 
 		MPRAM #(
@@ -291,7 +294,8 @@ module TageTable #(
 			.waddr(update_idx),
 			.raddr(lookup_idx),
 			.rdata(lookup_u[i]),
-			.wdata(update_u[i])
+			.wdata(update_u[i]),
+			.ready()
 		);
 		end
 

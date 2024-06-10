@@ -59,7 +59,8 @@ module ICacheWay(
                 .raddr(io.index[i]),
                 .we(io.we[i]),
                 .wdata(io.wdata[i]),
-                .rdata(io.data[i])
+                .rdata(io.data[i]),
+                .ready()
             );
         end
     endgenerate

@@ -46,7 +46,8 @@ module BTB (
                 .waddr(bank_ctrl[i].waddr),
                 .raddr(bank_ctrl[i].raddr),
                 .wdata(bank_ctrl[i].wdata),
-                .rdata(bank_ctrl[i].rdata)
+                .rdata(bank_ctrl[i].rdata),
+                .ready()
             );
             assign bank_ctrl[i].raddr = index;
             assign bank_ctrl[i].waddr = btb_io.updateInfo.start_addr[INDEX_POS: 2+$clog2(`BTB_WAY)];

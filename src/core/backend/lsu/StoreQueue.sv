@@ -153,7 +153,8 @@ endgenerate
         .rdata(redirectIdx),
         .we(issue_queue_io.dis_en),
         .waddr(dis_rob_idx),
-        .wdata(issue_queue_io.dis_sq_idx)
+        .wdata(issue_queue_io.dis_sq_idx),
+        .ready()
     );
 
 // write to commit
@@ -206,7 +207,8 @@ generate
             .dataValid(dataValid),
             .mask_o(forward_mask_o[i]),
             .data_o(forward_data_o[i]),
-            .dataValid_o(forward_data_valid_o[i])
+            .dataValid_o(forward_data_valid_o[i]),
+            .dir_o()
         );
     end
     always_ff @(posedge clk)begin

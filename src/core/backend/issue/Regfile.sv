@@ -23,7 +23,8 @@ module Regfile(
         .rdata(io.rdata),
         .we(io.we),
         .waddr(io.waddr),
-        .wdata(io.wdata)
+        .wdata(io.wdata),
+        .ready()
     );
     
 `ifdef DIFFTEST

@@ -17,12 +17,13 @@ module Dispatch(
 
     DispatchQueueIO #($bits(IntIssueBundle), `INT_DIS_PORT) int_io();
 generate
+    assign int_io.dis_full = backendCtrl.dis_full;
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : int_in
         DecodeInfo di;
         assign di = rename_dis_io.op[i].di;
         assign int_io.en[i] = rename_dis_io.op[i].en & 
                               (di.intv | di.branchv) &
-                              (~(backendCtrl.redirect | backendCtrl.dis_full));
+                              (~(backendCtrl.redirect));
         assign int_io.rs1[i] = di.rs1;
         assign int_io.rs2[i] = di.rs2;
         assign int_io.data[i] = {di.intv, di.branchv, di.sext, di.immv, di.intop, di.branchop,
@@ -43,6 +44,8 @@ endgenerate
     DispatchQueueIO #($bits(MemIssueBundle), `LOAD_DIS_PORT) load_io();
     DispatchQueueIO #($bits(MemIssueBundle), `STORE_DIS_PORT) store_io();
 generate
+    assign load_io.dis_full = backendCtrl.dis_full;
+    assign store_io.dis_full = backendCtrl.dis_full;
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : load_in
         DecodeInfo di;
         MemIssueBundle data;
@@ -54,12 +57,12 @@ generate
         assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
         assign di = rename_dis_io.op[i].di;
         assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
-                               (~(backendCtrl.redirect | backendCtrl.dis_full));
+                               (~(backendCtrl.redirect));
         assign load_io.rs1[i] = di.rs1;
         assign load_io.rs2[i] = di.rs2;
         assign load_io.data[i] = data;
         assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
-                                (~(backendCtrl.redirect | backendCtrl.dis_full));
+                                (~(backendCtrl.redirect));
         assign store_io.rs1[i] = di.rs1;
         assign store_io.rs2[i] = di.rs2;
         assign store_io.data[i] = data;
@@ -84,7 +87,7 @@ endgenerate
 
     assign full = int_io.full | load_io.full | store_io.full;
 
-    assign busytable_io.dis_en = rename_dis_io.wen & ~backendCtrl.dis_full;
+    assign busytable_io.dis_en = rename_dis_io.wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
     assign busytable_io.dis_rd = rename_dis_io.prd;
     assign busytable_io.preg = {store_io.rs2_o, store_io.rs1_o, load_io.rs1_o,
                                 int_io.rs2_o, int_io.rs1_o};
@@ -157,9 +160,10 @@ interface DispatchQueueIO #(
     logic `ARRAY(OUT_WIDTH, DATA_WIDTH) data_o;
     /* verilator lint_off UNOPTFLAT */
     logic full;
+    logic dis_full;
     logic issue_full;
 
-    modport dis_queue (input en, rs1, rs2, robIdx, data, issue_full, output en_o, rs1_o, rs2_o, data_o, full);
+    modport dis_queue (input en, rs1, rs2, robIdx, data, dis_full, issue_full, output en_o, rs1_o, rs2_o, data_o, full);
 endinterface
 
 module DispatchQueue #(
@@ -186,9 +190,10 @@ module DispatchQueue #(
     logic `N($bits(Entry)) entrys `N(DEPTH);
     logic `N(ADDR_WIDTH) head, tail;
     logic `N(ADDR_WIDTH+1) num;
-    logic `N($clog2(`FETCH_WIDTH)+1) addNum, subNum;
+    logic `N($clog2(`FETCH_WIDTH)+1) addNum, subNum, eqNum;
 
     ParallelAdder #(1, `FETCH_WIDTH) adder (io.en, addNum);
+    assign eqNum = io.dis_full ? 0 : addNum;
     assign subNum = io.issue_full ? 0 : 
                     num >= `FETCH_WIDTH ? `FETCH_WIDTH : num;
     assign io.full = num + addNum > DEPTH;
@@ -249,8 +254,8 @@ generate
             end
             else begin
                 head <= head + subNum;
-                tail <= tail + addNum;
-                num <= num + addNum - subNum;
+                tail <= tail + eqNum;
+                num <= num + eqNum - subNum;
             end
             end
         end
@@ -264,8 +269,8 @@ generate
             end
             else begin
                 head <= head + subNum;
-                tail <= tail + addNum;
-                num <= num + addNum - subNum;
+                tail <= tail + eqNum;
+                num <= num + eqNum - subNum;
             end
         end
     end
@@ -278,7 +283,7 @@ endgenerate
         end
         else begin
             for(int i=0; i<`FETCH_WIDTH; i++)begin
-                if(io.en[i])begin
+                if(io.en[i] & ~io.dis_full)begin
                     entrys[index[i]] <= {io.rs1[i], io.rs2[i], io.data[i]};
                     robIdx[index[i]] <= io.robIdx[i];
                 end

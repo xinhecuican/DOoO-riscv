@@ -6,7 +6,8 @@ module BackendRedirectCtrl(
     BackendRedirectIO.redirect io
 );
     logic branchOlder;
-    LoopCompare #(`ROB_WIDTH) compare_rob (io.branchRedirect.robIdx, io.memRedirect.robIdx, branchOlder);
+    RobIdx outIdx;
+    LoopCompare #(`ROB_WIDTH) compare_rob (io.branchRedirect.robIdx, io.memRedirect.robIdx, branchOlder, outIdx);
     always_ff @(posedge clk)begin
         io.out <= (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en) ? io.branchRedirect : io.memRedirect;
         io.branchOut.en <= (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en);

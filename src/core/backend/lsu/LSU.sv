@@ -101,8 +101,9 @@ generate
         for(genvar j=0; j<`STORE_PIPELINE; j++)begin
             MemIssueBundle storeBundle;
             logic older;
+            RobIdx rob_out;
             assign storeBundle = dis_store_io.data[j];
-            LoopCompare #(`ROB_WIDTH) compare_older (loadBundle.robIdx, storeBundle.robIdx, older);
+            LoopCompare #(`ROB_WIDTH) compare_older (loadBundle.robIdx, storeBundle.robIdx, older, rob_out);
             assign dis_ls_older[i][j] = older & dis_store_io.en[j];
         end
         logic `N($clog2(`LOAD_PIPELINE)) store_idx;
@@ -135,7 +136,8 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_io.loadIssueData[i].robIdx, older);
+        RobIdx rob_out;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_io.loadIssueData[i].robIdx, older, rob_out);
         assign redirect_clear_req[i] = backendCtrl.redirect & older;
     end
 endgenerate
@@ -192,12 +194,14 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_issue_data[i].robIdx, older);
+        RobIdx rob_out;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_issue_data[i].robIdx, older, rob_out);
         assign redirect_clear_s2[i] = backendCtrl.redirect & older;
     end
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, leq_data[i].robIdx, older);
+        RobIdx rob_out;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, leq_data[i].robIdx, older, rob_out);
         assign redirect_clear_s3[i] = backendCtrl.redirect & older;
     end
 endgenerate
@@ -238,14 +242,16 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) ldata_n;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        logic wb_data_en;
         always_ff @(posedge clk)begin
-            lsu_wb_io.datas[i].en <= leq_valid[i] |
+            wb_data_en <= leq_valid[i] |
                                      load_queue_io.wbData[i].en;
             from_issue[i] <= leq_valid[i];
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
             ldata_n[i] <= rdata[i];
         end
+        assign lsu_wb_io.datas[i].en = wb_data_en;
         assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
         assign lsu_wb_io.datas[i].rd = from_issue[i] ? lrd_n[i] : load_queue_io.wbData[i].rd;
         assign lsu_wb_io.datas[i].res = from_issue[i] ? ldata_n[i] : load_queue_io.wbData[i].res;
@@ -266,7 +272,8 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic older;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_io.storeIssueData[i].robIdx, older);
+        RobIdx rob_out;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_io.storeIssueData[i].robIdx, older, rob_out);
         assign store_redirect_clear_req[i] = backendCtrl.redirect & older;
     end
 endgenerate
@@ -284,8 +291,9 @@ generate
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
             MemIssueBundle loadBundle;
             logic older;
+            RobIdx rob_out;
             assign loadBundle = dis_load_io.data[j];
-            LoopCompare #(`ROB_WIDTH) compare_older (storeBundle.robIdx, loadBundle.robIdx, older);
+            LoopCompare #(`ROB_WIDTH) compare_older (storeBundle.robIdx, loadBundle.robIdx, older, rob_out);
             assign dis_sl_older[i][j] = older & dis_load_io.en[j];
         end
         logic `N($clog2(`LOAD_PIPELINE)) load_idx;
@@ -312,7 +320,8 @@ generate
 
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic older;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_issue_data[i].robIdx, older);
+        RobIdx rob_out;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_issue_data[i].robIdx, older, rob_out);
         assign store_redirect_s2[i] = backendCtrl.redirect & older;
     end
 endgenerate
@@ -436,7 +445,8 @@ module ViolationCompare(
     output ViolationData out
 );
     logic older, conflict;
-    LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older);
+    RobIdx rob_out;
+    LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older, rob_out);
     assign conflict = (cmp1.addr[`VADDR_SIZE-1: 2] == cmp2.addr[`VADDR_SIZE-1: 2]) &&
                       (|(cmp1.mask & cmp2.mask));
     assign out.addr = cmp2.addr;
@@ -453,6 +463,7 @@ module ViolationOlderCompare(
     output ViolationData out
 );
     logic older;
-    LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older);
+    RobIdx rob_out;
+    LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older, rob_out);
     assign out = cmp1.en & older | cmp1.en & ~cmp2.en ? cmp1 : cmp2;
 endmodule

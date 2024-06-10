@@ -90,15 +90,16 @@ module PSelector #(
 	input logic [RADIX-1: 0] in,
 	output logic [RADIX-1: 0] out
 );
-	/* verilator lint_off UNOPTFLAT */
 	logic [RADIX-1: 0] reverse;
 	assign reverse[RADIX-1] = 1'b1;
+generate
 	for(genvar i=RADIX-2; i>=0; i--)begin
 		assign reverse[i] = ~in[i+1] & reverse[i+1];
 	end
 	for(genvar i=0; i<RADIX; i++)begin
 		assign out[i] = reverse[i] & in[i];
 	end
+endgenerate
 endmodule
 
 // priority reverse selector
@@ -108,15 +109,16 @@ module PRSelector #(
 	input logic [RADIX-1: 0] in,
 	output logic [RADIX-1: 0] out
 );
-	/* verilator lint_off UNOPTFLAT */
 	logic [RADIX-1: 0] reverse;
 	assign reverse[0] = 1'b1;
+generate
 	for(genvar i=1; i<RADIX; i++)begin
 		assign reverse[i] = ~in[i-1] & reverse[i-1];
 	end
 	for(genvar i=0; i<RADIX; i++)begin
 		assign out[i] = reverse[i] & in[i];
 	end
+endgenerate
 endmodule
 
 module Matcher #(

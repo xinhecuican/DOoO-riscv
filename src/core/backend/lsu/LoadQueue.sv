@@ -75,7 +75,8 @@ endgenerate
         .rdata(redirectIdx),
         .we(load_io.dis_en),
         .waddr(dis_rob_idx),
-        .wdata(load_io.dis_lq_idx)
+        .wdata(load_io.dis_lq_idx),
+        .ready()
     );
 
     assign io.lqIdx.idx = tail;
@@ -137,9 +138,11 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign io.wbData[i].robIdx = wb_queue_data[i].robIdx;
         assign io.wbData[i].rd = wb_queue_data[i].rd;
+        logic `N(`XLEN) wbData;
         always_ff @(posedge clk)begin
-            io.wbData[i].res <= data[wbIdx[i]];
+            wbData <= data[wbIdx[i]];
         end
+        assign io.wbData[i].res = wbData;
     end
 endgenerate
 
@@ -210,7 +213,8 @@ endgenerate
         .rdata({wb_queue_data, vio_storeData}),
         .we(io.en),
         .waddr(eqIdx),
-        .wdata(writeData)
+        .wdata(writeData),
+        .ready()
     );
 
     logic `N(`VADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
@@ -266,12 +270,16 @@ endgenerate
     end
     assign violation_idx = span_en & span_next ? vio_mask_next : vio_enc_next;
 
+    logic lq_violation_en;
+    logic `N(`LOAD_QUEUE_WIDTH) lq_violation_idx;
     always_ff @(posedge clk)begin
-        io.lq_violation.en <= violation;
-        io.lq_violation.lqIdx.idx <= violation_idx;
+        lq_violation_en <= violation;
+        lq_violation_idx <= violation_idx;
     end
+    assign io.lq_violation.en = lq_violation_en;
     assign io.lq_violation.addr = 0;
     assign io.lq_violation.mask = 0;
+    assign io.lq_violation.lqIdx.idx = lq_violation_idx;
     assign io.lq_violation.lqIdx.dir = vio_storeData.dir;
     assign io.lq_violation.robIdx = vio_storeData.robIdx;
     assign io.lq_violation.fsqInfo = vio_storeData.fsqInfo;

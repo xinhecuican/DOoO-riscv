@@ -13,7 +13,7 @@ module HistoryControl(
     TageFoldHistory tage_history, tage_input_history, tage_update_history;
     logic `N(`GHIST_WIDTH) pos;
     /* verilator lint_off UNOPTFLAT */
-    logic `N(`GHIST_WIDTH) we_idx `N(`SLOT_NUM);
+    logic `ARRAY(`SLOT_NUM, `GHIST_WIDTH) we_idx;
     logic `N(`SLOT_NUM) ghist_we;
     logic `N(`SLOT_NUM) cond_result;
     logic prediction_redirect;

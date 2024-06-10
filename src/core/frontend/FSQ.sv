@@ -71,7 +71,8 @@ module FSQ (
         .waddr(write_tail),
         .raddr(squashIdx),
         .wdata(bpu_fsq_io.prediction.redirect_info),
-        .rdata(u_redirectInfo)
+        .rdata(u_redirectInfo),
+        .ready()
     );
 
     MPRAM #(
@@ -88,7 +89,8 @@ module FSQ (
         .rdata(oldEntry),
         .we(queue_we),
         .waddr(write_tail),
-        .wdata(bpu_fsq_io.prediction.btbEntry)
+        .wdata(bpu_fsq_io.prediction.btbEntry),
+        .ready()
     );
 
     PredictionMeta updateMeta;
@@ -106,7 +108,8 @@ module FSQ (
         .rdata(updateMeta),
         .we(bpu_fsq_io.lastStage),
         .waddr(bpu_fsq_io.lastStageIdx),
-        .wdata(bpu_fsq_io.lastStageMeta)
+        .wdata(bpu_fsq_io.lastStageMeta),
+        .ready()
     );
 
     typedef struct packed {
@@ -194,17 +197,25 @@ endgenerate
         end
     end
 
+    logic `N(`VADDR_SIZE) squash_target_pc;
+    CondPredInfo squash_pred_info;
+    BranchType squash_br_type;
+    RasType squash_ras_type;
     assign n_commit_head = commitValid ? commit_head + 1 : commit_head;
     assign full = commit_head == tail && (hdir ^ direction);
     assign bpu_fsq_io.squashInfo.redirectInfo = u_redirectInfo;
+    assign bpu_fsq_io.squashInfo.target_pc = squash_target_pc;
+    assign bpu_fsq_io.squashInfo.predInfo = squash_pred_info;
+    assign bpu_fsq_io.squashInfo.br_type = squash_br_type;
+    assign bpu_fsq_io.squashInfo.ras_type = squash_ras_type;
     always_ff @(posedge clk)begin
         last_search <= search_head == tail && fsq_cache_io.en;
         bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirectBr.en;
         // bpu_fsq_io.squashInfo.redirectInfo <= u_redirectInfo;
-        bpu_fsq_io.squashInfo.target_pc <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.target : pd_redirect.redirect_addr;
-        bpu_fsq_io.squashInfo.predInfo <= fsq_back_io.redirectBr.en ? redirectPredInfo : pd_predInfo;
-        bpu_fsq_io.squashInfo.br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : DIRECT;
-        bpu_fsq_io.squashInfo.ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : NONE;
+        squash_target_pc <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.target : pd_redirect.redirect_addr;
+        squash_pred_info <= fsq_back_io.redirectBr.en ? redirectPredInfo : pd_predInfo;
+        squash_br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : DIRECT;
+        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : NONE;
         if(rst == `RST)begin
             search_head <= 0;
             commit_head <= 0;
@@ -343,16 +354,28 @@ endgenerate
         .allocSlot(allocSlot)
     );
 
+    logic update_taken;
+    logic `N(`VADDR_SIZE) update_start_addr;
+    logic `N(`VADDR_SIZE) update_target_pc;
+    BTBEntry update_btb_entry; 
+    logic update_real_taken;
+    logic `N(`SLOT_NUM) update_alloc_slot;
     assign bpu_fsq_io.updateInfo.redirectInfo = u_redirectInfo;
     assign bpu_fsq_io.updateInfo.meta = updateMeta;
+    assign bpu_fsq_io.updateInfo.taken = update_taken;
+    assign bpu_fsq_io.updateInfo.start_addr = update_start_addr;
+    assign bpu_fsq_io.updateInfo.target_pc = update_target_pc;
+    assign bpu_fsq_io.updateInfo.btbEntry = update_btb_entry;
+    assign bpu_fsq_io.updateInfo.realTaken = update_real_taken;
+    assign bpu_fsq_io.updateInfo.allocSlot = update_alloc_slot;
     always_ff @(posedge clk)begin
         bpu_fsq_io.update <= commitValid;
-        bpu_fsq_io.updateInfo.taken <= wbInfos[tail].taken;
-        bpu_fsq_io.updateInfo.start_addr <= commitStream.start_addr;
-        bpu_fsq_io.updateInfo.target_pc <= wbInfos[tail].target;
-        bpu_fsq_io.updateInfo.btbEntry <= commitUpdateEntry;
-        bpu_fsq_io.updateInfo.realTaken <= realTaken;
-        bpu_fsq_io.updateInfo.allocSlot <= allocSlot;
+        update_taken <= wbInfos[tail].taken;
+        update_start_addr <= commitStream.start_addr;
+        update_target_pc <= wbInfos[tail].target;
+        update_btb_entry <= commitUpdateEntry;
+        update_real_taken <= realTaken;
+        update_alloc_slot <= allocSlot;
     end
 
 `ifdef DIFFTEST

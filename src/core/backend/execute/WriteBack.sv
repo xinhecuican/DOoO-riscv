@@ -21,27 +21,29 @@ module WriteBack(
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
         assign alu_wb_io.valid[i] = 1'b1;
+        WBData wbData;
         always_ff @(posedge clk)begin
-            wbBus.en[i] <= alu_wb_io.datas[i].en;
-            wbBus.we[i] <= alu_wb_io.datas[i].rd != 0;
-            wbBus.robIdx[i] <= alu_wb_io.datas[i].robIdx;
-            wbBus.rd[i] <= alu_wb_io.datas[i].rd;
-            wbBus.res[i] <= alu_wb_io.datas[i].res;
+            wbData <= alu_wb_io.datas[i];
         end
+        assign wbBus.en[i] = wbData.en;
+        assign wbBus.we[i] = wbData.rd != 0;
+        assign wbBus.robIdx[i] = wbData.robIdx;
+        assign wbBus.rd[i] = wbData.rd;
+        assign wbBus.res[i] = wbData.res;
     end
 endgenerate
 
 generate
     // store don't in wbBus
-    for(genvar i=`ALU_SIZE; i<`ALU_SIZE+`LSU_SIZE; i++)begin
+    for(genvar i=0; i<`LSU_SIZE; i++)begin
         assign lsu_wb_io.valid[i] = 1'b1;
         // always_ff @(posedge clk)begin
             // control by lsu
-            assign wbBus.en[i] = lsu_wb_io.datas[i].en;
-            assign wbBus.we[i] = lsu_wb_io.datas[i].rd != 0;
-            assign wbBus.robIdx[i] = lsu_wb_io.datas[i].robIdx;
-            assign wbBus.rd[i] = lsu_wb_io.datas[i].rd;
-            assign wbBus.res[i] = lsu_wb_io.datas[i].res;
+            assign wbBus.en[`ALU_SIZE+i] = lsu_wb_io.datas[i].en;
+            assign wbBus.we[`ALU_SIZE+i] = lsu_wb_io.datas[i].rd != 0;
+            assign wbBus.robIdx[`ALU_SIZE+i] = lsu_wb_io.datas[i].robIdx;
+            assign wbBus.rd[`ALU_SIZE+i] = lsu_wb_io.datas[i].rd;
+            assign wbBus.res[`ALU_SIZE+i] = lsu_wb_io.datas[i].res;
         // end
     end
 endgenerate

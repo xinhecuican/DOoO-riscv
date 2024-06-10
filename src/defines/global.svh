@@ -117,10 +117,6 @@ typedef enum logic [1: 0] {
 `define ROB_WIDTH $clog2(`ROB_SIZE)
 `define COMMIT_WIDTH 4
 
-// wb
-`define FU_SIZE (`ALU_SIZE)
-`define WB_SIZE 4
-
 // regfile
 `define REGFILE_READ_PORT (`ALU_SIZE * 2 + `LOAD_PIPELINE + `STORE_PIPELINE * 2)
 `define REGFILE_WRITE_PORT `WB_SIZE
@@ -155,6 +151,9 @@ typedef enum logic [1: 0] {
 `define STORE_COUNTER_WIDTH 8
 `define LSU_SIZE `LOAD_PIPELINE
 `define LOAD_REFILL_SIZE 2
+
+// wb
+`define WB_SIZE (`ALU_SIZE+`LSU_SIZE)
 
 // dcache
 `define DCACHE_ID 4'b1

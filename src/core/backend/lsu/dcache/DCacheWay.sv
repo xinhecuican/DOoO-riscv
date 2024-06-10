@@ -41,7 +41,8 @@ module DCacheWay(
         .rdata(io.tagv),
         .we(io.tagv_we),
         .waddr(io.tagv_windex),
-        .wdata(io.tagv_wdata)
+        .wdata(io.tagv_wdata),
+        .ready()
     );
 
     logic dirty `N(`DCACHE_SET);
