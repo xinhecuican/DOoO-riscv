@@ -52,10 +52,7 @@ module RenameTable(
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         for(genvar j=0; j<`COMMIT_WIDTH; j++)begin
-            if(j < i)begin
-                assign waw[i][j] = waw[j][i];
-            end
-            else if(j == i)begin
+            if(j <= i)begin
                 assign waw[i][j] = 0;
             end
             else begin

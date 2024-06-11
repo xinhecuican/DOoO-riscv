@@ -74,6 +74,7 @@ module DCacheMiss(
 
 //load enqueue
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
+    /* verilator lint_off UNOPTFLAT */
     logic `ARRAY(`LOAD_PIPELINE+1, $clog2(`LOAD_PIPELINE+1)+1) req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
     logic `N(`LOAD_PIPELINE) mshr_remain_valid, rhit_combine, remain_valid;
@@ -273,8 +274,8 @@ endgenerate
     logic `N(`XLEN) expandMask;
     logic `N(`XLEN) combine_cache_data;
 
-    assign miss_io.req = en[head] & ~req_start;
-    assign miss_io.req_addr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
+    assign io.req = en[head] & ~req_start;
+    assign io.req_addr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign rlast = r_axi_io.sr.valid & r_axi_io.sr.last;
     assign replace_queue_io.missIdx = head;
 
@@ -287,7 +288,7 @@ generate
 endgenerate
 
     always_ff @(posedge clk)begin
-        req_next <= miss_io.req;
+        req_next <= io.req;
         req_last <= r_axi_io.sr.valid & r_axi_io.sr.last;
         if(rst == `RST)begin
             req_start <= 1'b0;
@@ -296,9 +297,9 @@ endgenerate
             way <= '{default: 0};
         end
         else begin
-            if(miss_io.req)begin
+            if(io.req)begin
                 req_start <= 1'b1;
-                cache_addr <= miss_io.req_addr;
+                cache_addr <= io.req_addr;
             end
 
             if(req_next & ~io.req_success)begin

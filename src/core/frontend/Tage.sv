@@ -106,7 +106,8 @@ module Tage(
 		.wdata(base_update_ctr),
 		.ready(tage_io.ready)
 	);
-
+	
+	/* verilator lint_off UNOPTFLAT */
 	logic `N(`SLOT_NUM) tage_prediction;
 	generate;
 		for(genvar br=0; br<`SLOT_NUM; br++)begin
@@ -114,8 +115,7 @@ module Tage(
 				assign table_hits_reorder[br][bank] = table_hits[bank][br];
 			end
 			PSelector #(`TAGE_BANK) selector_provider(table_hits_reorder[br], tage_io.meta.provider[br]);
-			assign tage_prediction[br] = |tage_io.meta.provider[br] ? |(prediction[br] & tage_io.meta.provider[br]) :
-																		 base_ctr[br][`TAGE_BASE_CTR-1];
+			assign tage_prediction[br] = |tage_io.meta.provider[br] ? |(prediction[br] & tage_io.meta.provider[br]) : base_ctr[br][`TAGE_BASE_CTR-1];
 			assign tage_io.prediction[br] = tage_prediction[br];
 			assign tage_io.meta.altPred = base_ctr[br][`TAGE_BASE_CTR-1];
 		end

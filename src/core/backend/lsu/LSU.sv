@@ -42,8 +42,10 @@ module LSU(
     output StoreWBData `N(`STORE_PIPELINE) storeWBData
 );
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr, storeVAddr;
+    /* verilator lint_off UNOPTFLAT */
     LoadIdx `N(`LOAD_PIPELINE) lqIdxs;
     LoadIdx `N(`STORE_PIPELINE) s_lqIdxs;
+    /* verilator lint_off UNOPTFLAT */
     StoreIdx `N(`STORE_PIPELINE) sqIdxs;
     StoreIdx `N(`LOAD_PIPELINE) l_sqIdxs;
     LoadIssueData `N(`LOAD_PIPELINE) load_issue_data;

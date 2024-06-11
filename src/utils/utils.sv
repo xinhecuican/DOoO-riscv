@@ -90,6 +90,7 @@ module PSelector #(
 	input logic [RADIX-1: 0] in,
 	output logic [RADIX-1: 0] out
 );
+	/* verilator lint_off UNOPTFLAT */
 	logic [RADIX-1: 0] reverse;
 	assign reverse[RADIX-1] = 1'b1;
 generate

@@ -52,7 +52,7 @@ module BranchPredictor(
     assign redirect.tage_ready = tage_io.ready;
     assign redirect.flush = bpu_fsq_io.squash;
     assign redirect.stall = bpu_fsq_io.stall | ~tage_io.ready;
-    assign redirect_result = redirect.s2_redirect ? s2_result_out : 0;
+    assign redirect_result = s2_result_out;
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             pc <= `RESET_PC;
@@ -146,13 +146,13 @@ module S2Control(
                             br_tar_state_normal);
     assign tail_size = entry.tailSlot.en ? entry.tailSlot.offset : entry.fthAddr;
     assign tail_tar_state = entry.tailSlot.tar_state;
-    assign tail_target_high = tail_tar_state == TAR_OV ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
-                            tail_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
-                                                     ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
+    assign tail_target_high = tail_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
+                            tail_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
+                                                     pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
     assign tail_target = entry.tailSlot.en ? tail_indirect_target : entry.fthAddr + pc;
-    assign br_target_high = br_tar_state == TAR_OV ? ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
-                            br_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
-                                                     ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
+    assign br_target_high = br_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
+                            br_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
+                                                     pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
     assign br_target = {{(`VADDR_SIZE-`JAL_OFFSET){br_offset[`JAL_OFFSET-1]}}, br_offset} + pc;
     assign predict_pc = |br_takens ? br_target : tail_target;
     assign older = entry.slots[0].offset < entry.tailSlot.offset;
