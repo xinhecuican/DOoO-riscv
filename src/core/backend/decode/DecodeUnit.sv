@@ -13,7 +13,7 @@ module DecodeUnit(
     assign funct3 = inst[14: 12];
     assign funct7 = inst[31: 25];
 
-    logic lui, auipc, jal, jalr, branch, load, store, opimm, opreg;
+    logic lui, auipc, jal, jalr, branch, load, store, opimm, opreg, unknown;
     assign lui = ~op[4] & op[3] & op[2] & ~op[1] & op[0];
     assign auipc = ~op[4] & ~op[3] & op[2] & ~op[1] & op[0];
     assign jal = op[4] & op[3] & ~op[2] & op[1] & op[0];
@@ -23,8 +23,10 @@ module DecodeUnit(
     assign store = ~op[4] & op[3] & ~op[2] & ~op[1] & ~op[0];
     assign opimm = ~op[4] & ~op[3] & op[2] & ~op[1] & ~op[0];
     assign opreg = ~op[4] & op[3] & op[2] & ~op[1] & ~op[0];
+    assign unknown = ~lui & ~auipc & ~jal & ~jalr & ~branch & ~load & ~store & ~opimm & ~opreg &
+                    (~inst[0] | ~inst[1]);
 
-    assign info.intv = lui | opimm | opreg | auipc;
+    assign info.intv = lui | opimm | opreg | auipc | unknown;
     assign info.branchv = branch | jal | jalr;
     assign info.memv = load | store;
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg}} & inst[19: 15];

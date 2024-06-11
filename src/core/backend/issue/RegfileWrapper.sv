@@ -27,7 +27,7 @@ generate
         assign reg_io.raddr[`ALU_SIZE+i] = int_reg_io.preg[`ALU_SIZE+i];
         
         assign int_reg_io.data[i] = reg_io.rdata[i];
-        assign int_reg_io.data[i] = reg_io.rdata[`ALU_SIZE+i];
+        assign int_reg_io.data[`ALU_SIZE+i] = reg_io.rdata[`ALU_SIZE+i];
     end
     localparam LOAD_BASE = `ALU_SIZE * 2;
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin

@@ -379,7 +379,7 @@ interface DCacheLoadIO;
     logic `N(`LOAD_PIPELINE) hit;
     logic `N(`LOAD_PIPELINE) conflict;
     logic `N(`LOAD_PIPELINE) full;
-    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) rdata;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) rdata;
 
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lq_en;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;

@@ -227,10 +227,10 @@ module ICache(
                     end
                     miss_buffer.addition_paddr <= {ptag2, request_buffer.index2};
                     if((&cache_miss) & ~request_buffer.multi_tag)begin
-                        miss_buffer.length <= 4'hf;
+                        miss_buffer.length <= 2 * (`DCACHE_LINE / `DATA_BYTE) - 1;
                     end
                     else begin
-                        miss_buffer.length <= 4'h7;
+                        miss_buffer.length <= `DCACHE_LINE / `DATA_BYTE - 1;
                     end
                     miss_buffer.addition_request <= (&cache_miss) & request_buffer.multi_tag;
                     miss_buffer.data <= cache_pd_io.data;

@@ -133,7 +133,7 @@ endgenerate
     PEncoder #(`LOAD_QUEUE_SIZE) pencoder_wb_idx (waiting_wb, wbIdx[0]);
     PREncoder #(`LOAD_QUEUE_SIZE) prencoder_wb_idx (waiting_wb, wbIdx[1]);
     assign io.wbData[0].en = |waiting_wb;
-    assign io.wbData[1].en = wbIdx[0] != wbIdx[1];
+    assign io.wbData[1].en = (|waiting_wb) && wbIdx[0] != wbIdx[1];
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign io.wbData[i].robIdx = wb_queue_data[i].robIdx;

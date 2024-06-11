@@ -162,8 +162,8 @@ endgenerate
 
 generate
     always_ff @(posedge clk)begin
-        io.lq_en[0] <= |mshr_hit & refilled[mshr_head];
-        io.lq_en[1] <= (mshrIdx[0] != mshrIdx[1]) & refilled[mshr_head];
+        io.lq_en[0] <= (|mshr_hit) & refilled[mshr_head];
+        io.lq_en[1] <= (|mshr_hit) & (mshrIdx[0] != mshrIdx[1]) & refilled[mshr_head];
     end
     for(genvar i=0; i<`LOAD_REFILL_SIZE; i++)begin
         MSHREntry entry;

@@ -14,7 +14,7 @@ module PreDecode(
     logic `N(`FSQ_WIDTH) fsqIdx;
     logic `N(`PREDICTION_WIDTH) tailIdx;
     FetchStream stream_next;
-    logic `N(`ICACHE_BANK_WIDTH) selectIdx, jumpSelectIdx;
+    logic `N(`BLOCK_INST_WIDTH) selectIdx, jumpSelectIdx;
     PreDecodeBundle selectBundle;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data_next;
     logic `N($clog2(`BLOCK_INST_SIZE)+1) instNum, instNumNext;

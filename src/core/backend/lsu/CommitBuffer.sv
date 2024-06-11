@@ -57,7 +57,7 @@ endgenerate
     PEncoder #(`STORE_COMMIT_SIZE) encoder_free (~addr_en, free_idx[0]);
     PREncoder #(`STORE_COMMIT_SIZE) encoder_free_rev (~addr_en, free_idx[1]);
     assign free_valid[0] = ~full;
-    assign free_valid[1] = free_idx[0] != free_idx[1];
+    assign free_valid[1] = ~full && free_idx[0] != free_idx[1];
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin

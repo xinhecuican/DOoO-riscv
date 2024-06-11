@@ -201,9 +201,9 @@ endgenerate
                     wb[wbBus.robIdx[i].idx] <= 1'b1;
                 end
             end
-            for(int i=0; i<`FETCH_WIDTH; i++)begin
-                if(dis_en[i])begin
-                    wb[dis_io.robIdx[i]] <= 1'b1;
+            for(int i=0; i<`COMMIT_WIDTH; i++)begin
+                if(commitBus.en[i])begin
+                    wb[dis_io.robIdx[i]] <= 1'b0;
                 end
             end
         end

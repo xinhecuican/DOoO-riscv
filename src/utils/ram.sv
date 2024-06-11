@@ -286,14 +286,26 @@ generate;
         
     end
     else if(READ_LATENCY == 1)begin
-        always_ff @(posedge clk)begin
-            for(int i=0; i<READ_PORT; i++)begin
-                if(en[i])begin
-                    rdata[i] <= mem[raddr[i]];
+        if(RESET)begin
+            for(genvar i=0; i<READ_PORT; i++)begin
+                always_ff @(posedge clk)begin
+                    if(rst == `RST)begin
+                        rdata[i] <= 0;
+                    end
+                    else if(en[i]) begin
+                        rdata[i] <= mem[raddr[i]];
+                    end
                 end
             end
-
-
+        end
+        else begin
+            always_ff @(posedge clk)begin
+                for(int i=0; i<READ_PORT; i++)begin
+                    if(en[i])begin
+                        rdata[i] <= mem[raddr[i]];
+                    end
+                end
+            end
         end
     end
 endgenerate

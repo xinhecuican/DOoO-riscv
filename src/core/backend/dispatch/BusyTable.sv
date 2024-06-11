@@ -3,9 +3,6 @@
 interface BusyTableIO;
     logic `N(`FETCH_WIDTH) dis_en;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) dis_rd;
-
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs1;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2;
     logic `ARRAY(`BUSYTABLE_PORT, `PREG_WIDTH) preg;
     logic `N(`BUSYTABLE_PORT) reg_en;
 
@@ -27,7 +24,7 @@ module BusyTable(
     logic `ARRAY(`FETCH_WIDTH, `PREG_SIZE) dis_valids;
     logic `N(`PREG_SIZE) dis_valid;
 generate
-    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
+    for(genvar i=0; i<`BUSYTABLE_PORT; i++)begin
         logic `N(`PREG_SIZE) rd_decode;
         Decoder #(`PREG_SIZE) decoder_rd (io.dis_rd[i], rd_decode);
         assign dis_valids[i] = (rd_decode & {`PREG_SIZE{io.dis_en[i] & ~backendCtrl.redirect}});
@@ -42,7 +39,7 @@ generate
     for(genvar i=0; i<`WB_SIZE; i++)begin
         logic `N(`PREG_SIZE) rd_decode;
         Decoder #(`PREG_SIZE) decoder_rd (wbBus.rd[i], rd_decode);
-        assign wb_valids[i] = (rd_decode & {`PREG_SIZE{wbBus.en[i] & (wbBus.rd[i] != 0)}});
+        assign wb_valids[i] = (rd_decode & {`PREG_SIZE{wbBus.en[i] & (wbBus.we[i])}});
     end
     ParallelOR #(`PREG_SIZE, `WB_SIZE) or_wb_valid (wb_valids, wb_valid);
 endgenerate

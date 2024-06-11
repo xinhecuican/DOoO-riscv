@@ -177,10 +177,10 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, 32) rdata;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        logic `N(32) combine_queue_data;
-        logic `N(32) expand_mask, expand_commit_mask;
-        MaskExpand #(4) mask_expand(store_queue_fwd.mask[i], expand_mask);
-        MaskExpand #(4) mask_expand_commit(commit_queue_fwd.mask[i], expand_commit_mask);
+        logic `N(`DCACHE_BITS) combine_queue_data;
+        logic `N(`DCACHE_BITS) expand_mask, expand_commit_mask;
+        MaskExpand #(`DCACHE_BYTE) mask_expand(store_queue_fwd.mask[i], expand_mask);
+        MaskExpand #(`DCACHE_BYTE) mask_expand_commit(commit_queue_fwd.mask[i], expand_commit_mask);
         assign combine_queue_data = (rio.rdata[i] & ~expand_mask) | (store_queue_fwd.data[i] & expand_mask);
         assign rdata[i] = (combine_queue_data & ~expand_commit_mask) | (commit_queue_fwd.data[i] & expand_commit_mask);
     end
@@ -246,8 +246,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic wb_data_en;
         always_ff @(posedge clk)begin
-            wb_data_en <= leq_valid[i] |
-                                     load_queue_io.wbData[i].en;
+            wb_data_en <= leq_valid[i] | load_queue_io.wbData[i].en;
             from_issue[i] <= leq_valid[i];
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;

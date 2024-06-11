@@ -155,8 +155,8 @@ interface DispatchQueueIO #(
     logic `ARRAY(`FETCH_WIDTH, DATA_WIDTH) data;
     /* verilator lint_off UNOPTFLAT */
     logic `N(OUT_WIDTH) en_o;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs1_o;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2_o;
+    logic `ARRAY(OUT_WIDTH, `PREG_WIDTH) rs1_o;
+    logic `ARRAY(OUT_WIDTH, `PREG_WIDTH) rs2_o;
     logic `ARRAY(OUT_WIDTH, DATA_WIDTH) data_o;
     /* verilator lint_off UNOPTFLAT */
     logic full;

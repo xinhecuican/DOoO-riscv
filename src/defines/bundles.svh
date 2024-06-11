@@ -150,7 +150,6 @@ typedef struct packed {
     logic `N(`FETCH_WIDTH) en;
     FsqIdxInfo `N(`FETCH_WIDTH) fsqInfo;
     logic `ARRAY(`FETCH_WIDTH, 32) inst;
-    logic `ARRAY(`FETCH_WIDTH, `VADDR_SIZE) addr;
 } FetchBundle;
 
 typedef struct packed {
