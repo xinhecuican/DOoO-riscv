@@ -74,15 +74,12 @@ module DCacheMiss(
 
 //load enqueue
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
-    /* verilator lint_off UNOPTFLAT */
-    logic `ARRAY(`LOAD_PIPELINE+1, $clog2(`LOAD_PIPELINE+1)+1) req_order;
+    logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)+1) req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
     logic `N(`LOAD_PIPELINE) mshr_remain_valid, rhit_combine, remain_valid;
+
+    CalValidNum #(`LOAD_PIPELINE) cal_req_order (io.ren, req_order);
 generate
-    assign req_order[0] = io.ren[0];
-    for(genvar i=1; i<`LOAD_PIPELINE; i++)begin
-        assign req_order[i] = io.ren[i] + req_order[i-1];
-    end
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign freeIdx[i] = tail + req_order[i];
         for(genvar j=0; j<`DCACHE_MISS_SIZE; j++)begin
@@ -108,14 +105,15 @@ endgenerate
 
 // write enqueue
     logic write_remain_valid, whit_combine;
+    logic `N($clog2(`LOAD_PIPELINE+1)+1) write_req_order;
     logic `N(`DCACHE_MISS_SIZE) whit;
     logic `N(`DCACHE_MISS_WIDTH) widx, whitIdx;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) read_data, combine_data;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) read_mask, combine_mask;
 
-    assign req_order[`LOAD_PIPELINE] = req_order[`LOAD_PIPELINE-1]  + io.wen;
-    assign freeIdx[`LOAD_PIPELINE] = tail + req_order[`LOAD_PIPELINE];
-    assign write_remain_valid = remain_count > req_order[`LOAD_PIPELINE];
+    assign write_req_order = req_order[`LOAD_PIPELINE-1]  + io.wen;
+    assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
+    assign write_remain_valid = remain_count > write_req_order;
     assign whit_combine = |whit;
     Encoder #(`DCACHE_MISS_SIZE) encoder_whit(whit, whitIdx);
     assign widx = whit_combine ? whitIdx : freeIdx[`LOAD_PIPELINE];

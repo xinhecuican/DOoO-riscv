@@ -58,7 +58,7 @@ generate
         assign bank_io[i].sqIdx = sqIdx[order[i]];
         assign bank_io[i].reply_fast = load_io.reply_fast[i];
         assign bank_io[i].reply_slow = load_io.reply_slow[i];
-        assign full[i] = dis_load_io.en[order[i]] & bank_io[i].full;
+        assign full[i] = bank_io[i].full;
 
         assign load_reg_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
         assign load_reg_io.preg[i] = bank_io[i].rs1;

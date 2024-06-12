@@ -73,3 +73,38 @@ generate
     end
 endgenerate
 endmodule
+
+module ParallelAND #(
+    parameter WIDTH=1,
+    parameter DEPTH=4
+)(
+    input logic [DEPTH-1: 0][WIDTH-1: 0] data,
+    output logic [WIDTH-1: 0] out
+);
+generate
+    if(DEPTH == 1)begin
+        assign out = data;
+    end
+    else if(DEPTH == 2)begin
+        assign out = data[0] & data[1];
+    end
+    else begin
+        logic [WIDTH-1: 0] out1, out2;
+        ParallelAND #(
+            .WIDTH(WIDTH),
+            .DEPTH(DEPTH/2)
+        ) or1(
+            data[DEPTH/2-1: 0],
+            out1
+        );
+        ParallelAND #(
+            .WIDTH(WIDTH),
+            .DEPTH(DEPTH-DEPTH/2)
+        ) or2 (
+            data[DEPTH-1: DEPTH/2],
+            out2
+        );
+        assign out = out1 & out2;
+    end
+endgenerate
+endmodule

@@ -38,7 +38,6 @@ module ROB(
     logic `N(`ROB_SIZE) wb; // set to 0 when commit, set to 1 when write back
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
-    /* verilator lint_off UNOPTFLAT */
     logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataWIdx;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataRIdx;
@@ -102,9 +101,8 @@ generate
     assign commit_en_num = remainCount < `COMMIT_WIDTH ? remainCount : `COMMIT_WIDTH;
     assign commitValid = (1 << commit_en_num) - 1;
     assign commit_en_pre = commitValid & wbValid;
-    assign commit_en[0] = commit_en_pre[0];
-    for(genvar i=1; i<`COMMIT_WIDTH; i++)begin
-        assign commit_en[i] = commit_en_pre[i] & commit_en[i-1];
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign commit_en[i] = &commit_en_pre[i: 0];
     end
 endgenerate
 
@@ -326,5 +324,29 @@ generate
         );
     end
 endgenerate
+
+    logic `N(64) cycleCnt, instrCnt;
+    DifftestTrapEvent difftest_trap_event (
+        .clock(clk),
+        .coreid(0),
+        .valid(0),
+        .code(0),
+        .pc(pc[0]),
+        .cycleCnt(cycleCnt),
+        .instrCnt(instrCnt)
+    );
+
+    logic `N($clog2(`COMMIT_WIDTH)+1) commitCnt;
+    ParallelAdder #(1, `COMMIT_WIDTH) adder_commit (diff_valid, commitCnt);
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            cycleCnt <= 0;
+            instrCnt <= 0;
+        end
+        else begin
+            cycleCnt <= cycleCnt + 1;
+            instrCnt <= instrCnt + commitCnt;
+        end
+    end
 `endif
 endmodule

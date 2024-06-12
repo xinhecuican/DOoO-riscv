@@ -209,6 +209,7 @@ module PEncoder32(
 );
 	logic [2: 0] out1, out2, out3, out4;
 	logic [3: 0] _or;
+	logic [1: 0] out_high;
 	PEncoder8 encoder2(in[15: 8], out2);
 	PEncoder8 encoder1(in[7: 0], out1);
 	PEncoder8 encoder3(in[23: 16], out3);
@@ -217,8 +218,11 @@ module PEncoder32(
 	assign _or[1] = |in[15: 8];
 	assign _or[2] = |in[23: 16];
 	assign _or[3] = |in[31: 24];
-	PEncoder4 encoder_high(_or, out[4: 3]);
-	assign out[2: 0] = out[4: 3] == 2'b11 ? out4 : out[4: 3] == 2'b10 ? out3 : out[4: 3] == 2'b01 ? out2 : out1;
+	PEncoder4 encoder_high(_or, out_high);
+	assign out[4: 3] = out_high;
+	assign out[2: 0] = out_high == 2'b11 ? out4 : 
+					   out_high == 2'b10 ? out3 : 
+					   out_high == 2'b01 ? out2 : out1;
 endmodule
 
 module PREncoder2(
@@ -307,7 +311,6 @@ module Sort4 #(
 	output logic [3: 0][DATA_WIDTH-1: 0] data_o
 );
 	logic [1: 0][WIDTH-1: 0] compare1, compare2;
-	/* verilator lint_off UNOPTFLAT */
 	logic [1: 0][DATA_WIDTH-1: 0] data1, data2;
 	Sort2 #(WIDTH, DATA_WIDTH) sort1 (origin[3: 2], data_i[3: 2], compare1, data1);
 	Sort2 #(WIDTH, DATA_WIDTH) sort2 (origin[1: 0], data_i[1: 0], compare2, data2);
@@ -365,4 +368,28 @@ module MaskGen32(
 	MaskGen16 gen_low (in[3: 0], low);
 	assign out[31: 16] = low & {16{in[4]}};
 	assign out[15: 0] = low | {16{in[4]}};
+endmodule
+
+module CalValidNum2 #(
+	parameter DATA_WIDTH=1
+)(
+	input logic [1: 0] en,
+	output logic [1: 0][DATA_WIDTH-1: 0] out
+);
+	assign out[0] = 0;
+	assign out[1] = en[0];
+endmodule
+
+module CalValidNum4 #(
+	parameter DATA_WIDTH=2
+)(
+	input logic [3: 0] en,
+	output logic [3: 0][1: 0] out
+);
+	CalValidNum2 #(DATA_WIDTH) calValidNum(en[1: 0], out[1: 0]);
+	assign out[2] = en[0] & en[1] ? 2 :
+					en[0] | en[1] ? 1 : 0;
+	assign out[3] = en[0] & en[1] & en[2] ? 3 :
+					en[0] & en[1] | en[0] & en[2] | en[1] & en[2] ? 2 :
+					en[0] | en[1] | en[2] ? 1 : 0;
 endmodule

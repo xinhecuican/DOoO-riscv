@@ -32,15 +32,12 @@ module Rename(
     logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) raw_rs1, raw_rs2, waw; // read after write
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) raw_rs1_idx, raw_rs2_idx;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1, prs2, prd;
-    /* verilator lint_off UNOPTFLAT */
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) prdIdx;
 
     assign stall = backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full;
+    
+    CalValidNum #(`FETCH_WIDTH) cal_rd_num (rd_en, prdIdx);
 generate
-    assign prdIdx[0] = 0;
-    for(genvar i=1; i<`FETCH_WIDTH; i++)begin
-        assign prdIdx[i] = prdIdx[i-1] + rd_en[i];
-    end
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         assign prd[i] = rd_en[i] ? fl_io.prd[prdIdx[i]] : 0;
         assign prs1[i] = |raw_rs1[i] ? prd[raw_rs1_idx[i]] : rename_io.prs1[i];

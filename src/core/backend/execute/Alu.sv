@@ -60,6 +60,7 @@ module BranchModel(
 );
     logic cmp, scmp, cmp_result;
     logic equal;
+    logic dir;
     assign cmp = rs1_data < rs2_data;
     assign equal = rs1_data == rs2_data;
     always_comb begin
@@ -75,18 +76,18 @@ module BranchModel(
     always_comb begin
         case(op)
         `BRANCH_BEQ: begin
-            branchRes.direction = equal;
+            dir = equal;
         end
         `BRANCH_BNE: begin
-            branchRes.direction = ~equal;
+            dir = ~equal;
         end
         `BRANCH_BLT: begin
-            branchRes.direction = cmp_result;
+            dir = cmp_result;
         end
         `BRANCH_BGE: begin
-            branchRes.direction = ~cmp_result;
+            dir = ~cmp_result;
         end
-        default: branchRes.direction = 0;
+        default: dir = 0;
         endcase
     end
 
@@ -99,11 +100,11 @@ module BranchModel(
 
     // predict error
     // cal stream taken offset
-    /* verilator lint_off UNOPTFLAT */
     logic streamHit, branchError, indirectError;
     assign streamHit = stream.size == offset;
-    assign branchError = streamHit ? stream.taken ^ branchRes.direction : branchRes.direction;
+    assign branchError = streamHit ? stream.taken ^ dir : dir;
     assign indirectError = stream.target != jalr_target;
+    assign branchRes.direction = dir;
     assign branchRes.error = op == `BRANCH_JALR ? indirectError :
                         op != `BRANCH_JAL ? branchError : 0;
     assign branchRes.br_type = br_type;

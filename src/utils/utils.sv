@@ -90,12 +90,11 @@ module PSelector #(
 	input logic [RADIX-1: 0] in,
 	output logic [RADIX-1: 0] out
 );
-	/* verilator lint_off UNOPTFLAT */
 	logic [RADIX-1: 0] reverse;
 	assign reverse[RADIX-1] = 1'b1;
 generate
 	for(genvar i=RADIX-2; i>=0; i--)begin
-		assign reverse[i] = ~in[i+1] & reverse[i+1];
+		assign reverse[i] = &(~in[RADIX-1: i+1]);
 	end
 	for(genvar i=0; i<RADIX; i++)begin
 		assign out[i] = reverse[i] & in[i];
@@ -114,7 +113,7 @@ module PRSelector #(
 	assign reverse[0] = 1'b1;
 generate
 	for(genvar i=1; i<RADIX; i++)begin
-		assign reverse[i] = ~in[i-1] & reverse[i-1];
+		assign reverse[i] = &(~in[i-1: 0]);
 	end
 	for(genvar i=0; i<RADIX; i++)begin
 		assign out[i] = reverse[i] & in[i];
@@ -371,5 +370,20 @@ generate
 	for(genvar i=0; i<WIDTH; i++)begin
 		assign out[(i+1)*8-1: i*8] = {8{mask[i]}};
 	end
+endgenerate
+endmodule
+
+module CalValidNum #(
+	parameter WIDTH=4
+)(
+	input logic [WIDTH-1: 0] en,
+	output logic [WIDTH-1: 0][$clog2(WIDTH)-1: 0] out
+);
+generate
+	case(WIDTH)
+	4: CalValidNum4 calValidNum(en, out);
+	2: CalValidNum2 calValidNum(en, out);
+	default: CalValidNum2 calValidNum(en, out);
+	endcase
 endgenerate
 endmodule

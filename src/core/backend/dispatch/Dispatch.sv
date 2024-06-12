@@ -153,12 +153,10 @@ interface DispatchQueueIO #(
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rs2;
     logic `ARRAY(`FETCH_WIDTH, $bits(RobIdx)) robIdx;
     logic `ARRAY(`FETCH_WIDTH, DATA_WIDTH) data;
-    /* verilator lint_off UNOPTFLAT */
     logic `N(OUT_WIDTH) en_o;
     logic `ARRAY(OUT_WIDTH, `PREG_WIDTH) rs1_o;
     logic `ARRAY(OUT_WIDTH, `PREG_WIDTH) rs2_o;
     logic `ARRAY(OUT_WIDTH, DATA_WIDTH) data_o;
-    /* verilator lint_off UNOPTFLAT */
     logic full;
     logic dis_full;
     logic issue_full;
@@ -184,23 +182,24 @@ module DispatchQueue #(
         logic `N(`PREG_WIDTH) rs1, rs2;
         logic `N(DATA_WIDTH) data;
     } Entry;
-    /* verilator lint_off UNOPTFLAT */
-    logic `N(ADDR_WIDTH) index `N(`FETCH_WIDTH);
     RobIdx robIdx `N(DEPTH);
     logic `N($bits(Entry)) entrys `N(DEPTH);
     logic `N(ADDR_WIDTH) head, tail;
     logic `N(ADDR_WIDTH+1) num;
     logic `N($clog2(`FETCH_WIDTH)+1) addNum, subNum, eqNum;
+    logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) eq_add_num;
+    logic `N(ADDR_WIDTH) index `N(`FETCH_WIDTH);
 
     ParallelAdder #(1, `FETCH_WIDTH) adder (io.en, addNum);
     assign eqNum = io.dis_full ? 0 : addNum;
     assign subNum = io.issue_full ? 0 : 
                     num >= `FETCH_WIDTH ? `FETCH_WIDTH : num;
     assign io.full = num + addNum > DEPTH;
+
+    CalValidNum #(`FETCH_WIDTH) cal_en (io.en, eq_add_num);
 generate
-    assign index[0] = tail;
-    for(genvar i=1; i<`FETCH_WIDTH; i++)begin
-        assign index[i] = index[i-1] + io.en[i];
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
+        assign index[i] = tail + eq_add_num[i];
     end
 
     for(genvar i=0; i<OUT_WIDTH; i++)begin

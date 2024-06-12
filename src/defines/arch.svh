@@ -2,5 +2,5 @@
 `define ARCH_H
 
 `define RV32I
-// `define DIFFTEST
+`define DIFFTEST
 `endif

@@ -113,7 +113,6 @@ module InstBufferBank #(
     input logic `N(WIDTH) din,
     input logic `N(`IBUF_BANK_WIDTH) waddr,
     input logic `N(`IBUF_BANK_WIDTH) raddr,
-    /* verilator lint_off UNOPTFLAT */
     output logic `N(WIDTH) dout
 );
     logic `N(WIDTH) ram `N(`IBUF_BANK_SIZE);

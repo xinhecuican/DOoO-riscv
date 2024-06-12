@@ -34,7 +34,7 @@ generate
         assign bank_io[i].en = dis_issue_io.en[order[i]] & ~dis_issue_io.full;
         assign bank_io[i].status = dis_issue_io.status[order[i]];
         assign bank_io[i].data = dis_issue_io.data[order[i]];
-        assign full[i] = dis_issue_io.en[order[i]] & bank_io[i].full;
+        assign full[i] = bank_io[i].full;
 
         assign int_reg_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
         assign int_reg_io.en[BANK_NUM+i] = bank_io[i].reg_en & ~backendCtrl.redirect;

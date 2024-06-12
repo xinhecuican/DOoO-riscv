@@ -25,10 +25,13 @@ module BusyTable(
     logic `N(`PREG_SIZE) dis_valid;
 generate
     for(genvar i=0; i<`BUSYTABLE_PORT; i++)begin
+        assign io.reg_en[i] = valid[io.preg[i]];
+    end
+
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         logic `N(`PREG_SIZE) rd_decode;
         Decoder #(`PREG_SIZE) decoder_rd (io.dis_rd[i], rd_decode);
         assign dis_valids[i] = (rd_decode & {`PREG_SIZE{io.dis_en[i] & ~backendCtrl.redirect}});
-        assign io.reg_en[i] = valid[io.preg[i]];
     end
     ParallelOR #(`PREG_SIZE, `FETCH_WIDTH) or_dis_valid (dis_valids, dis_valid);
 endgenerate

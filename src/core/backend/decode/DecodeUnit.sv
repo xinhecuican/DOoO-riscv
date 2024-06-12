@@ -8,6 +8,7 @@ module DecodeUnit(
     logic [4: 0] op;
     logic [2: 0] funct3;
     logic [5: 0] funct7;
+    logic [4: 0] rd;
 
     assign op = inst[6: 2];
     assign funct3 = inst[14: 12];
@@ -31,8 +32,9 @@ module DecodeUnit(
     assign info.memv = load | store;
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg}} & inst[19: 15];
     assign info.rs2 = {5{branch | store | opreg}} & inst[24: 20];
-    assign info.rd = {5{lui | jalr | jal | load | opimm | opreg}} & inst[11: 7];
-    assign info.we = info.rd != 0;
+    assign rd = {5{lui | jalr | jal | load | opimm | opreg}} & inst[11: 7];
+    assign info.rd = rd;
+    assign info.we = rd != 0;
 
     logic beq, bne, blt, bge, bltu, bgeu;
     assign beq = branch & ~funct3[2] & ~funct3[1] & ~funct3[0];
@@ -109,7 +111,7 @@ module DecodeUnit(
                       {`XLEN{auipc}} & auipc_imm |
                       {`XLEN{jal}} & jal_imm |
                       {`XLEN{beq | bne | blt | bge}} & branch_imm |
-                      {`XLEN{slli | srai | srli}} & info.rs2 |
+                      {`XLEN{slli | srai | srli}} & inst[24: 20] |
                       {`XLEN{lb | lh | lw | addi | slti | xori | ori | andi}} & sext_imm |
                       {`XLEN{lbu | lhu | sltiu | jalr}} & imm;
 

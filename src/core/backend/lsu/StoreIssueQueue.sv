@@ -48,7 +48,7 @@ generate
         assign addr_io[i].data = dis_store_io.data[order[i]];
         assign addr_io[i].sqIdx = sqIdx[order[i]];
         assign addr_io[i].lqIdx = lqIdx[order[i]];
-        assign full[i] = dis_store_io.en[order[i]] & addr_io[i].full;
+        assign full[i] = addr_io[i].full;
         
         assign store_reg_io.en[i] = addr_io[i].reg_en & ~backendCtrl.redirect;
         assign store_reg_io.preg[i] = addr_io[i].rs1;
