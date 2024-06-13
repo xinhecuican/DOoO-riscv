@@ -93,7 +93,7 @@ interface FsqCacheIO;
     logic abandon; // cancel request at idle and lookup state
     logic `N(`FSQ_WIDTH) abandonIdx;
     logic ready;
-    logic `N(`FSQ_WIDTH) fsqIdx;
+    FsqIdx fsqIdx;
     logic flush;
     logic stall;
 
@@ -132,7 +132,7 @@ interface CachePreDecodeIO;
     logic `N(`BLOCK_INST_SIZE) en;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
     FetchStream stream;
-    logic `N(`FSQ_WIDTH) fsqIdx;
+    FsqIdx fsqIdx;
 
     modport cache (output en, data, stream, fsqIdx);
     modport pd (input en, data, stream, fsqIdx);
@@ -167,7 +167,7 @@ endinterface
 interface PreDecodeRedirect;
     logic en;
     logic `VADDR_BUS pc;
-    logic `N(`FSQ_WIDTH) fsqIdx;
+    FsqIdx fsqIdx;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `VADDR_BUS redirect_addr;
     BranchType br_type;

@@ -10,8 +10,8 @@ module PreDecode(
 );
     PreDecodeBundle bundles`N(`BLOCK_INST_SIZE);
     PreDecodeBundle bundles_next `N(`BLOCK_INST_SIZE);
-    logic `N(`BLOCK_INST_SIZE) en_next;
-    logic `N(`FSQ_WIDTH) fsqIdx;
+    logic `N(`BLOCK_INST_SIZE) redirect_mask, en_next;
+    FsqIdx fsqIdx;
     logic `N(`PREDICTION_WIDTH) tailIdx;
     FetchStream stream_next;
     logic `N(`BLOCK_INST_WIDTH) selectIdx, jumpSelectIdx;
@@ -62,10 +62,22 @@ module PreDecode(
     assign pd_redirect.pc = stream_next.start_addr;
     assign pd_redirect.redirect_addr = bundles_next[selectIdx].target;
 
-    assign pd_ibuffer_io.en = {`BLOCK_INST_SIZE{~pd_redirect.en}} & en_next;
-    assign pd_ibuffer_io.num = instNumNext;
+    always_comb begin
+        case (selectIdx)
+            3'b000: redirect_mask = 8'h01;
+            3'b001: redirect_mask = 8'h03;
+            3'b010: redirect_mask = 8'h07;
+            3'b011: redirect_mask = 8'h0f;
+            3'b100: redirect_mask = 8'h1f;
+            3'b101: redirect_mask = 8'h3f;
+            3'b110: redirect_mask = 8'h7f;
+            3'b111: redirect_mask = 8'hff;
+        endcase
+    end
+    assign pd_ibuffer_io.en = ({`BLOCK_INST_SIZE{~pd_redirect.en}} | redirect_mask) & en_next;
+    assign pd_ibuffer_io.num = pd_redirect.en ? selectIdx + 1 : instNumNext;
     assign pd_ibuffer_io.inst = data_next;
-    assign pd_ibuffer_io.fsqIdx = fsqIdx;
+    assign pd_ibuffer_io.fsqIdx = fsqIdx.idx;
 
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
@@ -73,7 +85,7 @@ module PreDecode(
         end
     endgenerate
     ParallelAdder #(.DEPTH(`BLOCK_INST_SIZE)) adder_instnum (cache_pd_io.en, instNum);
-    PEncoder #(`BLOCK_INST_SIZE) encoder_jump_idx(jump_en, jumpSelectIdx);
+    PREncoder #(`BLOCK_INST_SIZE) encoder_jump_idx(jump_en, jumpSelectIdx);
 
 endmodule
 

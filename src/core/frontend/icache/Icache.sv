@@ -19,7 +19,7 @@ module ICache(
         logic span;
         logic multi_tag;
         FetchStream stream;
-        logic `N(`FSQ_WIDTH) fsqIdx;
+        FsqIdx fsqIdx;
     } RequestBuffer;
     RequestBuffer request_buffer;
 `ifdef DIFFTEST
@@ -79,7 +79,7 @@ module ICache(
     assign refill_en = main_state == REFILL && axi_io.sr.valid && next_stream_index == 0;
     assign abandon_success = main_state == LOOKUP && 
                              fsq_cache_io.abandon &&
-                             request_buffer.fsqIdx == fsq_cache_io.abandonIdx;
+                             request_buffer.fsqIdx.idx == fsq_cache_io.abandonIdx;
     always_ff @(posedge clk)begin
         ptag1 <= vtag;
         ptag2 <= vtag + indexp1[`ICACHE_SET_WIDTH];

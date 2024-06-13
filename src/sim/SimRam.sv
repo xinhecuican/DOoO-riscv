@@ -9,9 +9,13 @@ module SimRam(
     logic [63: 0] wmask;
     logic [7: 0] arlen;
     logic [7: 0] arsize;
+    logic [3: 0] rsize;
+    logic [7: 0] rshift;
 
     logic [7: 0] awlen;
     logic [7: 0] awsize;
+    logic [3: 0] wsize;
+    logic [7: 0] wshift;
 
     assign wmask = {{8{axi.mw.wstrb[7]}},
                     {8{axi.mw.wstrb[6]}},
@@ -36,11 +40,15 @@ module SimRam(
             axi.sb.valid <= 1'b0;
             rIdx <= 0;
             wIdx <= 0;
+            rsize <= 0;
+            rshift <= 0;
+            wsize <= 0;
+            wshift <= 0;
         end
         else begin
             if(axi.mar.valid && axi.sar.ready)begin
                 axi.sar.ready <= 1'b0;
-                rIdx <= axi.mar.addr;
+                rIdx <= axi.mar.addr >> 3;
                 if(axi.mar.burst == 0)begin
                     arlen <= 1;
                 end
@@ -59,21 +67,33 @@ module SimRam(
                 endcase
                 axi.sr.id <= axi.mar.id;
                 axi.sr.user <= axi.mar.user;
-
+                rsize <= 8;
             end
             if(!axi.sar.ready)begin
                 if(arlen == 1)begin
                     axi.sar.ready <= 1'b1;
                     axi.sr.last <= 1'b1;
                 end
-                rIdx <= rIdx + arsize;
+                if(rsize <= arsize)begin
+                    rIdx <= rIdx + 1;
+                    rshift <= 0;
+                end
+                else begin
+                    rsize <= rsize - arsize;
+                    rshift <= rshift + (8 * arsize);
+                end
                 arlen <= arlen - 1;
-                axi.sr.data <= rdata;
+                axi.sr.data <= (rdata >> rshift);
                 axi.sr.valid <= 1'b1;
             end
 
+            if(axi.sr.last && axi.sr.valid)begin
+                axi.sr.last <= 1'b0;
+                axi.sr.valid <= 1'b0;
+            end
+
             if(axi.maw.valid && axi.saw.ready)begin
-                wIdx <= axi.maw.addr;
+                wIdx <= axi.maw.addr >> 3;
                 axi.saw.ready <= 1'b0;
                 axi.sw.ready <= 1'b1;
                 axi.sb.id <= axi.maw.id;
@@ -87,13 +107,20 @@ module SimRam(
                 3'b110: awsize <= 64;
                 3'b111: awsize <= 128;
                 endcase
+                wsize <= 8;
             end
 
             if(axi.sw.ready)begin
                 if(axi.mw.valid)begin
-                    wIdx <= wIdx + awsize;
+                    if(wsize <= awsize)begin
+                        wIdx <= wIdx + 1;
+                    end
+                    else begin
+                        wsize <= wsize - awsize;
+                        wshift <= wshift + (8 * awsize);
+                    end
                 end
-                if(axi.mw.last)begin
+                if(axi.mw.valid && axi.mw.last)begin
                     axi.sw.ready <= 1'b0;
                     axi.sb.valid <= 1'b1;
                 end
@@ -112,8 +139,8 @@ module SimRam(
         .rIdx(rIdx),
         .rdata(rdata),
         .wIdx(wIdx),
-        .wdata(axi.mw.data),
-        .wmask(wmask),
+        .wdata((axi.mw.data << wshift)),
+        .wmask((wmask << wshift)),
         .wen(axi.mw.valid)
     );
 endmodule

@@ -147,6 +147,11 @@ typedef struct packed {
 } FsqIdxInfo;
 
 typedef struct packed {
+    logic `N(`FSQ_WIDTH) idx;
+    logic dir;
+} FsqIdx;
+
+typedef struct packed {
     logic `N(`FETCH_WIDTH) en;
     FsqIdxInfo `N(`FETCH_WIDTH) fsqInfo;
     logic `ARRAY(`FETCH_WIDTH, 32) inst;

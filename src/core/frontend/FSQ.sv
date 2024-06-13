@@ -23,7 +23,7 @@ module FSQ (
     BTBEntry oldEntry;
     logic `N(`BLOCK_INST_SIZE) predErrorVec `N(`FSQ_SIZE);
     logic directionTable `N(`FSQ_SIZE);
-    logic direction, hdir;
+    logic direction, hdir, shdir;
     FetchStream commitStream;
     logic `ARRAY(2, `BLOCK_INST_SIZE) commitVec, streamVec;
     logic `ARRAY(`COMMIT_WIDTH, `BLOCK_INST_SIZE * 2) commitOffsetExpand;
@@ -56,7 +56,7 @@ module FSQ (
 
 
     RedirectInfo u_redirectInfo;
-    assign squashIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx;
+    assign squashIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx.idx;
     MPRAM #(
         .WIDTH($bits(RedirectInfo)),
         .DEPTH(`FSQ_SIZE),
@@ -121,8 +121,8 @@ module FSQ (
 
     PredictionInfo predictionInfos `N(`FSQ_SIZE);
     PredictionInfo pd_wr_info;
-    logic `N(`SLOT_NUM) condSmallNum;
-    logic `N(`SLOT_NUM) condSmallNumAll;
+    logic `N(`SLOT_NUM) condSmallNum, pd_smallNum;
+    logic `N(`SLOT_NUM) condSmallNumAll, pd_smallNumAll;
     logic redirectIsCond;
     PredictionInfo redirectPredInfo;
     PredictionInfo pd_predInfo;
@@ -155,7 +155,8 @@ endgenerate
         fsq_cache_io.en <= search_head != tail || full;
         fsq_cache_io.abandon <= bpu_fsq_io.redirect;
         fsq_cache_io.abandonIdx <= bpu_fsq_io.prediction.stream_idx;
-        fsq_cache_io.fsqIdx <= search_head;
+        fsq_cache_io.fsqIdx.idx <= search_head;
+        fsq_cache_io.fsqIdx.dir <= directionTable[search_head];
     end
     assign fsq_cache_io.flush = pd_redirect.en | fsq_back_io.redirect.en;
     assign fsq_cache_io.stall = frontendCtrl.ibuf_full;
@@ -168,18 +169,23 @@ endgenerate
     // PEncoder #(`SLOT_NUM) encoder_condFree({~oldEntry.slots[0].en, ~oldEntry.tailSlot.en}, condFree);
 
     CondPredInfo redirectCondInfo, pd_condInfo;
-    assign pd_predInfo = predictionInfos[pd_redirect.fsqIdx];
+    assign pd_predInfo = predictionInfos[pd_redirect.fsqIdx.idx];
     assign redirectPredInfo = predictionInfos[fsq_back_io.redirect.fsqInfo.idx];
 
-    assign pd_condInfo.condNum = pd_predInfo.condNum;
-    assign pd_condInfo.taken = |(pd_predInfo.condValid & pd_predInfo.condHist);
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
+        assign pd_smallNum[i] = pd_predInfo.condValid[i] & (pd_predInfo.offsets[i] < pd_redirect.offset);
         assign condSmallNum[i] = redirectPredInfo.condValid[i] & (redirectPredInfo.offsets[i] < fsq_back_io.redirect.fsqInfo.offset);
     end
 endgenerate
     assign redirectIsCond = fsq_back_io.redirectBr.en & fsq_back_io.redirectBr.br_type == CONDITION;
+    /* UNPARAM */
     assign condSmallNumAll = condSmallNum[0] + condSmallNum[1];
+    assign pd_smallNumAll[1] = pd_smallNum[0] & pd_smallNum[1];
+    assign pd_smallNumAll[0] = pd_smallNum[0] ^ pd_smallNum[1];
+    
+    assign pd_condInfo.condNum = pd_smallNumAll;
+    assign pd_condInfo.taken = 0;
     always_comb begin
         if(redirectIsCond)begin
             if(condSmallNumAll < `SLOT_NUM)begin
@@ -198,6 +204,11 @@ endgenerate
     end
 
     logic `N(`VADDR_SIZE) squash_target_pc;
+    logic `N(`FSQ_WIDTH) pd_redirect_n1, bpu_fsq_redirect_n1;
+
+    assign pd_redirect_n1 = pd_redirect.fsqIdx.idx + 1;
+    assign bpu_fsq_redirect_n1 = bpu_fsq_io.stream_idx + 1;
+
     CondPredInfo squash_pred_info;
     BranchType squash_br_type;
     RasType squash_ras_type;
@@ -208,12 +219,13 @@ endgenerate
     assign bpu_fsq_io.squashInfo.predInfo = squash_pred_info;
     assign bpu_fsq_io.squashInfo.br_type = squash_br_type;
     assign bpu_fsq_io.squashInfo.ras_type = squash_ras_type;
+
     always_ff @(posedge clk)begin
         last_search <= search_head == tail && fsq_cache_io.en;
         bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirectBr.en;
         // bpu_fsq_io.squashInfo.redirectInfo <= u_redirectInfo;
         squash_target_pc <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.target : pd_redirect.redirect_addr;
-        squash_pred_info <= fsq_back_io.redirectBr.en ? redirectPredInfo : pd_predInfo;
+        squash_pred_info <= fsq_back_io.redirectBr.en ? redirectCondInfo : pd_condInfo;
         squash_br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : DIRECT;
         squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : NONE;
         if(rst == `RST)begin
@@ -228,7 +240,7 @@ endgenerate
             end
             else if(!frontendCtrl.ibuf_full) begin
                 if(pd_redirect.en)begin
-                    search_head <= pd_redirect.fsqIdx;
+                    search_head <= pd_redirect_n1;
                 end
                 else if(cache_req_ok)begin
                     search_head <= search_head + 1;
@@ -239,10 +251,10 @@ endgenerate
                 tail <= fsq_back_io.redirect.fsqInfo.idx;
             end
             else if(pd_redirect.en)begin
-                tail <= pd_redirect.fsqIdx;
+                tail <= pd_redirect_n1;
             end
             else if(bpu_fsq_io.redirect)begin
-                tail <= bpu_fsq_io.stream_idx + 1;
+                tail <= bpu_fsq_redirect_n1;
             end
             else if(bpu_fsq_io.en & ~full)begin
                 tail <= tail_n1;
@@ -257,7 +269,7 @@ endgenerate
     end
 
     logic `N(`FSQ_WIDTH) redirect_dir_idx;
-    assign redirect_dir_idx = fsq_back_io.redirectBr.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx;
+    assign redirect_dir_idx = fsq_back_io.redirect.fsqInfo.idx;
     always_ff @(posedge clk)begin
         for(int i=0; i<`ALU_SIZE; i++)begin
             fsq_back_io.directions[i] <= directionTable[fsq_back_io.fsqIdx[i]];
@@ -269,11 +281,14 @@ endgenerate
             directionTable <= '{default: 0};
         end
         else begin
-            if(pd_redirect.en | fsq_back_io.redirectBr.en)begin
+            if(fsq_back_io.redirectBr.en)begin
                 direction <= directionTable[redirect_dir_idx];
             end
+            else if(pd_redirect.en)begin
+                direction <= pd_redirect.fsqIdx.idx & ~pd_redirect_n1 ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
+            end
             else if(bpu_fsq_io.redirect)begin
-                direction <= bpu_fsq_io.stream_dir;
+                direction <= bpu_fsq_io.stream_idx & ~bpu_fsq_redirect_n1 ? ~bpu_fsq_io.stream_dir : bpu_fsq_io.stream_dir;
             end
             else if(bpu_fsq_io.en & ~full)begin
                 direction <= tail[`FSQ_WIDTH-1] & ~tail_n1[`FSQ_WIDTH-1] ? ~direction : direction;

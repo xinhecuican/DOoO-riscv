@@ -5,3 +5,6 @@
 [submodule "utils/NEMU"]
 	path = utils/NEMU
 	url = https://github.com/xinhecuican/NEMU
+[submodule "utils/riscv-tests"]
+	path = utils/riscv-tests
+	url = https://github.com/xinhecuican/riscv-tests.git
