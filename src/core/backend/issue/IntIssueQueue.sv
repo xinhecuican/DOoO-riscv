@@ -42,7 +42,7 @@ generate
         assign int_reg_io.preg[BANK_NUM+i] = bank_io[i].rs2;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
 
-        assign redirectClear[i] = backendCtrl.redirect & (bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir);
+        assign redirectClear[i] = backendCtrl.redirect & ((bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir));
     end
 endgenerate
     assign dis_issue_io.full = |full;

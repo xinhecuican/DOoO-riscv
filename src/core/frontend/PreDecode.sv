@@ -50,9 +50,9 @@ module PreDecode(
     end
 
     logic `N(`BLOCK_INST_SIZE) jump_en;
-    assign pd_redirect.en = (~stream_next.taken & (|jump_en)) |
+    assign pd_redirect.en = ((~stream_next.taken & (|jump_en)) |
                             (stream_next.taken & ((tailIdx != jumpSelectIdx) |
-                            bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)));
+                            bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)))) & ~frontendCtrl.ibuf_full;
     assign pd_redirect.fsqIdx = fsqIdx;
     assign selectIdx = jumpSelectIdx;
     assign selectBundle = bundles_next[selectIdx];

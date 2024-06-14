@@ -13,12 +13,14 @@ module FSQ (
     CommitBus.in commitBus,
     FrontendCtrl frontendCtrl
 );
-    logic `N(`FSQ_WIDTH) search_head, commit_head, tail, write_index, tail_n1, n_commit_head;
+    logic `N(`FSQ_WIDTH) search_head, commit_head, tail, write_index;
+    logic `N(`FSQ_WIDTH) search_head_n1, tail_n1, n_commit_head;
     logic `N(`FSQ_WIDTH) write_tail;
     logic `N(`FSQ_WIDTH) squashIdx;
     logic full;
     logic queue_we;
     logic last_search;
+    logic cache_req;
     logic cache_req_ok;
     BTBEntry oldEntry;
     logic `N(`BLOCK_INST_SIZE) predErrorVec `N(`FSQ_SIZE);
@@ -33,6 +35,7 @@ module FSQ (
     
 
     assign tail_n1 = tail + 1;
+    assign search_head_n1 = search_head + 1;
     assign write_tail = bpu_fsq_io.redirect ? bpu_fsq_io.stream_idx : tail;
     assign queue_we = bpu_fsq_io.en & ~full;
     assign write_index = bpu_fsq_io.redirect ? bpu_fsq_io.stream_idx : tail;
@@ -45,7 +48,7 @@ module FSQ (
     ) fs_queue(
         .clk(clk),
         .rst(rst),
-        .en({(1+`ALU_SIZE+1){1'b1}}),
+        .en({cache_req_ok, {(`ALU_SIZE+1){1'b1}}}),
         .we(queue_we),
         .waddr(write_tail),
         .raddr({search_head, fsq_back_io.fsqIdx, n_commit_head}),
@@ -151,19 +154,24 @@ endgenerate
         end
     end
 
+    assign cache_req = ((search_head != tail) | (shdir ^ direction)) & 
+                       ~pd_redirect.en  & ~fsq_back_io.redirect.en;
     always_ff @(posedge clk)begin
-        fsq_cache_io.en <= search_head != tail || full;
-        fsq_cache_io.abandon <= bpu_fsq_io.redirect;
-        fsq_cache_io.abandonIdx <= bpu_fsq_io.prediction.stream_idx;
-        fsq_cache_io.fsqIdx.idx <= search_head;
-        fsq_cache_io.fsqIdx.dir <= directionTable[search_head];
+        if(cache_req_ok)begin
+            fsq_cache_io.en <= cache_req;
+            fsq_cache_io.abandon <= bpu_fsq_io.redirect;
+            fsq_cache_io.abandonIdx <= bpu_fsq_io.prediction.stream_idx;
+            fsq_cache_io.fsqIdx.idx <= search_head;
+            fsq_cache_io.fsqIdx.dir <= directionTable[search_head];
+        end
+
     end
     assign fsq_cache_io.flush = pd_redirect.en | fsq_back_io.redirect.en;
     assign fsq_cache_io.stall = frontendCtrl.ibuf_full;
     assign bpu_fsq_io.stream_idx = tail;
     assign bpu_fsq_io.stream_dir = direction;
     assign bpu_fsq_io.stall = full;
-    assign cache_req_ok = fsq_cache_io.en & fsq_cache_io.ready;
+    assign cache_req_ok = ~frontendCtrl.ibuf_full & fsq_cache_io.ready;
 
     // logic `N(`SLOT_NUM) condFree;
     // PEncoder #(`SLOT_NUM) encoder_condFree({~oldEntry.slots[0].en, ~oldEntry.tailSlot.en}, condFree);
@@ -238,13 +246,11 @@ endgenerate
             if(fsq_back_io.redirect.en)begin
                 search_head <= fsq_back_io.redirect.fsqInfo.idx;
             end
-            else if(!frontendCtrl.ibuf_full) begin
-                if(pd_redirect.en)begin
-                    search_head <= pd_redirect_n1;
-                end
-                else if(cache_req_ok)begin
-                    search_head <= search_head + 1;
-                end
+            else if(pd_redirect.en)begin
+                search_head <= pd_redirect_n1;
+            end
+            else if(cache_req_ok & cache_req) begin
+                search_head <= search_head_n1;
             end
 
             if(fsq_back_io.redirectBr.en)begin
@@ -278,6 +284,7 @@ endgenerate
         if(rst == `RST)begin
             direction <= 0;
             hdir <= 0;
+            shdir <= 0;
             directionTable <= '{default: 0};
         end
         else begin
@@ -293,6 +300,17 @@ endgenerate
             else if(bpu_fsq_io.en & ~full)begin
                 direction <= tail[`FSQ_WIDTH-1] & ~tail_n1[`FSQ_WIDTH-1] ? ~direction : direction;
             end
+
+            if(fsq_back_io.redirectBr.en)begin
+                shdir <= directionTable[redirect_dir_idx];
+            end
+            else if(pd_redirect.en)begin
+                shdir <= pd_redirect.fsqIdx.idx & ~pd_redirect_n1 ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
+            end
+            else if(cache_req_ok & cache_req)begin
+                shdir <= search_head[`FSQ_WIDTH-1] & ~search_head_n1[`FSQ_WIDTH-1] ? ~shdir : shdir;
+            end
+
             if(commitValid)begin
                 hdir <= commit_head[`FSQ_WIDTH-1] & ~n_commit_head[`FSQ_WIDTH-1] ? ~hdir : hdir;
             end

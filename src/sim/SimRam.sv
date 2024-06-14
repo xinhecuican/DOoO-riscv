@@ -77,6 +77,7 @@ module SimRam(
                 if(rsize <= arsize)begin
                     rIdx <= rIdx + 1;
                     rshift <= 0;
+                    rsize <= 8;
                 end
                 else begin
                     rsize <= rsize - arsize;
@@ -114,6 +115,7 @@ module SimRam(
                 if(axi.mw.valid)begin
                     if(wsize <= awsize)begin
                         wIdx <= wIdx + 1;
+                        wsize <= 8;
                     end
                     else begin
                         wsize <= wsize - awsize;
