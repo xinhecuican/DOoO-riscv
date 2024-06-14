@@ -26,7 +26,7 @@ generate
                               (~(backendCtrl.redirect));
         assign int_io.rs1[i] = di.rs1;
         assign int_io.rs2[i] = di.rs2;
-        assign int_io.data[i] = {di.intv, di.branchv, di.sext, di.immv, di.intop, di.branchop,
+        assign int_io.data[i] = {di.intv, di.branchv, di.uext, di.immv, di.intop, di.branchop,
             rename_dis_io.robIdx[i], rename_dis_io.prd[i], di.imm, rename_dis_io.op[i].fsqInfo};
     end
     assign int_io.robIdx = rename_dis_io.robIdx;
@@ -49,7 +49,7 @@ generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : load_in
         DecodeInfo di;
         MemIssueBundle data;
-        assign data.sext = di.sext;
+        assign data.uext = di.uext;
         assign data.memop = di.memop;
         assign data.robIdx = rename_dis_io.robIdx[i];
         assign data.rd = rename_dis_io.prd[i];

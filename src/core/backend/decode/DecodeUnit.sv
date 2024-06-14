@@ -94,26 +94,29 @@ module DecodeUnit(
     assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sra | srai;
     assign info.intop[0] = lui | andi | _and | srl | srli;
 
-    assign info.sext = blt | bge | lb | lh | slti | slt;
+`ifdef ZICSR
+    logic csrrw, csrrs, csrrc, csrrwi, csrrsi, csrrci;
+    assign csrrw = opsystem & ~funct3[2] & ~funct3[1] & funct[0];
+    assign csrrs = opsystem & ~funct3[2] & funct3[1] & ~funct[0];
+    assign csrrc = opsystem & ~funct3[2] & funct3[1] & funct3[0];
+    assign csrrwi = opsystem & funct3[2] & ~funct3[1] & funct3[0];
+    assign csrrsi = opsystem & funct3[2] & funct3[1] & ~funct3[0];
+    assign csrrci = opsystem & funct3[2] & funct3[1] & funct3[0];
+
+    assign info.csrv = csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci;
+    assign info.csrop = funct3;
+`endif
+
+    assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu;
     logic [11: 0] imm;
-    logic `N(`XLEN) lui_imm;
-    logic `N(`XLEN) jal_imm;
-    logic `N(`XLEN) branch_imm;
-    logic `N(`XLEN) sext_imm;
-    logic `N(`XLEN) auipc_imm;
-    assign auipc_imm = {{`XLEN-20{inst[31]}}, inst[31: 12]};
-    assign jal_imm = {{(`XLEN-21){inst[31]}}, inst[31], inst[19: 12], inst[20], inst[30: 21], 1'b0};
-    assign lui_imm = {{`XLEN-20{inst[31]}}, inst[31: 12]};
-    assign branch_imm = {{`XLEN-13{inst[31]}}, inst[31], inst[7], inst[30: 25], inst[11: 8], 1'b0};
+    logic `N(`DEC_IMM_WIDTH) branch_imm;
+    assign branch_imm = {inst[31], inst[7], inst[30: 25], inst[11: 8], 1'b0};
     assign imm = inst[31: 20];
-    assign sext_imm = {{`XLEN-12{inst[31]}}, imm};
-    assign info.immv = lui | jal | beq | bne | blt | bge | slli | srai | srli | lb | lh | lw | addi | slti | xori | ori | andi | lbu | lhu | sltiu | jalr;
-    assign info.imm = {`XLEN{lui}} & lui_imm |
-                      {`XLEN{auipc}} & auipc_imm |
-                      {`XLEN{jal}} & jal_imm |
-                      {`XLEN{beq | bne | blt | bge}} & branch_imm |
+
+    assign info.immv = slli | srai | srli | addi | slti | xori | ori | andi | sltiu;
+    assign info.imm = {`XLEN{beq | bne | blt | bge}} & branch_imm |
                       {`XLEN{slli | srai | srli}} & inst[24: 20] |
-                      {`XLEN{lb | lh | lw | addi | slti | xori | ori | andi}} & sext_imm |
-                      {`XLEN{lbu | lhu | sltiu | jalr}} & imm;
+                      {`XLEN{~jal & ~beq & ~bne & ~blt & ~bge & ~slli & ~srai & ~srli}} & imm;
+                      
 
 endmodule

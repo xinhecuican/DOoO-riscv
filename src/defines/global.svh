@@ -107,6 +107,7 @@ typedef enum logic [1: 0] {
 
 `define FETCH_WIDTH 4
 `define FETCH_WIDTH_LOG $clog2(`FETCH_WIDTH)
+`define DEC_IMM_WIDTH 20
 
 // rename
 `define PREG_SIZE 128

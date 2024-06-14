@@ -136,7 +136,7 @@ module LoadIssueBank(
         .addr0(freeIdx),
         .addr1(selectIdx),
         .we(io.en),
-        .wdata({io.data.sext, size, io.data.imm, io.data.rd, io.lqIdx, io.sqIdx, io.data.robIdx, io.data.fsqInfo}),
+        .wdata({io.data.uext, size, io.data.imm, io.data.rd, io.lqIdx, io.sqIdx, io.data.robIdx, io.data.fsqInfo}),
         .rdata1(data_o)
     );
 

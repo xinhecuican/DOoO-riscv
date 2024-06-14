@@ -12,7 +12,7 @@ module ALU(
     logic `N(`XLEN) result, branchResult;
     ALUModel model(
         .immv(io.bundle.immv),
-        .sext(io.bundle.sext),
+        .uext(io.bundle.uext),
         .imm(io.bundle.imm),
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
@@ -23,7 +23,7 @@ module ALU(
     );
     BranchModel branchModel(
         .immv(io.bundle.immv),
-        .sext(io.bundle.sext),
+        .uext(io.bundle.uext),
         .imm(io.bundle.imm),
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
@@ -46,8 +46,8 @@ endmodule
 
 module BranchModel(
     input logic immv,
-    input logic sext,
-    input logic `N(`XLEN) imm,
+    input logic uext,
+    input logic `N(`DEC_IMM_WIDTH) imm,
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
     input logic `N(`BRANCHOP_WIDTH) op,
@@ -58,6 +58,7 @@ module BranchModel(
     output BranchUnitRes branchRes,
     output logic `N(`XLEN) result
 );
+    logic `N(`XLEN) s_imm;
     logic cmp, scmp, cmp_result;
     logic equal;
     logic dir;
@@ -71,7 +72,7 @@ module BranchModel(
         2'b11: scmp = ~cmp;
         endcase
     end
-    assign cmp_result = sext ? scmp : cmp;
+    assign cmp_result = uext ? cmp : scmp;
 
     always_comb begin
         case(op)
@@ -92,7 +93,8 @@ module BranchModel(
     end
 
     logic `N(`VADDR_SIZE) jalr_target;
-    assign jalr_target = rs1_data + imm;
+    assign s_imm = {{`XLEN-13{imm[12]}}, imm[12: 0]};
+    assign jalr_target = rs1_data + s_imm;
     assign branchRes.target = jalr_target;
     logic `N(`PREDICTION_WIDTH+1) addrOffset;
     assign addrOffset = offset + 1;
@@ -113,8 +115,8 @@ endmodule
 
 module ALUModel(
     input logic immv,
-    input logic sext,
-    input logic `N(`XLEN) imm,
+    input logic uext,
+    input logic `N(`DEC_IMM_WIDTH) imm,
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
     input logic `N(`INTOP_WIDTH) op,
@@ -122,23 +124,23 @@ module ALUModel(
     input logic `N(`PREDICTION_WIDTH) offset,
     output logic `N(`XLEN) result
 );
-    logic `N(`XLEN) data1, data2;
+    logic `N(`XLEN) lui_imm, ext_imm, s_imm;
+    assign lui_imm = {{`XLEN-20{imm[19]}}, imm[19: 0]};
+    assign ext_imm = {{`XLEN-12{imm[11] & ~uext}}, imm[11: 0]};
+    assign s_imm = {{`XLEN-12{imm[11]}}, imm[11: 0]};
+
+    logic `N(`XLEN) data1, data2, cmp_data;
     logic `N(`XLEN) add_result;
     logic cmp, scmp;
 
     assign data1 = rs1_data;
     assign data2 = immv ? imm : rs2_data;
+
+    assign cmp_data = immv ? s_imm : rs2_data;
     assign add_result = data1 + data2;
-    assign cmp = data1 < data2;
-
-
-    logic `N(`XLEN) imm_shift;
-    logic `N(`PREDICTION_WIDTH+2) br_offset;
-    assign br_offset = {offset, 2'b00};
-    assign imm_shift = {imm[`XLEN-13: 0], 12'b0};
-
+    assign cmp = data1 < cmp_data;
     always_comb begin
-        case({data2[`XLEN-1], data1[`XLEN-1]})
+        case({cmp_data[`XLEN-1], data1[`XLEN-1]})
         2'b00: scmp = cmp;
         2'b01: scmp = 1;
         2'b10: scmp = 0;
@@ -146,13 +148,18 @@ module ALUModel(
         endcase
     end
 
+    logic `N(`XLEN) auipc_imm;
+    logic `N(`PREDICTION_WIDTH+2) br_offset;
+    assign br_offset = {offset, 2'b00};
+    assign auipc_imm = {{`XLEN-32{imm[19]}}, imm[19: 0], 12'b0};
+
     always_comb begin
         case(op)
         `INT_ADD: begin
             result = add_result;
         end
         `INT_LUI: begin
-            result = imm;
+            result = lui_imm;
         end
         `INT_SLT: begin
             // A   B   s u
@@ -161,11 +168,11 @@ module ALUModel(
             // 100 111 1 0
             // 101 110 0 1
             // 100 011 1 0
-            if(sext)begin
-                result = scmp;
+            if(uext)begin
+                result = cmp;
             end
             else begin
-                result = cmp;
+                result = scmp;
             end
         end
         `INT_XOR: begin
@@ -185,7 +192,7 @@ module ALUModel(
             result = $signed(data1) >> data2[$clog2(`XLEN)-1: 0];
         end
         `INT_AUIPC: begin
-            result = stream.start_addr + br_offset + imm_shift;
+            result = stream.start_addr + br_offset + auipc_imm;
         end
         default: result = 0;
         endcase

@@ -161,14 +161,20 @@ typedef struct packed {
     logic intv; // int valid
     logic memv;
     logic branchv;
-    logic sext;
+`ifdef ZICSR
+    logic csrv;
+`endif
+    logic uext;
     logic we;
     logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(`BRANCHOP_WIDTH) branchop;
+`ifdef ZICSR
+    logic `N(`CSROP_WIDTH) csrop;
+`endif
     logic [4: 0] rs1, rs2, rd;
-    logic `N(`XLEN) imm;
+    logic `N(`DEC_IMM_WIDTH) imm;
 } DecodeInfo;
 
 typedef struct packed {
@@ -194,18 +200,18 @@ typedef struct packed {
 typedef struct packed {
     logic intv;
     logic branchv;
-    logic sext;
+    logic uext;
     logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
-    logic `N(`XLEN) imm;
+    logic `N(`DEC_IMM_WIDTH) imm;
     FsqIdxInfo fsqInfo;
 } IntIssueBundle;
 
 typedef struct packed {
-    logic sext;
+    logic uext;
     logic `N(`MEMOP_WIDTH) memop;
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
@@ -260,7 +266,7 @@ typedef struct packed {
 } StoreIdx;
 
 typedef struct packed {
-    logic sext;
+    logic uext;
     logic [1: 0] size;
     logic [11: 0] imm;
     logic `N(`PREG_WIDTH) rd;
@@ -271,7 +277,7 @@ typedef struct packed {
 } LoadIssueData;
 
 typedef struct packed {
-    logic sext;
+    logic uext;
     logic [1: 0] size;
     logic [11: 0] imm;
     StoreIdx sqIdx;
