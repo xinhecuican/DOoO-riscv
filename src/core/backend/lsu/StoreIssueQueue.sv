@@ -19,7 +19,7 @@ module StoreIssueQueue(
     input StoreIdx `N(`STORE_PIPELINE) sqIdx,
     input LoadIdx `N(`STORE_PIPELINE) lqIdx,
     DisIssueIO.issue dis_store_io,
-    IssueRegfileIO.issue store_reg_io,
+    IssueWakeupIO.issue store_wakeup_io,
     WriteBackBus wbBus,
     BackendCtrl backendCtrl,
     StoreUnitIO.store store_io
@@ -50,8 +50,9 @@ generate
         assign addr_io[i].lqIdx = lqIdx[order[i]];
         assign full[i] = addr_io[i].full;
         
-        assign store_reg_io.en[i] = addr_io[i].reg_en & ~backendCtrl.redirect;
-        assign store_reg_io.preg[i] = addr_io[i].rs1;
+        assign store_wakeup_io.en[i] = addr_io[i].reg_en & ~backendCtrl.redirect;
+        assign store_wakeup_io.preg[i] = addr_io[i].rs1;
+        assign store_wakeup_io.rd[i] = 0;
         assign store_io.storeIssueData[i] = addr_io[i].data_o;
 
         assign data_io[i].en = addr_io[i].en;
@@ -61,8 +62,8 @@ generate
         assign data_io[i].walk_en = addr_io[i].walk_en;
         assign data_io[i].sqIdx = addr_io[i].sqIdx;
         
-        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en & ~backendCtrl.redirect;
-        assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
+        assign store_wakeup_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en & ~backendCtrl.redirect;
+        assign store_wakeup_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
         assign store_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
         assign store_io.dis_sq_idx[i] = sqIdx[i];
@@ -73,8 +74,8 @@ endgenerate
     assign store_io.dis_en = full ? 0 : dis_store_io.en;
     always_ff @(posedge clk)begin
         order <= sortOrder;
-        store_io.en <= store_reg_io.en[`STORE_ISSUE_BANK_NUM-1: 0];
-        store_io.data_en <= store_reg_io.en[`STORE_ISSUE_BANK_NUM * 2 -1: `STORE_ISSUE_BANK_NUM];
+        store_io.en <= store_wakeup_io.en[`STORE_ISSUE_BANK_NUM-1: 0];
+        store_io.data_en <= store_wakeup_io.en[`STORE_ISSUE_BANK_NUM * 2 -1: `STORE_ISSUE_BANK_NUM];
     end
 endmodule
 

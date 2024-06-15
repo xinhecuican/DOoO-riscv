@@ -7,7 +7,7 @@ module Dispatch(
     DisIssueIO.dis dis_intissue_io,
     DisIssueIO.dis dis_load_io,
     DisIssueIO.dis dis_store_io,
-    WriteBackBus wbBus,
+    WakeupBus wakeupBus,
     CommitBus.in commitBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl,
@@ -83,6 +83,16 @@ endgenerate
     ) store_dispatch_queue(
         .*,
         .io(store_io)
+    );
+
+    DispatchQueueIO #($bits(CsrIssueBundle), `CSR_DIS_PORT) csr_io();
+    DispatchQueue #(
+        .DATA_WIDTH($bits(CsrIssueBundle)),
+        .DETPH(`CSR_DIS_SIZE),
+        .OUT_WIDTH(`CSR_DIS_PORT)
+    ) csr_dispatch_queue (
+        .*,
+        .io(csr_io)
     );
 
     assign full = int_io.full | load_io.full | store_io.full;

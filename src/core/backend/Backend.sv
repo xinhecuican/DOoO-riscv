@@ -15,9 +15,10 @@ module Backend(
     DisIssueIO #(.PORT_NUM(`INT_DIS_PORT), .DATA_SIZE($bits(IntIssueBundle))) dis_intissue_io();
     DisIssueIO #(.PORT_NUM(`LOAD_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_load_io();
     DisIssueIO #(.PORT_NUM(`STORE_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_store_io();
-    IssueRegfileIO #(.PORT_SIZE(`ALU_SIZE * 2)) int_reg_io();
-    IssueRegfileIO #(.PORT_SIZE(`LOAD_PIPELINE)) load_reg_io();
-    IssueRegfileIO #(.PORT_SIZE(`STORE_PIPELINE * 2)) store_reg_io();
+    WakeupBus wakeupBus();
+    IssueWakeupIO #(`ALU_SIZE, `ALU_SIZE * 2) int_wakeup_io();
+    IssueWakeupIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_wakeup_io();
+    IssueWakeupIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_wakeup_io();
     IntIssueExuIO int_exu_io();
     BackendCtrl backendCtrl();
     CommitBus commitBus();
@@ -63,7 +64,7 @@ module Backend(
         .*,
         .memRedirect(backendRedirect.memRedirect)
     );
-    RegfileWrapper regfile_wrapper(.*);
+    Wakeup wakeup(.*);
     Execute execute(.*,
                     .backendRedirectInfo(backendRedirect.branchRedirect),
                     .branchRedirectInfo(backendRedirect.branchInfo));

@@ -247,6 +247,33 @@ interface DisIssueIO #(
     modport issue(input en, status, data, output full);
 endinterface
 
+interface IssueWakeupIO #(
+    parameter BANK_SIZE = 4,
+    parameter PORT_SIZE = 4
+);
+    logic `N(BANK_SIZE) en;
+    logic `N(BANK_SIZE) wakeup_en;
+    logic `ARRAY(PORT_SIZE, `PREG_WIDTH) preg;
+    logic `ARRAY(BANK_SIZE, `PREG_WIDTH) rd;
+
+    logic `N(BANK_SIZE) ready;
+    logic `ARRAY(PORT_SIZE, `XLEN) data;
+
+    modport issue(output en, preg, rd, input ready, data);
+    modport regfile(output en, preg, input ready, data);
+    modport spec(output en, preg, rd, wakeup_en, input ready, data);
+    modport wakeup(input en, preg, rd, wakeup_en, output ready, data);
+endinterface
+
+interface WakeupBus;
+
+    logic `N(`WAKEUP_SIZE) en;
+    logic `N(`WAKEUP_SIZE) we;
+    logic `ARRAY(`WAKEUP_SIZE, `PREG_WIDTH) rd;
+
+    modport wakeup(output en, we, rd);
+endinterface
+
 interface IssueRegfileIO #(
     parameter PORT_SIZE = 4
 );

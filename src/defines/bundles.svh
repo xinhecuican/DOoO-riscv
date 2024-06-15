@@ -220,6 +220,15 @@ typedef struct packed {
 } MemIssueBundle;
 
 typedef struct packed {
+    logic immv;
+    logic `N(`CSROP_WIDTH) csrop;
+    RobIdx robIdx;
+    logic `N(`PREG_WIDTH) rd;
+    logic `N(12) imm;
+    FsqIdxInfo fsqInfo;
+} CsrIssueBundle;
+
+typedef struct packed {
     logic en;
     FsqIdxInfo fsqInfo;
     RobIdx robIdx;

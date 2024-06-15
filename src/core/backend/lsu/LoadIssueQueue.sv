@@ -26,8 +26,8 @@ module LoadIssueQueue(
     input LoadIdx `N(`LOAD_PIPELINE) lqIdx,
     input StoreIdx `N(`LOAD_PIPELINE) sqIdx,
     DisIssueIO.issue dis_load_io,
-    IssueRegfileIO.issue load_reg_io,
-    WriteBackBus wbBus,
+    IssueWakeupIO.regfile load_wakeup_io,
+    WakeupBus wakeupBus,
     LoadUnitIO.load load_io,
     BackendCtrl backendCtrl
 );
@@ -60,8 +60,8 @@ generate
         assign bank_io[i].reply_slow = load_io.reply_slow[i];
         assign full[i] = bank_io[i].full;
 
-        assign load_reg_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
-        assign load_reg_io.preg[i] = bank_io[i].rs1;
+        assign load_wakeup_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
+        assign load_wakeup_io.preg[i] = bank_io[i].rs1;
         assign load_io.loadIssueData[i] = bank_io[i].data_o;
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
         assign load_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
@@ -75,7 +75,7 @@ endgenerate
     assign load_io.eqNum = full ? 0 : disNum;
     always_ff @(posedge clk)begin
         order <= sortOrder;
-        load_io.en <= load_reg_io.en;
+        load_io.en <= load_wakeup_io.en & load_wakeup_io.ready;
     end
 endmodule
 
@@ -104,7 +104,7 @@ module LoadIssueBank(
     input logic clk,
     input logic rst,
     LoadIssueBankIO.bank io,
-    WriteBackBus wbBus,
+    WakeupBus wakeupBus,
     BackendCtrl backendCtrl
 );
     typedef struct packed {
@@ -163,7 +163,7 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
         for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs1_cmp[i][j] = wbBus.en[j] & wbBus.we[j] & (wbBus.rd[j] == status_ram[i].rs1);
+            assign rs1_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs1);
         end
     end
 endgenerate

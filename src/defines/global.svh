@@ -130,7 +130,9 @@ typedef enum logic [1: 0] {
 `define STORE_DIS_SIZE 8
 `define LOAD_DIS_PORT 2
 `define STORE_DIS_PORT 2
-`define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2)
+`define CSR_DIS_SIZE 4
+`define CSR_DIS_PORT 1
+`define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 + `CSR_DIS_PORT)
 
 // issue
 `define INT_ISSUE_SIZE 32
@@ -155,6 +157,7 @@ typedef enum logic [1: 0] {
 `define LOAD_REFILL_SIZE 2
 
 // wb
+`define WAKEUP_SIZE (`ALU_SIZE+`LSU_SIZE)
 `define WB_SIZE (`ALU_SIZE+`LSU_SIZE)
 
 // dcache

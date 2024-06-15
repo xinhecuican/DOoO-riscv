@@ -4,10 +4,10 @@ module IntIssueQueue(
     input logic clk,
     input logic rst,
     DisIssueIO.issue dis_issue_io,
-    IssueRegfileIO.issue int_reg_io,
+    IssueWakeupIO.issue int_wakeup_io,
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
-    WriteBackBus wbBus,
+    WakeupBus wakeupBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl
 );
@@ -34,12 +34,13 @@ generate
         assign bank_io[i].en = dis_issue_io.en[order[i]] & ~dis_issue_io.full;
         assign bank_io[i].status = dis_issue_io.status[order[i]];
         assign bank_io[i].data = dis_issue_io.data[order[i]];
+        assign bank_io[i].ready = int_wakeup_io.ready[i];
         assign full[i] = bank_io[i].full;
 
-        assign int_reg_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
-        assign int_reg_io.en[BANK_NUM+i] = bank_io[i].reg_en & ~backendCtrl.redirect;
-        assign int_reg_io.preg[i] = bank_io[i].rs1;
-        assign int_reg_io.preg[BANK_NUM+i] = bank_io[i].rs2;
+        assign int_wakeup_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
+        assign int_wakeup_io.preg[i] = bank_io[i].rs1;
+        assign int_wakeup_io.preg[BANK_NUM+i] = bank_io[i].rs2;
+        assign int_wakeup_io.rd[i] = bank_io[i].rd;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
 
         assign redirectClear[i] = backendCtrl.redirect & ((bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir));
@@ -58,11 +59,11 @@ generate
     end
 endgenerate
 
+    assign issue_exu_io.rs1_data = int_wakeup_io.data[BANK_NUM-1: 0];
+    assign issue_exu_io.rs2_data = int_wakeup_io.data[BANK_NUM*2-1: BANK_NUM];
     always_ff @(posedge clk)begin
         order <= sortOrder;
         issue_exu_io.en <= enNext & ~redirectClear;
-        issue_exu_io.rs1_data <= int_reg_io.data[BANK_NUM-1: 0];
-        issue_exu_io.rs2_data <= int_reg_io.data[BANK_NUM*2-1: BANK_NUM];
         issue_exu_io.streams <= fsq_back_io.streams;
         issue_exu_io.directions <= fsq_back_io.directions;
     end
@@ -76,13 +77,14 @@ interface IntBankIO #(parameter DEPTH=8);
     logic full;
     logic `N($clog2(DEPTH)+1) bankNum;
     logic reg_en;
-    logic `N(`PREG_WIDTH) rs1, rs2;
+    logic ready;
+    logic `N(`PREG_WIDTH) rs1, rs2, rd;
     IntIssueBundle data_o;
     logic `N(`FSQ_WIDTH) fsqIdx;
     BranchType br_type;
     RasType ras_type;
 
-    modport bank(input en, status, data, output full, bankNum, reg_en, rs1, rs2, data_o, fsqIdx, br_type, ras_type);
+    modport bank(input en, status, data, ready, output full, bankNum, reg_en, rs1, rs2, rd, data_o, fsqIdx, br_type, ras_type);
 endinterface
 
 module IntIssueBank #(
@@ -92,7 +94,7 @@ module IntIssueBank #(
     input logic clk,
     input logic rst,
     IntBankIO.bank io,
-    WriteBackBus wbBus,
+    WakeupBus wakeupBus,
     CommitWalk commitWalk,
     BackendCtrl backendCtrl
 );
@@ -138,6 +140,7 @@ endgenerate
     assign io.reg_en = |ready;
     assign io.rs1 = status_ram[selectIdx].rs1;
     assign io.rs2 = status_ram[selectIdx].rs2;
+    assign io.rd = data_o.rd;
     assign io.fsqIdx = data_o.fsqInfo.idx;
     PSelector #(DEPTH) selector_free_idx (~en, free_en);
     Encoder #(DEPTH) encoder_free_idx (free_en, freeIdx);
@@ -146,8 +149,8 @@ endgenerate
 generate
     for(genvar i=0; i<DEPTH; i++)begin
         for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs1_cmp[i][j] = wbBus.en[j] & wbBus.we[j] & (wbBus.rd[j] == status_ram[i].rs1);
-            assign rs2_cmp[i][j] = wbBus.en[j] & wbBus.we[j] & (wbBus.rd[j] == status_ram[i].rs2);
+            assign rs1_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs1);
+            assign rs2_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs2);
         end
     end
 endgenerate
@@ -174,7 +177,7 @@ endgenerate
             end
             else begin
                 en <= (en | ({DEPTH{io.en}} & free_en)) &
-                      ~(select_en);
+                      ~(select_en & {{DEPTH{io.ready}}});
             end
             
             if(io.en)begin

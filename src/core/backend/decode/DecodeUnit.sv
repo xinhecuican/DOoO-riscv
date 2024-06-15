@@ -96,8 +96,8 @@ module DecodeUnit(
 
 `ifdef ZICSR
     logic csrrw, csrrs, csrrc, csrrwi, csrrsi, csrrci;
-    assign csrrw = opsystem & ~funct3[2] & ~funct3[1] & funct[0];
-    assign csrrs = opsystem & ~funct3[2] & funct3[1] & ~funct[0];
+    assign csrrw = opsystem & ~funct3[2] & ~funct3[1] & funct3[0];
+    assign csrrs = opsystem & ~funct3[2] & funct3[1] & ~funct3[0];
     assign csrrc = opsystem & ~funct3[2] & funct3[1] & funct3[0];
     assign csrrwi = opsystem & funct3[2] & ~funct3[1] & funct3[0];
     assign csrrsi = opsystem & funct3[2] & funct3[1] & ~funct3[0];
