@@ -278,6 +278,7 @@ generate
 endgenerate
 endmodule
 
+// in1 older if bigger set
 module LoopCompare #(
 	parameter WIDTH=4
 )(

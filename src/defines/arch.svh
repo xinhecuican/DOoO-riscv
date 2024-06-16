@@ -6,8 +6,8 @@
 `define DIFFTEST
 
 `ifdef ZICSR
-parameter HAS_ZICSR=1
+parameter HAS_ZICSR=1;
 `else
-parameter HAS_ZICSR=0
+parameter HAS_ZICSR=0;
 `endif
 `endif

@@ -121,7 +121,7 @@ typedef struct packed {
 `define IP_MASK{{`MXL-18{1'b0}}, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
 
 typedef struct packed {
-    logic interrupt;
+    logic intr;
     logic `N(`MXL-1) excode;
 } CAUSE;
 

@@ -8,7 +8,7 @@ module Dispatch(
     DisIssueIO.dis dis_load_io,
     DisIssueIO.dis dis_store_io,
 `ifdef ZICSR
-    DisCsrIO.dis dis_csr_io,
+    DisIssueIO.dis dis_csr_io,
 `endif
     WakeupBus wakeupBus,
     CommitBus.in commitBus,
@@ -89,14 +89,14 @@ endgenerate
     DispatchQueueIO #($bits(CsrIssueBundle), `CSR_DIS_PORT) csr_io();
     DispatchQueue #(
         .DATA_WIDTH($bits(CsrIssueBundle)),
-        .DETPH(`CSR_DIS_SIZE),
+        .DEPTH(`CSR_DIS_SIZE),
         .OUT_WIDTH(`CSR_DIS_PORT)
     ) csr_dispatch_queue (
         .*,
         .io(csr_io)
     );
 generate
-    for(genvar i=0; i<`FETCH_WIDTH; i++)begin : load_in
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin : csr_in
         DecodeInfo di;
         CsrIssueBundle data;
         assign data.immv = di.immv;
@@ -174,10 +174,18 @@ generate
 endgenerate
 
 `ifdef ZICSR
+    IssueStatusBundle csr_status;
+    CsrIssueBundle csr_issue_bundle;
+    assign csr_issue_bundle = csr_io.data_o;
     assign dis_csr_io.en = csr_io.en;
-    assign dis_csr_io.rs1 = csr_io.rs1_o;
-    assign dis_csr_io.bundle = csr_io.data_o;
+    assign dis_csr_io.data = csr_io.data_o;
     assign csr_io.issue_full = dis_csr_io.full;
+    assign csr_status.rs1v = 1'b0;
+    assign csr_status.rs2v = 1'b0;
+    assign csr_status.rs1 = csr_io.rs1;
+    assign csr_status.rs2 = 0;
+    assign csr_status.robIdx = csr_issue_bundle.robIdx;
+    assign dis_csr_io.status = csr_status;
 `endif
 endmodule
 
@@ -227,7 +235,7 @@ module DispatchQueue #(
     logic `N(ADDR_WIDTH) index `N(`FETCH_WIDTH);
 
     ParallelAdder #(1, `FETCH_WIDTH) adder (io.en, addNum);
-    assign eqNum = io.dis_full ? 0 : addNum;
+    assign eqNum = backendCtrl.dis_full ? 0 : addNum;
     assign subNum = io.issue_full ? 0 : 
                     num >= `FETCH_WIDTH ? `FETCH_WIDTH : num;
     assign io.full = num + addNum > DEPTH;
@@ -267,10 +275,11 @@ generate
 
         for(genvar i=0; i<DEPTH; i++)begin
             assign bigger[i] = (robIdx[i].dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > robIdx[i].idx);
-            logic `N(ADDR_WIDTH) i_n;
+            logic `N(ADDR_WIDTH) i_n, i_p;
             assign i_n = i + 1;
+            assign i_p = i - 1;
             assign validStart[i] = valid[i] & ~valid[i_n]; // valid[i] == 1 && valid[i + 1] == 0
-            assign validEnd[i] = ~valid[i] & valid[i_n];
+            assign validEnd[i] = valid[i] & ~valid[i_p];
         end
         Encoder #(DEPTH) encoder1 (validStart, validSelect1);
         Encoder #(DEPTH) encoder2 (validEnd, validSelect2);

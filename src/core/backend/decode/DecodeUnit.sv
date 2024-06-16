@@ -94,7 +94,6 @@ module DecodeUnit(
     assign csrrsi = opsystem & funct3[2] & funct3[1] & ~funct3[0];
     assign csrrci = opsystem & funct3[2] & funct3[1] & funct3[0];
 
-    assign info.csrv = csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci;
     assign info.csrop = funct3;
     assign info.csrid = inst[31: 20];
 `endif

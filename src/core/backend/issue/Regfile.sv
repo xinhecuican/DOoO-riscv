@@ -42,11 +42,11 @@ generate
             .WIDTH(`PREG_WIDTH),
             .RADIX(`WB_SIZE),
             .DATA_WIDTH(`XLEN)
-        )(
+        ) parallel_eq_bypass(
             .origin(raddr[i]),
             .cmp_en(wbBus.en),
             .cmp(wbBus.rd),
-            .data_i(wbBus.data_i),
+            .data_i(wbBus.res),
             .eq(eq),
             .data_o(data)
         );

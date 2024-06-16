@@ -115,7 +115,7 @@ module ParallelEQ #(
 	parameter DATA_WIDTH = 4
 )(
     input logic [WIDTH-1: 0] origin,
-    input logic [WIDTH-1: 0] cmp_en,
+    input logic [RADIX-1: 0] cmp_en,
 	input logic [RADIX-1: 0][WIDTH-1: 0] cmp,
 	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
     output logic [RADIX-1: 0] eq,
@@ -134,6 +134,7 @@ generate
 	end
 	else begin
 		logic [DATA_WIDTH-1: 0] data1, data2;
+        logic eq0, eq1;
 		ParallelEQ #(
 			.RADIX(RADIX/2),
 			.WIDTH(WIDTH),
@@ -158,6 +159,8 @@ generate
             .eq(eq[RADIX-1: RADIX/2]),
 			.data_o(data2)
 		);
+        assign eq0 = |eq[RADIX/2-1: 0];
+        assign eq1 = |eq[RADIX-1: RADIX/2];
 		assign data_o = ({WIDTH{eq0}} & data1) | ({WIDTH{eq1}} & data2);
 	end
 endgenerate

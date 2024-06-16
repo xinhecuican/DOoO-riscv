@@ -5,7 +5,8 @@ module CSR(
     input logic clk,
     input logic rst,
     IssueCSRIO.csr issue_csr_io,
-    WriteBackIO.fu csr_wb_io
+    WriteBackIO.fu csr_wb_io,
+    BackendCtrl backendCtrl
 );
     logic `N(2) priviledge;
 
@@ -36,7 +37,7 @@ module CSR(
     logic `N(`MXL) sip;
     logic `N(`MXL) sie;
     logic `N(`MXL) sepc;
-    CAUSE scuase;
+    CAUSE scause;
     logic `N(`MXL) stval;
     SATP satp;
 
@@ -57,7 +58,10 @@ module CSR(
     logic `ARRAY(`CSR_NUM, 12) cmp_csrid;
     logic `ARRAY(`CSR_NUM, `MXL) cmp_csr_data;
     logic `N(`CSR_NUM) cmp_eq;
-    assign wen = cmp_eq & issue_csr_io.bundle.en & {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0))}};
+    logic redirect_older;
+    RobIdx out;
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.bundle.robIdx, redirect_older, out);
+    assign wen = cmp_eq & issue_csr_io.en & {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & ~(backendCtrl.redirect & redirect_older)}};
 
 `define CSR_CMP_DEF(name, i, WARL, mask)        \
     localparam [7: 0] ``name``_id = i;                 \
@@ -158,7 +162,7 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(mtvec,       0,          1, 0, 0)
     `CSR_WRITE_DEF(medeleg,     0,          1, 0, 0)
     `CSR_WRITE_DEF(mideleg,     0,          1, 0, 0)
-    `CSR_WRITE_DEF(msratch,     0,          1, 0, 0)
+    `CSR_WRITE_DEF(mscratch,    0,          1, 0, 0)
     `CSR_WRITE_DEF(mepc,        0,          1, 0, 0)
     `CSR_WRITE_DEF(mcause,      0,          1, 1, `CAUSE_MASK)
     `CSR_WRITE_DEF(mtval,       0,          1, 0, 0)
@@ -195,7 +199,7 @@ endgenerate                                                             \
         .mstatus(mstatus),
         .sstatus(sstatus),
         .mepc(mepc),
-        .sepc(spec),
+        .sepc(sepc),
         .mtval(mtval),
         .stval(stval),
         .mtvec(mtvec),
