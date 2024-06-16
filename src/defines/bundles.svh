@@ -163,6 +163,7 @@ typedef struct packed {
     logic branchv;
 `ifdef ZICSR
     logic csrv;
+    logic [11: 0] csrid;
 `endif
     logic uext;
     logic we;
@@ -225,6 +226,7 @@ typedef struct packed {
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
     logic `N(12) imm;
+    logic `N(12) csrid;
     FsqIdxInfo fsqInfo;
 } CsrIssueBundle;
 

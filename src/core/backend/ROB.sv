@@ -113,6 +113,10 @@ endgenerate
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_store (commitBus.en & commit_mem & commit_store, commitStoreNum);
     assign commitBus.wenum = commitWeNum;
     assign commitBus.we = commit_we;
+`ifdef ZICSR
+    assign commitBus.robIdx.idx = tail;
+    assign commitBus.robIdx.dir = tdir;
+`endif
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitBus.fsqInfo[i] = robData[i].fsqInfo;

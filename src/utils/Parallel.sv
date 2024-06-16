@@ -108,3 +108,57 @@ generate
     end
 endgenerate
 endmodule
+
+module ParallelEQ #(
+	parameter RADIX = 2,
+	parameter WIDTH = 4,
+	parameter DATA_WIDTH = 4
+)(
+    input logic [WIDTH-1: 0] origin,
+    input logic [WIDTH-1: 0] cmp_en,
+	input logic [RADIX-1: 0][WIDTH-1: 0] cmp,
+	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
+    output logic [RADIX-1: 0] eq,
+	output logic [DATA_WIDTH-1: 0] data_o
+);
+generate
+	if(RADIX == 1)begin
+        assign eq = origin == cmp && cmp_en;
+		assign data_o = data_i;
+	end
+	else if(RADIX == 2)begin
+        logic eq0, eq1;
+        assign eq[0] = cmp[0] == origin && cmp_en[0];
+        assign eq[1] = cmp[1] == origin && cmp_en[1];
+		assign data_o = ({WIDTH{eq[0]}} & data_i[0]) | ({WIDTH{eq[1]}} & data_i[1]);
+	end
+	else begin
+		logic [DATA_WIDTH-1: 0] data1, data2;
+		ParallelEQ #(
+			.RADIX(RADIX/2),
+			.WIDTH(WIDTH),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select1 (
+            .origin(origin),
+            .cmp_en(cmp_en[RADIX/2-1: 0]),
+			.cmp(cmp[RADIX/2-1: 0]),
+			.data_i(data_i[RADIX/2-1: 0]),
+            .eq(eq[RADIX/2-1: 0]),
+			.data_o(data1)
+		);
+		ParallelEQ #(
+			.RADIX(RADIX-RADIX/2),
+			.WIDTH(WIDTH),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select2 (
+            .origin(origin),
+            .cmp_en(cmp_en[RADIX-1: RADIX/2]),
+			.cmp(cmp[RADIX-1: RADIX/2]),
+			.data_i(data_i[RADIX-1: RADIX/2]),
+            .eq(eq[RADIX-1: RADIX/2]),
+			.data_o(data2)
+		);
+		assign data_o = ({WIDTH{eq0}} & data1) | ({WIDTH{eq1}} & data2);
+	end
+endgenerate
+endmodule

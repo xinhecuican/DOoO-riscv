@@ -6,6 +6,9 @@ module Wakeup(
     IssueWakeupIO.wakeup int_wakeup_io,
     IssueWakeupIO.wakeup load_wakeup_io,
     IssueWakeupIO.wakeup store_wakeup_io,
+`ifdef ZICSR
+    IssueWakeupIO.wakeup csr_wakeup_io,
+`endif
     WakeupBus.wakeup wakeupBus,
     WriteBackBus wbBus
 `ifdef DIFFTEST
@@ -14,20 +17,35 @@ module Wakeup(
 );
     RegfileIO reg_io();
 
-    assign int_wakeup_io.ready = {`ALU_SIZE{1'b1}};
-    assign int_wakeup_io.data = reg_io.rdata[`ALU_SIZE * 2 - 1: 0];
-
     logic `N(`ALU_SIZE) int_en, int_we;
     logic `ARRAY(`ALU_SIZE, `PREG_WIDTH) int_rd;
     logic `ARRAY(`ALU_SIZE*2, `PREG_WIDTH) int_preg;
-    always_ff @(posedge clk)begin
-        int_en <= int_wakeup_io.en;
-        for(int i=0; i<`ALU_SIZE; i++)begin
-            int_we[i] <= int_wakeup_io.rd[i] != 0;
+
+    assign int_wakeup_io.data = reg_io.rdata[`ALU_SIZE * 2 - 1: 0];
+generate
+    for(genvar i=0; i<`ALU_SIZE; i++)begin
+        if(i == 1 && HAS_ZICSR)begin
+            assign int_wakeup_io.ready[i] = ~csr_wakeup_io.en;
+            always_ff @(posedge clk)begin
+                int_en[i] <= int_wakeup_io.en[i] | csr_wakeup_io.en; 
+                int_we[i] <= csr_wakeup_io.en ? csr_wakeup_io.rd != 0 : int_wakeup_io.rd != 0;
+                int_rd[i] <= csr_wakeup_io.en ? csr_wakeup_io.rd : int_wakeup_io.rd;
+                int_preg[i] <= csr_wakeup_io.en ? csr_wakeup_io.preg : int_wakeup_io.preg[i];
+                int_preg[`ALU_SIZE+i] <= int_wakeup_io.preg[i];
+            end
         end
-        int_rd <= int_wakeup_io.rd;
-        int_preg <= int_wakeup_io.preg;
+        else begin
+            assign int_wakeup_io.ready[i] = 1'b1;
+            always_ff @(posedge clk)begin
+                int_en[i] <= int_wakeup_io.en[i];
+                int_we[i] <= int_wakeup_io.rd[i] != 0;
+                int_rd[i] <= int_wakeup_io.rd[i];
+                int_preg[i] <= int_wakeup_io.preg[i];
+                int_preg[`ALU_SIZE+i] <= int_wakeup_io.preg[i];
+            end
+        end
     end
+endgenerate
     assign wakeupBus.en[`ALU_SIZE-1: 0] = int_en;
     assign wakeupBus.rd[`ALU_SIZE-1: 0] = int_rd;
 generate
@@ -38,6 +56,10 @@ generate
 endgenerate
     assign reg_io.raddr[`ALU_SIZE*2-1: 0] = int_preg;
 
+`ifdef ZICSR
+    assign csr_wakeup_io.ready = 1'b1;
+    assign csr_wakeup_io.data = reg_io.rdata[1];
+`endif
 
 
     localparam LOAD_BASE = `ALU_SIZE * 2;

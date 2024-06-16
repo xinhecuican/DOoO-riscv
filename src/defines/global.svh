@@ -9,6 +9,7 @@
 `define RST 1'b1
 `ifdef RV32I
 `define XLEN 32
+`define MXL 32
 `endif
 `define DATA_BYTE (`XLEN / 8)
 `define DATA_BUS `N(`XLEN)
@@ -57,7 +58,7 @@
 `define TAGE_BASE_CTR 2
 `define TAGE_ALT_CTR 7
 parameter [8: 0] tage_hist_length `N(`TAGE_BANK) = {9'd8, 9'd13, 9'd32, 9'd119};
-parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd4096, 13'd4096, 13'd4096, 13'd4096};
+parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd2048, 13'd2048, 13'd2048, 13'd2048};
 `define TAGE_SET_WIDTH 12
 typedef enum logic [1: 0] { 
     DIRECT, 
@@ -132,7 +133,7 @@ typedef enum logic [1: 0] {
 `define STORE_DIS_PORT 2
 `define CSR_DIS_SIZE 4
 `define CSR_DIS_PORT 1
-`define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 + `CSR_DIS_PORT)
+`define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2)
 
 // issue
 `define INT_ISSUE_SIZE 32
@@ -142,6 +143,8 @@ typedef enum logic [1: 0] {
 `define LOAD_ISSUE_BANK_NUM `LOAD_DIS_PORT
 `define STORE_ISSUE_BANK_SIZE 8
 `define STORE_ISSUE_BANK_NUM `STORE_DIS_PORT
+`define CSR_ISSUE_SIZE 4
+`define CSR_ISSUE_WIDTH $clog2(`CSR_ISSUE_SIZE)
 
 // lsu
 `define LOAD_QUEUE_SIZE 32

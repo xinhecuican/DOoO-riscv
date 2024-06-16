@@ -4,6 +4,7 @@ module Execute(
     input logic clk,
     input logic rst,
     IntIssueExuIO.exu int_exu_io,
+    IssueCSRIO.csr issue_csr_io,
     WriteBackIO.fu alu_wb_io,
     WriteBackBus.wb wbBus,
     BackendCtrl backendCtrl,

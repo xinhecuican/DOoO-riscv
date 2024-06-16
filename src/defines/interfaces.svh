@@ -247,6 +247,16 @@ interface DisIssueIO #(
     modport issue(input en, status, data, output full);
 endinterface
 
+interface DisCsrIO;
+    logic en;
+    logic `N(`PREG_WIDTH) rs1;
+    CsrIssueBundle bundle;
+    logic full;
+
+    modport dis (output en, rs1, rs2, bundle, input full);
+    modport issue(input en, rs1, rs2, bundle, output full);
+endinterface
+
 interface IssueWakeupIO #(
     parameter BANK_SIZE = 4,
     parameter PORT_SIZE = 4
@@ -316,6 +326,15 @@ interface IssueAluIO;
     modport alu (input en, rs1_data, rs2_data, bundle, stream, direction, ras_type, br_type, output valid);
 endinterface
 
+interface IssueCSRIO;
+    logic en;
+    logic `N(`XLEN) rdata;
+    CsrIssueBundle bundle;
+
+    modport issue(output en, rdata, bundle);
+    modport csr (input en, rdata, bundle);
+endinterface
+
 interface IssueBranchIO;
     logic en;
     logic `N(`XLEN) rs1_data;
@@ -325,6 +344,16 @@ interface IssueBranchIO;
     logic direction;
 
     modport branch (input en, rs1_data, rs2_data, bundle, streams, direction);
+endinterface
+
+interface WriteBackIO#(
+    parameter FU_SIZE = 4
+);
+    WBData `N(FU_SIZE) datas;
+    logic `N(FU_SIZE) valid;
+
+    modport wb (input datas, output valid);
+    modport fu (output datas, input valid);
 endinterface
 
 interface WriteBackBus;
@@ -348,10 +377,20 @@ interface CommitBus;
 
     logic `N($clog2(`COMMIT_WIDTH)+1) loadNum;
     logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
+`ifdef ZICSR
+    RobIdx robIdx;
+`endif
 
-    modport rob(output en, we, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum);
+    modport rob(output en, we, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum
+`ifdef ZICSR
+    , robIdx
+`endif
+);
     modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
     modport mem(input loadNum, storeNum);
+`ifdef ZICSR
+    modport csr(input robIdx);
+`endif
 endinterface
 
 interface CommitWalk;
