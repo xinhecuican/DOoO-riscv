@@ -17,6 +17,9 @@ module BackendRedirectCtrl(
             if(io.branchRedirect.en || io.memRedirect.en)begin
                 io.out <= (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en) ? io.branchRedirect : io.memRedirect;
             end
+            else begin
+                io.out <= 0;
+            end
             if(io.branchRedirect.en)begin
                 io.branchOut.en <= (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en);
                 io.branchOut.taken <= io.branchInfo.taken;
@@ -24,7 +27,9 @@ module BackendRedirectCtrl(
                 io.branchOut.br_type <= io.branchInfo.br_type;
                 io.branchOut.ras_type <= io.branchInfo.ras_type;
             end
-
+            else begin
+                io.branchOut <= 0;
+            end
         end
 
     end

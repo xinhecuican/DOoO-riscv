@@ -19,12 +19,10 @@ module Backend(
     IssueWakeupIO #(`ALU_SIZE, `ALU_SIZE * 2) int_wakeup_io();
     IssueWakeupIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_wakeup_io();
     IssueWakeupIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_wakeup_io();
-`ifdef ZICSR
     DisIssueIO #(.PORT_NUM(1), .DATA_SIZE($bits(CsrIssueBundle))) dis_csr_io();
     IssueWakeupIO #(1, 1) csr_wakeup_io();
     IssueCSRIO issue_csr_io();
     WriteBackIO #(1) csr_wb_io();
-`endif
     IntIssueExuIO int_exu_io();
     BackendCtrl backendCtrl();
     CommitBus commitBus();
@@ -66,9 +64,7 @@ module Backend(
         .dis_issue_io(dis_intissue_io),
         .issue_exu_io(int_exu_io)
     );
-`ifdef ZICSR
     CsrIssueQueue csr_issue_queue(.*);
-`endif
     LSU lsu(
         .*,
         .memRedirect(backendRedirect.memRedirect)
@@ -78,8 +74,6 @@ module Backend(
                     .backendRedirectInfo(backendRedirect.branchRedirect),
                     .branchRedirectInfo(backendRedirect.branchInfo));
     BackendRedirectCtrl backend_redirect_ctrl(.*,.io(backendRedirect));
-`ifdef ZICSR
     CSR csr(.*);
-`endif
     WriteBack write_back(.*);
 endmodule

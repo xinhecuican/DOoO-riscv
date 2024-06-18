@@ -25,7 +25,7 @@ module DecodeUnit(
     assign opimm = ~op[4] & ~op[3] & op[2] & ~op[1] & ~op[0];
     assign opreg = ~op[4] & op[3] & op[2] & ~op[1] & ~op[0];
     assign opsystem = op[4] & op[3] & op[2] & ~op[0] & ~op[0];
-    assign unknown = ~lui & ~auipc & ~jal & ~jalr & ~branch & ~load & ~store & ~opimm & ~opreg &
+    assign unknown = ~lui & ~auipc & ~jal & ~jalr & ~branch & ~load & ~store & ~opimm & ~opreg & ~opsystem &
                     (~inst[0] | ~inst[1]);
 
     logic beq, bne, blt, bge, bltu, bgeu;
@@ -85,11 +85,12 @@ module DecodeUnit(
     assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sra | srai;
     assign info.intop[0] = lui | andi | _and | srl | srli;
 
-`ifdef ZICSR
-    logic csrrw, csrrs, csrrc, csrrwi, csrrsi, csrrci;
+    logic csrrw, csrrs, csrrc;
     assign csrrw = opsystem & ~funct3[2] & ~funct3[1] & funct3[0];
     assign csrrs = opsystem & ~funct3[2] & funct3[1] & ~funct3[0];
     assign csrrc = opsystem & ~funct3[2] & funct3[1] & funct3[0];
+`ifdef ZICSR
+    logic csrrwi, csrrsi, csrrci;
     assign csrrwi = opsystem & funct3[2] & ~funct3[1] & funct3[0];
     assign csrrsi = opsystem & funct3[2] & funct3[1] & ~funct3[0];
     assign csrrci = opsystem & funct3[2] & funct3[1] & funct3[0];
@@ -100,31 +101,41 @@ module DecodeUnit(
 
     assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu;
     logic [11: 0] imm;
+    logic [19: 0] lui_imm;
     logic `N(`DEC_IMM_WIDTH) branch_imm;
     assign branch_imm = {inst[31], inst[7], inst[30: 25], inst[11: 8], 1'b0};
     assign imm = inst[31: 20];
+    assign lui_imm = inst[31: 12];
 
     assign info.immv = slli | srai | srli | addi | slti | xori | ori | andi | sltiu;
     assign info.imm = {`DEC_IMM_WIDTH{beq | bne | blt | bge}} & branch_imm |
                       {`DEC_IMM_WIDTH{slli | srai | srli}} & inst[24: 20] |
+                      {`DEC_IMM_WIDTH{lui | auipc}} & lui_imm |
+                      {`DEC_IMM_WIDTH{csrrw | csrrs | csrrc | 
 `ifdef ZICSR
-                      {`DEC_IMM_WIDTH{csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci}} & inst[19: 15] |
+                      csrrwi | csrrsi | csrrci
 `endif
-                      {`DEC_IMM_WIDTH{~jal & ~beq & ~bne & ~blt & ~bge & ~slli & ~srai & ~srli}} & imm;
+                      }} & inst[19: 15] |
+                      {`DEC_IMM_WIDTH{~jal & ~beq & ~bne & ~blt & ~bge & ~slli & ~srai & ~srli & ~lui & ~auipc & ~csrrw & ~csrrs & ~csrrc
+`ifdef ZICSR
+                      & ~csrrwi & ~csrrsi & ~csrrci
+`endif
+                      }} & imm;
 
-    assign info.intv = lui | opimm | opreg | auipc | unknown;
+    assign info.intv = lui | opimm | opreg | auipc;
     assign info.branchv = branch | jal | jalr;
     assign info.memv = load | store;
+
+    assign info.csrv = csrrw | csrrs | csrrc 
 `ifdef ZICSR
-    assign info.csrv = csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci;
+    | csrrwi | csrrsi | csrrci
 `endif
+    ;
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | opsystem}} & inst[19: 15];
     assign info.rs2 = {5{
-`ifdef ZICSR
         csrrw | csrrs | csrrc |
-`endif
         branch | store | opreg}} & inst[24: 20];
-    assign rd = {5{lui | jalr | jal | load | opimm | opreg | opsystem}} & inst[11: 7];
+    assign rd = {5{lui | auipc | jalr | jal | load | opimm | opreg | opsystem}} & inst[11: 7];
     assign info.rd = rd;
     assign info.we = rd != 0;
                       

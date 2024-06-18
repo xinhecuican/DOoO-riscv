@@ -10,7 +10,6 @@ module Regfile(
 `endif
 );
     logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata;
-    logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr;
     MPRAM #(
         .WIDTH(`XLEN),
         .DEPTH(`PREG_SIZE),
@@ -31,26 +30,26 @@ module Regfile(
 // bypass
 generate
     for(genvar i=0; i<`REGFILE_READ_PORT; i++)begin
-        always_ff @(posedge clk)begin
-            if(io.en[i])begin
-                raddr[i] <= io.raddr[i]; 
-            end
-        end
         logic `N(`WB_SIZE) eq;
-        logic `N(`XLEN) data;
+        logic wb_valid;
+        logic `N(`XLEN) data, wb_data;
         ParallelEQ #(
             .WIDTH(`PREG_WIDTH),
             .RADIX(`WB_SIZE),
             .DATA_WIDTH(`XLEN)
         ) parallel_eq_bypass(
-            .origin(raddr[i]),
+            .origin(io.raddr[i]),
             .cmp_en(wbBus.en),
             .cmp(wbBus.rd),
             .data_i(wbBus.res),
             .eq(eq),
             .data_o(data)
         );
-        assign io.rdata[i] = |eq ? data[i] : rdata[i];
+        always_ff @(posedge clk)begin
+            wb_valid <= |eq;
+            wb_data <= data;
+        end
+        assign io.rdata[i] = wb_valid ? wb_data : rdata[i];
     end
 endgenerate
     
@@ -59,14 +58,18 @@ endgenerate
     logic `ARRAY(32, `XLEN) diff_data;
     always_ff @(posedge clk)begin
         for(int i=0; i<`REGFILE_WRITE_PORT; i++)begin
-            if(io.en[i] & io.we[i])begin
+            if(io.we[i])begin
                 data[io.waddr[i]] <= io.wdata[i];
             end
         end
-        for(int i=0; i<32; i++)begin
-            diff_data[i] <= data[diff_rat.map_reg[i]];
-        end
     end
+
+generate
+    for(genvar i=0; i<32; i++)begin
+        assign diff_data[i] = data[diff_rat.map_reg[i]];
+    end
+endgenerate
+
     DifftestArchIntRegState diff_int_reg(
         .clock(clk),
         .coreid(0),

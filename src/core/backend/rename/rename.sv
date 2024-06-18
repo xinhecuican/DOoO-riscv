@@ -46,15 +46,20 @@ generate
 
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         for(genvar j=0; j<`FETCH_WIDTH; j++)begin
-            if(j <= i)begin
+            if(i == j)begin
                 assign raw_rs1[i][j] = 0;
                 assign raw_rs2[i][j] = 0;
                 assign waw[i][j] = 0;
             end
+            else if(j > i)begin
+                assign raw_rs1[i][j] = 0;
+                assign raw_rs2[i][j] = 0;
+                assign waw[i][j] = rd_en[i] & rd_en[j] & (dec_rename_io.op[i].di.rd == dec_rename_io.op[j].di.rd);
+            end
             else begin
                 assign raw_rs1[i][j] = rd_en[j] && dec_rename_io.op[i].di.rs1 == dec_rename_io.op[j].di.rd;
                 assign raw_rs2[i][j] = rd_en[j] && dec_rename_io.op[i].di.rs2 == dec_rename_io.op[j].di.rd;
-                assign waw[i][j] = rd_en[i] & rd_en[j] & (dec_rename_io.op[i].di.rd == dec_rename_io.op[j].di.rd);
+                assign waw[i][j] = 0;
             end
         end
         PEncoder #(`FETCH_WIDTH) encoder_rs1_idx (raw_rs1[i], raw_rs1_idx[i]);
@@ -96,7 +101,7 @@ endgenerate
             rename_dis_io.wen <= rd_en;
             for(int i=0; i<`FETCH_WIDTH; i++)begin
                 rename_dis_io.robIdx[i].idx <= robIdx[i];
-                rename_dis_io.robIdx[i].dir <= robIdx[i][`FSQ_WIDTH-1] ^ rob_rename_io.robIdx.idx[`FSQ_WIDTH-1] ? ~rob_rename_io.robIdx.dir : rob_rename_io.robIdx.dir;
+                rename_dis_io.robIdx[i].dir <= robIdx[i][`FSQ_WIDTH-1] & ~rob_rename_io.robIdx.idx[`FSQ_WIDTH-1] ? ~rob_rename_io.robIdx.dir : rob_rename_io.robIdx.dir;
             end
         end
     end

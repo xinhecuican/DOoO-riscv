@@ -32,6 +32,7 @@ module InstBuffer (
     logic `N(`IBUF_BANK_NUM*2) out_en_shift;
     logic `N(`IBUF_BANK_NUM) inst_buffer_re;
     logic `N(`FETCH_WIDTH) out_en_compose;
+    IBufData `N(`BLOCK_INST_SIZE) in_data;
 
     assign data_valid_shift = pd_ibuffer_io.en << tail[$clog2(`IBUF_BANK_NUM)-1: 0];
     assign inst_buffer_we = data_valid_shift[`IBUF_BANK_NUM-1: 0] | 
@@ -60,9 +61,10 @@ module InstBuffer (
         end
         for(genvar j=0; j<`IBUF_BANK_NUM; j++)begin
             logic `N($clog2(`IBUF_BANK_NUM)) writeIdx;
-            assign writeIdx = tail[$clog2(`IBUF_BANK_NUM)-1: 0] + j;
+            assign writeIdx = j - tail[$clog2(`IBUF_BANK_NUM)-1: 0];
             assign ibuf[j].we = inst_buffer_we[j];
-            assign ibuf[j].wdata = '{fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: j}, inst: pd_ibuffer_io.inst[writeIdx]};
+            assign in_data[j] = '{fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: j}, inst: pd_ibuffer_io.inst[j]};
+            assign ibuf[j].wdata = in_data[writeIdx];
         end
         for(genvar i=0; i<`FETCH_WIDTH; i++)begin
             logic `N($clog2(`IBUF_BANK_NUM)) readIdx;

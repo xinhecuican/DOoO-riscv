@@ -415,7 +415,7 @@ endgenerate
     logic `N(`VADDR_SIZE) diff_pcs `N(`FSQ_SIZE);
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign fsq_back_io.diff_pc[i] = diff_pcs[fsq_back_io.diff_fsqInfo[i].idx] + fsq_back_io.diff_fsqInfo[i].offset;
+        assign fsq_back_io.diff_pc[i] = diff_pcs[fsq_back_io.diff_fsqInfo[i].idx] + {fsq_back_io.diff_fsqInfo[i].offset, 2'b00};
     end
 endgenerate
     always_ff @(posedge clk)begin
@@ -424,7 +424,7 @@ endgenerate
         end
         else begin
             if(queue_we)begin
-                diff_pcs[write_tail] <= fsq_cache_io.stream.start_addr;
+                diff_pcs[write_tail] <= bpu_fsq_io.prediction.stream.start_addr;
             end
             
         end

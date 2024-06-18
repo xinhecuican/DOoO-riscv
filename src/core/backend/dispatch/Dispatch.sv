@@ -7,9 +7,7 @@ module Dispatch(
     DisIssueIO.dis dis_intissue_io,
     DisIssueIO.dis dis_load_io,
     DisIssueIO.dis dis_store_io,
-`ifdef ZICSR
     DisIssueIO.dis dis_csr_io,
-`endif
     WakeupBus wakeupBus,
     CommitBus.in commitBus,
     CommitWalk commitWalk,
@@ -27,8 +25,8 @@ generate
         assign int_io.en[i] = rename_dis_io.op[i].en & 
                               (di.intv | di.branchv) &
                               (~(backendCtrl.redirect));
-        assign int_io.rs1[i] = di.rs1;
-        assign int_io.rs2[i] = di.rs2;
+        assign int_io.rs1[i] = rename_dis_io.prs1[i];
+        assign int_io.rs2[i] = rename_dis_io.prs2[i];
         assign int_io.data[i] = {di.intv, di.branchv, di.uext, di.immv, di.intop, di.branchop,
             rename_dis_io.robIdx[i], rename_dis_io.prd[i], di.imm, rename_dis_io.op[i].fsqInfo};
     end
@@ -58,13 +56,13 @@ generate
         assign di = rename_dis_io.op[i].di;
         assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
                                (~(backendCtrl.redirect));
-        assign load_io.rs1[i] = di.rs1;
-        assign load_io.rs2[i] = di.rs2;
+        assign load_io.rs1[i] = rename_dis_io.prs1[i];
+        assign load_io.rs2[i] = rename_dis_io.prs2[i];
         assign load_io.data[i] = data;
         assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
                                 (~(backendCtrl.redirect));
-        assign store_io.rs1[i] = di.rs1;
-        assign store_io.rs2[i] = di.rs2;
+        assign store_io.rs1[i] = rename_dis_io.prs1[i];
+        assign store_io.rs2[i] = rename_dis_io.prs2[i];
         assign store_io.data[i] = data;
     end
 endgenerate
@@ -85,7 +83,6 @@ endgenerate
         .io(store_io)
     );
 
-`ifdef ZICSR
     DispatchQueueIO #($bits(CsrIssueBundle), `CSR_DIS_PORT) csr_io();
     DispatchQueue #(
         .DATA_WIDTH($bits(CsrIssueBundle)),
@@ -108,12 +105,11 @@ generate
         assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
         assign di = rename_dis_io.op[i].di;
         assign csr_io.en[i] = rename_dis_io.op[i].en & di.csrv & (~(backendCtrl.redirect));
-        assign csr_io.rs1[i] = di.rs1;
-        assign csr_io.rs2[i] = di.rs2;
+        assign csr_io.rs1[i] = rename_dis_io.prs1[i];
+        assign csr_io.rs2[i] = rename_dis_io.prs2[i];
         assign csr_io.data[i] = data;
     end
 endgenerate
-`endif
 
     assign full = int_io.full | load_io.full | store_io.full | csr_io.full;
 
@@ -173,20 +169,18 @@ generate
     end
 endgenerate
 
-`ifdef ZICSR
     IssueStatusBundle csr_status;
     CsrIssueBundle csr_issue_bundle;
     assign csr_issue_bundle = csr_io.data_o;
-    assign dis_csr_io.en = csr_io.en;
+    assign dis_csr_io.en = csr_io.en_o;
     assign dis_csr_io.data = csr_io.data_o;
     assign csr_io.issue_full = dis_csr_io.full;
     assign csr_status.rs1v = 1'b0;
     assign csr_status.rs2v = 1'b0;
-    assign csr_status.rs1 = csr_io.rs1;
+    assign csr_status.rs1 = csr_io.rs1_o;
     assign csr_status.rs2 = 0;
     assign csr_status.robIdx = csr_issue_bundle.robIdx;
     assign dis_csr_io.status = csr_status;
-`endif
 endmodule
 
 interface DispatchQueueIO #(
@@ -230,14 +224,15 @@ module DispatchQueue #(
     logic `N($bits(Entry)) entrys `N(DEPTH);
     logic `N(ADDR_WIDTH) head, tail;
     logic `N(ADDR_WIDTH+1) num;
-    logic `N($clog2(`FETCH_WIDTH)+1) addNum, subNum, eqNum;
+    logic `N($clog2(`FETCH_WIDTH)+1) addNum, eqNum;
+    logic `N($clog2(OUT_WIDTH)+1) subNum;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) eq_add_num;
     logic `N(ADDR_WIDTH) index `N(`FETCH_WIDTH);
 
     ParallelAdder #(1, `FETCH_WIDTH) adder (io.en, addNum);
     assign eqNum = backendCtrl.dis_full ? 0 : addNum;
     assign subNum = io.issue_full ? 0 : 
-                    num >= `FETCH_WIDTH ? `FETCH_WIDTH : num;
+                    num >= OUT_WIDTH ? OUT_WIDTH : num;
     assign io.full = num + addNum > DEPTH;
 
     CalValidNum #(`FETCH_WIDTH) cal_en (io.en, eq_add_num);

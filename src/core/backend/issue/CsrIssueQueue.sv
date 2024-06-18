@@ -25,11 +25,12 @@ module CsrIssueQueue(
     logic `N(`CSR_ISSUE_SIZE) dirTable;
     logic full;
     logic enqueue;
-    CsrIssueBundle rdata;
+    CsrIssueBundle rdata, rdata_n;
     CsrIssueBundle bundle;
     IssueStatusBundle status;
 
     assign full = head == tail && (hdir ^ tdir);
+    assign dis_csr_io.full = full;
     assign enqueue = dis_csr_io.en & ~full & ~backendCtrl.redirect;
     assign head_n = head + 1;
     assign tail_n = tail + 1;
@@ -50,9 +51,10 @@ module CsrIssueQueue(
 
     always_ff @(posedge clk)begin
         issue_csr_io.en <= wakeup_en & ~(backendCtrl.redirect & wakeup_older);
+        rdata_n <= rdata;
     end
     assign issue_csr_io.rdata = csr_wakeup_io.data;
-    assign issue_csr_io.bundle = rdata;
+    assign issue_csr_io.bundle = rdata_n;
 
     MPRAM #(
         .WIDTH($bits(CsrIssueBundle)),
@@ -62,7 +64,7 @@ module CsrIssueQueue(
     ) data_ram (
         .clk(clk),
         .rst(rst),
-        .en(wakeup_en),
+        .en(1'b1),
         .raddr(head),
         .rdata(rdata),
         .we(enqueue),

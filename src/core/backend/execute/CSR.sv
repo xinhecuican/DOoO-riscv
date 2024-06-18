@@ -48,11 +48,15 @@ module CSR(
     logic csrrw, csrrs, csrrc;
 
     assign csrop = issue_csr_io.bundle.csrop;
+`ifdef ZICSR
     assign origin_data = csrop[2] ? issue_csr_io.bundle.imm : issue_csr_io.rdata;
+`else
+    assign origin_data = issue_csr_io.rdata;
+`endif
     assign csrrw = ~csrop[1] & csrop[0];
     assign csrrs = csrop[1] & ~csrop[0];
     assign csrrc = csrop[1] & csrop[0];
-    assign wdata = csrrw ? rdata :
+    assign wdata = csrrw ? origin_data :
                    csrrs ? rdata | origin_data : rdata & ~origin_data;
 // csr read
     logic `ARRAY(`CSR_NUM, 12) cmp_csrid;
@@ -61,7 +65,10 @@ module CSR(
     logic redirect_older;
     RobIdx out;
     LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.bundle.robIdx, redirect_older, out);
-    assign wen = cmp_eq & issue_csr_io.en & {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & ~(backendCtrl.redirect & redirect_older)}};
+    assign wen = cmp_eq  & 
+       {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
+                 ~(backendCtrl.redirect & redirect_older) & 
+                 issue_csr_io.en}};
 
 `define CSR_CMP_DEF(name, i, WARL, mask)        \
     localparam [7: 0] ``name``_id = i;                 \
@@ -167,7 +174,7 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(mcause,      0,          1, 1, `CAUSE_MASK)
     `CSR_WRITE_DEF(mtval,       0,          1, 0, 0)
     `CSR_WRITE_DEF(sstatus,     0,          1, 1, `STATUS_MASK)
-    `CSR_WRITE_DEF(stvec,       0,          0, 0, 0)
+    `CSR_WRITE_DEF(stvec,       0,          1, 0, 0)
     `CSR_WRITE_DEF(sip,         0,          1, 0, 0)
     `CSR_WRITE_DEF(sie,         0,          1, 0, 0)
     `CSR_WRITE_DEF(sepc,        0,          1, 0, 0)
@@ -187,7 +194,7 @@ endgenerate                                                             \
 
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
-            priviledge <= 0;
+            priviledge <= 2'b11;
         end
     end
 

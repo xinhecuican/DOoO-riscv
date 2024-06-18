@@ -125,7 +125,7 @@ module ALUModel(
     output logic `N(`XLEN) result
 );
     logic `N(`XLEN) lui_imm, ext_imm, s_imm;
-    assign lui_imm = {{`XLEN-20{imm[19]}}, imm[19: 0]};
+    assign lui_imm = {{`XLEN-32{imm[19]}}, imm[19: 0], 12'b0};
     assign ext_imm = {{`XLEN-12{imm[11] & ~uext}}, imm[11: 0]};
     assign s_imm = {{`XLEN-12{imm[11]}}, imm[11: 0]};
 
@@ -148,10 +148,8 @@ module ALUModel(
         endcase
     end
 
-    logic `N(`XLEN) auipc_imm;
     logic `N(`PREDICTION_WIDTH+2) br_offset;
     assign br_offset = {offset, 2'b00};
-    assign auipc_imm = {{`XLEN-32{imm[19]}}, imm[19: 0], 12'b0};
 
     always_comb begin
         case(op)
@@ -192,7 +190,7 @@ module ALUModel(
             result = $signed(data1) >> data2[$clog2(`XLEN)-1: 0];
         end
         `INT_AUIPC: begin
-            result = stream.start_addr + br_offset + auipc_imm;
+            result = stream.start_addr + br_offset + lui_imm;
         end
         default: result = 0;
         endcase

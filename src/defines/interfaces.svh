@@ -377,20 +377,14 @@ interface CommitBus;
 
     logic `N($clog2(`COMMIT_WIDTH)+1) loadNum;
     logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
-`ifdef ZICSR
     RobIdx robIdx;
-`endif
 
     modport rob(output en, we, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum
-`ifdef ZICSR
     , robIdx
-`endif
 );
     modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
     modport mem(input loadNum, storeNum);
-`ifdef ZICSR
     modport csr(input robIdx);
-`endif
 endinterface
 
 interface CommitWalk;
@@ -511,7 +505,7 @@ endinterface
 
 `ifdef DIFFTEST
 interface DiffRAT;
-    logic `ARRAY(5, `PREG_WIDTH) map_reg;
+    logic `ARRAY(32, `PREG_WIDTH) map_reg;
 
     modport rat (output map_reg);
     modport regfile (input map_reg);

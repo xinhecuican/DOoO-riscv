@@ -9,12 +9,10 @@ module WriteBack(
     BackendCtrl backendCtrl,
     WriteBackBus.wb wbBus
 );
-`ifdef ZICSR
     WBData csrData;
     always_ff @(posedge clk)begin
         csrData <= csr_wb_io.datas[0];
     end
-`endif
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
         assign alu_wb_io.valid[i] = 1'b1;
@@ -22,7 +20,7 @@ generate
         always_ff @(posedge clk)begin
             wbData <= alu_wb_io.datas[i];
         end
-        if(i == 1 && HAS_ZICSR)begin
+        if(i == 1)begin
             assign wbBus.en[i] = csrData.en | wbData.en;
             assign wbBus.we[i] = csrData.en ? csrData.rd != 0 : wbData.rd != 0;
             assign wbBus.robIdx[i] = csrData.en ? csrData.robIdx : wbData.robIdx;

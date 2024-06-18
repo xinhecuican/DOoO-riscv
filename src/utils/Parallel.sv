@@ -130,7 +130,7 @@ generate
         logic eq0, eq1;
         assign eq[0] = cmp[0] == origin && cmp_en[0];
         assign eq[1] = cmp[1] == origin && cmp_en[1];
-		assign data_o = ({WIDTH{eq[0]}} & data_i[0]) | ({WIDTH{eq[1]}} & data_i[1]);
+		assign data_o = ({DATA_WIDTH{eq[0]}} & data_i[0]) | ({DATA_WIDTH{eq[1]}} & data_i[1]);
 	end
 	else begin
 		logic [DATA_WIDTH-1: 0] data1, data2;
@@ -161,7 +161,7 @@ generate
 		);
         assign eq0 = |eq[RADIX/2-1: 0];
         assign eq1 = |eq[RADIX-1: RADIX/2];
-		assign data_o = ({WIDTH{eq0}} & data1) | ({WIDTH{eq1}} & data2);
+		assign data_o = ({DATA_WIDTH{eq0}} & data1) | ({DATA_WIDTH{eq1}} & data2);
 	end
 endgenerate
 endmodule

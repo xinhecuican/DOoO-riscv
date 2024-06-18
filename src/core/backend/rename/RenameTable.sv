@@ -74,7 +74,7 @@ endgenerate
     assign commit_io.wdata = commitBus.prd;
 
 `ifdef DIFFTEST
-    logic `ARRAY(5, `PREG_WIDTH) diff_map;
+    logic `ARRAY(32, `PREG_WIDTH) diff_map;
     assign diff_rat.map_reg = diff_map;
     always_ff @(posedge clk)begin
         if(rst == `RST)begin

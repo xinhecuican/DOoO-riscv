@@ -161,19 +161,15 @@ typedef struct packed {
     logic intv; // int valid
     logic memv;
     logic branchv;
-`ifdef ZICSR
     logic csrv;
     logic [11: 0] csrid;
-`endif
     logic uext;
     logic we;
     logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(`BRANCHOP_WIDTH) branchop;
-`ifdef ZICSR
     logic `N(`CSROP_WIDTH) csrop;
-`endif
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
 } DecodeInfo;

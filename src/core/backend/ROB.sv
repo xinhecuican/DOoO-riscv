@@ -44,7 +44,7 @@ module ROB(
     logic `N(`FETCH_WIDTH) data_en;
     logic `N(`ROB_WIDTH) head, tail, tail_n, head_n;
     logic `N(`COMMIT_WIDTH) commit_we;
-    logic tdir; // tail direction
+    logic hdir, tdir; // tail direction
     logic `N(`ROB_WIDTH+1) remainCount, remainCount_n;
 
     logic `N(`FETCH_WIDTH) dis_en;
@@ -113,10 +113,8 @@ endgenerate
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_store (commitBus.en & commit_mem & commit_store, commitStoreNum);
     assign commitBus.wenum = commitWeNum;
     assign commitBus.we = commit_we;
-`ifdef ZICSR
-    assign commitBus.robIdx.idx = tail;
-    assign commitBus.robIdx.dir = tdir;
-`endif
+    assign commitBus.robIdx.idx = head;
+    assign commitBus.robIdx.dir = hdir;
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitBus.fsqInfo[i] = robData[i].fsqInfo;
@@ -126,7 +124,7 @@ generate
 
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         always_ff @(posedge clk)begin
-            if(state == IDLE && !(backendRedirect.en) && initReady)begin
+            if(state == IDLE && initReady)begin
                 commitBus.en[i] <= commit_en[i];
             end
             else begin
@@ -178,6 +176,7 @@ endgenerate
             for(int i=0; i<`FETCH_WIDTH; i++)begin
                 dataWIdx[i] <= i;
             end
+            hdir <= 0;
             tdir <= 0;
             remainCount <= `ROB_SIZE;
         end
@@ -188,6 +187,9 @@ endgenerate
                 tdir <= ~tdir;
             end
             head <= head_n;
+            if(head[`ROB_WIDTH-1] & ~head_n[`ROB_WIDTH-1])begin
+                hdir <= ~hdir;
+            end
             if(dis_io.op[0].en)begin
                 for(int i=0; i<`FETCH_WIDTH; i++)begin
                     dataWIdx[i] <= dataWIdx[i] + dis_validNum;
@@ -310,7 +312,7 @@ endgenerate
     end
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign fsq_back_io.diff_fsqInfo[i] = rob_wdata[i].fsqInfo;
+        assign fsq_back_io.diff_fsqInfo[i] = robData[i].fsqInfo;
         DifftestInstrCommit difftest_inst_commit(
             .clock(clk),
             .coreid(0),
