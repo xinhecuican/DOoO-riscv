@@ -28,9 +28,12 @@ module Backend(
     CommitBus commitBus();
     CommitWalk commitWalk();
     BackendRedirectIO backendRedirect();
+    RobRedirectIO rob_redirect_io();
     WriteBackIO #(`ALU_SIZE) alu_wb_io();
     WriteBackIO #(`LSU_SIZE) lsu_wb_io();
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
+    logic rename_full, rob_full;
+    logic `N(`VADDR_SIZE) exc_pc;
 
 `ifdef DIFFTEST
     DiffRAT diff_rat();
@@ -45,17 +48,19 @@ module Backend(
     assign commitBus_out.wenum = commitBus.wenum;
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
     assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
-    assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full;
+    assign backendCtrl.rename_full = rename_full | rob_full;
+    assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.dis_full;
     assign fsq_back_io.redirect = backendRedirect.out;
     assign fsq_back_io.redirectBr = backendRedirect.branchOut;
+    assign fsq_back_io.redirectCsr = backendRedirect.csrOut;
 
     Decode decode(.*,
                   .insts(ifu_backend_io.fetchBundle));
     Rename rename(.*,
-                  .full(backendCtrl.rename_full));
+                  .full(rename_full));
     ROB rob(.*,
             .dis_io(rename_dis_io),
-            .full(backendCtrl.rob_full),
+            .full(rob_full),
             .backendRedirect(backendRedirect.out));
     Dispatch dispatch(.*,
                       .full(backendCtrl.dis_full));
@@ -74,6 +79,9 @@ module Backend(
                     .backendRedirectInfo(backendRedirect.branchRedirect),
                     .branchRedirectInfo(backendRedirect.branchInfo));
     BackendRedirectCtrl backend_redirect_ctrl(.*,.io(backendRedirect));
-    CSR csr(.*);
+    CSR csr(.*,
+            .exc_pc(fsq_back_io.exc_pc),
+            .redirect(backendRedirect.csrOut),
+            .target_pc(exc_pc));
     WriteBack write_back(.*);
 endmodule

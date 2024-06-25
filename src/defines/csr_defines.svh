@@ -2,6 +2,10 @@
 `define CSR_DEFINES_SVH
 `include "global.svh"
 
+`define U_MODE 2'b00
+`define S_MODE 2'b01
+`define M_MODE 2'b11
+
 `define CSR_NUM 25
 `define CSRID_misa      12'h301
 `define CSRID_mvendorid 12'hf11

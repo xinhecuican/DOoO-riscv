@@ -13,6 +13,7 @@ generate;
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         DecodeUnit decodeUnit(
             .inst(insts.inst[i]),
+            .iam(insts.iam[i]),
             .info(decodeInfo[i])
         );
     end
@@ -23,7 +24,7 @@ endgenerate
         if(rst == `RST || backendCtrl.redirect)begin
             dec_rename_io.op <= 0;
         end
-        else if(~(backendCtrl.rename_full | backendCtrl.rob_full | backendCtrl.dis_full))begin
+        else if(~(backendCtrl.rename_full | backendCtrl.dis_full))begin
             for(int i=0; i<`FETCH_WIDTH; i++)begin
                 dec_rename_io.op[i].en <= insts.en[i];
                 dec_rename_io.op[i].di <= decodeInfo[i];

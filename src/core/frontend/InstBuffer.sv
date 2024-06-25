@@ -10,6 +10,7 @@ module InstBuffer (
     output logic full
 );
     typedef struct packed {
+        logic iam;
         FsqIdxInfo fsqInfo;
         logic [31: 0] inst;
     } IBufData;
@@ -63,7 +64,9 @@ module InstBuffer (
             logic `N($clog2(`IBUF_BANK_NUM)) writeIdx;
             assign writeIdx = j - tail[$clog2(`IBUF_BANK_NUM)-1: 0];
             assign ibuf[j].we = inst_buffer_we[j];
-            assign in_data[j] = '{fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: j}, inst: pd_ibuffer_io.inst[j]};
+            assign in_data[j] = '{iam: pd_ibuffer_io.iam, 
+                                  fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: j}, 
+                                  inst: pd_ibuffer_io.inst[j]};
             assign ibuf[j].wdata = in_data[writeIdx];
         end
         for(genvar i=0; i<`FETCH_WIDTH; i++)begin
@@ -71,10 +74,11 @@ module InstBuffer (
             assign readIdx = head[$clog2(`IBUF_BANK_NUM)-1: 0] + i;
             assign fetchBundle.fsqInfo[i] = ibuf[readIdx].rdata.fsqInfo;
             assign fetchBundle.inst[i] = ibuf[readIdx].rdata.inst;
+            assign fetchBundle.iam[i] = ibuf[readIdx].rdata.iam;
         end
     endgenerate
     assign fetchBundle.en = out_en_compose;
-    assign full = inst_num == `IBUF_SIZE;
+    assign full = inst_num + pd_ibuffer_io.num > `IBUF_SIZE;
 
     always_ff @(posedge clk) begin
         if(rst == `RST || frontendCtrl.redirect)begin
@@ -88,14 +92,14 @@ module InstBuffer (
         end 
         else begin
             // enqueue
-            inst_num <= inst_num + pd_ibuffer_io.num - outNum;
+            inst_num <= inst_num + ({$clog2(`BLOCK_INST_SIZE)+1{~full}} & pd_ibuffer_io.num) - ({$clog2(`FETCH_WIDTH)+1{~stall}} & outNum);
             if(inst_num != 0 && !stall)begin
                 head <= head + outNum;
                 for(int i=0; i<`IBUF_BANK_NUM; i++)begin
                     ibuf[i].rindex <= ibuf[i].rindex + inst_buffer_re[i];
                 end
             end
-            if(pd_ibuffer_io.en[0])begin
+            if(pd_ibuffer_io.en[0] & ~full)begin
                 tail <= tail + pd_ibuffer_io.num;
                 for(int i=0; i<`IBUF_BANK_NUM; i++)begin
                     ibuf[i].windex <= ibuf[i].windex + inst_buffer_we[i];

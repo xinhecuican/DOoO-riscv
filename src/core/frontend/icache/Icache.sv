@@ -160,7 +160,9 @@ module ICache(
         for(genvar bank=0; bank<`BLOCK_INST_SIZE; bank++)begin
             logic `N(BANK_IDX_SIZE) bank_index;
             always_ff @(posedge clk)begin
-                bank_index <= bank + fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
+                if(!fsq_cache_io.stall)begin
+                    bank_index <= bank + fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
+                end
             end
             assign cache_pd_io.data[bank] = miss_data_en ? miss_buffer.data[bank] :
                                             bank_index[BANK_IDX_SIZE-1] ? 
@@ -288,15 +290,13 @@ module ICache(
                 end
             end
             endcase
-            if(fsq_cache_io.flush)begin
-                if(axi_io.sr.valid & axi_io.sr.last)begin
-                    miss_buffer.flush <= 1'b0;
-                end
-                else if(main_state == MISS || main_state == REFILL)begin
-                    miss_buffer.flush <= 1'b1;
-                end
+            if(axi_io.sr.valid & axi_io.sr.last)begin
+                miss_buffer.flush <= 1'b0;
             end
-            stall_wait <= miss_data_en ? 1'b0 :
+            else if(fsq_cache_io.flush && (main_state == MISS || main_state == REFILL))begin
+                miss_buffer.flush <= 1'b1;
+            end
+            stall_wait <= miss_data_en || fsq_cache_io.flush ? 1'b0 :
                           fsq_cache_io.stall & main_state == REFILL ? 1'b1 : stall_wait;
             miss_data_en <= ((main_state == REFILL) & 
                             axi_io.sr.valid & 

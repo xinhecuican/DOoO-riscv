@@ -35,11 +35,11 @@ module ALU(
         .branchRes(branchRes),
         .result(branchResult)
     );
-    assign wbData.en = io.en & valid & ~(backendCtrl.redirect &
-            ((backendCtrl.redirectIdx.dir ^ io.bundle.robIdx.dir) ^ (io.bundle.robIdx.idx < backendCtrl.redirectIdx.idx)));
+    assign wbData.en = io.en & valid;
     assign wbData.robIdx = io.bundle.robIdx;
     assign wbData.rd = io.bundle.rd;
     assign wbData.res = io.bundle.intv ? result : branchResult;
+    assign wbData.exccode = `EXC_NONE;
 
     assign io.valid = valid;
 endmodule
@@ -67,9 +67,9 @@ module BranchModel(
     always_comb begin
         case({rs1_data[`XLEN-1], rs2_data[`XLEN-1]})
         2'b00: scmp = cmp;
-        2'b01: scmp = 1;
-        2'b10: scmp = 0;
-        2'b11: scmp = ~cmp;
+        2'b01: scmp = 0;
+        2'b10: scmp = 1;
+        2'b11: scmp = ~cmp & ~equal;
         endcase
     end
     assign cmp_result = uext ? cmp : scmp;
@@ -92,10 +92,11 @@ module BranchModel(
         endcase
     end
 
-    logic `N(`VADDR_SIZE) jalr_target;
+    logic `N(`VADDR_SIZE) jalr_target, br_target;
     assign s_imm = {{`XLEN-13{imm[12]}}, imm[12: 0]};
     assign jalr_target = rs1_data + s_imm;
-    assign branchRes.target = jalr_target;
+    assign br_target = stream.start_addr + {offset, 2'b00} + s_imm;
+    assign branchRes.target = op == `BRANCH_JALR ? jalr_target : br_target;
     logic `N(`PREDICTION_WIDTH+1) addrOffset;
     assign addrOffset = offset + 1;
     assign result = {stream.start_addr[`VADDR_SIZE-1: 2] + addrOffset, 2'b00};
@@ -131,20 +132,21 @@ module ALUModel(
 
     logic `N(`XLEN) data1, data2, cmp_data;
     logic `N(`XLEN) add_result;
-    logic cmp, scmp;
+    logic cmp, scmp, equal;
 
     assign data1 = rs1_data;
-    assign data2 = immv ? imm : rs2_data;
+    assign data2 = immv ? s_imm : rs2_data;
 
     assign cmp_data = immv ? s_imm : rs2_data;
     assign add_result = data1 + data2;
     assign cmp = data1 < cmp_data;
+    assign equal = data1 == cmp_data;
     always_comb begin
         case({cmp_data[`XLEN-1], data1[`XLEN-1]})
         2'b00: scmp = cmp;
-        2'b01: scmp = 1;
-        2'b10: scmp = 0;
-        2'b11: scmp = ~cmp;
+        2'b01: scmp = 0;
+        2'b10: scmp = 1;
+        2'b11: scmp = ~cmp & ~equal;
         endcase
     end
 

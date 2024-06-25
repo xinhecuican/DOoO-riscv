@@ -59,11 +59,13 @@ generate
         assign load_io.rs1[i] = rename_dis_io.prs1[i];
         assign load_io.rs2[i] = rename_dis_io.prs2[i];
         assign load_io.data[i] = data;
+        assign load_io.robIdx[i] = rename_dis_io.robIdx[i];
         assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
                                 (~(backendCtrl.redirect));
         assign store_io.rs1[i] = rename_dis_io.prs1[i];
         assign store_io.rs2[i] = rename_dis_io.prs2[i];
         assign store_io.data[i] = data;
+        assign store_io.robIdx[i] = rename_dis_io.robIdx[i];
     end
 endgenerate
     DispatchQueue #(
@@ -96,17 +98,19 @@ generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : csr_in
         DecodeInfo di;
         CsrIssueBundle data;
-        assign data.immv = di.immv;
         assign data.csrop = di.csrop;
         assign data.robIdx = rename_dis_io.robIdx[i];
         assign data.rd = rename_dis_io.prd[i];
-        assign data.imm = di.imm[11: 0];
+        assign data.imm = di.imm[4: 0];
         assign data.csrid = di.csrid;
         assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
+        assign data.exc_valid = di.exccode != `EXC_NONE;
+        assign data.exccode = di.exccode;
         assign di = rename_dis_io.op[i].di;
         assign csr_io.en[i] = rename_dis_io.op[i].en & di.csrv & (~(backendCtrl.redirect));
         assign csr_io.rs1[i] = rename_dis_io.prs1[i];
         assign csr_io.rs2[i] = rename_dis_io.prs2[i];
+        assign csr_io.robIdx[i] = rename_dis_io.robIdx[i];
         assign csr_io.data[i] = data;
     end
 endgenerate
@@ -244,11 +248,14 @@ generate
     for(genvar i=0; i<OUT_WIDTH; i++)begin
         logic `N(ADDR_WIDTH) raddr;
         logic bigger;
+        logic older;
         Entry entry;
+        RobIdx out;
         assign entry = entrys[raddr];
         assign raddr = head + i;
         assign bigger = num > i;
-        assign io.en_o[i] = bigger & ~io.issue_full;
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older, out);
+        assign io.en_o[i] = bigger & ~io.issue_full & (~backendCtrl.redirect | older);
         assign io.rs1_o[i] = entry.rs1;
         assign io.rs2_o[i] = entry.rs2;
         assign io.data_o[i] = entry.data;
@@ -265,7 +272,7 @@ generate
         logic `N(ADDR_WIDTH + 1) walkNum;
         assign headShift = (1 << head) - 1;
         assign tailShift = (1 << tail) - 1;
-        assign en = tail > head ? headShift ^ tailShift : ~(headShift ^ tailShift);
+        assign en = tail > head || num == 0 ? headShift ^ tailShift : ~(headShift ^ tailShift);
         assign valid = en & bigger;
 
         for(genvar i=0; i<DEPTH; i++)begin

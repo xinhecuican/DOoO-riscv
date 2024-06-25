@@ -159,9 +159,9 @@ generate
 	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: 2] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * 2 + 1 : `TAGE_BASE_WIDTH + 2];
 
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
-		assign u_slot_en[i] = btbEntry.slots[i].en & ~btbEntry.slots[i].carry;
+		assign u_slot_en[i] = tage_io.updateInfo.allocSlot[i] & ~btbEntry.slots[i].carry;
 	end
-	assign u_slot_en[`SLOT_NUM-1] = btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
+	assign u_slot_en[`SLOT_NUM-1] = tage_io.updateInfo.allocSlot[`SLOT_NUM-1] & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
 		logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
 		assign bank_u = update_u_origin[i];

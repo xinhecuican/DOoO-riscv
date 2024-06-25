@@ -4,11 +4,15 @@
 module CSR(
     input logic clk,
     input logic rst,
+    input logic `N(`VADDR_SIZE) exc_pc,
+    input CSRRedirectInfo redirect,
     IssueCSRIO.csr issue_csr_io,
     WriteBackIO.fu csr_wb_io,
-    BackendCtrl backendCtrl
+    BackendCtrl backendCtrl,
+    output logic `N(`VADDR_SIZE) target_pc
 );
-    logic `N(2) priviledge;
+    logic `N(2) mode;
+    logic exc_ecall;
 
     // machine mode regs
     ISA misa;
@@ -45,17 +49,16 @@ module CSR(
     logic `N(`CSR_NUM) wen;
     logic `N(`XLEN) wdata, origin_data, rdata;
     logic `N(`CSROP_WIDTH) csrop;
-    logic csrrw, csrrs, csrrc;
+    logic csrrw, csrrs, csrrc, ecall, ebreak;
+    logic `N(`EXC_WIDTH) exccode;
 
     assign csrop = issue_csr_io.bundle.csrop;
-`ifdef ZICSR
     assign origin_data = csrop[2] ? issue_csr_io.bundle.imm : issue_csr_io.rdata;
-`else
-    assign origin_data = issue_csr_io.rdata;
-`endif
-    assign csrrw = ~csrop[1] & csrop[0];
-    assign csrrs = csrop[1] & ~csrop[0];
-    assign csrrc = csrop[1] & csrop[0];
+    assign csrrw = ~csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
+    assign csrrs = csrop[1] & ~csrop[0] & ~issue_csr_io.bundle.exc_valid;
+    assign csrrc = csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
+    assign ecall = csrop[2] & ~csrop[1] & ~csrop[0];
+    assign ebreak = ~csrop[2] & ~csrop[1] & ~csrop[0];
     assign wdata = csrrw ? origin_data :
                    csrrs ? rdata | origin_data : rdata & ~origin_data;
 // csr read
@@ -165,14 +168,10 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(marchid,     0,          0, 0, 0)
     `CSR_WRITE_DEF(mimpid,      0,          0, 0, 0)
     `CSR_WRITE_DEF(mhartid,     0,          0, 0, 0)
-    `CSR_WRITE_DEF(mstatus,     0,          1, 1, `STATUS_MASK)
     `CSR_WRITE_DEF(mtvec,       0,          1, 0, 0)
     `CSR_WRITE_DEF(medeleg,     0,          1, 0, 0)
     `CSR_WRITE_DEF(mideleg,     0,          1, 0, 0)
     `CSR_WRITE_DEF(mscratch,    0,          1, 0, 0)
-    `CSR_WRITE_DEF(mepc,        0,          1, 0, 0)
-    `CSR_WRITE_DEF(mcause,      0,          1, 1, `CAUSE_MASK)
-    `CSR_WRITE_DEF(mtval,       0,          1, 0, 0)
     `CSR_WRITE_DEF(sstatus,     0,          1, 1, `STATUS_MASK)
     `CSR_WRITE_DEF(stvec,       0,          1, 0, 0)
     `CSR_WRITE_DEF(sip,         0,          1, 0, 0)
@@ -186,15 +185,74 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(medelegh,    0,          1, 0, 0)
 `endif
 
+    logic `N(`VADDR_SIZE-2) vec_pc;
+    logic `N(`EXC_WIDTH) ecall_exccode;
+    /* verilator lint_off UNOPTFLAT */
+    logic ret, ret_priv_error, ret_valid;
+    assign vec_pc = mtvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
+    assign target_pc = ret_valid ? mepc : 
+                                   {{`VADDR_SIZE-`MXL{1'b0}}, mtvec[`MXL-1: 2], 2'b00};
+
+    assign ecall_exccode = {{`EXC_WIDTH-4{1'b0}}, 2'b10, mode};
+    assign ret = redirect.exccode == `EXC_MRET | redirect.exccode == `EXC_SRET;
+    assign ret_priv_error = mode < redirect.exccode[1: 0];
+    assign ret_valid = ret & ~ret_priv_error;
+    assign exccode = redirect.exccode == `EXC_EC ? ecall_exccode : 
+                     ret & ret_priv_error ? `EXC_II : redirect.exccode;
+
+    always_ff @(posedge clk)begin
+        if(rst == `RST)begin
+            mstatus <= 0;
+            mepc <= 0;
+            mcause <= 0;
+            mtval <= 0;
+        end
+        else begin
+            if(wen[mstatus_id])begin
+                mstatus <= wdata & `STATUS_MASK;
+            end
+            if(wen[mcause_id])begin
+                mcause <= wdata & `CAUSE_MASK;
+            end
+            if(wen[mepc_id])begin
+                mepc <= wdata;
+            end
+            if(redirect.en & ~ret_valid)begin
+                mstatus.mpp <= mode;
+                mstatus.mpie <= mstatus.mie;
+                mstatus.mie <= 0;
+            end
+            if(redirect.en && redirect.exccode == `EXC_MRET && ret_valid)begin
+                mstatus.mie <= mstatus.mpie;
+                mstatus.mpie <= 1;
+            end
+            if(redirect.en & ~ret_valid)begin
+                mcause[`EXC_WIDTH-1: 0] <= redirect.exccode;
+            end
+            if(redirect.en & ~ret_valid)begin
+                mepc <= exc_pc;
+            end
+        end
+    end
+
 // wb
     assign csr_wb_io.datas[0].en = issue_csr_io.en;
     assign csr_wb_io.datas[0].robIdx = issue_csr_io.bundle.robIdx;
     assign csr_wb_io.datas[0].rd = issue_csr_io.bundle.rd;
     assign csr_wb_io.datas[0].res = rdata;
+    assign csr_wb_io.datas[0].exccode = issue_csr_io.bundle.exc_valid ? issue_csr_io.bundle.exccode : `EXC_NONE;
 
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
-            priviledge <= 2'b11;
+            mode <= 2'b11;
+        end
+        else begin
+            if(redirect.en & ~ret_valid)begin
+                mode <= 2'b11;
+            end
+            if(redirect.en && redirect.exccode == `EXC_MRET && !ret_priv_error)begin
+                mode <= mstatus.mpp;
+            end
         end
     end
 
@@ -202,7 +260,7 @@ endgenerate                                                             \
     DifftestCSRState difftest_csr_state (
         .clock(clk),
         .coreid(mhartid),
-        .priviledgeMode(priviledge),
+        .priviledgeMode(mode),
         .mstatus(mstatus),
         .sstatus(sstatus),
         .mepc(mepc),

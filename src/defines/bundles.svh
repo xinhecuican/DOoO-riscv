@@ -153,6 +153,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic `N(`FETCH_WIDTH) en;
+    logic `N(`FETCH_WIDTH) iam;
     FsqIdxInfo `N(`FETCH_WIDTH) fsqInfo;
     logic `ARRAY(`FETCH_WIDTH, 32) inst;
 } FetchBundle;
@@ -172,6 +173,7 @@ typedef struct packed {
     logic `N(`CSROP_WIDTH) csrop;
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
+    logic `N(`EXC_WIDTH) exccode;
 } DecodeInfo;
 
 typedef struct packed {
@@ -217,13 +219,14 @@ typedef struct packed {
 } MemIssueBundle;
 
 typedef struct packed {
-    logic immv;
     logic `N(`CSROP_WIDTH) csrop;
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
-    logic `N(12) imm;
+    logic `N(5) imm;
     logic `N(12) csrid;
     FsqIdxInfo fsqInfo;
+    logic exc_valid;
+    logic `N(`EXC_WIDTH) exccode;
 } CsrIssueBundle;
 
 typedef struct packed {
@@ -239,6 +242,12 @@ typedef struct packed {
     BranchType br_type;
     RasType ras_type;
 } BranchRedirectInfo;
+
+typedef struct packed {
+    logic en;
+    logic `N(`EXC_WIDTH) exccode;
+    logic `N(`VADDR_SIZE) exc_pc;
+} CSRRedirectInfo;
 
 typedef struct packed {
     logic direction;
@@ -259,6 +268,7 @@ typedef struct packed {
     logic en;
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
+    logic `N(`EXC_WIDTH) exccode;
     logic `N(`XLEN) res;
 } WBData;
 
@@ -318,6 +328,7 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     RobIdx robIdx;
+    logic `N(`EXC_WIDTH) exccode;
 } StoreWBData;
 
 `endif

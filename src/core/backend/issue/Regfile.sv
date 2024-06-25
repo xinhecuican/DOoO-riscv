@@ -39,7 +39,7 @@ generate
             .DATA_WIDTH(`XLEN)
         ) parallel_eq_bypass(
             .origin(io.raddr[i]),
-            .cmp_en(wbBus.en),
+            .cmp_en(wbBus.en & wbBus.we),
             .cmp(wbBus.rd),
             .data_i(wbBus.res),
             .eq(eq),

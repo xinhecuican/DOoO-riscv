@@ -12,10 +12,11 @@ module Execute(
     output BranchRedirectInfo branchRedirectInfo
 );
     AluBranchCtrlIO branch_ctrl_io();
+    logic `N(`ALU_SIZE) older;
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
         IssueAluIO issue_alu_io();
-        assign issue_alu_io.en = int_exu_io.en[i];
+        assign issue_alu_io.en = int_exu_io.en[i] & (~backendCtrl.redirect | older[i]);
         assign issue_alu_io.rs1_data = int_exu_io.rs1_data[i];
         assign issue_alu_io.rs2_data = int_exu_io.rs2_data[i];
         assign issue_alu_io.bundle = int_exu_io.bundle[i];
@@ -34,7 +35,10 @@ generate
             .backendCtrl(backendCtrl)
         );
 
-        assign branch_ctrl_io.bundles[i].en = int_exu_io.en[i] & int_exu_io.bundle[i].branchv & int_exu_io.valid[i];
+        RobIdx out;
+        LoopCompare #(`ROB_WIDTH) compare_older (issue_alu_io.bundle.robIdx, backendCtrl.redirectIdx, older[i], out);
+
+        assign branch_ctrl_io.bundles[i].en = int_exu_io.en[i] & int_exu_io.bundle[i].branchv & int_exu_io.valid[i] & (~backendCtrl.redirect | older[i]);
         assign branch_ctrl_io.bundles[i].fsqInfo = int_exu_io.bundle[i].fsqInfo;
         assign branch_ctrl_io.bundles[i].robIdx = int_exu_io.bundle[i].robIdx;
     end

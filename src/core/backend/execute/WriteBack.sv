@@ -26,6 +26,7 @@ generate
             assign wbBus.robIdx[i] = csrData.en ? csrData.robIdx : wbData.robIdx;
             assign wbBus.rd[i] = csrData.en ? csrData.rd : wbData.rd;
             assign wbBus.res[i] = csrData.en ? csrData.res : wbData.res;
+            assign wbBus.exccode[i] = csrData.en ? csrData.exccode : wbData.exccode;
         end
         else begin
             assign wbBus.en[i] = wbData.en;
@@ -33,6 +34,7 @@ generate
             assign wbBus.robIdx[i] = wbData.robIdx;
             assign wbBus.rd[i] = wbData.rd;
             assign wbBus.res[i] = wbData.res;
+            assign wbBus.exccode[i] = wbData.exccode;
         end
 
     end
@@ -49,6 +51,7 @@ generate
             assign wbBus.robIdx[`ALU_SIZE+i] = lsu_wb_io.datas[i].robIdx;
             assign wbBus.rd[`ALU_SIZE+i] = lsu_wb_io.datas[i].rd;
             assign wbBus.res[`ALU_SIZE+i] = lsu_wb_io.datas[i].res;
+            assign wbBus.exccode[`ALU_SIZE+i] = lsu_wb_io.datas[i].exccode;
         // end
     end
 endgenerate

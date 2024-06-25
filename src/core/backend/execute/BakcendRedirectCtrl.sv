@@ -3,34 +3,32 @@
 module BackendRedirectCtrl(
     input logic clk,
     input logic rst,
-    BackendRedirectIO.redirect io
+    BackendRedirectIO.redirect io,
+    RobRedirectIO.redirect rob_redirect_io
 );
     logic branchOlder;
+    logic branchValid, branchValid_n;
     RobIdx outIdx;
+    BackendRedirectInfo preRedirect;
+    BranchRedirectInfo preBranch; 
     LoopCompare #(`ROB_WIDTH) compare_rob (io.branchRedirect.robIdx, io.memRedirect.robIdx, branchOlder, outIdx);
+    assign branchValid = (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en);
     always_ff @(posedge clk)begin
+        branchValid_n <= branchValid;
         if(rst == `RST)begin
-            io.out <= 0;
-            io.branchOut <= 0;
+            preRedirect <= 0;
+            preBranch <= 0;
         end
         else begin
-            if(io.branchRedirect.en || io.memRedirect.en)begin
-                io.out <= (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en) ? io.branchRedirect : io.memRedirect;
-            end
-            else begin
-                io.out <= 0;
-            end
-            if(io.branchRedirect.en)begin
-                io.branchOut.en <= (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en);
-                io.branchOut.taken <= io.branchInfo.taken;
-                io.branchOut.target <= io.branchInfo.target;
-                io.branchOut.br_type <= io.branchInfo.br_type;
-                io.branchOut.ras_type <= io.branchInfo.ras_type;
-            end
-            else begin
-                io.branchOut <= 0;
-            end
+            preRedirect <= branchValid ? io.branchRedirect : io.memRedirect;
+            preBranch <= io.branchInfo;
         end
-
     end
+    assign io.out = rob_redirect_io.csrRedirect.en ? rob_redirect_io.csrRedirect : preRedirect;
+    assign io.branchOut.en = branchValid_n & ~rob_redirect_io.csrRedirect.en;
+    assign io.branchOut.taken = preBranch.taken;
+    assign io.branchOut.target = preBranch.target;
+    assign io.branchOut.br_type = preBranch.br_type;
+    assign io.branchOut.ras_type = preBranch.ras_type;
+    assign io.csrOut = rob_redirect_io.csrInfo;
 endmodule

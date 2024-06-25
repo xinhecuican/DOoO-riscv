@@ -43,14 +43,14 @@ module CsrIssueQueue(
         wakeup_en <= select_en & csr_wakeup_io.ready;
         wakeup_robIdx <= status_ram[head].robIdx;
     end
-    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (backendCtrl.redirectIdx, wakeup_robIdx,  wakeup_older, wakeup_out);
+    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (wakeup_robIdx, backendCtrl.redirectIdx,  wakeup_older, wakeup_out);
 
     assign csr_wakeup_io.en = select_en;
     assign csr_wakeup_io.preg = status_ram[head].rs1;
     assign csr_wakeup_io.rd = status_ram[head].rd;
 
     always_ff @(posedge clk)begin
-        issue_csr_io.en <= wakeup_en & ~(backendCtrl.redirect & wakeup_older);
+        issue_csr_io.en <= wakeup_en & (~backendCtrl.redirect | wakeup_older);
         rdata_n <= rdata;
     end
     assign issue_csr_io.rdata = csr_wakeup_io.data;

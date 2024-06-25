@@ -29,7 +29,7 @@ generate
                 int_we[i] <= csr_wakeup_io.en ? csr_wakeup_io.rd != 0 : int_wakeup_io.rd[i] != 0;
                 int_rd[i] <= csr_wakeup_io.en ? csr_wakeup_io.rd : int_wakeup_io.rd[i];
                 int_preg[i] <= csr_wakeup_io.en ? csr_wakeup_io.preg : int_wakeup_io.preg[i];
-                int_preg[`ALU_SIZE+i] <= int_wakeup_io.preg[i];
+                int_preg[`ALU_SIZE+i] <= int_wakeup_io.preg[`ALU_SIZE+i];
             end
         end
         else begin
@@ -39,7 +39,7 @@ generate
                 int_we[i] <= int_wakeup_io.rd[i] != 0;
                 int_rd[i] <= int_wakeup_io.rd[i];
                 int_preg[i] <= int_wakeup_io.preg[i];
-                int_preg[`ALU_SIZE+i] <= int_wakeup_io.preg[i];
+                int_preg[`ALU_SIZE+i] <= int_wakeup_io.preg[`ALU_SIZE+i];
             end
         end
     end

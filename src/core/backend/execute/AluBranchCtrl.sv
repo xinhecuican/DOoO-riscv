@@ -42,12 +42,12 @@ generate
     end
     else if(WIDTH == 2)begin
         logic bigger, sameLine;
-        assign sameLine = (~(bundles[0].res.direction ^ bundles[1].res.direction)) &
+        assign sameLine = ((bundles[0].res.direction == bundles[1].res.direction)) &
                           (bundles[0].fsqInfo.idx == bundles[1].fsqInfo.idx);
         assign bigger = (bundles[0].res.direction ^ bundles[1].res.direction) ^
                         (bundles[0].fsqInfo.idx < bundles[1].fsqInfo.idx);
         always_comb begin
-            case({bundles[1].en, bundles[0].en})
+            case({bundles[1].en & bundles[1].res.error, bundles[0].en & bundles[0].res.error})
             2'b00: bundle_o = bundles[0];
             2'b01: bundle_o = bundles[0];
             2'b10: bundle_o = bundles[1];

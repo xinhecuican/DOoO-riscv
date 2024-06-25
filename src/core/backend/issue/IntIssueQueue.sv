@@ -43,7 +43,7 @@ generate
         assign int_wakeup_io.rd[i] = bank_io[i].rd;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
 
-        assign redirectClear[i] = backendCtrl.redirect & ((bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.dir));
+        assign redirectClear[i] = backendCtrl.redirect & ((bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.idx));
     end
 endgenerate
     assign dis_issue_io.full = |full;

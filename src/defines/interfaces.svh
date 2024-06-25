@@ -102,25 +102,27 @@ interface FsqCacheIO;
 endinterface
 
 interface FsqBackendIO;
-    FetchStream `N(`ALU_SIZE) streams;
-    logic `ARRAY(`ALU_SIZE, `FSQ_WIDTH) fsqIdx;
-    logic `N(`ALU_SIZE) directions;
+    FetchStream `N(`FETCH_WIDTH) streams;
+    logic `ARRAY(`FETCH_WIDTH, `FSQ_WIDTH) fsqIdx;
+    logic `N(`FETCH_WIDTH) directions;
+    logic `N(`VADDR_SIZE) exc_pc;
 
     BackendRedirectInfo redirect;
     BranchRedirectInfo redirectBr;
+    CSRRedirectInfo redirectCsr;
 
 `ifdef DIFFTEST
     FsqIdxInfo `N(`COMMIT_WIDTH) diff_fsqInfo;
     logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) diff_pc;
 `endif
     
-    modport fsq (input fsqIdx, redirect, redirectBr, output streams, directions
+    modport fsq (input fsqIdx, redirect, redirectBr, redirectCsr, output streams, directions, exc_pc
 `ifdef DIFFTEST
     ,input diff_fsqInfo,
     output diff_pc
 `endif
     );
-    modport backend (output fsqIdx, redirect, redirectBr, input streams, directions
+    modport backend (output fsqIdx, redirect, redirectBr, redirectCsr, input streams, directions, exc_pc
 `ifdef DIFFTEST
     ,output diff_fsqInfo,
     input diff_pc
@@ -181,10 +183,11 @@ interface PreDecodeIBufferIO;
     logic `N(`BLOCK_INST_SIZE) en;
     logic `N($clog2(`BLOCK_INST_SIZE)+1) num;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) inst;
+    logic iam; // for exception, instruction address misaligned
     logic `N(`FSQ_WIDTH) fsqIdx;
 
-    modport predecode(output en, num, inst, fsqIdx);
-    modport instbuffer(input en, num, inst, fsqIdx);
+    modport predecode(output en, num, inst, iam, fsqIdx);
+    modport instbuffer(input en, num, inst, iam, fsqIdx);
 endinterface
 
 interface IfuBackendIO;
@@ -216,11 +219,12 @@ interface RenameDisIO;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs2;
     logic `N(`FETCH_WIDTH) wen;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) old_prd;
     RobIdx `N(`FETCH_WIDTH) robIdx;
 
-    modport rename(output op, prs1, prs2, wen, prd, robIdx);
+    modport rename(output op, prs1, prs2, wen, prd, old_prd, robIdx);
     modport dis(input op, prs1, prs2, wen, prd, robIdx);
-    modport rob(input op, prd, robIdx);
+    modport rob(input op, prd, old_prd, robIdx);
 endinterface
 
 interface RegfileIO;
@@ -362,8 +366,9 @@ interface WriteBackBus;
     RobIdx `N(`WB_SIZE) robIdx;
     logic `ARRAY(`WB_SIZE, `PREG_WIDTH) rd;
     logic `ARRAY(`WB_SIZE, `XLEN) res;
+    logic `ARRAY(`WB_SIZE, `EXC_WIDTH) exccode;
 
-    modport wb (output en, we, robIdx, rd, res);
+    modport wb (output en, we, robIdx, rd, res, exccode);
 endinterface
 
 interface CommitBus;
@@ -398,8 +403,9 @@ interface CommitWalk;
     logic `N($clog2(`COMMIT_WIDTH) + 1) weNum;
     logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) old_prd;
 
-    modport rob (output walk, walkStart, walkIdx, en, we, vrd, prd, num, weNum);
+    modport rob (output walk, walkStart, walkIdx, en, we, vrd, prd, old_prd, num, weNum);
 endinterface
 
 interface FrontendCtrl;
@@ -409,7 +415,6 @@ endinterface
 
 interface BackendCtrl;
     logic rename_full;
-    logic rob_full;
     logic dis_full;
 
     logic redirect;
@@ -423,8 +428,17 @@ interface BackendRedirectIO;
 
     BackendRedirectInfo out;
     BranchRedirectInfo branchOut;
+    CSRRedirectInfo csrOut;
 
-    modport redirect(input branchRedirect, memRedirect, branchInfo, output out, branchOut);
+    modport redirect(input branchRedirect, memRedirect, branchInfo, output out, branchOut, csrOut);
+endinterface
+
+interface RobRedirectIO;
+    BackendRedirectInfo csrRedirect;
+    CSRRedirectInfo csrInfo;
+
+    modport rob (output csrRedirect, csrInfo);
+    modport redirect (input csrRedirect, csrInfo);
 endinterface
 
 interface DCacheLoadIO;

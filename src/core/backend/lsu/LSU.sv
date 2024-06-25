@@ -263,6 +263,7 @@ generate
         assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
         assign lsu_wb_io.datas[i].rd = from_issue[i] ? lrd_n[i] : load_queue_io.wbData[i].rd;
         assign lsu_wb_io.datas[i].res = from_issue[i] ? ldata_n[i] : load_queue_io.wbData[i].res;
+        assign lsu_wb_io.datas[i].exccode = `EXC_NONE;
         assign load_wakeup_io.wakeup_en[i] = wb_data_en;
         assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].rd;
     end
@@ -348,6 +349,7 @@ generate
         always_ff @(posedge clk)begin
             storeWBData[i].en <= store_en[i] & ~store_redirect_s2[i];
             storeWBData[i].robIdx <= store_issue_data[i].robIdx;
+            storeWBData[i].exccode <= `EXC_NONE;
         end
     end
 endgenerate
