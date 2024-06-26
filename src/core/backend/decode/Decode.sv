@@ -5,7 +5,8 @@ module Decode(
     input logic rst,
     input FetchBundle insts,
     DecodeRenameIO.decode dec_rename_io,
-    BackendCtrl backendCtrl
+    BackendCtrl backendCtrl,
+    CommitWalk commitWalk
 );
     DecodeInfo decodeInfo `N(`FETCH_WIDTH);
 
@@ -21,7 +22,7 @@ endgenerate
 
     // TODO: Fusion Decoder，在rob中添加一个funsion位表示为两条指令
     always_ff @(posedge clk)begin
-        if(rst == `RST || backendCtrl.redirect)begin
+        if(rst == `RST || backendCtrl.redirect || commitWalk.walk)begin
             dec_rename_io.op <= 0;
         end
         else if(~(backendCtrl.rename_full | backendCtrl.dis_full))begin

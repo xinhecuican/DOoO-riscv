@@ -36,8 +36,9 @@ module InstBuffer (
     IBufData `N(`BLOCK_INST_SIZE) in_data;
 
     assign data_valid_shift = pd_ibuffer_io.en << tail[$clog2(`IBUF_BANK_NUM)-1: 0];
-    assign inst_buffer_we = data_valid_shift[`IBUF_BANK_NUM-1: 0] | 
-                            data_valid_shift[`IBUF_BANK_NUM*2-1: `IBUF_BANK_NUM];
+    assign inst_buffer_we = (data_valid_shift[`IBUF_BANK_NUM-1: 0] | 
+                            data_valid_shift[`IBUF_BANK_NUM*2-1: `IBUF_BANK_NUM]) &
+                            {`IBUF_BANK_NUM{~full}};
     assign outNum = stall ? 0 : inst_num >= `FETCH_WIDTH ? `FETCH_WIDTH : inst_num;
     always_comb begin
         out_en_compose[0] = |inst_num;

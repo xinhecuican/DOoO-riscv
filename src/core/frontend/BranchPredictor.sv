@@ -124,9 +124,11 @@ module S2Control(
     logic `VADDR_BUS tail_target, br_target, tail_indirect_target;
     logic [1: 0] cond_num;
     logic `N(`SLOT_NUM) cond_valid;
+    logic `N(`BTB_TAG_SIZE) lookup_tag;
     logic older;
 
-    assign hit = entry.en && (pc`BTB_TAG_BUS == entry.tag);
+    BTBTagGen gen_tag(pc, lookup_tag);
+    assign hit = entry.en && (lookup_tag == entry.tag);
     assign br_takens = isBr & prediction;
     generate;
         for(genvar br=0; br<`SLOT_NUM-1; br++)begin

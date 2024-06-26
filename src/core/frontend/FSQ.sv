@@ -363,14 +363,14 @@ endgenerate
     assign commitValid = initReady & (
                         (|commitNum[7: `PREDICTION_WIDTH]) || 
                         (commitNum[`PREDICTION_WIDTH-1: 0] > commitStream.size) ||
-                        (pred_error_en[tail] & (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqInfo.offset)));
-    assign pred_error = initReady & pred_error_en[tail] & 
+                        (pred_error_en[commit_head] & (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqInfo.offset)));
+    assign pred_error = initReady & pred_error_en[commit_head] & 
                         ((|commitNum[7: `PREDICTION_WIDTH]) | (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqInfo.offset));
 
     logic `N(`PREDICTION_WIDTH) streamCommitOffset;
     logic `N(`PREDICTION_WIDTH+1) streamCommitNum;
 
-    assign streamCommitOffset = pred_error_en[tail] ? commitFsqInfo.offset : commitStream.size;
+    assign streamCommitOffset = pred_error_en[commit_head] ? commitFsqInfo.offset : commitStream.size;
     assign streamCommitNum = streamCommitOffset + 1;
 
     always_ff @(posedge clk)begin
@@ -422,7 +422,7 @@ endgenerate
         update_taken <= commitWBInfo.taken;
         update_start_addr <= commitStream.start_addr;
         update_target_pc <= commitWBInfo.target;
-        update_btb_entry <= pred_error ? oldEntry : commitUpdateEntry;
+        update_btb_entry <= pred_error ? commitUpdateEntry : oldEntry;
         update_real_taken <= realTaken;
         update_alloc_slot <= allocSlot;
     end
@@ -506,7 +506,7 @@ endgenerate
     assign offsets[`SLOT_NUM-1] = oldEntry.tailSlot.offset;
     assign equal[`SLOT_NUM-1] = oldEntry.tailSlot.en && oldEntry.tailSlot.br_type == CONDITION &&  oldEntry.tailSlot.offset == fsqInfo.offset;
     assign offsets[`SLOT_NUM] = fsqInfo.offset;
-    PSelector #(`SLOT_NUM) selector_free (free, free_p);
+    PRSelector #(`SLOT_NUM) selector_free (free, free_p);
     for(genvar i=0; i<`SLOT_NUM+1; i++)begin
         assign idx[i] = i;
     end
@@ -528,10 +528,10 @@ endgenerate
                       target[`VADDR_SIZE-1: `JAL_OFFSET+1] < pc[`VADDR_SIZE-1: `JAL_OFFSET+1] ? TAR_UN : TAR_NONE;
     assign tailTarState = target[`VADDR_SIZE-1: `JALR_OFFSET+1] > pc[`VADDR_SIZE-1: `JALR_OFFSET+1] ? TAR_OV :
                       target[`VADDR_SIZE-1: `JALR_OFFSET+1] < pc[`VADDR_SIZE-1: `JALR_OFFSET+1] ? TAR_UN : TAR_NONE;
+    assign updateEntry.en = 1'b1;
+    BTBTagGen gen_tag(pc, updateEntry.tag);
     always_comb begin
         if(br_type != CONDITION)begin
-            updateEntry.en = 1'b1;
-            updateEntry.tag = pc`BTB_TAG_BUS;
             updateEntry.fthAddr = fsqInfo.offset;
 
             updateEntry.slots = oldEntry.slots;
@@ -559,8 +559,6 @@ endgenerate
             updateEntry.tailSlot.target = we[`SLOT_NUM-1] ? target : oldEntry.tailSlot.target;
             updateEntry.tailSlot.tar_state = we[`SLOT_NUM-1] ? tarState : oldEntry.tailSlot.tar_state;
 
-            updateEntry.en = 1'b1;
-            updateEntry.tag = pc`BTB_TAG_BUS;
             updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-1 : oldEntry.fthAddr;
         end
     end
@@ -595,7 +593,7 @@ endgenerate
             allocSlot = predOldAlloc;
         end
         else begin
-            allocSlot = predAlloc | ({`SLOT_NUM{~(|equal)}} & free);
+            allocSlot = predAlloc | ({`SLOT_NUM{~(|equal)}} & free_p);
         end
     end
 

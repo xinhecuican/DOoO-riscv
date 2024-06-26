@@ -38,7 +38,6 @@
 `define JALR_OFFSET 20
 
 `define UBTB_SIZE 64
-`define UBTB_TAG_SIZE 7
 `define UBTB_WIDTH $clog2(`UBTB_SIZE)
 
 `define BTB_TAG_SIZE 14

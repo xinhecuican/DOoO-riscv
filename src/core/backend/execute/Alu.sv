@@ -158,6 +158,9 @@ module ALUModel(
         `INT_ADD: begin
             result = add_result;
         end
+        `INT_SUB: begin
+            result = data1 - rs2_data;
+        end
         `INT_LUI: begin
             result = lui_imm;
         end

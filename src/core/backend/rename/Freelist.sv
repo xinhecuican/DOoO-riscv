@@ -18,7 +18,7 @@ module Freelist(
     CommitWalk commitWalk,
     BackendCtrl backendCtrl
 );
-    logic `ARRAY(`PREG_SIZE, `PREG_WIDTH) freelist;
+    logic `N(`PREG_WIDTH) freelist `N(`PREG_SIZE);
     logic `N(`PREG_WIDTH) head, tail, tail_n;
     logic `N($clog2(`FETCH_WIDTH)+1) tail_add_num;
     logic `N(`PREG_WIDTH+1) remainCount;

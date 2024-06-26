@@ -222,12 +222,12 @@ endgenerate                                                             \
                 mstatus.mpie <= mstatus.mie;
                 mstatus.mie <= 0;
             end
-            if(redirect.en && redirect.exccode == `EXC_MRET && ret_valid)begin
+            if(redirect.en && exccode == `EXC_MRET && ret_valid)begin
                 mstatus.mie <= mstatus.mpie;
                 mstatus.mpie <= 1;
             end
             if(redirect.en & ~ret_valid)begin
-                mcause[`EXC_WIDTH-1: 0] <= redirect.exccode;
+                mcause[`EXC_WIDTH-1: 0] <= exccode;
             end
             if(redirect.en & ~ret_valid)begin
                 mepc <= exc_pc;

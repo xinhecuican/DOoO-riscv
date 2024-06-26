@@ -49,7 +49,7 @@ module Backend(
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
     assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
     assign backendCtrl.rename_full = rename_full | rob_full;
-    assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.dis_full;
+    assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.dis_full | commitWalk.walk;
     assign fsq_back_io.redirect = backendRedirect.out;
     assign fsq_back_io.redirectBr = backendRedirect.branchOut;
     assign fsq_back_io.redirectCsr = backendRedirect.csrOut;

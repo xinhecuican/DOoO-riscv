@@ -6,13 +6,13 @@ module UBTB(
     BpuUBtbIO.ubtb ubtb_io
 );
 
-    BTBEntry entrys `N(`UBTB_SIZE);
+    BTBEntry `N(`UBTB_SIZE) entrys;
     logic `ARRAY(`SLOT_NUM, 2) ctrs `N(`UBTB_SIZE);
     BTBEntry lookup_entry;
     logic `ARRAY(`SLOT_NUM, 2) lookup_ctr;
     logic `N(`UBTB_SIZE) lookup_hits, updateHits;
     logic `N($clog2(`UBTB_SIZE)) lookup_index, updateIdx, updateSelectIdx;
-    logic `N(`UBTB_TAG_SIZE) lookup_tag;
+    logic `N(`BTB_TAG_SIZE) lookup_tag, update_tag;
     logic `N(`SLOT_NUM) br_takens;
     logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
     logic [`VADDR_SIZE-`JAL_OFFSET-2: 0] br_target_high;
@@ -30,7 +30,7 @@ module UBTB(
 
     Encoder #(`UBTB_SIZE) encoder_lookup(lookup_hits, lookup_index);
     Encoder #(`UBTB_SIZE) encoder_update(updateHits, updateIdx);
-    assign lookup_tag = ubtb_io.pc[`UBTB_TAG_SIZE+1: 2];
+    BTBTagGen gen_tag(ubtb_io.pc, lookup_tag);
     assign lookup_hit = |lookup_hits;
     assign updateHit = |updateHits;
     assign updateSelectIdx = updateHit ? updateIdx : replace_io.miss_way;
@@ -56,10 +56,11 @@ module UBTB(
                                                      ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
     assign br_target = {br_target_high, br_offset, 1'b0};
     assign older = lookup_entry.slots[0].offset < lookup_entry.tailSlot.offset;
+    BTBTagGen gen_update_tag(ubtb_io.updateInfo.start_addr, update_tag);
 generate;
     for(genvar i=0; i<`UBTB_SIZE; i++)begin
         assign lookup_hits[i] = entrys[i].en && entrys[i].tag == lookup_tag;
-        assign updateHits[i] = entrys[i].en && entrys[i].tag == ubtb_io.updateInfo.start_addr[`UBTB_TAG_SIZE+1: 2];
+        assign updateHits[i] = entrys[i].en && entrys[i].tag == update_tag;
     end
     for(genvar br=0; br<`SLOT_NUM-1; br++)begin
         assign isBr[br] = lookup_entry.slots[br].en;

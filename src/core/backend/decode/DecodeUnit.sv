@@ -91,10 +91,10 @@ module DecodeUnit(
     assign _and = opreg & (&funct3) & funct7_0;
 
     assign info.intop[4] = 1'b0;
-    assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc;
-    assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc;
+    assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
+    assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc | sub;
     assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sra | srai | fence;
-    assign info.intop[0] = lui | andi | _and | srl | srli | fence;
+    assign info.intop[0] = lui | andi | _and | srl | srli | fence | sub;
 
     logic ecall, ebreak, mret, sret;
     assign ecall = opsystem & funct3_0 & funct7_0 & rs2_0;

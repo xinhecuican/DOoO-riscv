@@ -229,7 +229,8 @@ endgenerate
             tail <= tail_n;
             remainCount <= remainCount_n;
             validCount <= validCount_n;
-            if(tail[`ROB_WIDTH-1] & ~tail_n[`ROB_WIDTH-1])begin
+            if((~commitWalk.walk & tail[`ROB_WIDTH-1] & ~tail_n[`ROB_WIDTH-1]) |
+               (commitWalk.walk & tail_n[`ROB_WIDTH-1] & ~tail[`ROB_WIDTH-1]))begin
                 tdir <= ~tdir;
             end
             head <= head_n;

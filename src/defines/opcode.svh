@@ -8,6 +8,7 @@
 // intop
 
 `define INT_ADD     `INTOP_WIDTH'b00000
+`define INT_SUB     `INTOP_WIDTH'b01101
 `define INT_LUI     `INTOP_WIDTH'b00001
 `define INT_SLT     `INTOP_WIDTH'b00010
 `define INT_XOR     `INTOP_WIDTH'b00100

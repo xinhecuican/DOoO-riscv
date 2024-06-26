@@ -1,5 +1,12 @@
 `include "../../defines/defines.svh"
 
+module BTBTagGen(
+    input logic `VADDR_BUS pc,
+    output logic `N(`BTB_TAG_SIZE) tag
+);
+    assign tag = pc[`BTB_TAG_SIZE + 1 + `PREDICTION_WIDTH : 2+`PREDICTION_WIDTH];
+endmodule
+
 module BTB (
     input logic clk,
     input logic rst,
