@@ -54,17 +54,19 @@ module PreDecode(
 
     logic `N(`BLOCK_INST_SIZE) jump_en;
     logic redirect_en;
-    assign redirect_en = ((~stream_next.taken & (|jump_en)) | // 存在直接跳转分支预测不跳转
-                            (stream_next.taken & ((tailIdx != jumpSelectIdx) |
-                            (~bundles_next[tailIdx].branch | bundles_next[tailIdx].br_type != stream_next.branch_type) |
-                            bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target))));
-    assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
-    assign pd_redirect.fsqIdx = fsqIdx;
+
     assign selectIdx = jumpSelectIdx;
     assign selectBundle = bundles_next[selectIdx];
+
+    assign redirect_en = (|jump_en) & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
+                            (stream_next.taken & ((tailIdx != jumpSelectIdx) |
+                            (bundles_next[tailIdx].br_type != stream_next.branch_type) |
+                            bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)))) |
+                         (stream_next.taken & ~bundles_next[tailIdx].branch);
+    assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
+    assign pd_redirect.direct = bundles_next[tailIdx].branch & (|jump_en);
+    assign pd_redirect.fsqIdx = fsqIdx;
     assign pd_redirect.offset = selectIdx;
-    assign pd_redirect.br_type = bundles_next[selectIdx].br_type;
-    assign pd_redirect.ras_type = bundles_next[selectIdx].ras_type;
     assign pd_redirect.pc = stream_next.start_addr;
     assign pd_redirect.redirect_addr = stream_next.taken & ~bundles_next[tailIdx].branch ? next_pc : bundles_next[selectIdx].target;
 
@@ -81,7 +83,8 @@ module PreDecode(
         endcase
     end
     assign pd_ibuffer_io.en = ({`BLOCK_INST_SIZE{~pd_redirect.en}} | redirect_mask) & en_next;
-    assign pd_ibuffer_io.num = redirect_en ? selectIdx + 1 : instNumNext;
+    assign pd_ibuffer_io.num = redirect_en & (|jump_en) ? selectIdx + 1 : 
+                               redirect_en ? tailIdx + 1 : instNumNext;
     assign pd_ibuffer_io.inst = data_next;
     assign pd_ibuffer_io.fsqIdx = fsqIdx.idx;
     assign pd_ibuffer_io.iam = stream_next.start_addr[1: 0] != 0;

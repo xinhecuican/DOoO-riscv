@@ -93,7 +93,7 @@ module InstBuffer (
         end 
         else begin
             // enqueue
-            inst_num <= inst_num + ({$clog2(`BLOCK_INST_SIZE)+1{~full}} & pd_ibuffer_io.num) - ({$clog2(`FETCH_WIDTH)+1{~stall}} & outNum);
+            inst_num <= inst_num + ({$clog2(`BLOCK_INST_SIZE)+1{~full & pd_ibuffer_io.en[0]}} & pd_ibuffer_io.num) - ({$clog2(`FETCH_WIDTH)+1{~stall}} & outNum);
             if(inst_num != 0 && !stall)begin
                 head <= head + outNum;
                 for(int i=0; i<`IBUF_BANK_NUM; i++)begin

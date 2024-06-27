@@ -105,7 +105,7 @@ module BranchModel(
     // cal stream taken offset
     logic streamHit, branchError, indirectError;
     assign streamHit = stream.size == offset;
-    assign branchError = streamHit ? stream.taken ^ dir : dir;
+    assign branchError = streamHit ? stream.taken ^ dir | (stream.taken & (stream.target != br_target)) : dir;
     assign indirectError = stream.target != jalr_target;
     assign branchRes.direction = dir;
     assign branchRes.error = op == `BRANCH_JALR ? indirectError :

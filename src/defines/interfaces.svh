@@ -168,15 +168,14 @@ endinterface
 
 interface PreDecodeRedirect;
     logic en;
+    logic direct;
     logic `VADDR_BUS pc;
     FsqIdx fsqIdx;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `VADDR_BUS redirect_addr;
-    BranchType br_type;
-    RasType ras_type;
 
-    modport predecode(output en, fsqIdx, redirect_addr, pc, offset, br_type, ras_type);
-    modport redirect(input en, fsqIdx, redirect_addr, pc, offset, br_type, ras_type);
+    modport predecode(output en, direct, fsqIdx, redirect_addr, pc, offset);
+    modport redirect(input en, direct, fsqIdx, redirect_addr, pc, offset);
 endinterface
 
 interface PreDecodeIBufferIO;

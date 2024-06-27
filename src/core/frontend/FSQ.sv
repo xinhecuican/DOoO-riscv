@@ -290,10 +290,10 @@ endgenerate
                 direction <= redirect_dir_idx[`FSQ_WIDTH-1] & ~redirect_n1[`FSQ_WIDTH-1] ? ~directionTable[redirect_dir_idx] : directionTable[redirect_dir_idx];
             end
             else if(pd_redirect.en)begin
-                direction <= pd_redirect.fsqIdx.idx & ~pd_redirect_n1 ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
+                direction <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
             end
             else if(bpu_fsq_io.redirect)begin
-                direction <= bpu_fsq_io.stream_idx & ~bpu_fsq_redirect_n1 ? ~bpu_fsq_io.stream_dir : bpu_fsq_io.stream_dir;
+                direction <= bpu_fsq_io.stream_idx[`FSQ_WIDTH-1] & ~bpu_fsq_redirect_n1[`FSQ_WIDTH-1] ? ~bpu_fsq_io.stream_dir : bpu_fsq_io.stream_dir;
             end
             else if(bpu_fsq_io.en & ~full)begin
                 direction <= tail[`FSQ_WIDTH-1] & ~tail_n1[`FSQ_WIDTH-1] ? ~direction : direction;
@@ -303,7 +303,7 @@ endgenerate
                 shdir <= redirect_dir_idx[`FSQ_WIDTH-1] & ~redirect_n1[`FSQ_WIDTH-1] ? ~directionTable[redirect_dir_idx] : directionTable[redirect_dir_idx];
             end
             else if(pd_redirect.en)begin
-                shdir <= pd_redirect.fsqIdx.idx & ~pd_redirect_n1 ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
+                shdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
             end
             else if(cache_req_ok & cache_req)begin
                 shdir <= search_head[`FSQ_WIDTH-1] & ~search_head_n1[`FSQ_WIDTH-1] ? ~shdir : shdir;
@@ -346,11 +346,17 @@ endgenerate
             if(rd.en | cr.en)begin
                 wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {cr.en, rd.taken, rd.br_type, rd.ras_type, rd.target, fsq_back_io.redirect.fsqInfo.offset};
             end
+            if(pd_redirect.en & pd_redirect.direct)begin
+                wbInfos[pd_redirect.fsqIdx.idx] <= {1'b0, 1'b1, DIRECT, NONE, pd_redirect.redirect_addr, pd_redirect.offset};
+            end
             if(queue_we)begin
                 pred_error_en[tail] <= 1'b0;
             end
             if(rd.en | cr.en)begin
                 pred_error_en[fsq_back_io.redirect.fsqInfo.idx] <= 1'b1;
+            end
+            if(pd_redirect.en & pd_redirect.direct)begin
+                pred_error_en[pd_redirect.fsqIdx.idx] <= 1'b1;
             end
         end
     end

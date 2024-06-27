@@ -73,7 +73,7 @@ generate;
     assign isBr[`SLOT_NUM-1] = lookup_entry.tailSlot.en &&
                                 lookup_entry.tailSlot.br_type == CONDITION;
     assign lookup_carry[`SLOT_NUM-1] = lookup_entry.tailSlot.carry;
-    assign br_takens = isBr & (cond_history | carry);
+    assign br_takens = isBr & (cond_history | lookup_carry);
 endgenerate
 
     always_comb begin
@@ -151,6 +151,7 @@ endgenerate
                     if(!update_carry)begin
                         ctrs[updateSelectIdx] <= u_ctr;
                     end
+                end
             end
         end
     end
