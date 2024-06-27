@@ -4,6 +4,7 @@
 `define RV32I
 // `define ZICSR // always include
 `define DIFFTEST
+`define ENABLE_LOG
 
 // `ifdef ZICSR
 // parameter HAS_ZICSR=1;

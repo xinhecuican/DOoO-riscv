@@ -76,7 +76,7 @@ module CsrIssueQueue(
 // redirect
     logic `N(`CSR_ISSUE_SIZE) redirect_en, head_mask, tail_mask;
     logic `N(`CSR_ISSUE_SIZE) bigger, valid, validStart, validEnd;
-    logic `N(`CSR_ISSUE_WIDTH) validSelect1, validSelect2, validSelect;
+    logic `N(`CSR_ISSUE_WIDTH) validSelect1, validSelect2, validSelect, validSelect_n;
     MaskGen #(`CSR_ISSUE_SIZE) mask_gen_head(head, head_mask);
     MaskGen #(`CSR_ISSUE_SIZE) mask_gen_tail(tail, tail_mask);
     assign redirect_en = hdir ^ tdir ? ~(head_mask ^ tail_mask) : head_mask ^ tail_mask;
@@ -95,6 +95,7 @@ endgenerate
     Encoder #(`CSR_ISSUE_SIZE) encoder1 (validStart, validSelect1);
     Encoder #(`CSR_ISSUE_SIZE) encoder2 (validEnd, validSelect2);
     assign validSelect = validSelect1 == head ? validSelect2 : validSelect1;
+    assign validSelect_n = validSelect + 1;
 
 
     always_ff @(posedge clk)begin
@@ -112,8 +113,9 @@ endgenerate
         end
         else begin
             if(backendCtrl.redirect)begin
-                tail <= |valid ? validSelect + 1 : head;
-                tdir <= |valid ? dirTable[validSelect + 1] : hdir;
+                tail <= |valid ? validSelect_n : head;
+                tdir <= |valid ? (validSelect[`CSR_ISSUE_WIDTH-1] & ~validSelect_n[`CSR_ISSUE_WIDTH-1] ?
+                        ~dirTable[validSelect] : dirTable[validSelect]) : hdir;
             end
             else if(enqueue)begin
                 tail <= tail_n;

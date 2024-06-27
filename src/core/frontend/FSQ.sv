@@ -455,6 +455,8 @@ endgenerate
             
         end
     end
+
+    `Log(DLog::Debug, bpu_fsq_io.update, $sformatf("update BP%4d. taken: %b target: %8h allocSlot: %2d", commit_head, update_taken, update_target_pc, update_alloc_slot))
 `endif
 
 endmodule

@@ -11,6 +11,7 @@ module UBTB(
     BTBEntry lookup_entry;
     logic `ARRAY(`SLOT_NUM, 2) lookup_ctr;
     logic `N(`UBTB_SIZE) lookup_hits, updateHits;
+    logic `N(`SLOT_NUM) lookup_carry;
     logic `N($clog2(`UBTB_SIZE)) lookup_index, updateIdx, updateSelectIdx;
     logic `N(`BTB_TAG_SIZE) lookup_tag, update_tag;
     logic `N(`SLOT_NUM) br_takens;
@@ -64,13 +65,15 @@ generate;
     end
     for(genvar br=0; br<`SLOT_NUM-1; br++)begin
         assign isBr[br] = lookup_entry.slots[br].en;
+        assign lookup_carry[br] = lookup_entry.slots[br].carry;
     end
     for(genvar br=0; br<`SLOT_NUM; br++)begin
         assign cond_history[br] = lookup_ctr[br][1];
     end
     assign isBr[`SLOT_NUM-1] = lookup_entry.tailSlot.en &&
                                 lookup_entry.tailSlot.br_type == CONDITION;
-    assign br_takens = isBr & cond_history;
+    assign lookup_carry[`SLOT_NUM-1] = lookup_entry.tailSlot.carry;
+    assign br_takens = isBr & (cond_history | carry);
 endgenerate
 
     always_comb begin
@@ -124,12 +127,17 @@ endgenerate
     );
 
     UBTBMeta meta;
+    logic `N(`SLOT_NUM) update_carry;
     logic `ARRAY(`SLOT_NUM, 2) u_ctr;
     assign meta = ubtb_io.updateInfo.meta.ubtb;
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
         UpdateCounter updateCounter (meta.ctr[i], ubtb_io.updateInfo.realTaken[i], u_ctr[i]);
     end
+    for(genvar i=0; i<`SLOT_NUM-1; i++)begin
+        assign update_carry[i] = ubtb_io.updateInfo.btbEntry.slots[i].carry;
+    end
+    assign update_carry[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.carry;
 endgenerate
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
@@ -139,7 +147,10 @@ endgenerate
         else begin
             if(ubtb_io.update)begin
                 entrys[updateSelectIdx] <= ubtb_io.updateInfo.btbEntry;
-                ctrs[updateSelectIdx] <= u_ctr;
+                for(int i=0; i<`SLOT_NUM; i++)begin
+                    if(!update_carry)begin
+                        ctrs[updateSelectIdx] <= u_ctr;
+                    end
             end
         end
     end

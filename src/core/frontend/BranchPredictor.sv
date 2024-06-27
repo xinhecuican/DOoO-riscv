@@ -115,7 +115,7 @@ module S2Control(
     logic `VADDR_BUS predict_pc;
     logic hit;
     logic `N(`SLOT_NUM) isBr;
-    logic `N(`SLOT_NUM) br_takens;
+    logic `N(`SLOT_NUM) br_takens, carry;
     logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
     logic `N(`PREDICTION_WIDTH) br_size, tail_size, br_size_normal;
     TargetState br_tar_state, tail_tar_state, br_tar_state_normal;
@@ -129,13 +129,15 @@ module S2Control(
 
     BTBTagGen gen_tag(pc, lookup_tag);
     assign hit = entry.en && (lookup_tag == entry.tag);
-    assign br_takens = isBr & prediction;
+    assign br_takens = isBr & (prediction | carry);
     generate;
         for(genvar br=0; br<`SLOT_NUM-1; br++)begin
             assign isBr[br] = entry.slots[br].en;
+            assign carry[br] = entry.slots[br].carry;
         end
         assign isBr[`SLOT_NUM-1] = entry.tailSlot.en &&
                                         entry.tailSlot.br_type == CONDITION;
+        assign carry[`SLOT_NUM-1] = entry.tailSlot.carry;
     endgenerate
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
                                         entry.slots[0].target,entry.tailSlot.target[`JAL_OFFSET-1: 0],
@@ -155,7 +157,7 @@ module S2Control(
     assign br_target_high = br_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
                             br_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
-    assign br_target = {{(`VADDR_SIZE-`JAL_OFFSET){br_offset[`JAL_OFFSET-1]}}, br_offset} + pc;
+    assign br_target = {br_target_high, br_offset_normal, 1'b0};
     assign predict_pc = |br_takens ? br_target : tail_target;
     assign older = entry.slots[0].offset < entry.tailSlot.offset;
 
@@ -178,8 +180,7 @@ module S2Control(
     always_comb begin
         case(entry.tailSlot.br_type)
         CONDITION, INDIRECT, DIRECT:begin
-            tail_indirect_target = {{(`VADDR_SIZE-`JALR_OFFSET){entry.tailSlot.target[`JALR_OFFSET-1]}}, 
-                                    entry.tailSlot.target} + pc;
+            tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
         end
         CALL:begin
             tail_indirect_target = ras_entry.pc;

@@ -1,4 +1,4 @@
-
+`include "../defines/defines.svh"
 module SimTop(
     input         clock,
     input         reset,
@@ -25,4 +25,12 @@ module SimTop(
         .rst(reset),
         .axi(cpu_mem_io.slave)
     );
+
+import DLog::*;
+    initial begin
+        logLevel = io_logCtrl_log_level;
+    end
+    always_ff @(posedge clock)begin
+        logValid <= cycleCnt > io_logCtrl_log_begin && cycleCnt < io_logCtrl_log_end;
+    end
 endmodule

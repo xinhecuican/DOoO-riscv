@@ -350,11 +350,14 @@ endgenerate
     logic `N(`COMMIT_WIDTH) diff_valid, diff_wen;
     logic `ARRAY(`COMMIT_WIDTH, 5) diff_wdest;
     logic `ARRAY(`COMMIT_WIDTH, `XLEN) diff_data, diff_data_before;
+    logic `ARRAY(`COMMIT_WIDTH, `ROB_WIDTH) dataRIdxNext, diff_robIdx;
     always_ff @(posedge clk)begin
         pc <= fsq_back_io.diff_pc;
         diff_valid <= commitBus.en;
         diff_wen <= commitBus.we;
         diff_wdest <= commitBus.vrd;
+        dataRIdxNext <= dataRIdx;
+        diff_robIdx <= dataRIdxNext;
         for(int i=0; i<`FETCH_WIDTH; i++)begin
             if(data_en[i])begin
                 insts[dataWIdx[i]] <= dis_io.op[i].inst;
@@ -382,6 +385,7 @@ generate
             .valid(diff_valid[i]),
             .pc(pc[i]),
             .instr(diff_insts[i]),
+            .robIdx({{32-`ROB_WIDTH{1'b0}}, diff_robIdx[i]}),
             .special(1'b0),
             .skip(1'b0),
             .isRVC(1'b0),
@@ -406,6 +410,7 @@ endgenerate
 
     logic `N($clog2(`COMMIT_WIDTH)+1) commitCnt;
     ParallelAdder #(1, `COMMIT_WIDTH) adder_commit (diff_valid, commitCnt);
+    assign DLog::cycleCnt = cycleCnt;
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
             cycleCnt <= 0;
