@@ -19,7 +19,7 @@ module IntIssueQueue(
     logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) originOrder, sortOrder;
     logic `N(BANK_NUM) full;
-    logic `N(BANK_NUM) enNext, redirectClear;
+    logic `N(BANK_NUM) enNext, bigger;
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin
         IntIssueBank #(BANK_SIZE) issue_bank (
@@ -37,13 +37,13 @@ generate
         assign bank_io[i].ready = int_wakeup_io.ready[i];
         assign full[i] = bank_io[i].full;
 
-        assign int_wakeup_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
+        assign int_wakeup_io.en[i] = bank_io[i].reg_en;
         assign int_wakeup_io.preg[i] = bank_io[i].rs1;
         assign int_wakeup_io.preg[BANK_NUM+i] = bank_io[i].rs2;
         assign int_wakeup_io.rd[i] = bank_io[i].rd;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
 
-        assign redirectClear[i] = backendCtrl.redirect & ((bank_io[i].data_o.robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx < bank_io[i].data_o.robIdx.idx));
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (bank_io[i].data_o.robIdx, backendCtrl.redirectIdx, bigger[i]);
     end
 endgenerate
     assign dis_issue_io.full = |full;
@@ -51,7 +51,7 @@ endgenerate
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin
         always_ff @(posedge clk)begin
-            enNext[i] <= bank_io[i].reg_en & ~backendCtrl.redirect;
+            enNext[i] <= bank_io[i].reg_en;
             issue_exu_io.bundle[i] <= bank_io[i].data_o;
             issue_exu_io.br_type[i] <= bank_io[i].br_type;
             issue_exu_io.ras_type[i] <= bank_io[i].ras_type;
@@ -63,7 +63,7 @@ endgenerate
     assign issue_exu_io.rs2_data = int_wakeup_io.data[BANK_NUM*2-1: BANK_NUM];
     always_ff @(posedge clk)begin
         order <= sortOrder;
-        issue_exu_io.en <= enNext & ~redirectClear;
+        issue_exu_io.en <= enNext & ({BANK_NUM{~backendCtrl.redirect}} | bigger);
         issue_exu_io.streams <= fsq_back_io.streams;
         issue_exu_io.directions <= fsq_back_io.directions;
     end
@@ -137,7 +137,7 @@ endgenerate
     );
 
     assign io.full = &en;
-    assign io.reg_en = |ready;
+    assign io.reg_en = |ready & ~backendCtrl.redirect;
     assign io.rs1 = status_ram[selectIdx].rs1;
     assign io.rs2 = status_ram[selectIdx].rs2;
     assign io.rd = data_o.rd;

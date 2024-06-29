@@ -15,7 +15,7 @@
 `endif \
 
 package DLog;
-    typedef enum logic [1: 0] { Debug, Error, Warning, Info} LogLevel;
+    typedef enum logic [1: 0] { Debug, Info, Warning, Error} LogLevel;
     logic logValid = 1'b0;
     logic [63: 0] cycleCnt;
     parameter [7: 0] logLevel = Debug;

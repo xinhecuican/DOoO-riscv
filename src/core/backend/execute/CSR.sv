@@ -66,8 +66,7 @@ module CSR(
     logic `ARRAY(`CSR_NUM, `MXL) cmp_csr_data;
     logic `N(`CSR_NUM) cmp_eq;
     logic redirect_older;
-    RobIdx out;
-    LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.bundle.robIdx, redirect_older, out);
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.bundle.robIdx, redirect_older);
     assign wen = cmp_eq  & 
        {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
                  ~(backendCtrl.redirect & redirect_older) & 

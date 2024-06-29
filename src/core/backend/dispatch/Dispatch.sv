@@ -250,11 +250,10 @@ generate
         logic bigger;
         logic older;
         Entry entry;
-        RobIdx out;
         assign entry = entrys[raddr];
         assign raddr = head + i;
         assign bigger = num > i;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older, out);
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older);
         assign io.en_o[i] = bigger & ~io.issue_full & (~backendCtrl.redirect | older);
         assign io.rs1_o[i] = entry.rs1;
         assign io.rs2_o[i] = entry.rs2;

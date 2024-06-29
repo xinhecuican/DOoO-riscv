@@ -81,10 +81,10 @@ module BranchPredictor(
         // end
     end
 
-    assign bpu_fsq_io.en = bpu_fsq_io.prediction.en;
+    assign bpu_fsq_io.en = bpu_fsq_io.prediction.en & ~redirect.flush;
     assign bpu_fsq_io.prediction = redirect.s2_redirect ? s2_result_out : s1_result;
-    assign bpu_fsq_io.redirect = redirect.s2_redirect;
-    assign bpu_fsq_io.lastStage = s2_result_out.en;
+    assign bpu_fsq_io.redirect = redirect.s2_redirect & ~redirect.flush;
+    assign bpu_fsq_io.lastStage = s2_result_out.en  & ~redirect.flush;
     assign bpu_fsq_io.lastStageIdx = s2_result_out.stream_idx;
     assign bpu_fsq_io.lastStageMeta = s2_meta_out;
     S2Control s2_control(
@@ -116,6 +116,7 @@ module S2Control(
     logic hit;
     logic `N(`SLOT_NUM) isBr;
     logic `N(`SLOT_NUM) br_takens, carry;
+    logic tail_taken;
     logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
     logic `N(`PREDICTION_WIDTH) br_size, tail_size, br_size_normal;
     TargetState br_tar_state, tail_tar_state, br_tar_state_normal;
@@ -153,7 +154,8 @@ module S2Control(
     assign tail_target_high = tail_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
                             tail_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
-    assign tail_target = entry.tailSlot.en ? tail_indirect_target : entry.fthAddr + pc;
+    assign tail_taken = entry.tailSlot.en && entry.tailSlot.br_type != CONDITION;
+    assign tail_target = tail_taken ? tail_indirect_target : entry.fthAddr + pc;
     assign br_target_high = br_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
                             br_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
@@ -187,7 +189,7 @@ module S2Control(
         end
         endcase
         if(hit && predict_pc != result_i.stream.target)begin
-            result_o.stream.taken = |br_takens;
+            result_o.stream.taken = (|br_takens) | tail_taken;
             result_o.stream.branch_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
             result_o.stream.ras_type = entry.tailSlot.ras_type;
             result_o.stream.size = |br_takens ? br_size : tail_size;
@@ -195,7 +197,7 @@ module S2Control(
             result_o.redirect = 1;
             result_o.cond_num = cond_num;
             result_o.cond_valid = cond_valid;
-            result_o.taken = |br_takens;
+            result_o.taken = (|br_takens) | tail_taken;
             result_o.predTaken = br_takens;
             result_o.btbEntry = entry;
         end

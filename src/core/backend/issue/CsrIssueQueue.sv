@@ -18,7 +18,7 @@ module CsrIssueQueue(
 
     StatusEntry status_ram `N(`CSR_ISSUE_SIZE);
     logic select_en, wakeup_en;
-    RobIdx wakeup_robIdx, wakeup_out;
+    RobIdx wakeup_robIdx;
     logic wakeup_older;
     logic `N(`CSR_ISSUE_WIDTH) head, tail, head_n, tail_n;
     logic hdir, tdir;
@@ -43,7 +43,7 @@ module CsrIssueQueue(
         wakeup_en <= select_en & csr_wakeup_io.ready;
         wakeup_robIdx <= status_ram[head].robIdx;
     end
-    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (wakeup_robIdx, backendCtrl.redirectIdx,  wakeup_older, wakeup_out);
+    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (wakeup_robIdx, backendCtrl.redirectIdx,  wakeup_older);
 
     assign csr_wakeup_io.en = select_en;
     assign csr_wakeup_io.preg = status_ram[head].rs1;
@@ -83,8 +83,7 @@ module CsrIssueQueue(
     assign valid = bigger & redirect_en;
 generate
     for(genvar i=0; i<`CSR_ISSUE_SIZE; i++)begin
-        RobIdx out;
-        LoopCompare #(`ROB_WIDTH) cmp_bigger (status_ram[i].robIdx, backendCtrl.redirectIdx, bigger[i], out);
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (status_ram[i].robIdx, backendCtrl.redirectIdx, bigger[i]);
         logic `N(`CSR_ISSUE_WIDTH) i_n, i_p;
         assign i_n = i + 1;
         assign i_p = i - 1;

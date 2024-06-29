@@ -15,6 +15,7 @@ module UBTB(
     logic `N($clog2(`UBTB_SIZE)) lookup_index, updateIdx, updateSelectIdx;
     logic `N(`BTB_TAG_SIZE) lookup_tag, update_tag;
     logic `N(`SLOT_NUM) br_takens;
+    logic tail_taken;
     logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
     logic [`VADDR_SIZE-`JAL_OFFSET-2: 0] br_target_high;
     logic [`VADDR_SIZE-`JALR_OFFSET-2: 0] tail_target_high;
@@ -41,7 +42,8 @@ module UBTB(
     assign tail_target_high = tail_tar_state == TAR_OV ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
                             tail_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
-    assign tail_target = lookup_entry.tailSlot.en ? {br_target_high, lookup_entry.tailSlot.target, 1'b0} : lookup_entry.fthAddr + ubtb_io.pc;
+    assign tail_taken = lookup_entry.tailSlot.en && lookup_entry.tailSlot.br_type != CONDITION;
+    assign tail_target = tail_taken ? {br_target_high, lookup_entry.tailSlot.target, 1'b0} : lookup_entry.fthAddr + ubtb_io.pc;
     assign tail_size = lookup_entry.tailSlot.en ? lookup_entry.tailSlot.offset : lookup_entry.fthAddr;
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
                                         lookup_entry.slots[0].target,lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0],
@@ -95,7 +97,7 @@ endgenerate
 
     always_comb begin
         ubtb_io.result.en = ~ubtb_io.redirect.flush & ~ubtb_io.redirect.s2_redirect & ubtb_io.redirect.tage_ready;
-        ubtb_io.result.stream.taken = lookup_hit & (|br_takens);
+        ubtb_io.result.stream.taken = lookup_hit & ((|br_takens) | (tail_taken));
         ubtb_io.result.stream.branch_type = |br_takens ? CONDITION : lookup_entry.tailSlot.br_type;
         ubtb_io.result.stream.ras_type = NONE;
         ubtb_io.result.stream.start_addr = ubtb_io.pc;
@@ -106,7 +108,7 @@ endgenerate
         ubtb_io.result.redirect = 0;
         ubtb_io.result.cond_num = ~lookup_hit ? 0 : br_num;
         ubtb_io.result.cond_valid = cond_valid;
-        ubtb_io.result.taken = |br_takens;
+        ubtb_io.result.taken = (|br_takens) | tail_taken;
         ubtb_io.result.predTaken = br_takens;
         ubtb_io.result.stream_idx = ubtb_io.fsqIdx;
         ubtb_io.result.stream_dir = ubtb_io.fsqDir;

@@ -259,6 +259,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
+    logic fsqDir;
     FsqIdxInfo fsqInfo;
     RobIdx robIdx;
     BranchUnitRes res;

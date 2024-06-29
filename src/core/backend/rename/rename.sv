@@ -29,7 +29,7 @@ module Rename(
     Freelist freelist (.*);
 
 // conflict
-    logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) raw_rs1, raw_rs2, waw; // read after write
+    logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) raw_rs1, raw_rs2, waw, waw_old; // read after write
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) raw_rs1_idx, raw_rs2_idx, waw_idx;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1, prs2, old_prd, prd;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) prdIdx;
@@ -40,7 +40,7 @@ module Rename(
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         assign prd[i] = rd_en[i] ? fl_io.prd[prdIdx[i]] : 0;
-        assign old_prd[i] = |waw[i] ? prd[waw_idx[i]] : rename_io.prd[i];
+        assign old_prd[i] = |waw_old[i] ? prd[waw_idx[i]] : rename_io.prd[i];
         assign prs1[i] = |raw_rs1[i] ? prd[raw_rs1_idx[i]] : rename_io.prs1[i];
         assign prs2[i] = |raw_rs2[i] ? prd[raw_rs2_idx[i]] : rename_io.prs2[i];
     end
@@ -51,21 +51,24 @@ generate
                 assign raw_rs1[i][j] = 0;
                 assign raw_rs2[i][j] = 0;
                 assign waw[i][j] = 0;
+                assign waw_old[i][j] = 0;
             end
             else if(j > i)begin
                 assign raw_rs1[i][j] = 0;
                 assign raw_rs2[i][j] = 0;
                 assign waw[i][j] = rd_en[i] & rd_en[j] & (dec_rename_io.op[i].di.rd == dec_rename_io.op[j].di.rd);
+                assign waw_old[i][j] = 0;
             end
             else begin
                 assign raw_rs1[i][j] = rd_en[j] && dec_rename_io.op[i].di.rs1 == dec_rename_io.op[j].di.rd;
                 assign raw_rs2[i][j] = rd_en[j] && dec_rename_io.op[i].di.rs2 == dec_rename_io.op[j].di.rd;
                 assign waw[i][j] = 0;
+                assign waw_old[i][j] = rd_en[i] & rd_en[j] & (dec_rename_io.op[i].di.rd == dec_rename_io.op[j].di.rd);
             end
         end
         PEncoder #(`FETCH_WIDTH) encoder_rs1_idx (raw_rs1[i], raw_rs1_idx[i]);
         PEncoder #(`FETCH_WIDTH) encoder_rs2_idx (raw_rs2[i], raw_rs2_idx[i]);
-        PREncoder #(`FETCH_WIDTH) encoder_waw_idx (waw[i], waw_idx[i]);
+        PREncoder #(`FETCH_WIDTH) encoder_waw_idx (waw_old[i], waw_idx[i]);
     end
 endgenerate
 

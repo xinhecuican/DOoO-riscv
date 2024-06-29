@@ -428,7 +428,7 @@ endgenerate
         update_taken <= commitWBInfo.taken;
         update_start_addr <= commitStream.start_addr;
         update_target_pc <= commitWBInfo.target;
-        update_btb_entry <= pred_error ? commitUpdateEntry : oldEntry;
+        update_btb_entry <= pred_error & commitWBInfo.taken ? commitUpdateEntry : oldEntry;
         update_real_taken <= realTaken;
         update_alloc_slot <= allocSlot;
     end
@@ -572,7 +572,7 @@ endgenerate
     end
 
     always_comb begin
-        if((~pred_error) | exception)begin
+        if((~pred_error) | exception | (~taken))begin
             realTaken = predTaken;
         end
         else if(|equal)begin
@@ -594,7 +594,7 @@ generate
     end
 endgenerate
     always_comb begin
-        if(!pred_error)begin
+        if((~pred_error) | (~taken))begin
             allocSlot = predAlloc;
         end
         else if(exception)begin

@@ -284,11 +284,9 @@ module LoopCompare #(
 )(
 	input logic [WIDTH: 0] in1,
 	input logic [WIDTH: 0] in2,
-	output logic bigger,
-	output logic [WIDTH: 0] out
+	output logic bigger
 );
 	assign bigger = (in1[0] ^ in2[0]) ^ (in1[WIDTH: 1] < in2[WIDTH: 1]);
-	assign out = bigger ? in1 : in2;
 endmodule
 
 module MaskExpand #(

@@ -37,8 +37,8 @@ module DecodeUnit(
     assign bgeu = branch & (&funct3);
 
     assign info.branchop[2] = jal | jalr;
-    assign info.branchop[1] = blt | bge;
-    assign info.branchop[0] = jalr | bne | bge;
+    assign info.branchop[1] = blt | bge | bgeu | bltu;
+    assign info.branchop[0] = jalr | bne | bge | bgeu;
 
     logic funct7_0, funct7_5, rs2_0, rs2_1, rs2_2, funct3_0;
     assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
@@ -134,12 +134,12 @@ module DecodeUnit(
     assign lui_imm = inst[31: 12];
 
     assign info.immv = slli | srai | srli | addi | slti | xori | ori | andi | sltiu;
-    assign info.imm = {`DEC_IMM_WIDTH{beq | bne | blt | bge}} & branch_imm |
+    assign info.imm = {`DEC_IMM_WIDTH{beq | bne | blt | bge | bgeu | bltu}} & branch_imm |
                       {`DEC_IMM_WIDTH{lui | auipc}} & lui_imm |
                       {`DEC_IMM_WIDTH{csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci
                       }} & inst[19: 15] |
                       {`DEC_IMM_WIDTH{store}} & store_imm |
-                      {`DEC_IMM_WIDTH{load | opimm | fence}} & imm;
+                      {`DEC_IMM_WIDTH{load | opimm | fence | jalr}} & imm;
 
     assign info.intv = lui | opimm | opreg | auipc | fence;
     assign info.branchv = branch | jal | jalr;

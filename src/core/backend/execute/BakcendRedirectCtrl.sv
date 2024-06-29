@@ -8,10 +8,9 @@ module BackendRedirectCtrl(
 );
     logic branchOlder;
     logic branchValid, branchValid_n;
-    RobIdx outIdx;
     BackendRedirectInfo preRedirect;
     BranchRedirectInfo preBranch; 
-    LoopCompare #(`ROB_WIDTH) compare_rob (io.branchRedirect.robIdx, io.memRedirect.robIdx, branchOlder, outIdx);
+    LoopCompare #(`ROB_WIDTH) compare_rob (io.branchRedirect.robIdx, io.memRedirect.robIdx, branchOlder);
     assign branchValid = (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en);
     always_ff @(posedge clk)begin
         branchValid_n <= branchValid;

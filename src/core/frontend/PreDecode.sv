@@ -62,13 +62,13 @@ module PreDecode(
                             (stream_next.taken & ((tailIdx != jumpSelectIdx) |
                             (bundles_next[tailIdx].br_type != stream_next.branch_type) |
                             bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)))) |
-                         (stream_next.taken & ~bundles_next[tailIdx].branch);
+                         (en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch);
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
     assign pd_redirect.direct = bundles_next[tailIdx].branch & (|jump_en);
     assign pd_redirect.fsqIdx = fsqIdx;
     assign pd_redirect.offset = selectIdx;
     assign pd_redirect.pc = stream_next.start_addr;
-    assign pd_redirect.redirect_addr = stream_next.taken & ~bundles_next[tailIdx].branch ? next_pc : bundles_next[selectIdx].target;
+    assign pd_redirect.redirect_addr = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? next_pc : bundles_next[selectIdx].target;
 
     always_comb begin
         case (selectIdx)
@@ -119,7 +119,7 @@ module PreDecoder(
     assign offset = {{(`VADDR_SIZE-21){inst[31]}}, inst[31], inst[19: 12], inst[20], inst[30: 21], 1'b0};
     assign pdBundle.branch = jal | jalr | branch;
     assign pdBundle.target = addr + offset;
-    assign pdBundle.direct = jal | jalr;
+    assign pdBundle.direct = jal;
     assign push = rd == 5'h1 || rd == 5'h5;
     assign pop = rs == 5'h1 || rs == 5'h5;
     always_comb begin

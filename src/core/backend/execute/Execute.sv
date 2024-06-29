@@ -35,12 +35,12 @@ generate
             .backendCtrl(backendCtrl)
         );
 
-        RobIdx out;
-        LoopCompare #(`ROB_WIDTH) compare_older (issue_alu_io.bundle.robIdx, backendCtrl.redirectIdx, older[i], out);
+        LoopCompare #(`ROB_WIDTH) compare_older (issue_alu_io.bundle.robIdx, backendCtrl.redirectIdx, older[i]);
 
         assign branch_ctrl_io.bundles[i].en = int_exu_io.en[i] & int_exu_io.bundle[i].branchv & int_exu_io.valid[i] & (~backendCtrl.redirect | older[i]);
         assign branch_ctrl_io.bundles[i].fsqInfo = int_exu_io.bundle[i].fsqInfo;
         assign branch_ctrl_io.bundles[i].robIdx = int_exu_io.bundle[i].robIdx;
+        assign branch_ctrl_io.bundles[i].fsqDir = int_exu_io.directions[i];
     end
 endgenerate
 

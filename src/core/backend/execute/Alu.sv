@@ -69,7 +69,7 @@ module BranchModel(
         2'b00: scmp = cmp;
         2'b01: scmp = 0;
         2'b10: scmp = 1;
-        2'b11: scmp = ~cmp & ~equal;
+        2'b11: scmp = cmp;
         endcase
     end
     assign cmp_result = uext ? cmp : scmp;
@@ -93,10 +93,11 @@ module BranchModel(
     end
 
     logic `N(`VADDR_SIZE) jalr_target, br_target;
-    assign s_imm = {{`XLEN-13{imm[12]}}, imm[12: 0]};
+    assign s_imm = {{`XLEN-12{imm[11]}}, imm[11: 1], 1'b0};
     assign jalr_target = rs1_data + s_imm;
     assign br_target = stream.start_addr + {offset, 2'b00} + s_imm;
-    assign branchRes.target = op == `BRANCH_JALR ? jalr_target : br_target;
+    assign branchRes.target = op == `BRANCH_JALR ? jalr_target : 
+                              dir ? br_target : result;
     logic `N(`PREDICTION_WIDTH+1) addrOffset;
     assign addrOffset = offset + 1;
     assign result = {stream.start_addr[`VADDR_SIZE-1: 2] + addrOffset, 2'b00};
@@ -106,7 +107,7 @@ module BranchModel(
     logic streamHit, branchError, indirectError;
     assign streamHit = stream.size == offset;
     assign branchError = streamHit ? stream.taken ^ dir | (stream.taken & (stream.target != br_target)) : dir;
-    assign indirectError = stream.target != jalr_target;
+    assign indirectError = ~streamHit | (stream.target != jalr_target);
     assign branchRes.direction = dir;
     assign branchRes.error = op == `BRANCH_JALR ? indirectError :
                         op != `BRANCH_JAL ? branchError : 0;
@@ -146,7 +147,7 @@ module ALUModel(
         2'b00: scmp = cmp;
         2'b01: scmp = 0;
         2'b10: scmp = 1;
-        2'b11: scmp = ~cmp & ~equal;
+        2'b11: scmp = cmp;
         endcase
     end
 
