@@ -58,7 +58,7 @@ generate
     ParallelOR #(`PREG_SIZE, `COMMIT_WIDTH) or_walk_valid (walk_valids, walk_valid);
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             valid <= {`PREG_SIZE{1'b1}};
         end

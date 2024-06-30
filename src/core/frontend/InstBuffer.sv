@@ -81,7 +81,7 @@ module InstBuffer (
     assign fetchBundle.en = out_en_compose;
     assign full = inst_num + pd_ibuffer_io.num > `IBUF_SIZE;
 
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clk or posedge rst) begin
         if(rst == `RST || frontendCtrl.redirect)begin
             for(int i=0; i<`IBUF_BANK_NUM; i++)begin
                 ibuf[i].rindex <= 0;
@@ -125,7 +125,7 @@ module InstBufferBank #(
     logic `N(WIDTH) ram `N(`IBUF_BANK_SIZE);
     
     assign dout = ram[raddr];
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<`IBUF_BANK_SIZE; i++)begin
                 ram[i] <= 0;

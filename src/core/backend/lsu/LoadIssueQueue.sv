@@ -58,6 +58,8 @@ generate
         assign bank_io[i].sqIdx = sqIdx[order[i]];
         assign bank_io[i].reply_fast = load_io.reply_fast[i];
         assign bank_io[i].reply_slow = load_io.reply_slow[i];
+        assign bank_io[i].success = load_io.success[i];
+        assign bank_io[i].success_idx = load_io.success_idx[i];
         assign full[i] = bank_io[i].full;
 
         assign load_wakeup_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
@@ -134,7 +136,7 @@ module LoadIssueBank(
         .rst(rst),
         .en(1'b1),
         .addr0(freeIdx),
-        .addr1(selectIdx),
+        .addr1(selectIdxNext),
         .we(io.en),
         .wdata({io.data.uext, size, io.data.imm, io.data.rd, io.lqIdx, io.sqIdx, io.data.robIdx, io.data.fsqInfo}),
         .rdata1(data_o)
@@ -154,8 +156,12 @@ endgenerate
         .select(select_en)
     );
     assign io.full = &en;
-    assign io.reg_en = |ready;
-    assign io.rs1 = status_ram[selectIdx].rs1;
+    always_ff @(posedge clk)begin
+        io.reg_en <= |ready;
+        io.rs1 <= status_ram[selectIdx].rs1;
+    end
+    // assign io.reg_en = |ready;
+    // assign io.rs1 = status_ram[selectIdx].rs1;
     PSelector #(`LOAD_ISSUE_BANK_SIZE) selector_free_idx (~en, free_en);
     Encoder #(`LOAD_ISSUE_BANK_SIZE) encoder_free_idx (free_en, freeIdx);
     Encoder #(`LOAD_ISSUE_BANK_SIZE) encoder_select_idx (select_en, selectIdx);
@@ -178,8 +184,9 @@ endgenerate
 
     logic `N(`LOAD_ISSUE_BANK_SIZE) success_idx_decode;
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
-    always_ff @(posedge clk)begin
-        io.issue_idx <= selectIdx;
+    always_ff @(posedge clk or posedge rst)begin
+        selectIdxNext <= selectIdx;
+        io.issue_idx <= selectIdxNext;
         if(rst == `RST)begin
             status_ram <= 0;
             en <= 0;
@@ -202,7 +209,7 @@ endgenerate
                 issue[freeIdx] <= 1'b0;
             end
 
-            if(io.reg_en)begin
+            if(|ready)begin
                 issue[selectIdx] <= 1'b1;
             end
 

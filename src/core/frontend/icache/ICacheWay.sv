@@ -26,7 +26,7 @@ module ICacheWay(
     logic `N(`ICACHE_TAG+1) tagv `N(`ICACHE_SET);
 
     assign tagv_index_p1 = io.tagv_index + 1;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             tagv <= '{default: 0};
         end

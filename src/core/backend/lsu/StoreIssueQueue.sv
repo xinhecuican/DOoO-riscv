@@ -175,7 +175,7 @@ generate
         assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
     end
 endgenerate
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             status_ram <= 0;
             en <= 0;
@@ -268,7 +268,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(io.en)begin
             sqIdxs[io.freeIdx] <= io.sqIdx;
         end

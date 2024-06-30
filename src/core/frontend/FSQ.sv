@@ -139,7 +139,7 @@ generate
     assign pd_wr_info.offsets[`SLOT_NUM-1] = predEntry.tailSlot.offset;
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             predictionInfos <= '{default: 0};
         end
@@ -237,7 +237,7 @@ endgenerate
     end
 
 // idx maintain
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         last_search <= search_head == tail && fsq_cache_io.en;
         if(rst == `RST)begin
             search_head <= 0;
@@ -274,7 +274,7 @@ endgenerate
 
     logic `N(`FSQ_WIDTH) redirect_dir_idx;
     assign redirect_dir_idx = fsq_back_io.redirect.fsqInfo.idx;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         for(int i=0; i<`ALU_SIZE; i++)begin
             fsq_back_io.directions[i] <= directionTable[fsq_back_io.fsqIdx[i]];
         end
@@ -337,7 +337,7 @@ endgenerate
     CSRRedirectInfo cr;
     assign rd = fsq_back_io.redirectBr;
     assign cr = fsq_back_io.redirectCsr;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             wbInfos <= '{default: 0};
             pred_error_en <= 0;
@@ -379,7 +379,7 @@ endgenerate
     assign streamCommitOffset = pred_error_en[commit_head] ? commitFsqInfo.offset : commitStream.size;
     assign streamCommitNum = streamCommitOffset + 1;
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             commitNum <= 0;
         end
@@ -450,7 +450,7 @@ generate
         assign fsq_back_io.diff_pc[i] = diff_pcs[fsq_back_io.diff_fsqInfo[i].idx] + {fsq_back_io.diff_fsqInfo[i].offset, 2'b00};
     end
 endgenerate
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             diff_pcs <= '{default: 0};
         end

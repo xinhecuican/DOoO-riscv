@@ -24,7 +24,7 @@ module AxiInterface(
 
     assign arEnd = axi.mar.valid & axi.sar.ready;
     assign ar_en = (~read_controller.en) | arEnd;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             read_controller.en <= 1'b0;
             read_controller.device <= ICACHE;

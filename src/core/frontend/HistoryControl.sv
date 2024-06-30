@@ -80,7 +80,7 @@ generate;
     end
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             ghist <= 0;
             pos <= 0;

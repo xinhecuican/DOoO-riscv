@@ -3,7 +3,7 @@
 `define PERF(name, cond) \
 `ifdef DIFFTEST \
     logic [31: 0] perf_counter_``name; \
-    always_ff @(posedge clk) begin \
+    always_ff @(posedge clk or posedge rst) begin \
         if(rst == `RST)begin \
             perf_counter_``name <= 0; \
         end \

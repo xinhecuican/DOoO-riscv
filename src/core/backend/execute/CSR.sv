@@ -129,7 +129,7 @@ endgenerate                                     \
 generate                                                                \
     if(WRITE_ENABLE)begin                                               \
         if(MASK_VALID)begin                                             \
-            always_ff @(posedge clk)begin                               \
+            always_ff @(posedge clk or posedge rst)begin                \
                 if(rst == `RST)begin                                    \
                     name <= init_value;                                 \
                 end                                                     \
@@ -141,7 +141,7 @@ generate                                                                \
             end                                                         \
         end                                                             \
         else begin                                                      \
-            always_ff @(posedge clk)begin                               \
+            always_ff @(posedge clk or posedge rst)begin                \
                 if(rst == `RST)begin                                    \
                     name <= init_value;                                 \
                 end                                                     \
@@ -154,7 +154,7 @@ generate                                                                \
         end                                                             \
     end                                                                 \
     else begin                                                          \
-        always_ff @(posedge clk)begin                                   \
+        always_ff @(posedge clk or posedge rst)begin                    \
             if(rst == `RST)begin                                        \
                 name <= init_value;                                     \
             end                                                         \
@@ -199,7 +199,7 @@ endgenerate                                                             \
     assign exccode = redirect.exccode == `EXC_EC ? ecall_exccode : 
                      ret & ret_priv_error ? `EXC_II : redirect.exccode;
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
             mepc <= 0;
@@ -241,7 +241,7 @@ endgenerate                                                             \
     assign csr_wb_io.datas[0].res = rdata;
     assign csr_wb_io.datas[0].exccode = issue_csr_io.bundle.exc_valid ? issue_csr_io.bundle.exccode : `EXC_NONE;
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             mode <= 2'b11;
         end

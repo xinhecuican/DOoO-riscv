@@ -58,7 +58,7 @@ endgenerate
     assign head_n = queue_commit_io.conflict ? head : head + commitNum;
     assign tail_n = tail + disNum;
     assign hdir_n = head[`STORE_QUEUE_WIDTH-1] & ~head_n[`STORE_QUEUE_WIDTH-1] ? ~hdir : hdir;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -87,7 +87,7 @@ endgenerate
     logic `N(`VADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
     logic `N(`STORE_QUEUE_SIZE) data_dir;
     logic `ARRAY(`LOAD_QUEUE_SIZE, `DCACHE_BITS) data;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         redirect_next <= backendCtrl.redirect;
         if(rst == `RST)begin
             addr_mask <= '{default: 0};

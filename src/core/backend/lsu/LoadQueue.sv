@@ -84,7 +84,7 @@ endgenerate
     assign head_n = head + commitBus.loadNum;
     assign tail_n = tail + io.disNum;
     assign hdir_n = head[`LOAD_QUEUE_WIDTH-1] & ~head_n[`LOAD_QUEUE_WIDTH-1] ? ~hdir : hdir;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         redirect_next <= backendCtrl.redirect;
         if(rst == `RST)begin
             head <= 0;
@@ -148,7 +148,7 @@ endgenerate
 
     MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_redirect (redirectIdx.idx, redirect_mask);
     MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_head_n (head_n, head_n_mask);
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             valid <= 0;
             miss <= 0;
@@ -218,7 +218,7 @@ endgenerate
     );
 
     logic `N(`VADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             addr_mask <= '{default: 0};
         end

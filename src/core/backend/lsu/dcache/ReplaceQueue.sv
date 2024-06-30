@@ -44,7 +44,7 @@ module ReplaceQueue(
     assign newEntry.data = io.data;
     assign io.wend = w_axi_io.sb.valid;
     assign io.missIdx_o = entrys[bhead].missIdx;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             bhead <= 0;
             head <= 0;
@@ -80,7 +80,7 @@ module ReplaceQueue(
     logic processValid;
     ReplaceEntry processEntry;
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             aw_valid <= 1'b0;
             widx <= 0;

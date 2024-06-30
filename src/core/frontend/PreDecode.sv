@@ -29,7 +29,7 @@ module PreDecode(
         end
     endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST || pd_redirect.en || frontendCtrl.redirect)begin
             bundles_next <= '{default: 0};
             en_next <= 0;

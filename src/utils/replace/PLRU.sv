@@ -32,7 +32,7 @@ endgenerate
     end
 
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             plru <= '{default: 0};
         end

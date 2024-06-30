@@ -97,7 +97,7 @@ endgenerate
     assign validSelect_n = validSelect + 1;
 
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(enqueue)begin
             status_ram[tail].rs1 <= status.rs1;
             status_ram[tail].robIdx <= status.robIdx;

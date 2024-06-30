@@ -40,7 +40,7 @@ endgenerate
     assign fl_io.full = remainCount < fl_io.rdNum;
     assign tail_add_num = backendCtrl.redirect || backendCtrl.rename_full || backendCtrl.dis_full ? 0 : fl_io.rdNum;
     assign tail_n = commitWalk.walk ? tail - commitWalk.weNum : tail + tail_add_num;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<`FREELIST_DEPTH; i++)begin
 `ifdef DIFFTEST

@@ -35,7 +35,7 @@ module RAS(
         .rdata1(entry)
     );
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             top <= 0;
         end

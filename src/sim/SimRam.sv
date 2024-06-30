@@ -25,7 +25,7 @@ module SimRam(
                     {8{axi.mw.wstrb[2]}},
                     {8{axi.mw.wstrb[1]}},
                     {8{axi.mw.wstrb[0]}}};
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             axi.sar.ready <= 1'b1;
             axi.sr.valid <= 1'b0;

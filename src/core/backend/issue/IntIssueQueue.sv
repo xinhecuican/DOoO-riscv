@@ -164,7 +164,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         selectIdxNext <= selectIdx;
         if(rst == `RST)begin
             status_ram <= 0;

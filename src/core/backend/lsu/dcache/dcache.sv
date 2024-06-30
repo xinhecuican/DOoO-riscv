@@ -97,12 +97,14 @@ generate
         end
         Encoder #(`DCACHE_WAY) encoder_hit_way (wayHit[i], hitWay_encode[i]);
         always_ff @(posedge clk)begin
-            r_req[0] <= rio.req[i] & ~write_valid & ~rio.req_cancel;
-            r_req[1] <= rio.req[i] & ~write_valid & ~rio.req_cancel & ~req_bank_conflict;
             rvaddr[i] <= rio.vaddr[i];
             rio.rdata[i] <= rdata[hitWay_encode[i]][s2_loadBank[i]];
         end
         assign rio.hit[i] = |wayHit[i];
+    end
+    always_ff @(posedge clk)begin
+            r_req[0] <= rio.req[0] & ~write_valid[0] & ~rio.req_cancel[0];
+            r_req[1] <= rio.req[1] & ~write_valid[1] & ~rio.req_cancel[1] & ~req_bank_conflict;
     end
 endgenerate
     // load conflict detect

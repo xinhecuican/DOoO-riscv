@@ -286,7 +286,7 @@ generate
         Encoder #(DEPTH) encoder2 (validEnd, validSelect2);
         ParallelAdder #(.DEPTH(DEPTH)) adder_walk_num (valid, walkNum);
         assign walk_tail = validSelect1 == head ? validSelect2 : validSelect1;
-        always_ff @(posedge clk)begin
+        always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 head <= 0;
                 tail <= 0;
@@ -306,7 +306,7 @@ generate
         end
     end
     else begin
-        always_ff @(posedge clk)begin
+        always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 head <= 0;
                 tail <= 0;
@@ -321,7 +321,7 @@ generate
     end
 
 endgenerate
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             entrys <= '{default: 0};
             robIdx <= '{default: 0};

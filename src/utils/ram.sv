@@ -87,7 +87,7 @@ module TDPRAM#(
         end
     endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             data <= '{default: INIT_VALUE};
         end
@@ -147,7 +147,7 @@ module DPRAM#(
         end
     endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<DEPTH; i++)begin
                 data[i] <= INIT_VALUE;
@@ -195,7 +195,7 @@ module SDPRAM#(
         end
     endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<DEPTH; i++)begin
                 data[i] <= '{default: INIT_VALUE};
@@ -241,7 +241,7 @@ generate
         logic resetState;
         assign resetAddr = resetState ? counter : waddr[0];
         assign resetData = resetState ? 0 : wdata[0];
-        always_ff @(posedge clk)begin
+        always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter <= 0;
                 resetState <= 1'b1;
@@ -288,7 +288,7 @@ generate;
     else if(READ_LATENCY == 1)begin
         if(RESET)begin
             for(genvar i=0; i<READ_PORT; i++)begin
-                always_ff @(posedge clk)begin
+                always_ff @(posedge clk or posedge rst)begin
                     if(rst == `RST)begin
                         rdata[i] <= 0;
                     end
@@ -382,7 +382,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -446,7 +446,7 @@ module FIFO#(
         end
     endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             queue <= '{default: INIT_VALUE};
             head <= 0;

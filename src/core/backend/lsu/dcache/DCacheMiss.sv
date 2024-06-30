@@ -61,7 +61,7 @@ module DCacheMiss(
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`DCACHE_MISS_SIZE);
 
     logic `N(`DCACHE_MISS_WIDTH) mshr_head, head, tail;
-    logic `N(`DCACHE_MISS_WIDTH) remain_count;
+    logic `N(`DCACHE_MISS_WIDTH+1) remain_count;
     logic `ARRAY(`LOAD_PIPELINE+1, `DCACHE_MISS_WIDTH) freeIdx;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MSHR_WIDTH) mshrFreeIdx;
     logic `N(`LOAD_PIPELINE+1) free_en;
@@ -74,7 +74,7 @@ module DCacheMiss(
 
 //load enqueue
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
-    logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)+1) req_order;
+    logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
     logic `N(`LOAD_PIPELINE) mshr_remain_valid, rhit_combine, remain_valid;
 
@@ -189,7 +189,7 @@ endgenerate
     end
 
     ParallelAdder #(1, `LOAD_PIPELINE+1) adder_free (free_en, free_num);
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             en <= 0;
             dataValid <= 0;
@@ -284,7 +284,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         req_next <= io.req;
         req_last <= r_axi_io.sr.valid & r_axi_io.sr.last;
         if(rst == `RST)begin

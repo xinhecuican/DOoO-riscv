@@ -141,7 +141,7 @@ generate
     end
     assign update_carry[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.carry;
 endgenerate
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             entrys <= '{default: 0};
             ctrs <= '{default: 0};

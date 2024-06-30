@@ -4,7 +4,14 @@ module BTBTagGen(
     input logic `VADDR_BUS pc,
     output logic `N(`BTB_TAG_SIZE) tag
 );
-    assign tag = pc[`BTB_TAG_SIZE + 1 + `PREDICTION_WIDTH : 2+`PREDICTION_WIDTH];
+    assign tag = pc[`BTB_TAG_SIZE + 1 : 2] ^ pc[`BTB_TAG_SIZE + 1 + `BTB_TAG_SIZE : 2+`BTB_TAG_SIZE];
+endmodule
+
+module BTBIndexGen(
+    input logic `VADDR_BUS pc,
+    output logic `N(`BTB_SET_WIDTH) index
+);
+    assign index = pc[`BTB_SET_WIDTH + 1 + $clog2(`BTB_WAY): 2 + $clog2(`BTB_WAY)];
 endmodule
 
 module BTB (
@@ -32,8 +39,8 @@ module BTB (
     logic `N(`BTB_WAY) bank_en, bank_we;
 
     localparam INDEX_POS = `BTB_SET_WIDTH+1+$clog2(`BTB_WAY);
-    assign index = btb_io.pc[INDEX_POS: 2+$clog2(`BTB_WAY)];
-    assign updateIdx = btb_io.updateInfo.start_addr[INDEX_POS: 2+$clog2(`BTB_WAY)];
+    BTBIndexGen index_gen(btb_io.pc, index);
+    BTBIndexGen update_index_gen(btb_io.updateInfo.start_addr, updateIdx);
     Decoder #(`BTB_WAY) decoder_bank(btb_io.pc[1+$clog2(`BTB_WAY): 2], bank_en);
     Decoder #(`BTB_WAY) decoder_we(btb_io.updateInfo.start_addr[1+$clog2(`BTB_WAY): 2], bank_we);
 
@@ -57,7 +64,7 @@ module BTB (
                 .ready()
             );
             assign bank_ctrl[i].raddr = index;
-            assign bank_ctrl[i].waddr = btb_io.updateInfo.start_addr[INDEX_POS: 2+$clog2(`BTB_WAY)];
+            assign bank_ctrl[i].waddr = updateIdx;
             assign bank_ctrl[i].we = btb_io.update & bank_we[i];
             assign bank_ctrl[i].wdata = btb_io.updateInfo.btbEntry;
         end

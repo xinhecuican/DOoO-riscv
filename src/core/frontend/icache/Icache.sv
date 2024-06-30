@@ -183,7 +183,7 @@ module ICache(
     assign axi_io.mar.region = 0;
     assign axi_io.mar.user = 0;
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             request_buffer <= '{default: 0};
             main_state <= IDLE;

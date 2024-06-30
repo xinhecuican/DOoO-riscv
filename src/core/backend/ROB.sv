@@ -164,9 +164,6 @@ generate
         end
     end
 endgenerate
-    always_ff @(posedge clk)begin
-
-    end
 
 
 // exception
@@ -213,7 +210,7 @@ endgenerate
     assign full = remainCount < rob_rename_io.validNum;
     assign rob_rename_io.robIdx.idx = tail;
     assign rob_rename_io.robIdx.dir = tdir;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -273,7 +270,7 @@ generate
     end
 endgenerate
     // TODO: dataWIdx改为rw port，walk使用widx，从而walk和commit同时进行
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             walk_state <= 1'b0;
             walkInfo <= '{default: 0};
@@ -411,7 +408,7 @@ endgenerate
     logic `N($clog2(`COMMIT_WIDTH)+1) commitCnt;
     ParallelAdder #(1, `COMMIT_WIDTH) adder_commit (diff_valid, commitCnt);
     assign DLog::cycleCnt = cycleCnt;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             cycleCnt <= 0;
             instrCnt <= 0;

@@ -82,7 +82,7 @@ generate
     PEncoder #(`STORE_COMMIT_SIZE) encoder_write_ready (write_ready, widx);
     for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
         assign ready[i] = counter[i][0];
-        always_ff @(posedge clk)begin
+        always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter[i] <= 1;
             end
@@ -153,7 +153,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             addr_en <= 0;
             writing <= 0;

@@ -310,9 +310,9 @@ module CalValidNum #(
 );
 generate
 	case(WIDTH)
-	4: CalValidNum4 calValidNum(en, out);
-	2: CalValidNum2 calValidNum(en, out);
-	default: CalValidNum2 calValidNum(en, out);
+	4: CalValidNum4 #($clog2(WIDTH)) calValidNum(en, out);
+	2: CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
+	default: CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
 	endcase
 endgenerate
 endmodule

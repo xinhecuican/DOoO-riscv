@@ -85,7 +85,7 @@ endgenerate
 `ifdef DIFFTEST
     logic `ARRAY(32, `PREG_WIDTH) diff_map;
     assign diff_rat.map_reg = diff_map;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<32; i++)begin
                 diff_map[i] <= i;

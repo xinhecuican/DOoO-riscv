@@ -92,7 +92,7 @@ endgenerate
     logic `N($clog2(`FETCH_WIDTH) + 1) validNum;
     ParallelAdder #(1, `FETCH_WIDTH) adder_valid (en, validNum);
     assign rob_rename_io.validNum = validNum;
-    always_ff @(posedge clk)begin
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST || backendCtrl.redirect)begin
             rename_dis_io.op <= 0;
             rename_dis_io.prs1 <= 0;
