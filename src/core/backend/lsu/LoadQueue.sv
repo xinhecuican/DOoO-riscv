@@ -48,6 +48,16 @@ module LoadQueue(
     logic redirect_next;
     logic `ARRAY(`LOAD_PIPELINE, `ROB_WIDTH) dis_rob_idx;
 
+    typedef struct packed {
+        logic uext;
+        logic [1: 0] size;
+        logic `N(`DCACHE_BYTE_WIDTH) offset;
+        logic `N(`DCACHE_BYTE) mask;
+    } MaskData;
+    logic `N(`LOAD_QUEUE_SIZE) valid, miss, dataValid, writeback;
+    logic `N(`DCACHE_BITS) data `N(`LOAD_QUEUE_SIZE);
+    MaskData mask `N(`LOAD_QUEUE_SIZE);
+
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign eqIdx[i] = io.data[i].lqIdx.idx;
@@ -62,30 +72,47 @@ generate
     end
 endgenerate
 
-    MPRAM #(
-        .WIDTH($bits(LoadIdx)),
-        .DEPTH(`ROB_SIZE),
-        .READ_PORT(1),
-        .WRITE_PORT(`LOAD_PIPELINE)
-    ) rob_redirect_ram (
-        .clk(clk),
-        .rst(rst),
-        .en(backendCtrl.redirect),
-        .raddr(backendCtrl.redirectIdx.idx),
-        .rdata(redirectIdx),
-        .we(load_io.dis_en),
-        .waddr(dis_rob_idx),
-        .wdata(load_io.dis_lq_idx),
-        .ready()
-    );
+// redirect
+    RobIdx redirect_robIdxs `N(`LOAD_QUEUE_SIZE);
+    logic `N(`LOAD_QUEUE_SIZE) bigger, walk_en, validStart, validEnd;
+    logic `N(`LOAD_QUEUE_WIDTH) validSelect1, validSelect2, walk_tail, valid_select;
+    logic walk_dir;
+    assign walk_en = valid & bigger;
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        always_ff @(posedge clk) begin
+            if(load_io.dis_en[i])begin
+                redirect_robIdxs[load_io.dis_lq_idx[i]] <= load_io.dis_rob_idx[i];
+            end
+        end
+    end
+    for(genvar i=0; i<`LOAD_QUEUE_SIZE; i++)begin
+        LoopCompare cmp_bigger (redirect_robIdxs[i], backendCtrl.redirectIdx, bigger[i]);
+        logic `N(`LOAD_QUEUE_WIDTH) i_n, i_p;
+        assign i_n = i + 1;
+        assign i_p = i - 1;
+        assign validStart[i] = valid[i] & ~valid[i_n]; // valid[i] == 1 && valid[i + 1] == 0
+        assign validEnd[i] = valid[i] & ~valid[i_p];
+    end
+endgenerate
+    Encoder #(`LOAD_QUEUE_SIZE) encoder1 (validStart, validSelect1);
+    Encoder #(`LOAD_QUEUE_SIZE) encoder2 (validEnd, validSelect2);
+    assign valid_select = validSelect1 == head ? validSelect2 : validSelect1;
+    always_ff @(posedge clk)begin
+        walk_tail <= valid_select;
+        walk_dir <= valid_select < walk_tail ? tdir : ~tdir;
+    end
 
     assign io.lqIdx.idx = tail;
     assign io.lqIdx.dir = tdir;
     assign head_n = head + commitBus.loadNum;
     assign tail_n = tail + io.disNum;
     assign hdir_n = head[`LOAD_QUEUE_WIDTH-1] & ~head_n[`LOAD_QUEUE_WIDTH-1] ? ~hdir : hdir;
-    always_ff @(posedge clk or posedge rst)begin
+    
+    always_ff @(posedge clk)begin
         redirect_next <= backendCtrl.redirect;
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -96,8 +123,8 @@ endgenerate
             head <= head_n;
             hdir <= hdir_n;
             if(redirect_next)begin
-                tail <= redirectIdx.idx;
-                tdir <= redirectIdx.dir;
+                tail <= walk_tail;
+                tdir <= walk_dir;
             end
             else begin
                 tail <= tail_n;
@@ -107,20 +134,20 @@ endgenerate
         end
     end
 
-    logic `N(`LOAD_QUEUE_SIZE) valid, miss, dataValid, writeback;
-    logic `N(`DCACHE_BITS) data `N(`LOAD_QUEUE_SIZE);
-    logic `N(`DCACHE_BYTE) mask `N(`LOAD_QUEUE_SIZE);
     logic `N(`LOAD_QUEUE_SIZE) head_mask, head_n_mask, redirect_mask;
 
-    logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) refillData, refillDataCombine;
+    logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) refillData, refillDataCombine, refillDataShift;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BYTE) refillMask;
 generate
     for(genvar i=0; i<`LOAD_REFILL_SIZE; i++)begin
+        MaskData mask_data;
+        assign mask_data = mask[rio.lqIdx_o[i]];
         assign refillData[i] = data[rio.lqIdx_o[i]];
-        assign refillMask[i] = mask[rio.lqIdx_o[i]];
+        assign refillMask[i] = mask_data.mask;
         logic `N(`DCACHE_BITS) expand_mask;
         MaskExpand #(`DCACHE_BYTE) expand_refill_mask (refillMask[i], expand_mask);
         assign refillDataCombine[i] = refillData[i] & expand_mask | rio.lqData[i] & ~expand_mask;
+        RDataGen data_gen (mask_data.uext, mask_data.size, mask_data.offset, refillDataCombine, refillDataShift);
     end
 endgenerate
 
@@ -146,7 +173,7 @@ generate
     end
 endgenerate
 
-    MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_redirect (redirectIdx.idx, redirect_mask);
+    MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_redirect (walk_tail, redirect_mask);
     MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_head_n (head_n, head_n_mask);
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -159,6 +186,7 @@ endgenerate
             for(int i=0; i<`LOAD_DIS_PORT; i++)begin
                 if(load_io.dis_en[i])begin
                     valid[load_io.dis_lq_idx[i].idx] <= 1'b1;
+                    dataValid[load_io.dis_lq_idx[i].idx] <= 1'b0;
                 end
             end
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
@@ -167,7 +195,7 @@ endgenerate
                     dataValid[eqIdx[i]] <= ~io.miss[i];
                     writeback[eqIdx[i]] <= ~io.miss[i];
                     data[eqIdx[i]] <= io.rdata[i];
-                    mask[eqIdx[i]] <= io.mask[i];
+                    mask[eqIdx[i]] <= {io.data[i].uext, io.data[i].size, io.paddr[`DCACHE_BYTE_WIDTH-1: 0], io.mask[i]};
                 end
                 if(io.wbData[i].en & io.wb_valid[i])begin
                     writeback[wbIdx[i]] <= 1'b1;
@@ -179,12 +207,12 @@ endgenerate
                 end
             end
             if(redirect_next)begin
-                valid <= hdir_n ^ redirectIdx.dir ? ~(head_n_mask ^ redirect_mask) : head_n_mask ^ redirect_mask;
+                valid <= hdir_n ^ walk_dir ? ~(head_n_mask ^ redirect_mask) : head_n_mask ^ redirect_mask;
             end
             for(int i=0; i<`LOAD_REFILL_SIZE; i++)begin
                 if(rio.lq_en[i])begin
                     dataValid[rio.lqIdx_o[i]] <= 1'b1;
-                    data[rio.lqIdx_o[i]] <= refillDataCombine[i];
+                    data[rio.lqIdx_o[i]] <= refillDataShift[i];
                 end
             end
         end

@@ -25,7 +25,7 @@ interface DCacheMissIO;
     logic `N(`VADDR_SIZE) refillAddr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refillData;
 
-    logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lq_en;
+    logic `N(`LOAD_REFILL_SIZE) lq_en;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
@@ -149,6 +149,7 @@ endgenerate
 // mshr refill
     logic `N(`DCACHE_MSHR_SIZE) mshr_hit;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_MSHR_WIDTH) mshrIdx;
+    logic `N(`LOAD_REFILL_SIZE) lq_en;
 generate
     for(genvar i=0; i<`DCACHE_MSHR_SIZE; i++)begin
         assign mshr_hit[i] = mshr_en[i] & (mshr[i].missIdx == mshr_head);
@@ -158,11 +159,12 @@ endgenerate
     PEncoder #(`DCACHE_MSHR_SIZE) pencoder_mshr_idx (mshr_hit, mshrIdx[0]);
     PREncoder #(`DCACHE_MSHR_SIZE) prencoder_mshr_idx (mshr_hit, mshrIdx[1]);
 
-generate
+    assign lq_en[0] = (|mshr_hit) & refilled[mshr_head];
+    assign lq_en[1] = (|mshr_hit) & (mshrIdx[0] != mshrIdx[1]) & refilled[mshr_head];
     always_ff @(posedge clk)begin
-        io.lq_en[0] <= (|mshr_hit) & refilled[mshr_head];
-        io.lq_en[1] <= (|mshr_hit) & (mshrIdx[0] != mshrIdx[1]) & refilled[mshr_head];
+        io.lq_en <= lq_en;
     end
+generate
     for(genvar i=0; i<`LOAD_REFILL_SIZE; i++)begin
         MSHREntry entry;
         assign entry = mshr[mshrIdx[i]];
@@ -224,7 +226,7 @@ endgenerate
             end
 
             for(int i=0; i<`LOAD_REFILL_SIZE; i++)begin
-                if(io.lq_en[i])begin
+                if(lq_en[i])begin
                     mshr_en[mshrIdx[i]] <= 1'b0;
                 end
             end
@@ -284,9 +286,11 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk)begin
         req_next <= io.req;
         req_last <= r_axi_io.sr.valid & r_axi_io.sr.last;
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             req_start <= 1'b0;
             req_cache <= 1'b0;

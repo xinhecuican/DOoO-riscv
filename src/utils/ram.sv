@@ -256,6 +256,9 @@ generate
                     end
                 end
             end
+        end
+
+        always_ff @(posedge clk)begin
             for(int i=0; i<BYTES; i++)begin
                 if(we[0][i] | resetState)begin
                     mem[resetAddr][i] <= resetData[i];

@@ -268,11 +268,13 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk)begin
         if(io.en)begin
             sqIdxs[io.freeIdx] <= io.sqIdx;
         end
         io.sqIdx_o <= sqIdxs[selectIdx];
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             status_ram <= 0;
             en <= 0;

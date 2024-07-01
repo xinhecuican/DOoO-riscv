@@ -84,11 +84,14 @@ endgenerate
 
     logic `N(`STORE_QUEUE_SIZE) valid, addrValid, dataValid, commited;
 
-    logic `N(`VADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`VADDR_SIZE+`DCACHE_BYTE_WIDTH) addr_mask `N(`LOAD_QUEUE_SIZE);
     logic `N(`STORE_QUEUE_SIZE) data_dir;
     logic `ARRAY(`LOAD_QUEUE_SIZE, `DCACHE_BITS) data;
-    always_ff @(posedge clk or posedge rst)begin
+
+    always_ff @(posedge clk)begin
         redirect_next <= backendCtrl.redirect;
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             addr_mask <= '{default: 0};
             valid <= 0;
@@ -107,7 +110,7 @@ endgenerate
             end
             for(int i=0; i<`STORE_PIPELINE; i++)begin
                 if(io.en[i])begin
-                    addr_mask[addr_eqIdx[i]] <= {io.paddr[i][`VADDR_SIZE-1: 2], io.mask[i]};
+                    addr_mask[addr_eqIdx[i]] <= {io.paddr[i][`VADDR_SIZE-1: `DCACHE_BYTE_WIDTH], io.mask[i]};
                     addrValid[addr_eqIdx[i]] <= 1'b1;
                     data_dir[addr_eqIdx[i]] <= io.data[i].sqIdx.dir;
                 end
@@ -182,7 +185,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
             assign offset_vec[i][j] = loadFwd.fwdData[i].en &
-                                      (loadFwd.fwdData[i].vaddrOffset[11: 2] == addr_mask[j][`DCACHE_BYTE+9: `DCACHE_BYTE]);
+                                      (loadFwd.fwdData[i].vaddrOffset[11: `DCACHE_BYTE_WIDTH] == addr_mask[j][`DCACHE_BYTE+9: `DCACHE_BYTE]);
         end
         logic `N(`STORE_QUEUE_SIZE) store_mask;
         MaskGen #(`STORE_QUEUE_SIZE) maskgen_store (loadFwd.fwdData[i].sqIdx.idx, store_mask);
@@ -196,8 +199,8 @@ generate
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
-            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addr_mask[j][`VADDR_SIZE-1: `TLB_TAG+2];
-            assign forward_mask[i][j] = {4{forward_vec[i][j]}} & addr_mask[j][3: 0];
+            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addr_mask[j][`VADDR_SIZE-1: `TLB_TAG+`DCACHE_BYTE_WIDTH];
+            assign forward_mask[i][j] = {`DCACHE_BYTE{forward_vec[i][j]}} & addr_mask[j][`DCACHE_BYTE-1: 0];
         end
         assign forward_vec[i] = ptag_vec[i] & fwd_offset_vec[i] & addrValid;
         ForwardSelect #(`STORE_QUEUE_SIZE) forward_select (
@@ -245,7 +248,7 @@ generate
         logic older;
         assign older = dir[1] ^ dir[0];
         assign dir_o = older ? dir[1] : dir[0];
-        for(genvar i=0; i<4; i++)begin
+        for(genvar i=0; i<`DCACHE_BYTE; i++)begin
             assign mask_o[i] = ((older | (~mask[0][i])) & mask[1][i]) | ((~older | (~mask[1][i])) & mask[0][i]);
             assign data_o[(i+1)*8-1: i*8] = ({8{older | (~mask[0][i])}} & data[1][(i+1)*8-1: i*8]) |
                                     ({8{~older | (~mask[1][i])}} & data[0][(i+1)*8-1: i*8]);
@@ -254,8 +257,8 @@ generate
     end
     else begin
         logic `N(2) dir1;
-        logic `ARRAY(2, 4) mask1, dataValid1;
-        logic `ARRAY(2, 32) data1;
+        logic `ARRAY(2, `DCACHE_BYTE) mask1, dataValid1;
+        logic `ARRAY(2, `DCACHE_BITS) data1;
         ForwardSelect #(DEPTH/2) select1 (
             .dir(dir[DEPTH/2-1: 0]),
             .mask(mask[DEPTH/2-1: 0]),
@@ -280,7 +283,7 @@ generate
         logic older;
         assign older = dir1[1] ^ dir1[0];
         assign dir_o = older ? dir1[1] : dir1[0];
-        for(genvar i=0; i<4; i++)begin
+        for(genvar i=0; i<`DCACHE_BYTE; i++)begin
             assign mask_o[i] = ((older | (~mask1[0][i])) & mask1[1][i]) | ((~older | (~mask1[1][i])) & mask1[0][i]);
             assign data_o[(i+1)*8-1: i*8] = ({8{older | (~mask1[0][i])}} & data1[1][(i+1)*8-1: i*8]) |
                                     ({8{~older | (~mask1[1][i])}} & data1[0][(i+1)*8-1: i*8]);

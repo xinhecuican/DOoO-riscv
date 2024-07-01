@@ -51,6 +51,7 @@ module AxiInterface(
     end
 
     assign icache_io.sar.ready = read_controller.en & (read_controller.device == ICACHE) & arEnd;
+    assign dcache_io.sar.ready = read_controller.en & (read_controller.device == DCACHE) & arEnd;
     always_comb begin
         AxiSRCopy(axi.sr, axi.sr.id == icache_io.mar.id && axi.sr.valid, icache_io.sr);
         AxiSRCopy(axi.sr, axi.sr.id == dcache_io.mar.id && axi.sr.valid, dcache_io.sr);

@@ -96,13 +96,14 @@ endgenerate
     assign validSelect = validSelect1 == head ? validSelect2 : validSelect1;
     assign validSelect_n = validSelect + 1;
 
-
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk)begin
         if(enqueue)begin
             status_ram[tail].rs1 <= status.rs1;
             status_ram[tail].robIdx <= status.robIdx;
             status_ram[tail].rd <= bundle.rd;
         end
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;

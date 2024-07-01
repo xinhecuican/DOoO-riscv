@@ -64,7 +64,7 @@ endgenerate
     assign load_wakeup_io.data = reg_io.rdata[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE];
     assign reg_io.en[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_wakeup_io.en;
     assign reg_io.raddr[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_wakeup_io.preg;
-    assign wakeupBus.en[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.en;
+    assign wakeupBus.en[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.wakeup_en;
     assign wakeupBus.rd[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.rd;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin

@@ -454,7 +454,7 @@ interface DCacheLoadIO;
     logic `N(`LOAD_PIPELINE) full;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) rdata;
 
-    logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lq_en;
+    logic `N(`LOAD_REFILL_SIZE) lq_en;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 

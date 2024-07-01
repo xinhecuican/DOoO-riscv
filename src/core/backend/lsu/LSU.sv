@@ -157,7 +157,7 @@ endgenerate
         load_en <= load_io.en & ~redirect_clear_req;
         load_issue_idx <= load_io.issue_idx;
         for(int i=0; i<`LOAD_PIPELINE; i++)begin
-            lptag[i] <= loadVAddr[i]`TLB_TAG_BUS;
+            lptag[i] <= loadVAddr[i]`TLB_TAG_BUS & 20'h7fff;
         end
     end
 generate
@@ -242,18 +242,19 @@ endgenerate
     
     // wb
     logic `N(`LOAD_PIPELINE) from_issue;
-    logic `ARRAY(`LOAD_PIPELINE, `ROB_WIDTH) lrobIdx_n;
+    RobIdx `N(`LOAD_PIPELINE) lrobIdx_n;
     logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) lrd_n;
-    logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) ldata_n;
+    logic `ARRAY(`LOAD_PIPELINE, `XLEN) ldata_n, ldata_shift;
 generate
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
         logic wb_data_en;
+        RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
         always_ff @(posedge clk)begin
             wb_data_en <= leq_valid[i] | load_queue_io.wbData[i].en;
             from_issue[i] <= leq_valid[i];
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
-            ldata_n[i] <= rdata[i];
+            ldata_n[i] <= ldata_shift[i];
         end
         assign lsu_wb_io.datas[i].en = wb_data_en;
         assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
@@ -469,4 +470,35 @@ module ViolationOlderCompare(
     logic older;
     LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older);
     assign out = cmp1.en & older | cmp1.en & ~cmp2.en ? cmp1 : cmp2;
+endmodule
+
+module RDataGen(
+    input logic uext,
+    input logic [1: 0] size,
+    input logic [`DCACHE_BYTE_WIDTH-1: 0] offset,
+    input logic [`XLEN-1: 0] data,
+    output logic [`XLEN-1: 0] data_o
+);
+    logic [7: 0] byte_data;
+    logic [15: 0] half;
+    logic [31: 0] word;
+    logic `ARRAY(`DCACHE_BYTE, 8) db;
+    logic `ARRAY(`DCACHE_BYTE, `DCACHE_BYTE_WIDTH) idx;
+generate
+    for(genvar i=0; i<`DCACHE_BYTE; i++)begin
+        assign idx[i] = offset + i;
+    end
+endgenerate
+    assign db = data;
+    assign byte_data = db[idx[0]];
+    assign half = {db[idx[1]], byte_data};
+    assign word = {db[idx[3]], db[idx[2]], half};
+    always_comb begin
+        case(size)
+        2'b00: data_o = {{`XLEN-8{~uext & byte_data[7]}}, byte_data};
+        2'b01: data_o = {{`XLEN-16{~uext & half[15]}}, half};
+        2'b10: data_o = {{`XLEN-32{~uext & word[31]}}, word};
+        default: data_o = 0;
+        endcase
+    end
 endmodule

@@ -219,7 +219,7 @@ generate
                                         {`DCACHE_SET_WIDTH{miss_io.refill_valid}} & miss_io.refillAddr`DCACHE_SET_BUS;
         assign way_io[i].dirty_wdata = wreq_n & w_wayhit[i];
 
-        assign way_io[i].tagv_we = miss_io.refill_valid & miss_io.refill_en;
+        assign way_io[i].tagv_we = miss_io.refill_valid & miss_io.refill_en & refill_way[i];
         assign way_io[i].tagv_windex = miss_io.refillAddr`DCACHE_SET_BUS;
         assign way_io[i].tagv_wdata = {miss_io.refillAddr`DCACHE_TAG_BUS, 1'b1};
     end

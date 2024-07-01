@@ -62,7 +62,7 @@ generate
         assign bank_io[i].success_idx = load_io.success_idx[i];
         assign full[i] = bank_io[i].full;
 
-        assign load_wakeup_io.en[i] = bank_io[i].reg_en & ~backendCtrl.redirect;
+        assign load_wakeup_io.en[i] = bank_io[i].reg_en;
         assign load_wakeup_io.preg[i] = bank_io[i].rs1;
         assign load_io.loadIssueData[i] = bank_io[i].data_o;
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
@@ -125,6 +125,8 @@ module LoadIssueBank(
     LoadIssueData data_o;
     logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, `WB_SIZE) rs1_cmp;
     logic [1: 0] size;
+    logic reg_en;
+    RobIdx select_robIdx;
 
     assign size = io.data.memop == `MEM_LW ? 2'b10 :
                   io.data.memop == `MEM_LH ? 2'b01 : 2'b00;
@@ -144,7 +146,7 @@ module LoadIssueBank(
 
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-        assign ready[i] = en[i] & status_ram[i].rs1v & ~issue;
+        assign ready[i] = en[i] & status_ram[i].rs1v & ~issue[i];
     end
 endgenerate
     DirectionSelector #(`LOAD_ISSUE_BANK_SIZE) selector (
@@ -157,9 +159,13 @@ endgenerate
     );
     assign io.full = &en;
     always_ff @(posedge clk)begin
-        io.reg_en <= |ready;
+        reg_en <= (|ready) & ~backendCtrl.redirect;
         io.rs1 <= status_ram[selectIdx].rs1;
+        select_robIdx <= status_ram[selectIdx].robIdx;
     end
+    logic select_older;
+    LoopCompare #(`ROB_WIDTH) cmp_older (select_robIdx, backendCtrl.redirectIdx, select_older);
+    assign io.reg_en = reg_en & (~backendCtrl.redirect | select_older);
     // assign io.reg_en = |ready;
     // assign io.rs1 = status_ram[selectIdx].rs1;
     PSelector #(`LOAD_ISSUE_BANK_SIZE) selector_free_idx (~en, free_en);
@@ -184,9 +190,12 @@ endgenerate
 
     logic `N(`LOAD_ISSUE_BANK_SIZE) success_idx_decode;
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
-    always_ff @(posedge clk or posedge rst)begin
+
+    always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
         io.issue_idx <= selectIdxNext;
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             status_ram <= 0;
             en <= 0;
@@ -209,7 +218,7 @@ endgenerate
                 issue[freeIdx] <= 1'b0;
             end
 
-            if(|ready)begin
+            if((|ready) & ~backendCtrl.redirect)begin
                 issue[selectIdx] <= 1'b1;
             end
 

@@ -59,11 +59,11 @@
 parameter [8: 0] tage_hist_length `N(`TAGE_BANK) = {9'd8, 9'd13, 9'd32, 9'd119};
 parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd2048, 13'd2048, 13'd2048, 13'd2048};
 `define TAGE_SET_WIDTH 12
-typedef enum logic [1: 0] { 
-    DIRECT, 
-    CONDITION, 
-    INDIRECT, 
-    CALL 
+typedef enum logic [1: 0] {
+    DIRECT,
+    CONDITION,
+    INDIRECT,
+    CALL
 } BranchType;
 
 typedef enum logic [1: 0] { 

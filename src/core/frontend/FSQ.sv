@@ -237,8 +237,10 @@ endgenerate
     end
 
 // idx maintain
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk)begin
         last_search <= search_head == tail && fsq_cache_io.en;
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             search_head <= 0;
             commit_head <= 0;
@@ -274,11 +276,13 @@ endgenerate
 
     logic `N(`FSQ_WIDTH) redirect_dir_idx;
     assign redirect_dir_idx = fsq_back_io.redirect.fsqInfo.idx;
-    always_ff @(posedge clk or posedge rst)begin
+
+    always_ff @(posedge clk)begin
         for(int i=0; i<`ALU_SIZE; i++)begin
             fsq_back_io.directions[i] <= directionTable[fsq_back_io.fsqIdx[i]];
         end
-
+    end
+    always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             direction <= 0;
             hdir <= 0;
