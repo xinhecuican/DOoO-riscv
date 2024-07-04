@@ -143,7 +143,7 @@ module ALUModel(
     assign cmp = data1 < cmp_data;
     assign equal = data1 == cmp_data;
     always_comb begin
-        case({cmp_data[`XLEN-1], data1[`XLEN-1]})
+        case({data1[`XLEN-1], cmp_data[`XLEN-1]})
         2'b00: scmp = cmp;
         2'b01: scmp = 0;
         2'b10: scmp = 1;
