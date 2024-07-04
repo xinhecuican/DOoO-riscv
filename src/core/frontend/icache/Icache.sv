@@ -20,6 +20,7 @@ module ICache(
         logic multi_tag;
         FetchStream stream;
         FsqIdx fsqIdx;
+        logic `N(`PREDICTION_WIDTH+1) shiftIdx;
     } RequestBuffer;
     RequestBuffer request_buffer;
 `ifdef DIFFTEST
@@ -52,7 +53,7 @@ module ICache(
     logic `N(`BLOCK_INST_SIZE) expand_en_shift;
     logic `N(`ICACHE_BANK_WIDTH+1) end_addr, start_addr;
     logic `N(`PREDICTION_WIDTH+1) stream_size;
-    logic `N(`ICACHE_BANK) start_addr_mask;
+    logic `N(`ICACHE_BANK * 2) start_addr_mask;
     logic `ARRAY(`ICACHE_BANK, 32) rdata `N(`ICACHE_WAY);
     logic `N(`ICACHE_SET_WIDTH) index;
     logic `N(`ICACHE_SET_WIDTH+1) indexp1;
@@ -66,13 +67,13 @@ module ICache(
     logic abandon_success;
     logic stall_wait;
 
-    assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
+    assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx;
     assign stream_size = fsq_cache_io.stream.size + 1;
     assign end_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + stream_size;
     assign span = end_addr[`ICACHE_BANK_WIDTH] & (|end_addr[`ICACHE_BANK_WIDTH-1: 0]);
     assign start_addr_mask = (1 << start_addr) - 1;
     assign expand_en = ((1 << end_addr) - 1) ^ start_addr_mask;
-    assign expand_en_shift = expand_en >> start_addr;
+    assign expand_en_shift = expand_en >> (start_addr);
     assign index = fsq_cache_io.stream.start_addr`ICACHE_SET_BUS;
     assign indexp1 = index + 1;
     assign vtag = fsq_cache_io.stream.start_addr`ICACHE_TAG_BUS;
@@ -155,19 +156,20 @@ module ICache(
     assign cache_pd_io.stream.ras_type = request_buffer.stream.ras_type;
     assign cache_pd_io.stream.size = request_buffer.stream.size;
     assign cache_pd_io.stream.target = request_buffer.stream.target;
+    assign cache_pd_io.shiftIdx = request_buffer.shiftIdx;
     localparam BANK_IDX_SIZE = $clog2(`ICACHE_BANK)+1;
     generate;
         for(genvar bank=0; bank<`BLOCK_INST_SIZE; bank++)begin
             logic `N(BANK_IDX_SIZE) bank_index;
             always_ff @(posedge clk)begin
                 if(!fsq_cache_io.stall)begin
-                    bank_index <= bank + fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
+                    bank_index <= bank + fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx;
                 end
             end
             assign cache_pd_io.data[bank] = miss_data_en ? miss_buffer.data[bank] :
                                             bank_index[BANK_IDX_SIZE-1] ? 
-                                            rdata[hit_index[1]][bank_index[BANK_IDX_SIZE-1: 0]] :
-                                            rdata[hit_index[0]][bank_index[BANK_IDX_SIZE-1: 0]];
+                                            rdata[hit_index[1]][bank_index[BANK_IDX_SIZE-2: 0]] :
+                                            rdata[hit_index[0]][bank_index[BANK_IDX_SIZE-2: 0]];
         end
     endgenerate
     assign axi_io.mar.id = 0;
@@ -183,6 +185,23 @@ module ICache(
     assign axi_io.mar.region = 0;
     assign axi_io.mar.user = 0;
 
+`define REQ_DEF \
+    request_buffer.span <= span; \
+    request_buffer.start_offset <= fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx; \
+    request_buffer.index1 <= index; \
+    request_buffer.index2 <= indexp1[`ICACHE_SET_WIDTH-1: 0]; \
+    request_buffer.expand_en <= expand_en; \
+    request_buffer.expand_en_shift <= expand_en_shift; \
+    request_buffer.multi_tag <= indexp1[`ICACHE_SET_WIDTH]; \
+    request_buffer.fsqIdx <= fsq_cache_io.fsqIdx; \
+    request_buffer.stream.start_addr <= fsq_cache_io.stream.start_addr + {fsq_cache_io.shiftIdx, 2'b00}; \
+    request_buffer.stream.size <= fsq_cache_io.stream.size - fsq_cache_io.shiftIdx; \
+    request_buffer.stream.taken <= fsq_cache_io.stream.taken; \
+    request_buffer.stream.branch_type <= fsq_cache_io.stream.branch_type; \
+    request_buffer.stream.ras_type <= fsq_cache_io.stream.ras_type; \
+    request_buffer.stream.target <= fsq_cache_io.stream.target; \
+    request_buffer.shiftIdx <= fsq_cache_io.shiftIdx; \
+
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             request_buffer <= '{default: 0};
@@ -195,15 +214,7 @@ module ICache(
             case(main_state)
             IDLE:begin
                 if(fsq_cache_io.en & ~fsq_cache_io.flush & ~fsq_cache_io.stall)begin
-                    request_buffer.span <= span;
-                    request_buffer.start_offset <= fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
-                    request_buffer.index1 <= index;
-                    request_buffer.index2 <= indexp1[`ICACHE_SET_WIDTH-1: 0];
-                    request_buffer.expand_en <= expand_en;
-                    request_buffer.expand_en_shift <= expand_en_shift;
-                    request_buffer.multi_tag <= indexp1[`ICACHE_SET_WIDTH];
-                    request_buffer.fsqIdx <= fsq_cache_io.fsqIdx;
-                    request_buffer.stream <= fsq_cache_io.stream;
+                    `REQ_DEF
                     main_state <= LOOKUP;
                 end
             end
@@ -245,15 +256,7 @@ module ICache(
                     end
                 end
                 else if(fsq_cache_io.en)begin
-                    request_buffer.span <= span;
-                    request_buffer.start_offset <= fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2];
-                    request_buffer.index1 <= index;
-                    request_buffer.index2 <= indexp1[`ICACHE_SET_WIDTH-1: 0];
-                    request_buffer.expand_en <= expand_en;
-                    request_buffer.expand_en_shift <= expand_en_shift;
-                    request_buffer.multi_tag <= indexp1[`ICACHE_SET_WIDTH];
-                    request_buffer.fsqIdx <= fsq_cache_io.fsqIdx;
-                    request_buffer.stream <= fsq_cache_io.stream;
+                    `REQ_DEF
                 end
                 else begin
                     main_state <= IDLE;

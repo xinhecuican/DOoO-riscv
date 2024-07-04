@@ -15,8 +15,7 @@
 `define INT_OR      `INTOP_WIDTH'b00110
 `define INT_AND     `INTOP_WIDTH'b00101
 `define INT_SL      `INTOP_WIDTH'b01000
-`define INT_SRL     `INTOP_WIDTH'b01001
-`define INT_SRA     `INTOP_WIDTH'b01010
+`define INT_SR     `INTOP_WIDTH'b01001
 `define INT_AUIPC   `INTOP_WIDTH'b01100
 `define INT_FENCE   `INTOP_WIDTH'b00011
 
@@ -26,7 +25,7 @@
 `define MEM_LH      `MEMOP_WIDTH'b0001
 `define MEM_LW      `MEMOP_WIDTH'b0010
 `define MEM_SB      `MEMOP_WIDTH'b1000
-`define MEM_SH      `MEMOP_WIDTH'b1001
+`define MEM_SH      `MEMOP_WIDTH'b1100
 `define MEM_SW      `MEMOP_WIDTH'b1010
 
 // branchop

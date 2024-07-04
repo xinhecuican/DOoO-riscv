@@ -43,7 +43,7 @@ module UBTB(
                             tail_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
     assign tail_taken = lookup_entry.tailSlot.en && lookup_entry.tailSlot.br_type != CONDITION;
-    assign tail_target = tail_taken ? {br_target_high, lookup_entry.tailSlot.target, 1'b0} : lookup_entry.fthAddr + ubtb_io.pc;
+    assign tail_target = tail_taken ? {tail_target_high, lookup_entry.tailSlot.target, 1'b0} : lookup_entry.fthAddr + ubtb_io.pc;
     assign tail_size = lookup_entry.tailSlot.en ? lookup_entry.tailSlot.offset : lookup_entry.fthAddr;
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
                                         lookup_entry.slots[0].target,lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0],

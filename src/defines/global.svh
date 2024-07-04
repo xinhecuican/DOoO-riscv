@@ -9,6 +9,7 @@
 `define RST 1'b1
 `ifdef RV32I
 `define XLEN 32
+`define XLEN_32
 `define MXL 32
 `endif
 `define DATA_BYTE (`XLEN / 8)

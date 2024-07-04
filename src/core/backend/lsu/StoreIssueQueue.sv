@@ -8,9 +8,10 @@ interface StoreUnitIO;
     StoreIdx `N(`STORE_DIS_PORT) dis_sq_idx;
     logic `N(`STORE_ISSUE_BANK_NUM) data_en;
     StoreIdx `N(`STORE_ISSUE_BANK_NUM) data_sqIdx;
+    logic `ARRAY(`STORE_ISSUE_BANK_NUM, 2) data_size;
 
-    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx);
-    modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx);
+    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size);
+    modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx, data_size);
 endinterface
 
 module StoreIssueQueue(
@@ -29,7 +30,8 @@ module StoreIssueQueue(
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_NUM)) order;
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_SIZE)) bankNum;
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_NUM)) originOrder, sortOrder;
-    logic `N(`STORE_ISSUE_BANK_NUM) full;
+    logic `N(`STORE_ISSUE_BANK_NUM) full, addr_bigger, data_bigger;
+    logic `N(`STORE_ISSUE_BANK_NUM) addr_en_next, data_en_next;
     StoreIdx `N(`STORE_ISSUE_BANK_NUM) sqIdxs;
     logic `N($clog2(`STORE_DIS_PORT)+1) disNum;
 generate
@@ -37,6 +39,10 @@ generate
         StoreAddrBank addr_bank (
             .*,
             .io(addr_io[i])
+        );
+        StoreDataBank data_bank (
+            .*,
+            .io(data_io[i])
         );
         MemIssueBundle mem_issue_bundle;
         assign mem_issue_bundle = dis_store_io.data[i];
@@ -48,25 +54,27 @@ generate
         assign addr_io[i].data = dis_store_io.data[order[i]];
         assign addr_io[i].sqIdx = sqIdx[order[i]];
         assign addr_io[i].lqIdx = lqIdx[order[i]];
-        assign full[i] = addr_io[i].full;
+        assign full[i] = addr_io[i].full & data_io[i].full;
         
-        assign store_wakeup_io.en[i] = addr_io[i].reg_en & ~backendCtrl.redirect;
+        assign store_wakeup_io.en[i] = addr_io[i].reg_en;
         assign store_wakeup_io.preg[i] = addr_io[i].rs1;
         assign store_wakeup_io.rd[i] = 0;
         assign store_io.storeIssueData[i] = addr_io[i].data_o;
 
         assign data_io[i].en = addr_io[i].en;
         assign data_io[i].status = addr_io[i].status;
-        assign data_io[i].free_en = addr_io[i].free_en;
-        assign data_io[i].freeIdx = addr_io[i].freeIdx;
-        assign data_io[i].walk_en = addr_io[i].walk_en;
+        assign data_io[i].data = addr_io[i].data;
         assign data_io[i].sqIdx = addr_io[i].sqIdx;
         
-        assign store_wakeup_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en & ~backendCtrl.redirect;
+        assign store_wakeup_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en;
         assign store_wakeup_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
         assign store_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
         assign store_io.dis_sq_idx[i] = sqIdx[i];
+        assign store_io.data_size[i] = data_io[i].size_o;
+
+        LoopCompare #(`ROB_WIDTH) cmp_addr_bigger (addr_io[i].robIdx_o, backendCtrl.redirectIdx, addr_bigger[i]);
+        LoopCompare #(`ROB_WIDTH) cmp_data_bigger (data_io[i].robIdx_o, backendCtrl.redirectIdx, data_bigger[i]);
     end
 endgenerate
     assign dis_store_io.full = |full;
@@ -74,18 +82,23 @@ endgenerate
     assign store_io.dis_en = full ? 0 : dis_store_io.en;
     always_ff @(posedge clk)begin
         order <= sortOrder;
-        store_io.en <= store_wakeup_io.en[`STORE_ISSUE_BANK_NUM-1: 0];
-        store_io.data_en <= store_wakeup_io.en[`STORE_ISSUE_BANK_NUM * 2 -1: `STORE_ISSUE_BANK_NUM];
     end
+generate
+    for(genvar i=0; i<`STORE_ISSUE_BANK_NUM; i++)begin
+        always_ff @(posedge clk)begin
+            addr_en_next[i] <= addr_io[i].reg_en;
+            data_en_next[i] <= data_io[i].reg_en;
+            store_io.en[i] <= addr_en_next[i] & (~backendCtrl.redirect | addr_bigger[i]);
+            store_io.data_en[i] <= data_en_next[i] & (~backendCtrl.redirect | data_bigger[i]);
+        end
+    end
+endgenerate
 endmodule
 
 interface StoreAddrBankIO;
     logic en;
     IssueStatusBundle status;
     MemIssueBundle data;
-    logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
-    logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
-    logic `N(`STORE_ISSUE_BANK_SIZE) walk_en;
     StoreIdx sqIdx;
     LoadIdx lqIdx;
     logic reg_en;
@@ -93,8 +106,9 @@ interface StoreAddrBankIO;
     logic full;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)+1) bankNum;
     StoreIssueData data_o;
+    RobIdx robIdx_o;
 
-    modport bank(input en, status, data, sqIdx, lqIdx, output full, free_en, freeIdx, walk_en, reg_en, rs1, bankNum, data_o);
+    modport bank(input en, status, data, sqIdx, lqIdx, output full, reg_en, rs1, bankNum, data_o, robIdx_o);
 endinterface
 
 module StoreAddrBank(
@@ -120,9 +134,10 @@ module StoreAddrBank(
     StoreIssueData data_o;
     logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `WB_SIZE) rs1_cmp;
     logic [1: 0] size;
+    RobIdx select_robIdx;
 
-    assign size = io.data.memop == `MEM_LW ? 2'b10 :
-                  io.data.memop == `MEM_LH ? 2'b01 : 2'b00;
+    assign size = io.data.memop == `MEM_SW ? 2'b10 :
+                  io.data.memop == `MEM_SH ? 2'b01 : 2'b00;
     SDPRAM #(
         .WIDTH($bits(StoreIssueData)),
         .DEPTH(`STORE_ISSUE_BANK_SIZE)
@@ -131,7 +146,7 @@ module StoreAddrBank(
         .rst(rst),
         .en(1'b1),
         .addr0(freeIdx),
-        .addr1(selectIdx),
+        .addr1(selectIdxNext),
         .we(io.en),
         .wdata({io.data.uext, size, io.data.imm, io.sqIdx, io.lqIdx, io.data.robIdx, io.data.fsqInfo}),
         .rdata1(data_o)
@@ -151,10 +166,12 @@ endgenerate
         .select(select_en)
     );
     assign io.full = &en;
-    assign io.reg_en = |ready;
+    assign io.reg_en = (|ready) & ~backendCtrl.redirect;
     assign io.rs1 = status_ram[selectIdx].rs1;
-    assign io.free_en = free_en;
-    assign io.freeIdx = freeIdx;
+    always_ff @(posedge clk)begin
+        select_robIdx <= status_ram[selectIdx].robIdx;
+    end
+    assign io.robIdx_o = select_robIdx;
     PSelector #(`STORE_ISSUE_BANK_SIZE) selector_free_idx (~en, free_en);
     Encoder #(`STORE_ISSUE_BANK_SIZE) encoder_free_idx (free_en, freeIdx);
     Encoder #(`STORE_ISSUE_BANK_SIZE) encoder_select_idx (select_en, selectIdx);
@@ -169,12 +186,15 @@ endgenerate
     // walk
     logic `N(`STORE_ISSUE_BANK_SIZE) bigger, walk_en;
     assign walk_en = en & bigger;
-    assign io.walk_en = walk_en;
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
         assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
     end
 endgenerate
+
+    always_ff @(posedge clk)begin
+        selectIdxNext <= selectIdx;
+    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             status_ram <= 0;
@@ -212,15 +232,16 @@ endmodule
 interface StoreDataBankIO;
     logic en;
     IssueStatusBundle status;
-    logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
-    logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
-    logic `N(`STORE_ISSUE_BANK_SIZE) walk_en;
+    MemIssueBundle data;
     StoreIdx sqIdx;
     logic reg_en;
     logic `N(`PREG_WIDTH) rs2;
     StoreIdx sqIdx_o;
+    logic full;
+    RobIdx robIdx_o;
+    logic [1: 0] size_o;
 
-    modport bank(input en, status, sqIdx, free_en, freeIdx, walk_en, output reg_en, rs2, sqIdx_o);
+    modport bank(input en, status, data, sqIdx, output reg_en, rs2, sqIdx_o, full, robIdx_o, size_o);
 endinterface
 
 module StoreDataBank(
@@ -238,12 +259,19 @@ module StoreDataBank(
 
     logic `N(`STORE_ISSUE_BANK_SIZE) en;
     StoreIdx sqIdxs `N(`STORE_ISSUE_BANK_SIZE);
+    logic [1: 0] sqSize `N(`STORE_ISSUE_BANK_SIZE);
     StatusBundle `N(`STORE_ISSUE_BANK_SIZE) status_ram;
+    logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
+    logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
     logic `N(`STORE_ISSUE_BANK_SIZE) ready;
     logic `N(`STORE_ISSUE_BANK_SIZE) select_en;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
     logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `WB_SIZE) rs2_cmp;
+    logic [1: 0] size;
+    RobIdx select_robIdx;
 
+    assign size = io.data.memop == `MEM_SW ? 2'b10 :
+                  io.data.memop == `MEM_SH ? 2'b01 : 2'b00;
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
         assign ready[i] = en[i] & status_ram[i].rs2v;
@@ -253,12 +281,19 @@ endgenerate
         .clk(clk),
         .rst(rst),
         .en(io.en),
-        .idx(io.free_en),
+        .idx(free_en),
         .ready(ready),
         .select(select_en)
     );
-    assign io.reg_en = |ready;
+    assign io.full = &en;
+    assign io.reg_en = (|ready) & ~backendCtrl.redirect;
     assign io.rs2 = status_ram[selectIdx].rs2;
+    always_ff @(posedge clk)begin
+        select_robIdx <= status_ram[selectIdx].robIdx;
+    end
+    assign io.robIdx_o = select_robIdx;
+    PSelector #(`STORE_ISSUE_BANK_SIZE) selector_free_idx (~en, free_en);
+    Encoder #(`STORE_ISSUE_BANK_SIZE) encoder_free_idx (free_en, freeIdx);
     Encoder #(`STORE_ISSUE_BANK_SIZE) encoder_select_idx (select_en, selectIdx);
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
@@ -268,11 +303,23 @@ generate
     end
 endgenerate
 
+    // walk
+    logic `N(`STORE_ISSUE_BANK_SIZE) bigger, walk_en;
+    assign walk_en = en & bigger;
+generate
+    for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
+        assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
+    end
+endgenerate
+
     always_ff @(posedge clk)begin
         if(io.en)begin
-            sqIdxs[io.freeIdx] <= io.sqIdx;
+            sqIdxs[freeIdx] <= io.sqIdx;
+            sqSize[freeIdx] <= size;
         end
-        io.sqIdx_o <= sqIdxs[selectIdx];
+        selectIdxNext <= selectIdx;
+        io.sqIdx_o <= sqIdxs[selectIdxNext];
+        io.size_o <= sqSize[selectIdxNext];
     end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -281,21 +328,21 @@ endgenerate
         end
         else begin
             if(backendCtrl.redirect)begin
-                en <= io.walk_en;
+                en <= walk_en;
             end
             else begin
-                en <= (en | ({`STORE_ISSUE_BANK_SIZE{io.en}} & io.free_en)) &
+                en <= (en | ({`STORE_ISSUE_BANK_SIZE{io.en}} & free_en)) &
                       ~(select_en);
             end
             
             if(io.en)begin
-                status_ram[io.freeIdx].rs2v <= io.status.rs2v;
-                status_ram[io.freeIdx].rs2 <= io.status.rs2;
-                status_ram[io.freeIdx].robIdx <= io.status.robIdx;
+                status_ram[freeIdx].rs2v <= io.status.rs2v;
+                status_ram[freeIdx].rs2 <= io.status.rs2;
+                status_ram[freeIdx].robIdx <= io.status.robIdx;
             end
 
             for(int i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
-                if(io.en && io.free_en[i])begin
+                if(io.en && free_en[i])begin
                     status_ram[i].rs2v <= io.status.rs2v;
                 end
                 else begin

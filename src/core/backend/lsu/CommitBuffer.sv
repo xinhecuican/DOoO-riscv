@@ -125,20 +125,21 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_COMMIT_SIZE; j++)begin
             assign offset_vec[i][j] = loadFwd.fwdData[i].en &
-                                      (loadFwd.fwdData[i].vaddrOffset == addrs[j][11: 0]);
+                (loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_LINE_WIDTH] == 
+                                      addrs[j][`TLB_OFFSET-`DCACHE_LINE_WIDTH-1: 0]);
         end
     end
 endgenerate 
     always_ff @(posedge clk)begin
         fwd_offset_vec <= offset_vec;
         for(int i=0; i<`LOAD_PIPELINE; i++)begin
-            fwd_bank[i] <= loadFwd.fwdData[i].vaddrOffset[`DCACHE_BANK_WIDTH+1: `DCACHE_BYTE_WIDTH];
+            fwd_bank[i] <= loadFwd.fwdData[i].vaddrOffset[`DCACHE_BANK_WIDTH+`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE_WIDTH];
         end
     end
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_COMMIT_SIZE; j++)begin
-            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addrs[j][`DCACHE_BLOCK_SIZE-1: `TLB_TAG-`DCACHE_BYTE_WIDTH-`DCACHE_BANK_WIDTH];
+            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addrs[j][`DCACHE_BLOCK_SIZE-1: `TLB_OFFSET-`DCACHE_LINE_WIDTH];
         end
         assign forward_vec[i] = ptag_vec[i] & fwd_offset_vec[i] & addr_en;
     end

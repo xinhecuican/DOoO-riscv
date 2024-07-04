@@ -62,11 +62,12 @@ module InstBuffer (
             );
         end
         for(genvar j=0; j<`IBUF_BANK_NUM; j++)begin
-            logic `N($clog2(`IBUF_BANK_NUM)) writeIdx;
+            logic `N($clog2(`IBUF_BANK_NUM)) writeIdx, offset;
             assign writeIdx = j - tail[$clog2(`IBUF_BANK_NUM)-1: 0];
+            assign offset = j + pd_ibuffer_io.shiftIdx;
             assign ibuf[j].we = inst_buffer_we[j];
             assign in_data[j] = '{iam: pd_ibuffer_io.iam, 
-                                  fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: j}, 
+                                  fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: offset}, 
                                   inst: pd_ibuffer_io.inst[j]};
             assign ibuf[j].wdata = in_data[writeIdx];
         end

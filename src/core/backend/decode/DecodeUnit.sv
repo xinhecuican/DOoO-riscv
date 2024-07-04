@@ -63,9 +63,9 @@ module DecodeUnit(
     assign sw = store & ~funct3[2] & funct3[1] & ~funct3[0];
 
     assign info.memop[3] = store;
-    assign info.memop[2] = lbu | lhu;
+    assign info.memop[2] = sh;
     assign info.memop[1] = lw | sw;
-    assign info.memop[0] = lh | lhu | sh;
+    assign info.memop[0] = lh | lhu;
 
     logic addi, slti, sltiu, xori, ori, andi, slli, srli, srai;
     assign addi = opimm & ~funct3[2] & ~funct3[1] & ~funct3[0];
@@ -93,8 +93,8 @@ module DecodeUnit(
     assign info.intop[4] = 1'b0;
     assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
     assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc | sub;
-    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sra | srai | fence;
-    assign info.intop[0] = lui | andi | _and | srl | srli | fence | sub;
+    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | fence;
+    assign info.intop[0] = lui | andi | _and | srl | srli | fence | sub | sra | srai;
 
     logic ecall, ebreak, mret, sret;
     assign ecall = opsystem & funct3_0 & funct7_0 & rs2_0;
@@ -124,7 +124,7 @@ module DecodeUnit(
                      ~(inst[0] & inst[1]);
 
 
-    assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu;
+    assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu | srl | srli;
     logic [11: 0] imm, store_imm;
     logic [19: 0] lui_imm;
     logic `N(`DEC_IMM_WIDTH) branch_imm;

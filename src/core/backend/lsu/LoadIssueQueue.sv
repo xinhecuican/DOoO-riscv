@@ -36,7 +36,7 @@ module LoadIssueQueue(
     logic `ARRAY(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_NUM)) order;
     logic `ARRAY(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_SIZE)) bankNum;
     logic `ARRAY(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_NUM)) originOrder, sortOrder;
-    logic `N(`LOAD_ISSUE_BANK_NUM) full;
+    logic `N(`LOAD_ISSUE_BANK_NUM) full, enNext, bigger;
     logic `N($clog2(`LOAD_DIS_PORT)+1) disNum;
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_NUM; i++)begin
@@ -68,6 +68,8 @@ generate
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
         assign load_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
         assign load_io.dis_lq_idx[i] = lqIdx[i];
+
+        LoopCompare #(`ROB_WIDTH) cmp_bigger(bank_io[i].robIdx_o, backendCtrl.redirectIdx, bigger[i]);
     end
 endgenerate
     assign dis_load_io.full = |full;
@@ -77,7 +79,10 @@ endgenerate
     assign load_io.eqNum = full ? 0 : disNum;
     always_ff @(posedge clk)begin
         order <= sortOrder;
-        load_io.en <= load_wakeup_io.en & load_wakeup_io.ready;
+        enNext <= load_wakeup_io.en;
+        for(int i=0; i<`LOAD_ISSUE_BANK_NUM; i++)begin
+            load_io.en[i] <= enNext[i] & (~backendCtrl.redirect | bigger[i]) & load_wakeup_io.ready[i];
+        end
     end
 endmodule
 
@@ -93,13 +98,14 @@ interface LoadIssueBankIO;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)+1) bankNum;
     LoadIssueData data_o;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) issue_idx;
+    RobIdx robIdx_o;
     LoadReplyRequest reply_fast;
     LoadReplyRequest reply_slow;
     logic success;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) success_idx;
 
     modport bank(input en, status, data, lqIdx, sqIdx, reply_fast, reply_slow, success, success_idx,
-                 output full, reg_en, rs1, bankNum, data_o, issue_idx);
+                 output full, reg_en, rs1, bankNum, data_o, issue_idx, robIdx_o);
 endinterface
 
 module LoadIssueBank(
@@ -158,16 +164,12 @@ endgenerate
         .select(select_en)
     );
     assign io.full = &en;
+    assign io.reg_en = |ready & ~backendCtrl.redirect;
+    assign io.rs1 = status_ram[selectIdx].rs1;
     always_ff @(posedge clk)begin
-        reg_en <= (|ready) & ~backendCtrl.redirect;
-        io.rs1 <= status_ram[selectIdx].rs1;
         select_robIdx <= status_ram[selectIdx].robIdx;
     end
-    logic select_older;
-    LoopCompare #(`ROB_WIDTH) cmp_older (select_robIdx, backendCtrl.redirectIdx, select_older);
-    assign io.reg_en = reg_en & (~backendCtrl.redirect | select_older);
-    // assign io.reg_en = |ready;
-    // assign io.rs1 = status_ram[selectIdx].rs1;
+    assign io.robIdx_o = select_robIdx;
     PSelector #(`LOAD_ISSUE_BANK_SIZE) selector_free_idx (~en, free_en);
     Encoder #(`LOAD_ISSUE_BANK_SIZE) encoder_free_idx (free_en, freeIdx);
     Encoder #(`LOAD_ISSUE_BANK_SIZE) encoder_select_idx (select_en, selectIdx);

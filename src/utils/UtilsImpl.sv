@@ -131,10 +131,21 @@ module Encoder16(
 	output logic [3: 0] out
 );
 	logic [2: 0] out_high, out_low;
-	Encoder8 high(in[7: 0], out_low);
-	Encoder8 low(in[15: 8], out_high);
+	Encoder8 low(in[7: 0], out_low);
+	Encoder8 high(in[15: 8], out_high);
 	assign out[3] = |in[15: 8];
 	assign out[2: 0] = out_high | out_low;
+endmodule
+
+module Encoder32(
+	input logic [31: 0] in,
+	output logic [4: 0] out
+);
+	logic [3: 0] out_high, out_low;
+	Encoder16 high(in[31: 16], out_high);
+	Encoder16 low(in[15: 0], out_low);
+	assign out[4] = |in[31: 16];
+	assign out[3: 0] = out_high | out_low;
 endmodule
 
 module Encoder64(
@@ -283,7 +294,7 @@ module PREncoder32(
 	PREncoder16 high(in[31: 16], out2);
 	assign is_low = |in[15: 0];
 	assign out[4] = ~is_low;
-	assign out[3: 0] = is_low ? out2 : out1;
+	assign out[3: 0] = is_low ? out1 : out2;
 endmodule
 
 module Sort2 #(
@@ -297,8 +308,8 @@ module Sort2 #(
 );
 	logic bigger;
 	assign bigger = origin[1] < origin[0];
-	assign sort = bigger ? {origin[1], origin[0]} : origin;
-	assign data_o = bigger ? {data_i[1], data_i[0]} : data_i;
+	assign sort = bigger ? {origin[0], origin[1]} : origin;
+	assign data_o = bigger ? {data_i[0], data_i[1]} : data_i;
 endmodule
 
 module Sort4 #(

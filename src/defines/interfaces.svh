@@ -96,9 +96,10 @@ interface FsqCacheIO;
     FsqIdx fsqIdx;
     logic flush;
     logic stall;
+    logic `N(`PREDICTION_WIDTH+1) shiftIdx;
 
-    modport fsq (input ready, output en, stream, fsqIdx, abandon, abandonIdx, flush, stall);
-    modport cache (output ready, input en, stream,fsqIdx, abandon, abandonIdx, flush, stall);
+    modport fsq (input ready, output en, stream, fsqIdx, abandon, abandonIdx, flush, stall, shiftIdx);
+    modport cache (output ready, input en, stream,fsqIdx, abandon, abandonIdx, flush, stall, shiftIdx);
 endinterface
 
 interface FsqBackendIO;
@@ -135,9 +136,10 @@ interface CachePreDecodeIO;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
     FetchStream stream;
     FsqIdx fsqIdx;
+    logic `N(`PREDICTION_WIDTH+1) shiftIdx;
 
-    modport cache (output en, data, stream, fsqIdx);
-    modport pd (input en, data, stream, fsqIdx);
+    modport cache (output en, data, stream, fsqIdx, shiftIdx);
+    modport pd (input en, data, stream, fsqIdx, shiftIdx);
 endinterface
 
 interface ICacheAxi;
@@ -169,13 +171,11 @@ endinterface
 interface PreDecodeRedirect;
     logic en;
     logic direct;
-    logic `VADDR_BUS pc;
     FsqIdx fsqIdx;
-    logic `N(`PREDICTION_WIDTH) offset;
-    logic `VADDR_BUS redirect_addr;
+    FetchStream stream;
 
-    modport predecode(output en, direct, fsqIdx, redirect_addr, pc, offset);
-    modport redirect(input en, direct, fsqIdx, redirect_addr, pc, offset);
+    modport predecode(output en, direct, fsqIdx, stream);
+    modport redirect(input en, direct, fsqIdx, stream);
 endinterface
 
 interface PreDecodeIBufferIO;
@@ -184,9 +184,10 @@ interface PreDecodeIBufferIO;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) inst;
     logic iam; // for exception, instruction address misaligned
     logic `N(`FSQ_WIDTH) fsqIdx;
+    logic `N(`PREDICTION_WIDTH+1) shiftIdx;
 
-    modport predecode(output en, num, inst, iam, fsqIdx);
-    modport instbuffer(input en, num, inst, iam, fsqIdx);
+    modport predecode(output en, num, inst, iam, fsqIdx, shiftIdx);
+    modport instbuffer(input en, num, inst, iam, fsqIdx, shiftIdx);
 endinterface
 
 interface IfuBackendIO;
@@ -424,12 +425,14 @@ interface BackendRedirectIO;
     BackendRedirectInfo branchRedirect;
     BackendRedirectInfo memRedirect;
     BranchRedirectInfo branchInfo;
+    RobIdx memRedirectIdx;
 
     BackendRedirectInfo out;
     BranchRedirectInfo branchOut;
     CSRRedirectInfo csrOut;
 
-    modport redirect(input branchRedirect, memRedirect, branchInfo, output out, branchOut, csrOut);
+    modport redirect(input branchRedirect, memRedirect, memRedirectIdx, branchInfo, output out, branchOut, csrOut);
+    modport mem(output memRedirect, memRedirectIdx);
 endinterface
 
 interface RobRedirectIO;
@@ -444,6 +447,7 @@ interface DCacheLoadIO;
     logic `N(`LOAD_PIPELINE) req;
     logic `N(`LOAD_PIPELINE) req_cancel;
     logic `N(`LOAD_PIPELINE) req_cancel_s2;
+    logic `N(`LOAD_PIPELINE) req_cancel_s3;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) vaddr;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
     RobIdx `N(`LOAD_PIPELINE) robIdx;
@@ -458,7 +462,7 @@ interface DCacheLoadIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
-    modport dcache (input req, vaddr, lqIdx, ptag, req_cancel, req_cancel_s2, output hit, rdata, conflict, full, lq_en, lqData, lqIdx_o);
+    modport dcache (input req, vaddr, lqIdx, ptag, req_cancel, req_cancel_s2, req_cancel_s3, robIdx, output hit, rdata, conflict, full, lq_en, lqData, lqIdx_o);
     modport queue (input lq_en, lqData, lqIdx_o);
 endinterface
 

@@ -47,7 +47,7 @@ module Backend(
     assign commitBus_out.num = commitBus.num;
     assign commitBus_out.wenum = commitBus.wenum;
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
-    assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
+    // assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
     assign backendCtrl.rename_full = rename_full | rob_full;
     assign ifu_backend_io.stall = backendCtrl.rename_full | backendCtrl.dis_full | commitWalk.walk;
     assign fsq_back_io.redirect = backendRedirect.out;
@@ -72,13 +72,15 @@ module Backend(
     CsrIssueQueue csr_issue_queue(.*);
     LSU lsu(
         .*,
-        .memRedirect(backendRedirect.memRedirect)
+        .redirect_io(backendRedirect)
     );
     Wakeup wakeup(.*);
     Execute execute(.*,
                     .backendRedirectInfo(backendRedirect.branchRedirect),
                     .branchRedirectInfo(backendRedirect.branchInfo));
-    BackendRedirectCtrl backend_redirect_ctrl(.*,.io(backendRedirect));
+    BackendRedirectCtrl backend_redirect_ctrl(.*,
+                                              .io(backendRedirect),
+                                              .redirectIdx(backendCtrl.redirectIdx));
     CSR csr(.*,
             .exc_pc(fsq_back_io.exc_pc),
             .redirect(backendRedirect.csrOut),

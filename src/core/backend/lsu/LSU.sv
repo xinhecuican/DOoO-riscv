@@ -39,7 +39,7 @@ module LSU(
     CommitBus.mem commitBus,
     BackendCtrl backendCtrl,
     DCacheAxi.cache axi_io,
-    output BackendRedirectInfo memRedirect,
+    BackendRedirectIO.mem redirect_io,
     output StoreWBData `N(`STORE_PIPELINE) storeWBData
 );
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr, storeVAddr;
@@ -111,12 +111,14 @@ generate
             MemIssueBundle storeBundle;
             logic older;
             assign storeBundle = dis_store_io.data[j];
-            LoopCompare #(`ROB_WIDTH) compare_older (loadBundle.robIdx, storeBundle.robIdx, older);
-            assign dis_ls_older[i][j] = older & dis_store_io.en[j];
+            LoopCompare #(`ROB_WIDTH) compare_older (storeBundle.robIdx, loadBundle.robIdx, older);
+            assign dis_ls_older[i][j] = older & dis_store_io.en[j] & ~dis_store_io.full;
         end
-        logic `N($clog2(`LOAD_PIPELINE)) store_idx;
-        PEncoder #(`STORE_PIPELINE) pencoder_store_idx (dis_ls_older[i], store_idx);
-        assign l_sqIdxs[i] = |dis_ls_older[i] ? sqIdxs[store_idx] : store_queue_io.sqIdx;
+        logic `N($clog2(`STORE_PIPELINE)+1) store_idx;
+        StoreIdx l_sqIdx;
+        ParallelAdder #(1, `STORE_PIPELINE) adder_store_idx (dis_ls_older[i], store_idx);
+        LoopAdder #(`STORE_QUEUE_WIDTH, $clog2(`STORE_PIPELINE)+1) adder_lqIdx(store_idx, store_queue_io.sqIdx, l_sqIdx);
+        assign l_sqIdxs[i] = l_sqIdx;
     end
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : load_addr
@@ -180,6 +182,7 @@ endgenerate
 
     // load data
     logic `ARRAY(`LOAD_PIPELINE, 32) rdata;
+    logic `N(`LOAD_PIPELINE) rdata_valid;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic `N(`DCACHE_BITS) combine_queue_data;
@@ -188,6 +191,7 @@ generate
         MaskExpand #(`DCACHE_BYTE) mask_expand_commit(commit_queue_fwd.mask[i], expand_commit_mask);
         assign combine_queue_data = (rio.rdata[i] & ~expand_mask) | (store_queue_fwd.data[i] & expand_mask);
         assign rdata[i] = (combine_queue_data & ~expand_commit_mask) | (commit_queue_fwd.data[i] & expand_commit_mask);
+        assign rdata_valid[i] = ((store_queue_fwd.mask[i] | commit_queue_fwd.mask[i]) & lmaskNext[i]) == lmaskNext[i];
     end
 endgenerate
 
@@ -211,6 +215,7 @@ generate
     end
 endgenerate
     assign rio.req_cancel_s2 = redirect_clear_s2;
+    assign rio.req_cancel_s3 = redirect_clear_s3 | rdata_valid;
 
     always_ff @(posedge clk)begin
         lpaddrNext <= lpaddr;
@@ -219,23 +224,35 @@ endgenerate
         lmaskNext <= lmask;
         issue_idx_next <= load_issue_idx;
     end
-    assign leq_valid = leq_en & ~fwd_data_invalid & ~rio.full & ~redirect_clear_s3;
+    assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3;
     assign load_queue_io.disNum = load_io.eqNum;
     assign load_queue_io.en = leq_valid;
     assign load_queue_io.data = leq_data;
     assign load_queue_io.paddr = lpaddrNext;
     assign load_queue_io.mask = lmaskNext;
-    assign load_queue_io.rdata = rio.rdata;
-    assign load_queue_io.miss = ~rio.hit;
+    assign load_queue_io.rmask = (store_queue_fwd.mask | commit_queue_fwd.mask);
+    assign load_queue_io.rdata = rdata;
+    assign load_queue_io.miss = ~rio.hit & ~rdata_valid;
+    assign load_queue_io.wb_valid = ~leq_valid;
     
     assign load_io.success = leq_valid;
     assign load_io.success_idx = issue_idx_next;
 
     // reply slow
+    logic `N(`LOAD_PIPELINE) fwd_data_invalid_n, lreply_en;
+    logic `N(`LOAD_PIPELINE) lmiss;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_n2;
+    always_ff @(posedge clk)begin
+        fwd_data_invalid_n <= fwd_data_invalid;
+        lreply_en <= leq_en & ~redirect_clear_s3;
+        issue_idx_n2 <= issue_idx_next;
+        lmiss <= ~rio.hit & ~rdata_valid;
+    end
+    assign load_io.success = lreply_en & ~fwd_data_invalid_n  & ~(lmiss & rio.full);
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign load_io.reply_slow[i].en = leq_en[i] & (fwd_data_invalid[i] | rio.full);
-        assign load_io.reply_slow[i].issue_idx = issue_idx_next[i];
+        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i]));
+        assign load_io.reply_slow[i].issue_idx = issue_idx_n2[i];
         assign load_io.reply_slow[i].reason = rio.full ? 2'b10 : 2'b01;
     end
 endgenerate
@@ -247,11 +264,13 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `XLEN) ldata_n, ldata_shift;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
-        logic wb_data_en;
+        logic wb_data_en, wb_pipeline_en;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
+        assign wb_pipeline_en = leq_en[i] & (rio.hit[i] | rdata_valid[i]) &
+                                ~fwd_data_invalid[i] & ~redirect_clear_s3[i];
         always_ff @(posedge clk)begin
-            wb_data_en <= leq_valid[i] | load_queue_io.wbData[i].en;
-            from_issue[i] <= leq_valid[i];
+            wb_data_en <= wb_pipeline_en | load_queue_io.wbData[i].en;
+            from_issue[i] <= wb_pipeline_en;
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
             ldata_n[i] <= ldata_shift[i];
@@ -299,12 +318,14 @@ generate
             MemIssueBundle loadBundle;
             logic older;
             assign loadBundle = dis_load_io.data[j];
-            LoopCompare #(`ROB_WIDTH) compare_older (storeBundle.robIdx, loadBundle.robIdx, older);
-            assign dis_sl_older[i][j] = older & dis_load_io.en[j];
+            LoopCompare #(`ROB_WIDTH) compare_older (loadBundle.robIdx, storeBundle.robIdx, older);
+            assign dis_sl_older[i][j] = older & dis_load_io.en[j] & ~dis_load_io.full;
         end
-        logic `N($clog2(`LOAD_PIPELINE)) load_idx;
-        PEncoder #(`LOAD_PIPELINE) pencoder_load_idx (dis_sl_older[i], load_idx);
-        assign s_lqIdxs[i] = |dis_sl_older[i] ? lqIdxs[load_idx] : load_queue_io.lqIdx;
+        logic `N($clog2(`LOAD_PIPELINE)+1) load_idx;
+        LoadIdx s_lqIdx;
+        ParallelAdder #(1, `LOAD_PIPELINE) adder_load_idx (dis_sl_older[i], load_idx);
+        LoopAdder #(`LOAD_QUEUE_WIDTH, $clog2(`LOAD_PIPELINE)+1) adder_lqIdx(load_idx, load_queue_io.lqIdx, s_lqIdx);
+        assign s_lqIdxs[i] = s_lqIdx;
     end
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin : store_addr
         AGU agu(
@@ -315,7 +336,7 @@ generate
         always_ff @(posedge clk)begin
             store_en[i] <= store_io.en[i] & ~store_redirect_clear_req;
             store_issue_data[i] <= store_io.storeIssueData[i];
-            sptag[i] <= storeVAddr[i]`TLB_TAG_BUS;
+            sptag[i] <= storeVAddr[i]`TLB_TAG_BUS & 20'h7fff;
             storeAddrNext[i] <= storeVAddr[i];
         end
         always_comb begin
@@ -338,16 +359,38 @@ endgenerate
     assign store_queue_io.mask = smask;
 
     // store wb
+    // delay two cycle for violation detect
+    logic `N(`STORE_PIPELINE) store_en_s3;
+    RobIdx `N(`STORE_PIPELINE) store_robIdx_s3;
+    logic `ARRAY(`STORE_PIPELINE, `EXC_WIDTH) exccode_s3;
+    logic `N(`STORE_PIPELINE) store_redirect_s3;
+    logic `N(`STORE_PIPELINE) store_en_s4;
+    RobIdx `N(`STORE_PIPELINE) store_robIdx_s4;
+    logic `ARRAY(`STORE_PIPELINE, `EXC_WIDTH) exccode_s4;
+    logic `N(`STORE_PIPELINE) store_redirect_s4;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        logic bigger;
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (backendCtrl.redirectIdx, store_robIdx_s3[i], bigger);
+        assign store_redirect_s3[i] = backendCtrl.redirect & bigger;
+
+        logic bigger_s4;
+        LoopCompare #(`ROB_WIDTH) cmp_bigger_s4 (backendCtrl.redirectIdx, store_robIdx_s4[i], bigger_s4);
+        assign store_redirect_s4[i] = backendCtrl.redirect & bigger_s4;
         always_ff @(posedge clk)begin
-            storeWBData[i].en <= store_en[i] & ~store_redirect_s2[i];
-            storeWBData[i].robIdx <= store_issue_data[i].robIdx;
-            storeWBData[i].exccode <= `EXC_NONE;
+            store_en_s3[i] <= store_en[i] & ~store_redirect_s2[i];
+            store_robIdx_s3[i] <= store_issue_data[i].robIdx;
+            exccode_s3[i] <= `EXC_NONE;
+            store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i];
+            store_robIdx_s4[i] <= store_robIdx_s3[i];
+            exccode_s4[i] <= exccode_s3[i];
+
+            storeWBData[i].en <= store_en_s4[i] & ~store_redirect_s4[i];
+            storeWBData[i].robIdx <= store_robIdx_s4[i];
+            storeWBData[i].exccode <= exccode_s4[i];
         end
     end
 endgenerate
-
 
 // store load detect
     assign violation_io.lq_data = load_queue_io.lq_violation;
@@ -376,7 +419,6 @@ generate
         assign violation_io.s2_data[i].robIdx = leq_data[i].lqIdx;
         assign violation_io.s2_data[i].fsqInfo = leq_data[i].fsqInfo;
     end
-    assign memRedirect = violation_io.memInfo;
 endgenerate
 
 // forward
@@ -400,14 +442,14 @@ interface ViolationIO;
     ViolationData `N(`LOAD_PIPELINE) s2_data;
     ViolationData lq_data;
 
-    BackendRedirectInfo memInfo;
-    modport violation(input wdata, s1_data, s2_data, lq_data, output memInfo);
+    modport violation(input wdata, s1_data, s2_data, lq_data);
 endinterface
 
 module ViolationDetect(
     input logic clk,
     input logic rst,
-    ViolationIO.violation io
+    ViolationIO.violation io,
+    BackendRedirectIO.mem redirect_io
 );
     ViolationData `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) s1_cmp;
     ViolationData `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) s2_cmp;
@@ -440,9 +482,13 @@ endgenerate
     end
     ViolationData out;
     ViolationOlderCompare cmp_out (pipeline_o, io.lq_data, out);
-    assign io.memInfo.en = out.en;
-    assign io.memInfo.robIdx = out.robIdx;
-    assign io.memInfo.fsqInfo =out.fsqInfo;
+    logic `N(`ROB_WIDTH) robIdx_p;
+    assign robIdx_p = out.robIdx.idx - 1;
+    assign redirect_io.memRedirect.en = out.en;
+    assign redirect_io.memRedirect.robIdx.idx = robIdx_p;
+    assign redirect_io.memRedirect.robIdx.dir = robIdx_p[`ROB_WIDTH-1] & ~out.robIdx.idx[`ROB_WIDTH-1] ? ~out.robIdx.dir : out.robIdx.dir;
+    assign redirect_io.memRedirect.fsqInfo = out.fsqInfo;
+    assign redirect_io.memRedirectIdx = out.robIdx;
 endmodule
 
 module ViolationCompare(

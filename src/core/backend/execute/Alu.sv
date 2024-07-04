@@ -154,6 +154,11 @@ module ALUModel(
     logic `N(`PREDICTION_WIDTH+2) br_offset;
     assign br_offset = {offset, 2'b00};
 
+    logic padding;
+    logic `N(`XLEN) sr_data;
+    assign padding = rs1_data[`XLEN-1] & ~uext;
+    ShiftModel shift_model (padding, data1, data2[$clog2(`XLEN)-1: 0], sr_data);
+
     always_comb begin
         case(op)
         `INT_ADD: begin
@@ -179,6 +184,9 @@ module ALUModel(
                 result = scmp;
             end
         end
+        `INT_OR: begin
+            result = data1 | data2;
+        end
         `INT_XOR: begin
             result = data1 ^ data2;
         end
@@ -188,17 +196,94 @@ module ALUModel(
         `INT_SL: begin
             result = data1 << data2[$clog2(`XLEN)-1: 0];
         end
-        `INT_SRL: begin
-            result = data1 >> data2[$clog2(`XLEN)-1: 0];
-        end
-        `INT_SRA: begin
-            // TODO: remove $signed
-            result = $signed(data1) >> data2[$clog2(`XLEN)-1: 0];
+        `INT_SR: begin
+            result = sr_data;
         end
         `INT_AUIPC: begin
             result = stream.start_addr + br_offset + lui_imm;
         end
         default: result = 0;
+        endcase
+    end
+endmodule
+
+module ShiftModel(
+    input logic padding,
+    input logic `N(`XLEN) data,
+    input logic `N($clog2(`XLEN)) shift,
+    output logic `N(`XLEN) data_o
+);
+`define SHIFT_DEFINE(num) \
+        num: data_o = {{num{padding}}, data[`XLEN-1: num]};\
+
+    always_comb begin
+        case(shift)
+        0: data_o = data;
+        `SHIFT_DEFINE(1)
+        `SHIFT_DEFINE(2)
+        `SHIFT_DEFINE(3)
+        `SHIFT_DEFINE(4)
+        `SHIFT_DEFINE(5)
+        `SHIFT_DEFINE(6)
+        `SHIFT_DEFINE(7)
+        `SHIFT_DEFINE(8)
+        `SHIFT_DEFINE(9)
+        `SHIFT_DEFINE(10)
+        `SHIFT_DEFINE(11)
+        `SHIFT_DEFINE(12)
+        `SHIFT_DEFINE(13)
+        `SHIFT_DEFINE(14)
+        `SHIFT_DEFINE(15)
+        `SHIFT_DEFINE(16)
+        `SHIFT_DEFINE(17)
+        `SHIFT_DEFINE(18)
+        `SHIFT_DEFINE(19)
+        `SHIFT_DEFINE(20)
+        `SHIFT_DEFINE(21)
+        `SHIFT_DEFINE(22)
+        `SHIFT_DEFINE(23)
+        `SHIFT_DEFINE(24)
+        `SHIFT_DEFINE(25)
+        `SHIFT_DEFINE(26)
+        `SHIFT_DEFINE(27)
+        `SHIFT_DEFINE(28)
+        `SHIFT_DEFINE(29)
+        `SHIFT_DEFINE(30)
+        `SHIFT_DEFINE(31)
+`ifdef XLEN_64
+        `SHIFT_DEFINE(32)
+        `SHIFT_DEFINE(33)
+        `SHIFT_DEFINE(34)
+        `SHIFT_DEFINE(35)
+        `SHIFT_DEFINE(36)
+        `SHIFT_DEFINE(37)
+        `SHIFT_DEFINE(38)
+        `SHIFT_DEFINE(39)
+        `SHIFT_DEFINE(40)
+        `SHIFT_DEFINE(41)
+        `SHIFT_DEFINE(42)
+        `SHIFT_DEFINE(43)
+        `SHIFT_DEFINE(44)
+        `SHIFT_DEFINE(45)
+        `SHIFT_DEFINE(46)
+        `SHIFT_DEFINE(47)
+        `SHIFT_DEFINE(48)
+        `SHIFT_DEFINE(49)
+        `SHIFT_DEFINE(50)
+        `SHIFT_DEFINE(51)
+        `SHIFT_DEFINE(52)
+        `SHIFT_DEFINE(53)
+        `SHIFT_DEFINE(54)
+        `SHIFT_DEFINE(55)
+        `SHIFT_DEFINE(56)
+        `SHIFT_DEFINE(57)
+        `SHIFT_DEFINE(58)
+        `SHIFT_DEFINE(59)
+        `SHIFT_DEFINE(60)
+        `SHIFT_DEFINE(61)
+        `SHIFT_DEFINE(62)
+        `SHIFT_DEFINE(63)
+`endif
         endcase
     end
 endmodule

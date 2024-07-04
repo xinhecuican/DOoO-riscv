@@ -17,7 +17,7 @@ module DCache(
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_WAY) wayHit;
     logic `TENSOR(`DCACHE_WAY, `DCACHE_BANK, 32) rdata;
 
-    logic `N(`DCACHE_BANK)  s2_loadBank;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BANK_WIDTH)  s2_loadBank;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_WAY_WIDTH) hitWay_encode;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) rvaddr;
 
@@ -61,7 +61,7 @@ module DCache(
     assign dcache_axi_io.sb = axi_io.sb;
 
 // read
-    logic `N(`LOAD_PIPELINE) r_req;
+    logic `N(`LOAD_PIPELINE) r_req, r_req_s3;
     logic req_bank_conflict;
 generate
     /* UNPARAM */
@@ -97,14 +97,15 @@ generate
         end
         Encoder #(`DCACHE_WAY) encoder_hit_way (wayHit[i], hitWay_encode[i]);
         always_ff @(posedge clk)begin
+            s2_loadBank[i] <= loadOffset[i];
             rvaddr[i] <= rio.vaddr[i];
             rio.rdata[i] <= rdata[hitWay_encode[i]][s2_loadBank[i]];
         end
         assign rio.hit[i] = |wayHit[i];
     end
     always_ff @(posedge clk)begin
-            r_req[0] <= rio.req[0] & ~write_valid[0] & ~rio.req_cancel[0];
-            r_req[1] <= rio.req[1] & ~write_valid[1] & ~rio.req_cancel[1] & ~req_bank_conflict;
+        r_req[0] <= rio.req[0] & ~write_valid[0] & ~rio.req_cancel[0];
+        r_req[1] <= rio.req[1] & ~write_valid[1] & ~rio.req_cancel[1] & ~req_bank_conflict;
     end
 endgenerate
     // load conflict detect
@@ -113,20 +114,27 @@ generate
         assign write_valid[i] = replace_wb_en | wreq_n & whit & (|wmask[rio.vaddr[i]`DCACHE_BANK_BUS]);
     end
 endgenerate
+
+    LoadIdx `N(`LOAD_PIPELINE) lqIdx;
+    RobIdx `N(`LOAD_PIPELINE) robIdx;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) miss_addr;
     /* UNPARAM */
     always_ff @(posedge clk)begin
         rio.conflict[0] <= write_valid;
         rio.conflict[1] <= write_valid | req_bank_conflict;
+        r_req_s3 <= r_req & ~rio.req_cancel_s2;
+        lqIdx <= rio.lqIdx;
+        robIdx <= rio.robIdx;
+        for(int i=0; i<`LOAD_PIPELINE; i++)begin
+            miss_addr[i] <= {rio.ptag[i], rvaddr[i][11: 0]};
+        end
     end
     assign rio.full = miss_io.rfull;
 
-    assign miss_io.ren = r_req & ~rio.hit & ~rio.req_cancel_s2;
-    assign miss_io.lqIdx = rio.lqIdx;
-generate
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign miss_io.raddr[i] = {rio.ptag[i], rvaddr[i][11: 0]};
-    end
-endgenerate
+    assign miss_io.ren = r_req_s3 & ~rio.hit & ~rio.req_cancel_s3;
+    assign miss_io.lqIdx = lqIdx;
+    assign miss_io.robIdx = robIdx;
+    assign miss_io.raddr = miss_addr;
     
     logic replace_hit;
     logic `N(`DCACHE_WAY_WIDTH) replace_hit_way;

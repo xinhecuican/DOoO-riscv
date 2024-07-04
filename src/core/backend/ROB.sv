@@ -242,7 +242,8 @@ endgenerate
             end
             for(int i=0; i<`STORE_PIPELINE; i++)begin
                 if(storeWBData[i].en)begin
-                    wb[wbBus.robIdx[i].idx] <= 1'b1;
+                    wb[storeWBData[i].robIdx.idx] <= 1'b1;
+                    exccode[storeWBData[i].robIdx.idx] <= storeWBData[i].exccode;
                 end
             end
             for(int i=0; i<`FETCH_WIDTH; i++)begin

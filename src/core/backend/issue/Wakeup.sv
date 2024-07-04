@@ -60,10 +60,16 @@ endgenerate
 
 
     localparam LOAD_BASE = `ALU_SIZE * 2;
+    logic `N(`LOAD_PIPELINE) load_en;
+    logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) load_preg;
     assign load_wakeup_io.ready = {`LOAD_PIPELINE{1'b1}};
     assign load_wakeup_io.data = reg_io.rdata[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE];
-    assign reg_io.en[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_wakeup_io.en;
-    assign reg_io.raddr[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_wakeup_io.preg;
+    always_ff @(posedge clk)begin
+        load_en <= load_wakeup_io.en;
+        load_preg <= load_wakeup_io.preg;
+    end
+    assign reg_io.en[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_en;
+    assign reg_io.raddr[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_preg;
     assign wakeupBus.en[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.wakeup_en;
     assign wakeupBus.rd[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.rd;
 generate
@@ -73,10 +79,16 @@ generate
 endgenerate
 
     localparam STORE_BASE = `ALU_SIZE * 2 + `LOAD_PIPELINE;
-    assign store_wakeup_io.ready = {`STORE_PIPELINE{1'b1}};
-    assign store_wakeup_io.data = reg_io.rdata[`STORE_PIPELINE+STORE_BASE-1: STORE_BASE];
-    assign reg_io.en[`STORE_PIPELINE+STORE_BASE-1: STORE_BASE] = store_wakeup_io.en;
-    assign reg_io.raddr[`STORE_PIPELINE+STORE_BASE-1: STORE_BASE] = store_wakeup_io.preg;
+    logic `N(`STORE_PIPELINE * 2) store_en;
+    logic `ARRAY(`STORE_PIPELINE * 2, `PREG_WIDTH) store_preg;
+    assign store_wakeup_io.ready = {`STORE_PIPELINE*2{1'b1}};
+    assign store_wakeup_io.data = reg_io.rdata[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE];
+    always_ff @(posedge clk)begin
+        store_en <= store_wakeup_io.en;
+        store_preg <= store_wakeup_io.preg;
+    end
+    assign reg_io.en[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_en;
+    assign reg_io.raddr[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_preg;
 
 
 generate

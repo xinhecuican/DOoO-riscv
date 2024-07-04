@@ -35,6 +35,7 @@ module Encoder #(
 		4: Encoder4 encoder(in, out);
 		8: Encoder8 encoder(in, out);
 		16: Encoder16 encoder(in, out);
+		32: Encoder32 encoder(in, out);
 		64: Encoder64 encoder(in, out);
 		default: Encoder2 encoder(in, out);
 		endcase
@@ -287,6 +288,20 @@ module LoopCompare #(
 	output logic bigger
 );
 	assign bigger = (in1[0] ^ in2[0]) ^ (in1[WIDTH: 1] < in2[WIDTH: 1]);
+endmodule
+
+module LoopAdder #(
+	parameter WIDTH=4,
+	parameter ADD_WIDTH=2
+)(
+	input logic [ADD_WIDTH-1: 0] add,
+	input logic [WIDTH: 0] data,
+	output logic [WIDTH: 0] data_o
+);
+	logic [WIDTH-1: 0] res;
+	assign res = data[WIDTH: 1] + add;
+	assign data_o[WIDTH: 1] = res;
+	assign data_o[0] = data[WIDTH] & ~res[WIDTH-1] ? ~data[0] : data[0];
 endmodule
 
 module MaskExpand #(

@@ -35,13 +35,11 @@ endmodule
 // 0 1 0 0  0 0 0 0  1 1 1 1  1 1 0 1
 // 0 0 1 0  0 0 0 0  0 0 1 0  1 1 1 1
 // 0 0 0 1  0 0 0 0  0 0 0 1  0 0 0 1
-// ready [1, 1, 0, 0]
-// if ready[i] & ~ready[j] -> ready[i][j] = 1
-// if ~ready[i] -> ready[i][] = 0
-// 1 0 1 1
-// 1 1 1 1
-// 0 0 0 0
-// 0 0 0 0
+// bigger[i][j] ready[j] res
+// 0 0 1
+// 0 1 1
+// 1 0 1
+// 1 1 0
 module DirectionSelector #(
     parameter DEPTH = 8,
     parameter ADDR_WIDTH = $clog2(DEPTH)
@@ -58,9 +56,14 @@ module DirectionSelector #(
   generate
     for (genvar i = 0; i < DEPTH; i++) begin
       for (genvar j = 0; j < DEPTH; j++) begin
-        assign bigger_mask[i][j] = (bigger[i][j] | (~ready[j])) & ready[i];
+        if(i == j)begin
+          assign bigger_mask[i][j] = 1'b1;
+        end
+        else begin
+          assign bigger_mask[i][j] = ~(bigger[i][j] & ready[j]);
+        end
       end
-      assign select[i] = &bigger_mask[i];
+      assign select[i] = (&bigger_mask[i]) & ready[i];
     end
   endgenerate
 

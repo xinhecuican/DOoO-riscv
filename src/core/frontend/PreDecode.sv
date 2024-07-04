@@ -19,6 +19,7 @@ module PreDecode(
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data_next;
     logic `N($clog2(`BLOCK_INST_SIZE)+1) instNum, instNumNext;
     logic `N(`VADDR_SIZE) next_pc;
+    logic `N(`PREDICTION_WIDTH+1) shiftIdx;
 
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
@@ -39,6 +40,7 @@ module PreDecode(
             data_next <= 0;
             instNumNext <= 0;
             next_pc <= 0;
+            shiftIdx <= 0;
         end
         else if(!frontendCtrl.ibuf_full) begin
             bundles_next <= bundles;
@@ -49,6 +51,7 @@ module PreDecode(
             stream_next <= cache_pd_io.stream;
             instNumNext <= instNum;
             next_pc <= cache_pd_io.stream.start_addr + cache_pd_io.stream.size + 4;
+            shiftIdx <= cache_pd_io.shiftIdx;
         end
     end
 
@@ -61,14 +64,17 @@ module PreDecode(
     assign redirect_en = (|jump_en) & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
                             (stream_next.taken & ((tailIdx != jumpSelectIdx) |
                             (bundles_next[tailIdx].br_type != stream_next.branch_type) |
-                            bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)))) |
+                            (bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target))))) |
                          (en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch);
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
-    assign pd_redirect.direct = bundles_next[tailIdx].branch & (|jump_en);
+    assign pd_redirect.direct = ~(stream_next.taken & ~bundles_next[tailIdx].branch) & (|jump_en);
     assign pd_redirect.fsqIdx = fsqIdx;
-    assign pd_redirect.offset = selectIdx;
-    assign pd_redirect.pc = stream_next.start_addr;
-    assign pd_redirect.redirect_addr = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? next_pc : bundles_next[selectIdx].target;
+    assign pd_redirect.stream.taken = ~(stream_next.taken & ~bundles_next[tailIdx].branch);
+    assign pd_redirect.stream.start_addr = stream_next.start_addr;
+    assign pd_redirect.stream.branch_type = stream_next.branch_type;
+    assign pd_redirect.stream.ras_type = stream_next.ras_type;
+    assign pd_redirect.stream.target = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? next_pc : bundles_next[selectIdx].target;
+    assign pd_redirect.stream.size = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? stream_next.size : selectIdx;
 
     always_comb begin
         case (selectIdx)
@@ -88,6 +94,7 @@ module PreDecode(
     assign pd_ibuffer_io.inst = data_next;
     assign pd_ibuffer_io.fsqIdx = fsqIdx.idx;
     assign pd_ibuffer_io.iam = stream_next.start_addr[1: 0] != 0;
+    assign pd_ibuffer_io.shiftIdx = shiftIdx;
 
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
