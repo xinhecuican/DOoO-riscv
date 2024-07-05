@@ -31,6 +31,10 @@ module ROB(
         logic `N(5) vrd;
         logic `N(`PREG_WIDTH) prd;
         logic `N(`PREG_WIDTH) old_prd;
+`ifdef DIFFTEST
+        logic sim_trap;
+        logic [2: 0] trapCode;
+`endif
     } RobData;
 
     localparam ROB_BANK_SIZE = `ROB_SIZE / `FETCH_WIDTH;
@@ -74,6 +78,10 @@ generate
         assign rob_wdata[i].vrd = dis_io.op[i].di.rd;
         assign rob_wdata[i].prd = dis_io.prd[i];
         assign rob_wdata[i].old_prd = dis_io.old_prd[i];
+`ifdef DIFFTEST
+        assign rob_wdata[i].sim_trap = dis_io.op[i].di.sim_trap;
+        assign rob_wdata[i].trapCode = dis_io.op[i].di.imm;
+`endif
     end
 endgenerate
     MPRAM #(
@@ -396,11 +404,27 @@ generate
 endgenerate
 
     logic `N(64) cycleCnt, instrCnt;
+    logic trapValid;
+    logic `N(`COMMIT_WIDTH) trapValids;
+    logic `N($clog2(`COMMIT_WIDTH)) trapIdx;
+    logic [7: 0] trapCode;
+
+generate
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign trapValids[i] = commitBus.en[i] & robData[i].sim_trap;
+    end
+endgenerate
+    PEncoder #(`COMMIT_WIDTH) encoder_trap_idx (trapValids, trapIdx);
+    always_ff @(posedge clk)begin
+        trapValid <= |trapValids;
+        trapCode <= robData[trapIdx].trapCode;
+    end
+
     DifftestTrapEvent difftest_trap_event (
         .clock(clk),
         .coreid(0),
-        .valid(0),
-        .code(0),
+        .valid(trapValid),
+        .code(trapCode),
         .pc(pc[0]),
         .cycleCnt(cycleCnt),
         .instrCnt(instrCnt)

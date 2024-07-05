@@ -174,6 +174,9 @@ typedef struct packed {
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
     logic `N(`EXC_WIDTH) exccode;
+`ifdef DIFFTEST
+    logic sim_trap;
+`endif
 } DecodeInfo;
 
 typedef struct packed {

@@ -15,7 +15,7 @@
 `define INT_OR      `INTOP_WIDTH'b00110
 `define INT_AND     `INTOP_WIDTH'b00101
 `define INT_SL      `INTOP_WIDTH'b01000
-`define INT_SR     `INTOP_WIDTH'b01001
+`define INT_SR      `INTOP_WIDTH'b01001
 `define INT_AUIPC   `INTOP_WIDTH'b01100
 `define INT_FENCE   `INTOP_WIDTH'b00011
 
@@ -59,6 +59,7 @@
 `define OPCODE_OP       7'b0110011
 `define OPCODE_FENCE    7'b0001111
 `define OPCODE_SYSTEM   7'b1110011
+`define OPCODE_CUSTOM0  7'b0001011
 
 // funct3
 `define FUNCT_BEQ   3'b000
@@ -105,6 +106,8 @@
 `define FUNCT_CSRRSI    3'b110
 `define FUNCT_CSRRCI    3'b111
 
+`define FUNCT_SIMTRAP   3'b000
+
 // funct7
 `define FUNCT7_SRLI 7'b0000000
 `define FUNCT7_SRAI 7'b0100000
@@ -120,4 +123,7 @@
 `define FUNCT12_SRET    12'b0001_0000_0010
 `define FUNCT12_URET    12'b0000_0000_0010
 
+// simulation
+`define GOOD_TRAP   32'h0000000b
+`define BAD_TRAP    32'h0010000b
 `endif
