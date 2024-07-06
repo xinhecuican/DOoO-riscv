@@ -98,6 +98,7 @@ module LSU(
 // load
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) lmask_pre;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_PIPELINE) dis_ls_older;
+    logic `N(`LOAD_PIPELINE) lmisalign;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign lqIdxs[i].idx = load_queue_io.lqIdx.idx + i;
@@ -130,6 +131,7 @@ generate
         always_comb begin
             getMask(loadVAddr[i][1: 0], load_io.loadIssueData[i].size, lmask_pre[i]);
         end
+        MisalignDetect misalign_detect (load_io.loadIssueData[i].size, loadVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], lmisalign[i]);
     end
 endgenerate
     // load request
@@ -142,6 +144,7 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, 4) lmask, lmaskNext;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) load_issue_idx;
     logic `N(`LOAD_PIPELINE) redirect_clear_req;
+    logic `N(`LOAD_PIPELINE) lmisalign_s2;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -161,6 +164,7 @@ endgenerate
         for(int i=0; i<`LOAD_PIPELINE; i++)begin
             lptag[i] <= loadVAddr[i]`TLB_TAG_BUS & 20'h7fff;
         end
+        lmisalign_s2 <= lmisalign;
     end
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -202,6 +206,7 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_next;
 
     logic `N(`LOAD_PIPELINE) redirect_clear_s2, redirect_clear_s3;
+    logic `N(`LOAD_PIPELINE) lmisalign_s3;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
@@ -214,7 +219,7 @@ generate
         assign redirect_clear_s3[i] = backendCtrl.redirect & older;
     end
 endgenerate
-    assign rio.req_cancel_s2 = redirect_clear_s2;
+    assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2;
     assign rio.req_cancel_s3 = redirect_clear_s3 | rdata_valid;
 
     always_ff @(posedge clk)begin
@@ -223,6 +228,7 @@ endgenerate
         leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2;
         lmaskNext <= lmask;
         issue_idx_next <= load_issue_idx;
+        lmisalign_s3 <= lmisalign_s2;
     end
     assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3;
     assign load_queue_io.disNum = load_io.eqNum;
@@ -232,7 +238,7 @@ endgenerate
     assign load_queue_io.mask = lmaskNext;
     assign load_queue_io.rmask = (store_queue_fwd.mask | commit_queue_fwd.mask);
     assign load_queue_io.rdata = rdata;
-    assign load_queue_io.miss = ~rio.hit & ~rdata_valid;
+    assign load_queue_io.miss = ~rio.hit & ~rdata_valid & ~lmisalign_s3;
     assign load_queue_io.wb_valid = ~leq_valid;
     
     assign load_io.success = leq_valid;
@@ -243,10 +249,10 @@ endgenerate
     logic `N(`LOAD_PIPELINE) lmiss;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_n2;
     always_ff @(posedge clk)begin
-        fwd_data_invalid_n <= fwd_data_invalid;
+        fwd_data_invalid_n <= fwd_data_invalid  & ~lmisalign_s3;
         lreply_en <= leq_en & ~redirect_clear_s3;
         issue_idx_n2 <= issue_idx_next;
-        lmiss <= ~rio.hit & ~rdata_valid;
+        lmiss <= ~rio.hit & ~rdata_valid & ~lmisalign_s3;
     end
     assign load_io.success = lreply_en & ~fwd_data_invalid_n  & ~(lmiss & rio.full);
 generate
@@ -262,24 +268,27 @@ endgenerate
     RobIdx `N(`LOAD_PIPELINE) lrobIdx_n;
     logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) lrd_n;
     logic `ARRAY(`LOAD_PIPELINE, `XLEN) ldata_n, ldata_shift;
+    logic `ARRAY(`LOAD_PIPELINE, `EXC_WIDTH) lexccode;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
         logic wb_data_en, wb_pipeline_en;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
-        assign wb_pipeline_en = leq_en[i] & (rio.hit[i] | rdata_valid[i]) &
-                                ~fwd_data_invalid[i] & ~redirect_clear_s3[i];
+        assign wb_pipeline_en = leq_en[i] & (lmisalign_s3[i] | 
+                                ((rio.hit[i] | rdata_valid[i]) & ~fwd_data_invalid[i])) &
+                                ~redirect_clear_s3[i];
         always_ff @(posedge clk)begin
             wb_data_en <= wb_pipeline_en | load_queue_io.wbData[i].en;
             from_issue[i] <= wb_pipeline_en;
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
             ldata_n[i] <= ldata_shift[i];
+            lexccode[i] <= lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
         end
         assign lsu_wb_io.datas[i].en = wb_data_en;
         assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
         assign lsu_wb_io.datas[i].rd = from_issue[i] ? lrd_n[i] : load_queue_io.wbData[i].rd;
         assign lsu_wb_io.datas[i].res = from_issue[i] ? ldata_n[i] : load_queue_io.wbData[i].res;
-        assign lsu_wb_io.datas[i].exccode = `EXC_NONE;
+        assign lsu_wb_io.datas[i].exccode = lexccode;
         assign load_wakeup_io.wakeup_en[i] = wb_data_en;
         assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].rd;
     end
@@ -295,6 +304,7 @@ endgenerate
 
     logic `N(`STORE_PIPELINE) store_redirect_clear_req;
     logic `N(`STORE_PIPELINE) store_redirect_s2;
+    logic `N(`STORE_PIPELINE) smisalign, smisalign_s2;
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
@@ -338,10 +348,12 @@ generate
             store_issue_data[i] <= store_io.storeIssueData[i];
             sptag[i] <= storeVAddr[i]`TLB_TAG_BUS & 20'h7fff;
             storeAddrNext[i] <= storeVAddr[i];
+            smisalign_s2[i] <= smisalign[i];
         end
         always_comb begin
             getMask(storeAddrNext[i][1: 0], store_issue_data[i].size, smask[i]);
         end
+        MisalignDetect misalign_detect (store_io.storeIssueData[i].size, storeVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], smisalign[i]);
         assign spaddr[i] = {sptag[i], storeAddrNext[i][11: 0]};
     end
 
@@ -380,7 +392,7 @@ generate
         always_ff @(posedge clk)begin
             store_en_s3[i] <= store_en[i] & ~store_redirect_s2[i];
             store_robIdx_s3[i] <= store_issue_data[i].robIdx;
-            exccode_s3[i] <= `EXC_NONE;
+            exccode_s3[i] <= smisalign_s2[i] ? `EXC_SAM : `EXC_NONE;
             store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i];
             store_robIdx_s4[i] <= store_robIdx_s3[i];
             exccode_s4[i] <= exccode_s3[i];
@@ -545,6 +557,20 @@ endgenerate
         2'b01: data_o = {{`XLEN-16{~uext & half[15]}}, half};
         2'b10: data_o = {{`XLEN-32{~uext & word[31]}}, word};
         default: data_o = 0;
+        endcase
+    end
+endmodule
+
+module MisalignDetect(
+    input logic [1: 0] size,
+    input logic `N(`DCACHE_BYTE_WIDTH-1: 0) offset,
+    output misalign
+);
+    always_comb begin
+        case(size)
+        2'b10: misalign = |offset[1: 0];
+        2'b01: misalign = offset[0];
+        default: misalign = 1'b0;
         endcase
     end
 endmodule

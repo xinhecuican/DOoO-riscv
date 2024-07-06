@@ -12,6 +12,7 @@
 `define CSRID_marchid   12'hf12
 `define CSRID_mimpid    12'hf13
 `define CSRID_mhartid   12'hf14
+`define CSRID_mconfigptr 12'hf15
 `define CSRID_mstatus   12'h300
 `define CSRID_mtvec     12'h305
 `define CSRID_medeleg   12'h302

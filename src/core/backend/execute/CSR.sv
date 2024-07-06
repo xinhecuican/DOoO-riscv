@@ -34,6 +34,7 @@ module CSR(
     STATUSH mstatush;
     logic `N(`MXL) medelegh;
 `endif
+    logic `N(`MXL) mconfigptr;
 
     // superviser
     STATUS sstatus;
@@ -108,9 +109,10 @@ endgenerate                                     \
     `CSR_CMP_DEF(scause,    20,1, `CAUSE_MASK)
     `CSR_CMP_DEF(stval,     21,0, 0)
     `CSR_CMP_DEF(satp,      22,0, 0)
+    `CSR_CMP_DEF(mconfigptr,23,0, 0)
 `ifdef RV32I
-    `CSR_CMP_DEF(mstatush,  23,0, 0)
-    `CSR_CMP_DEF(medelegh,  24,0, 0)
+    `CSR_CMP_DEF(mstatush,  24,0, 0)
+    `CSR_CMP_DEF(medelegh,  25,0, 0)
 `endif
     ParallelEQ #(
         .RADIX(`CSR_NUM),
@@ -179,6 +181,7 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(scause,      0,          1, 1, `CAUSE_MASK)
     `CSR_WRITE_DEF(stval,       0,          1, 0, 0)
     `CSR_WRITE_DEF(satp,        0,          1, 0, 0)
+    `CSR_WRITE_DEF(mconfigptr   0,          0, 0, 0)
 `ifdef RV32I
     `CSR_WRITE_DEF(mstatush,    0,          1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,          1, 0, 0)

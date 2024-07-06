@@ -11,6 +11,7 @@
 `define XLEN 32
 `define XLEN_32
 `define MXL 32
+`define SV32
 `endif
 `define DATA_BYTE (`XLEN / 8)
 `define DATA_BUS `N(`XLEN)
