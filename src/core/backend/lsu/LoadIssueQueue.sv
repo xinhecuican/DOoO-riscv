@@ -5,17 +5,18 @@ interface LoadUnitIO;
     LoadIssueData `N(`LOAD_ISSUE_BANK_NUM) loadIssueData;
     logic `N($clog2(`LOAD_DIS_PORT)+1) eqNum;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx;
+    logic `N(`LOAD_ISSUE_BANK_NUM) exception;
 
     logic `N(`LOAD_DIS_PORT) dis_en;
     RobIdx `N(`LOAD_DIS_PORT) dis_rob_idx;
     LoadIdx `N(`LOAD_DIS_PORT) dis_lq_idx;
 
-    LoadReplyRequest `N(`LOAD_PIPELINE) reply_fast;
-    LoadReplyRequest `N(`LOAD_PIPELINE) reply_slow;
+    ReplyRequest `N(`LOAD_PIPELINE) reply_fast;
+    ReplyRequest `N(`LOAD_PIPELINE) reply_slow;
     logic `N(`LOAD_PIPELINE) success;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) success_idx;
 
-    modport load (output en, loadIssueData, eqNum, issue_idx, dis_en, dis_rob_idx, dis_lq_idx,
+    modport load (output en, loadIssueData, eqNum, issue_idx, dis_en, dis_rob_idx, dis_lq_idx, exception,
                   input reply_fast, reply_slow, success, success_idx);
     modport queue (input dis_en, dis_rob_idx, dis_lq_idx);
 endinterface
@@ -29,6 +30,7 @@ module LoadIssueQueue(
     IssueWakeupIO.regfile load_wakeup_io,
     WakeupBus wakeupBus,
     LoadUnitIO.load load_io,
+    DTLBLsuIO.lq tlb_lsu_io,
     BackendCtrl backendCtrl
 );
 
@@ -60,6 +62,10 @@ generate
         assign bank_io[i].reply_slow = load_io.reply_slow[i];
         assign bank_io[i].success = load_io.success[i];
         assign bank_io[i].success_idx = load_io.success_idx[i];
+        assign bank_io[i].tlb_en = tlb_lsu_io.lwb[i];
+        assign bank_io[i].tlb_exception = tlb_lsu_io.lwb_exception[i];
+        assign bank_io[i].tlb_error = tlb_lsu_io.lwb_error[i];
+        assign bank_io[i].tlb_bank_idx = tlb_lsu_io.lwb_idx[i];
         assign full[i] = bank_io[i].full;
 
         assign load_wakeup_io.en[i] = bank_io[i].reg_en;
@@ -68,6 +74,7 @@ generate
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
         assign load_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
         assign load_io.dis_lq_idx[i] = lqIdx[i];
+        assign load_io.exception[i] = bank_io[i].exception_o;
 
         LoopCompare #(`ROB_WIDTH) cmp_bigger(bank_io[i].robIdx_o, backendCtrl.redirectIdx, bigger[i]);
     end
@@ -99,13 +106,19 @@ interface LoadIssueBankIO;
     LoadIssueData data_o;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) issue_idx;
     RobIdx robIdx_o;
-    LoadReplyRequest reply_fast;
-    LoadReplyRequest reply_slow;
+    logic exception_o;
+    ReplyRequest reply_fast;
+    ReplyRequest reply_slow;
     logic success;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) success_idx;
+    logic tlb_en;
+    logic tlb_exception;
+    logic tlb_error;
+    logic `N(`LOAD_ISSUE_BANK_WIDTH) tlb_bank_idx;
 
     modport bank(input en, status, data, lqIdx, sqIdx, reply_fast, reply_slow, success, success_idx,
-                 output full, reg_en, rs1, bankNum, data_o, issue_idx, robIdx_o);
+                 tlb_en, tlb_exception, tlb_error, tlb_bank_idx,
+                 output full, reg_en, rs1, bankNum, data_o, issue_idx, robIdx_o, exception_o);
 endinterface
 
 module LoadIssueBank(
@@ -125,7 +138,7 @@ module LoadIssueBank(
     StatusBundle `N(`LOAD_ISSUE_BANK_SIZE) status_ram;
     logic `N(`LOAD_ISSUE_BANK_SIZE) free_en;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) freeIdx;
-    logic `N(`LOAD_ISSUE_BANK_SIZE) ready, issue;
+    logic `N(`LOAD_ISSUE_BANK_SIZE) ready, issue, exception;
     logic `N(`LOAD_ISSUE_BANK_SIZE) select_en;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
     LoadIssueData data_o;
@@ -196,6 +209,7 @@ endgenerate
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
         io.issue_idx <= selectIdxNext;
+        io.exception_o <= exception[selectIdxNext];
     end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -203,6 +217,7 @@ endgenerate
             en <= 0;
             io.data_o <= 0;
             issue <= 0;
+            exception <= 0;
         end
         else begin
             if(backendCtrl.redirect)begin
@@ -218,18 +233,27 @@ endgenerate
                 status_ram[freeIdx].rs1 <= io.status.rs1;
                 status_ram[freeIdx].robIdx <= io.status.robIdx;
                 issue[freeIdx] <= 1'b0;
+                exception[freeIdx] <= 1'b0;
             end
 
             if((|ready) & ~backendCtrl.redirect)begin
                 issue[selectIdx] <= 1'b1;
             end
 
-            if(io.reply_fast.en)begin
+            if(io.reply_fast.en && (io.reply_fast.reason != 2'b11))begin
                 issue[io.reply_fast.issue_idx] <= 1'b0;
             end
 
             if(io.reply_slow.en)begin
                 issue[io.reply_slow.issue_idx] <= 1'b0;
+            end
+
+            if(io.tlb_en)begin
+                issue[io.tlb_bank_idx] <= 1'b0;
+            end
+
+            if(io.tlb_en & io.tlb_exception)begin
+                exception[io.tlb_bank_idx] <= 1'b1;
             end
 
             for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin

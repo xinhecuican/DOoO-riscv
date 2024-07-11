@@ -17,7 +17,12 @@ module Decoder #(
 		32: Decoder32 decoder(in, out);
 		64: Decoder64 decoder(in, out);
 		128: Decoder128 decoder(in, out);
-		default: Decoder2 decoder(in, out);
+		default: begin
+			Decoder2 decoder(in, out);
+			always_comb begin
+				$display("unimpl Decoder");
+			end
+		end
 		endcase
 	endgenerate
 endmodule
@@ -37,7 +42,12 @@ module Encoder #(
 		16: Encoder16 encoder(in, out);
 		32: Encoder32 encoder(in, out);
 		64: Encoder64 encoder(in, out);
-		default: Encoder2 encoder(in, out);
+		default: begin
+			Encoder2 encoder(in, out);
+			always_comb begin
+				$display("unimpl Encoder");
+			end
+		end
 		endcase
 	endgenerate
 endmodule
@@ -52,12 +62,18 @@ module PEncoder #(
 
 generate;
 	case(RADIX)
+	1: PEncoder1 pencoder(in, out);
 	2: PEncoder2 pencoder(in, out);
 	4: PEncoder4 pencoder(in, out);
 	8: PEncoder8 pencoder(in, out);
 	16: PEncoder16 pencoder(in, out);
 	32: PEncoder32 pencoder(in, out);
-	default: PEncoder2 pencoder(in, out);
+	default: begin
+		PEncoder2 pencoder(in, out);
+		always_comb begin
+			$display("unimpl PEncoder");
+		end
+	end
 	endcase
 endgenerate
 
@@ -78,7 +94,12 @@ generate;
 	8: PREncoder8 pencoder(in, out);
 	16: PREncoder16 pencoder(in, out);
 	32: PREncoder32 pencoder(in, out);
-	default: PREncoder2 pencoder(in, out);
+	default: begin
+		PREncoder2 pencoder(in, out);
+		always_comb begin
+			$display("unimpl PREncoder");
+		end
+	end
 	endcase
 endgenerate
 
@@ -164,7 +185,12 @@ generate
 	case(RADIX)
 	2: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
 	4: Sort4 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
-	default: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
+	default: begin
+		Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
+		always_comb begin
+			$display("unimpl Sort");
+		end
+	end
 	endcase
 endgenerate
 endmodule
@@ -257,6 +283,11 @@ generate
 		assign sub_res = {WIDTH{sub[WIDTH]}} ^ sub[WIDTH-1: 0];
 		assign out = dir ? add_res : sub_res;
 	end
+	else begin
+		always_comb begin
+			$display("unimpl UpdateCounter");
+		end
+	end
 endgenerate
 endmodule
 
@@ -274,7 +305,12 @@ generate
 	8: MaskGen8 mask_gen(in, out);
 	16: MaskGen16 mask_gen(in, out);
 	32: MaskGen32 mask_gen(in, out);
-	default MaskGen2 mask_gen(in, out);
+	default: begin
+		MaskGen2 mask_gen(in, out);
+		always_comb begin
+			$display("unimpl MaskGen");
+		end
+	end
 	endcase
 endgenerate
 endmodule
@@ -327,7 +363,36 @@ generate
 	case(WIDTH)
 	4: CalValidNum4 #($clog2(WIDTH)) calValidNum(en, out);
 	2: CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
-	default: CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
+	default: begin
+		CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
+		always_comb begin
+			$display("unimpl CalValidNum");
+		end
+	end
+	endcase
+endgenerate
+endmodule
+
+// last data has highest priority
+module Arbiter #(
+	parameter WIDTH=2,
+	parameter DATA_WIDTH=4
+)(
+	input logic [WIDTH-1: 0] valid,
+	input logic [WIDTH-1: 0][DATA_WIDTH-1: 0] data,
+	output logic [WIDTH-1: 0] ready,
+	output logic valid_o,
+	output logic [DATA_WIDTH-1: 0] data_o
+);
+generate
+	case(WIDTH)
+	2: Arbiter2 #(WIDTH, DATA_WIDTH) arbiter (valid, data, ready, valid_o, data_o);
+	3: Arbiter3 #(WIDTH, DATA_WIDTH) arbiter (valid, data, ready, valid_o, data_o);
+	default: begin
+		always_comb begin
+			$display("unimpl Arbiter");
+		end
+	end
 	endcase
 endgenerate
 endmodule

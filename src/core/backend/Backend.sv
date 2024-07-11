@@ -6,7 +6,11 @@ module Backend(
     IfuBackendIO.backend ifu_backend_io,
     FsqBackendIO.backend fsq_back_io,
     CommitBus.rob commitBus_out,
-    DCacheAxi.cache axi_io
+    DCacheAxi.cache axi_io,
+    CsrTlbIO.csr csr_itlb_io,
+    CsrL2IO.csr csr_l2_io,
+    TlbL2IO.tlb dtlb_io,
+    PTWRequest.cache ptw_request
 );
     DecodeRenameIO dec_rename_io();
     RenameDisIO rename_dis_io();
@@ -31,6 +35,8 @@ module Backend(
     RobRedirectIO rob_redirect_io();
     WriteBackIO #(`ALU_SIZE) alu_wb_io();
     WriteBackIO #(`LSU_SIZE) lsu_wb_io();
+    CsrTlbIO csr_ltlb_io();
+    CsrTlbIO csr_stlb_io();
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
     logic rename_full, rob_full;
     logic `N(`VADDR_SIZE) exc_pc;

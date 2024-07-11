@@ -13,6 +13,10 @@ interface DCacheMissIO;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask;
     logic wfull;
 
+    logic ptw_req;
+    logic ptw_refill;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) ptw_refill_data;
+
     logic req;
     logic `N(`VADDR_SIZE) req_addr;
     logic req_success;
@@ -30,8 +34,8 @@ interface DCacheMissIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
     modport miss (input ren, raddr, lqIdx, robIdx, req_success, write_ready, replaceWay, refill_valid,
-                        wen, waddr, wdata, wmask,
-                  output rfull, req, req_addr, wfull, refill_en, refillWay, refillAddr, refillData, lq_en, lqData, lqIdx_o);
+                        wen, waddr, wdata, wmask, ptw_req,
+                  output rfull, req, req_addr, wfull, refill_en, refillWay, refillAddr, refillData, lq_en, lqData, lqIdx_o, ptw_refill, ptw_refill_data);
 endinterface
 
 module DCacheMiss(
@@ -53,6 +57,7 @@ module DCacheMiss(
         logic `N(`DCACHE_BANK_WIDTH) offset;
     } MSHREntry;
     logic `N(`DCACHE_BLOCK_SIZE) addr `N(`DCACHE_MISS_SIZE);
+    logic `N(`DCACHE_MISS_SIZE) ptw_en;
     MSHREntry mshr `N(`DCACHE_MSHR_SIZE);
     logic `N(`DCACHE_MSHR_SIZE) mshr_en;
     logic `N(`DCACHE_MISS_SIZE) en, we, dataValid, refilled;
@@ -67,7 +72,7 @@ module DCacheMiss(
     logic `N(`LOAD_PIPELINE+1) free_en;
     logic `N($clog2(`LOAD_PIPELINE+1)+1) free_num;
 
-    logic req_start, req_next;
+    logic req_start, req_next, req_ptw;
     logic req_last, rlast;
     logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `XLEN) cache_eq_data;
 
@@ -91,7 +96,7 @@ generate
         assign ridx[i] = rhit_combine[i] ? rhit_idx[i] : freeIdx[i];
 
         always_ff @(posedge clk)begin
-            io.rfull[i] <= io.ren[i] & ((~mshr_remain_valid[i]) | (~remain_valid[i])) & (~rhit_combine[i]);
+            io.rfull[i] <= io.ren[i] & ((~(mshr_remain_valid[i]) & ~io.ptw_req) | (~remain_valid[i])) & (~rhit_combine[i]);
         end
 
         assign free_en[i] = io.ren[i] & (mshr_remain_valid[i] & remain_valid[i] & ~rhit_combine[i]);
@@ -145,6 +150,8 @@ endgenerate
     assign io.refillWay = way[head];
     assign io.refillAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign io.refillData = data[head];
+    assign io.ptw_refill = req_last & req_ptw;
+    assign io.ptw_refill_data = cache_eq_data;
 
 // mshr refill
     logic `N(`DCACHE_MSHR_SIZE) mshr_hit;
@@ -194,6 +201,7 @@ endgenerate
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             en <= 0;
+            ptw_en <= 0;
             dataValid <= 0;
             we <= 0;
             refilled <= 0;
@@ -210,13 +218,13 @@ endgenerate
             remain_count <= remain_count + (refilled[mshr_head] & ~(|mshr_hit)) - free_num;
 
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
-                if(io.ren[i] & (mshr_remain_valid[i] & remain_valid[i] & ~rhit_combine[i]))begin
+                if(io.ren[i] & ((mshr_remain_valid[i] | io.ptw_req) & remain_valid[i] & ~rhit_combine[i]))begin
                     en[freeIdx[i]] <= 1'b1;
                     addr[freeIdx[i]] <= io.raddr[i]`DCACHE_BLOCK_BUS;
                     dataValid[freeIdx[i]] <= 1'b0;
                 end
 
-                if(io.ren[i] & (mshr_remain_valid[i] & remain_valid[i] | rhit_combine[i]))begin
+                if(io.ren[i] & ~io.ptw_req & (mshr_remain_valid[i] & remain_valid[i] | rhit_combine[i]))begin
                     mshr_en[mshrFreeIdx[i]] <= 1'b1;
                     mshr[mshrFreeIdx[i]].robIdx <= io.robIdx[i];
                     mshr[mshrFreeIdx[i]].missIdx <= ridx[i];
@@ -233,6 +241,10 @@ endgenerate
 
             if(redirect_n)begin
                 mshr_en <= redirect_valid_n;
+            end
+
+            if(io.ptw_req & (remain_valid[0] & ~rhit_combine[0]))begin
+                ptw_en[freeIdx[0]] <= 1'b1;
             end
 
             if(io.wen & ~rlast & ~req_last & (write_remain_valid & ~whit_combine))begin
@@ -294,6 +306,7 @@ endgenerate
         if(rst == `RST)begin
             req_start <= 1'b0;
             req_cache <= 1'b0;
+            req_ptw <= 1'b0;
             cacheIdx <= 0;
             way <= '{default: 0};
         end
@@ -313,7 +326,12 @@ endgenerate
 
             if(req_next & io.req_success)begin
                 req_cache <= 1'b1;
+                req_ptw <= ptw_en[head];
                 way[head] <= io.replaceWay;
+            end
+
+            if(req_last)begin
+                req_ptw <= 1'b0;
             end
 
             if(r_axi_io.mar.valid & r_axi_io.sar.ready)begin

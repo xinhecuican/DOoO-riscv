@@ -166,6 +166,13 @@ module Encoder64(
 	assign out[3: 0] = out1 | out2 | out3 | out4;
 endmodule
 
+module PEncoder1(
+	input logic in,
+	output logic out
+);
+	assign out = 0;
+endmodule
+
 module PEncoder2(
 	input logic [1: 0] in,
 	output logic [0: 0] out
@@ -403,4 +410,38 @@ module CalValidNum4 #(
 	assign out[3] = en[0] & en[1] & en[2] ? 3 :
 					en[0] & en[1] | en[0] & en[2] | en[1] & en[2] ? 2 :
 					en[0] | en[1] | en[2] ? 1 : 0;
+endmodule
+
+module Arbiter2 #(
+	parameter WIDTH=2,
+	parameter DATA_WIDTH=4
+)(
+	input logic [WIDTH-1: 0] valid,
+	input logic [WIDTH-1: 0][DATA_WIDTH-1: 0] data,
+	output logic [WIDTH-1: 0] ready,
+	output logic valid_o,
+	output logic [DATA_WIDTH-1: 0] data_o
+);
+	assign ready[0] = ~valid[1];
+	assign ready[1] = 1'b1;
+	assign valid_o = |valid;
+	assign data_o = valid[1] ? data[1] : data[0];
+endmodule
+
+module Arbiter3 #(
+	parameter WIDTH=2,
+	parameter DATA_WIDTH=4
+)(
+	input logic [WIDTH-1: 0] valid,
+	input logic [WIDTH-1: 0][DATA_WIDTH-1: 0] data,
+	output logic [WIDTH-1: 0] ready,
+	output logic valid_o,
+	output logic [DATA_WIDTH-1: 0] data_o
+);
+	assign ready[0] = ~valid[1] & ~valid[2];
+	assign ready[1] = ~valid[2];
+	assign ready[2] = 1'b1;
+	assign valid_o = |valid;
+	assign data_o = valid[2] ? data[2] :
+					valid[1] ? data[1] : data[0];
 endmodule

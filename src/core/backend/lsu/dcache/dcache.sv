@@ -6,6 +6,7 @@ module DCache(
     DCacheLoadIO.dcache rio,
     DCacheStoreIO.dcache wio,
     DCacheAxi.cache axi_io,
+    PTWRequest.cache ptw_io,
     BackendCtrl backendCtrl
 );
 
@@ -33,6 +34,9 @@ module DCache(
     logic `N(`DCACHE_WAY_WIDTH) w_wayIdx;
     logic replace_wb_en;
     logic `N(`LOAD_PIPELINE) write_valid;
+
+    logic ptw_req, ptw_req_n;
+    logic `N(`VADDR_SIZE) ptw_addr;
 
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
@@ -79,12 +83,13 @@ generate
             .rst(rst),
             .io(way_io[i])
         );
-        assign way_io[i].tagv_en = rio.req;
-        assign way_io[i].tagv_index = loadIdx;
-        assign way_io[i].en = loadBank;
+        assign way_io[i].tagv_en = rio.req | ptw_io.req;
+        assign way_io[i].tagv_index = loadIdx | ptw_io.paddr`DCACHE_SET_BUS;
+        assign way_io[i].en = loadBank | {`DCACHE_BANK{replace_wb_en | ptw_io.req}};
         for(genvar j=0; j<`DCACHE_BANK; j++)begin
             /* UNPARAM */
             assign way_io[i].index[j] = replace_wb_en ? waddr_n`DCACHE_SET_BUS :
+                                        ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
                                         {`DCACHE_SET_WIDTH{loadBankDecode[0][j] & rio.req[0]}} & loadIdx[0] |
                                         {`DCACHE_SET_WIDTH{loadBankDecode[1][j] & rio.req[1] & ~req_bank_conflict}} & loadIdx[1];
         end
@@ -111,7 +116,9 @@ endgenerate
     // load conflict detect
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign write_valid[i] = replace_wb_en | wreq_n & whit & (|wmask[rio.vaddr[i]`DCACHE_BANK_BUS]);
+        assign write_valid[i] = replace_wb_en |
+                                ptw_io.req |
+                                wreq_n & whit & (|wmask[rio.vaddr[i]`DCACHE_BANK_BUS]);
     end
 endgenerate
 
@@ -126,12 +133,12 @@ endgenerate
         lqIdx <= rio.lqIdx;
         robIdx <= rio.robIdx;
         for(int i=0; i<`LOAD_PIPELINE; i++)begin
-            miss_addr[i] <= {rio.ptag[i], rvaddr[i][11: 0]};
+            miss_addr[i] <= ptw_req ? ptw_addr : {rio.ptag[i], rvaddr[i][11: 0]};
         end
     end
     assign rio.full = miss_io.rfull;
 
-    assign miss_io.ren = r_req_s3 & ~rio.hit & ~rio.req_cancel_s3;
+    assign miss_io.ren = r_req_s3 & ~rio.hit & ~rio.req_cancel_s3 | ptw_req_n;
     assign miss_io.lqIdx = lqIdx;
     assign miss_io.robIdx = robIdx;
     assign miss_io.raddr = miss_addr;
@@ -235,4 +242,29 @@ endgenerate
     // refill
     assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit & miss_io.refillWay))) & ~miss_io.req;
 
+// ptw
+    logic `N(`DCACHE_TAG) ptw_tag;
+    logic `N(`DCACHE_WAY) ptw_way_hit;
+    logic `N(`DCACHE_WAY_WIDTH) ptw_hit_way;
+
+    always_ff @(posedge clk)begin
+        ptw_tag <= ptw_io.paddr`DCACHE_TAG_BUS;
+        ptw_req <= ptw_io.req & ~replace_wb_en;
+        ptw_req_n <= ptw_req;
+    end
+
+    assign miss_io.ptw_req = ptw_req_n;
+
+generate
+    for(genvar j=0; j<`DCACHE_WAY; j++)begin
+        assign ptw_way_hit[j] = way_io[j].tagv[0][0] & (way_io[j].tagv[0][`DCACHE_TAG: 1] == ptw_tag);
+    end
+endgenerate
+    Encoder #(`DCACHE_WAY) encoder_ptw_hit (ptw_way_hit, ptw_hit_way);
+    assign ptw_io.ready = ~replace_wb_en;
+    assign ptw_io.full = ptw_req_n & miss_io.rfull[0];
+    always_ff @(posedge clk)begin
+        ptw_io.data_valid <= miss_io.ptw_refill | (ptw_req & (|ptw_way_hit));
+        ptw_io.rdata <= miss_io.ptw_refill ? miss_io.ptw_refill_data : rdata[ptw_hit_way];
+    end
 endmodule

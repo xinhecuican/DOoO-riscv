@@ -9,6 +9,10 @@ module CSR(
     IssueCSRIO.csr issue_csr_io,
     WriteBackIO.fu csr_wb_io,
     BackendCtrl backendCtrl,
+    CsrTlbIO.csr csr_itlb_io,
+    CsrTlbIO.csr csr_ltlb_io,
+    CsrTlbIO.csr csr_stlb_io,
+    CsrL2IO.csr  csr_l2_io,
     output logic `N(`VADDR_SIZE) target_pc
 );
     logic `N(2) mode;
@@ -181,7 +185,7 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(scause,      0,          1, 1, `CAUSE_MASK)
     `CSR_WRITE_DEF(stval,       0,          1, 0, 0)
     `CSR_WRITE_DEF(satp,        0,          1, 0, 0)
-    `CSR_WRITE_DEF(mconfigptr   0,          0, 0, 0)
+    `CSR_WRITE_DEF(mconfigptr,  0,          0, 0, 0)
 `ifdef RV32I
     `CSR_WRITE_DEF(mstatush,    0,          1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,          1, 0, 0)
@@ -256,6 +260,38 @@ endgenerate                                                             \
                 mode <= mstatus.mpp;
             end
         end
+    end
+
+// tlb
+`define TLB_ASSIGN(name) \
+    always_ff @(posedge clk)begin \
+        if((mode == 2'b11) & mstatus.mprv)begin \
+            name.mode <= mstatus.mpp; \
+            name.sum <= mstatus.sum; \
+        end \
+        else begin \
+            name.mode <= mode; \
+            name.sum <= sstatus.sum; \
+        end \
+        name.asid <= satp.asid; \
+        name.satp_mode <= satp.mode; \
+    end \
+
+    `TLB_ASSIGN(csr_itlb_io)
+    `TLB_ASSIGN(csr_ltlb_io)
+    `TLB_ASSIGN(csr_stlb_io)
+    always_ff @(posedge clk)begin
+        if((mode == 2'b11) & mstatus.mprv)begin
+            csr_l2_io.mode <= mstatus.mpp;
+            csr_l2_io.sum <= mstatus.sum;
+            csr_l2_io.mxr <= mstatus.mxr;
+        end
+        else begin
+            csr_l2_io.mode <= mode;
+            csr_l2_io.sum <= sstatus.sum;
+            csr_l2_io.mxr <= sstatus.mxr;
+        end
+        csr_l2_io.ppn <= satp.ppn;
     end
 
 `ifdef DIFFTEST

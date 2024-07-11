@@ -40,6 +40,10 @@ module LSU(
     BackendCtrl backendCtrl,
     DCacheAxi.cache axi_io,
     BackendRedirectIO.mem redirect_io,
+    CsrTlbIO.tlb csr_ltlb_io,
+    CsrTlbIO.tlb csr_stlb_io,
+    PTWRequest.cache ptw_request,
+    TlbL2IO.tlb dtlb_io,
     output StoreWBData `N(`STORE_PIPELINE) storeWBData
 );
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr, storeVAddr;
@@ -62,6 +66,7 @@ module LSU(
     LoadForwardIO store_queue_fwd();
     LoadForwardIO commit_queue_fwd();
     IssueWakeupIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) li_w_io();
+    DTLBLsuIO tlb_lsu_io();
 
     LoadIssueQueue load_issue_queue(
         .load_wakeup_io(li_w_io),
@@ -69,7 +74,7 @@ module LSU(
         .sqIdx(l_sqIdxs),
         .*
     );
-    DCache dcache(.*);
+    DCache dcache(.*, .ptw_io(ptw_request));
     LoadQueue load_queue(.*, .io(load_queue_io));
     StoreIssueQueue store_issue_queue(
         .*,
@@ -90,6 +95,7 @@ module LSU(
         .loadFwd(commit_queue_fwd)
     );
     ViolationDetect violation_detect(.*, .io(violation_io));
+    DTLB dtlb(.*, .tlb_l2_io(dtlb_io));
 
     assign load_wakeup_io.en = li_w_io.en;
     assign load_wakeup_io.preg = li_w_io.preg;
@@ -140,31 +146,37 @@ endgenerate
 
     // tlb
     logic `ARRAY(`LOAD_PIPELINE, `TLB_TAG) lptag;
-    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lpaddr, loadAddrNext;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) lpaddr;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadAddrNext;
     logic `ARRAY(`LOAD_PIPELINE, 4) lmask, lmaskNext;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) load_issue_idx;
     logic `N(`LOAD_PIPELINE) redirect_clear_req;
     logic `N(`LOAD_PIPELINE) lmisalign_s2;
+    logic `N(`LOAD_PIPELINE) tlb_exception_s2, tlb_exception_s2_pre;
+
+    assign tlb_lsu_io.lreq = load_io.en & ~load_io.exception;
+    assign tlb_lsu_io.lidx = load_io.issue_idx;
+    assign tlb_lsu_io.laddr = loadVAddr;
+    assign tlb_lsu_io.lreq_cancel = lmisalign_s2;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
         LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_io.loadIssueData[i].robIdx, older);
         assign redirect_clear_req[i] = backendCtrl.redirect & older;
+        assign lptag = tlb_lsu_io.lpaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];
     end
 endgenerate
     assign rio.req_cancel = redirect_clear_req;
-
+    assign tlb_exception_s2 = tlb_lsu_io.lexception | tlb_exception_s2_pre;
     always_ff @(posedge clk)begin
         loadAddrNext <= loadVAddr;
         load_issue_data <= load_io.loadIssueData;
         lmask <= lmask_pre;
         load_en <= load_io.en & ~redirect_clear_req;
         load_issue_idx <= load_io.issue_idx;
-        for(int i=0; i<`LOAD_PIPELINE; i++)begin
-            lptag[i] <= loadVAddr[i]`TLB_TAG_BUS & 20'h7fff;
-        end
         lmisalign_s2 <= lmisalign;
+        tlb_exception_s2_pre <= load_io.exception;
     end
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -178,9 +190,9 @@ endgenerate
     // reply fast
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign load_io.reply_fast[i].en = load_en[i] & rio.conflict[i];
+        assign load_io.reply_fast[i].en = load_en[i] & rio.conflict[i] | tlb_lsu_io.lmiss[i];
         assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
-        assign load_io.reply_fast[i].reason = 2'b00;
+        assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] ? 2'b11 : 2'b00;
     end
 endgenerate
 
@@ -201,12 +213,13 @@ endgenerate
 
     // load enqueue
     LoadIssueData `N(`LOAD_PIPELINE) leq_data;
-    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lpaddrNext;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) lpaddrNext;
     logic `N(`LOAD_PIPELINE) leq_en, leq_valid;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_next;
 
     logic `N(`LOAD_PIPELINE) redirect_clear_s2, redirect_clear_s3;
     logic `N(`LOAD_PIPELINE) lmisalign_s3;
+    logic `N(`LOAD_PIPELINE) tlb_exception_s3;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
@@ -219,16 +232,17 @@ generate
         assign redirect_clear_s3[i] = backendCtrl.redirect & older;
     end
 endgenerate
-    assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2;
+    assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2 | tlb_exception_s2;
     assign rio.req_cancel_s3 = redirect_clear_s3 | rdata_valid;
 
     always_ff @(posedge clk)begin
         lpaddrNext <= lpaddr;
         leq_data <= load_issue_data;
-        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2;
+        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2 & ~tlb_lsu_io.lmiss;
         lmaskNext <= lmask;
         issue_idx_next <= load_issue_idx;
         lmisalign_s3 <= lmisalign_s2;
+        tlb_exception_s3 <= tlb_exception_s2;
     end
     assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3;
     assign load_queue_io.disNum = load_io.eqNum;
@@ -238,28 +252,26 @@ endgenerate
     assign load_queue_io.mask = lmaskNext;
     assign load_queue_io.rmask = (store_queue_fwd.mask | commit_queue_fwd.mask);
     assign load_queue_io.rdata = rdata;
-    assign load_queue_io.miss = ~rio.hit & ~rdata_valid & ~lmisalign_s3;
+    assign load_queue_io.miss = ~rio.hit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
     assign load_queue_io.wb_valid = ~leq_valid;
-    
-    assign load_io.success = leq_valid;
-    assign load_io.success_idx = issue_idx_next;
 
     // reply slow
     logic `N(`LOAD_PIPELINE) fwd_data_invalid_n, lreply_en;
     logic `N(`LOAD_PIPELINE) lmiss;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_n2;
     always_ff @(posedge clk)begin
-        fwd_data_invalid_n <= fwd_data_invalid  & ~lmisalign_s3;
+        fwd_data_invalid_n <= fwd_data_invalid  & ~lmisalign_s3 & ~tlb_exception_s3;
         lreply_en <= leq_en & ~redirect_clear_s3;
         issue_idx_n2 <= issue_idx_next;
-        lmiss <= ~rio.hit & ~rdata_valid & ~lmisalign_s3;
+        lmiss <= ~rio.hit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
     end
     assign load_io.success = lreply_en & ~fwd_data_invalid_n  & ~(lmiss & rio.full);
+    assign load_io.success_idx = issue_idx_n2;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i]));
+        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i])) | tlb_lsu_io.lcancel[i];
         assign load_io.reply_slow[i].issue_idx = issue_idx_n2[i];
-        assign load_io.reply_slow[i].reason = rio.full ? 2'b10 : 2'b01;
+        assign load_io.reply_slow[i].reason = fwd_data_invalid_n ? 2'b10 : 2'b00;
     end
 endgenerate
     
@@ -273,7 +285,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
         logic wb_data_en, wb_pipeline_en;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
-        assign wb_pipeline_en = leq_en[i] & (lmisalign_s3[i] | 
+        assign wb_pipeline_en = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3 | 
                                 ((rio.hit[i] | rdata_valid[i]) & ~fwd_data_invalid[i])) &
                                 ~redirect_clear_s3[i];
         always_ff @(posedge clk)begin
@@ -282,7 +294,8 @@ generate
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
             ldata_n[i] <= ldata_shift[i];
-            lexccode[i] <= lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
+            lexccode[i] <= tlb_exception_s3[i] ? `EXC_LPF : 
+                           lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
         end
         assign lsu_wb_io.datas[i].en = wb_data_en;
         assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
@@ -296,15 +309,20 @@ endgenerate
 
 // store
     logic `ARRAY(`STORE_PIPELINE, `TLB_TAG) sptag;
-    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) spaddr, storeAddrNext;
+    logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE) spaddr;
+    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) storeAddrNext;
     logic `ARRAY(`STORE_PIPELINE, 4) smask;
     logic `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) dis_sl_older;
     logic `N(`STORE_PIPELINE) store_en;
     StoreIssueData `N(`STORE_PIPELINE) store_issue_data;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx;
 
     logic `N(`STORE_PIPELINE) store_redirect_clear_req;
     logic `N(`STORE_PIPELINE) store_redirect_s2;
     logic `N(`STORE_PIPELINE) smisalign, smisalign_s2;
+    logic `N(`STORE_PIPELINE) stlb_exception, stlb_exception_s2;
+    logic `N(`STORE_PIPELINE) stlb_miss;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s2;
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
@@ -343,12 +361,14 @@ generate
             .data(store_wakeup_io.data[i]),
             .addr(storeVAddr[i])
         );
+        assign sptag[i] = tlb_lsu_io.spaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];
         always_ff @(posedge clk)begin
             store_en[i] <= store_io.en[i] & ~store_redirect_clear_req;
             store_issue_data[i] <= store_io.storeIssueData[i];
-            sptag[i] <= storeVAddr[i]`TLB_TAG_BUS & 20'h7fff;
             storeAddrNext[i] <= storeVAddr[i];
             smisalign_s2[i] <= smisalign[i];
+            stlb_exception[i] <= store_io.exception[i];
+            sissue_idx_s2[i] <= sissue_idx[i];
         end
         always_comb begin
             getMask(storeAddrNext[i][1: 0], store_issue_data[i].size, smask[i]);
@@ -357,6 +377,8 @@ generate
         assign spaddr[i] = {sptag[i], storeAddrNext[i][11: 0]};
     end
 
+    assign stlb_exception_s2 = stlb_exception | tlb_lsu_io.sexception;
+
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic older;
         LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_issue_data[i].robIdx, older);
@@ -364,8 +386,15 @@ generate
     end
 endgenerate
 
+    assign sissue_idx = store_io.issue_idx;
+    assign tlb_lsu_io.sreq = store_io.en & ~store_io.exception;
+    assign tlb_lsu_io.sreq_cancel = smisalign_s2;
+    assign tlb_lsu_io.sidx = sissue_idx;
+    assign tlb_lsu_io.saddr = storeVAddr;
+
     //store enqueue
-    assign store_queue_io.en = store_en & ~store_redirect_s2;
+    assign stlb_miss = tlb_lsu_io.smiss;
+    assign store_queue_io.en = store_en & ~store_redirect_s2 & ~stlb_miss;
     assign store_queue_io.data = store_issue_data;
     assign store_queue_io.paddr = spaddr;
     assign store_queue_io.mask = smask;
@@ -376,10 +405,15 @@ endgenerate
     RobIdx `N(`STORE_PIPELINE) store_robIdx_s3;
     logic `ARRAY(`STORE_PIPELINE, `EXC_WIDTH) exccode_s3;
     logic `N(`STORE_PIPELINE) store_redirect_s3;
+    logic `N(`STORE_PIPELINE) stlb_miss_s3;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s3;
     logic `N(`STORE_PIPELINE) store_en_s4;
     RobIdx `N(`STORE_PIPELINE) store_robIdx_s4;
     logic `ARRAY(`STORE_PIPELINE, `EXC_WIDTH) exccode_s4;
     logic `N(`STORE_PIPELINE) store_redirect_s4;
+    logic `N(`STORE_PIPELINE) stlb_miss_s4;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s4;
+
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic bigger;
@@ -392,15 +426,30 @@ generate
         always_ff @(posedge clk)begin
             store_en_s3[i] <= store_en[i] & ~store_redirect_s2[i];
             store_robIdx_s3[i] <= store_issue_data[i].robIdx;
-            exccode_s3[i] <= smisalign_s2[i] ? `EXC_SAM : `EXC_NONE;
+            exccode_s3[i] <= tlb_exception_s2[i] ? `EXC_SPF: 
+                             smisalign_s2[i] ? `EXC_SAM : `EXC_NONE;
+            stlb_miss_s3[i] <= stlb_miss[i];
+            sissue_idx_s3[i] <= sissue_idx_s2[i];
             store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i];
             store_robIdx_s4[i] <= store_robIdx_s3[i];
             exccode_s4[i] <= exccode_s3[i];
+            stlb_miss_s4[i] <= stlb_miss_s3[i];
+            sissue_idx_s4[i] <= sissue_idx_s3[i];
 
-            storeWBData[i].en <= store_en_s4[i] & ~store_redirect_s4[i];
+            storeWBData[i].en <= store_en_s4[i] & ~store_redirect_s4[i] & ~stlb_miss_s4[i];
             storeWBData[i].robIdx <= store_robIdx_s4[i];
             storeWBData[i].exccode <= exccode_s4[i];
         end
+    end
+endgenerate
+
+    assign store_io.success = store_en_s4 & ~stlb_miss_s4;
+    assign store_io.success_idx = sissue_idx_s4;
+generate
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        assign store_io.reply[i].en = store_en_s4[i] & (stlb_miss_s4[i] | tlb_lsu_io.scancel[i]);
+        assign store_io.reply[i].idx = sissue_idx_s4;
+        assign store_io.reply[i].reason = tlb_lsu_io.scancel[i] ? 2'b00 : 2'b11;
     end
 endgenerate
 
@@ -510,7 +559,7 @@ module ViolationCompare(
 );
     logic older, conflict;
     LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older);
-    assign conflict = (cmp1.addr[`VADDR_SIZE-1: 2] == cmp2.addr[`VADDR_SIZE-1: 2]) &&
+    assign conflict = (cmp1.addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] == cmp2.addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH]) &&
                       (|(cmp1.mask & cmp2.mask));
     assign out.addr = cmp2.addr;
     assign out.mask = cmp2.mask;
@@ -563,7 +612,7 @@ endmodule
 
 module MisalignDetect(
     input logic [1: 0] size,
-    input logic `N(`DCACHE_BYTE_WIDTH-1: 0) offset,
+    input logic `N(`DCACHE_BYTE_WIDTH) offset,
     output misalign
 );
     always_comb begin

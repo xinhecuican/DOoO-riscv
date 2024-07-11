@@ -133,13 +133,14 @@ endinterface
 
 interface CachePreDecodeIO;
     logic `N(`BLOCK_INST_SIZE) en;
+    logic `N(`BLOCK_INST_SIZE) exception;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
     FetchStream stream;
     FsqIdx fsqIdx;
     logic `N(`PREDICTION_WIDTH+1) shiftIdx;
 
-    modport cache (output en, data, stream, fsqIdx, shiftIdx);
-    modport pd (input en, data, stream, fsqIdx, shiftIdx);
+    modport cache (output en, exception, data, stream, fsqIdx, shiftIdx);
+    modport pd (input en, exception, data, stream, fsqIdx, shiftIdx);
 endinterface
 
 interface ICacheAxi;
@@ -156,7 +157,7 @@ interface ReplaceIO #(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
     parameter READ_PORT = 1,
-    parameter WAY_WIDTH = $clog2(WAY_NUM),
+    parameter WAY_WIDTH = WAY_NUM <= 1 ? 1 : $clog2(WAY_NUM),
     parameter ADDR_WIDTH = DEPTH <= 1 ? 1 : $clog2(DEPTH)
 );
     logic `N(READ_PORT) hit_en;
@@ -180,14 +181,15 @@ endinterface
 
 interface PreDecodeIBufferIO;
     logic `N(`BLOCK_INST_SIZE) en;
+    logic `N(`BLOCK_INST_SIZE) ipf;
     logic `N($clog2(`BLOCK_INST_SIZE)+1) num;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) inst;
     logic iam; // for exception, instruction address misaligned
     logic `N(`FSQ_WIDTH) fsqIdx;
     logic `N(`PREDICTION_WIDTH+1) shiftIdx;
 
-    modport predecode(output en, num, inst, iam, fsqIdx, shiftIdx);
-    modport instbuffer(input en, num, inst, iam, fsqIdx, shiftIdx);
+    modport predecode(output en, ipf, num, inst, iam, fsqIdx, shiftIdx);
+    modport instbuffer(input en, ipf, num, inst, iam, fsqIdx, shiftIdx);
 endinterface
 
 interface IfuBackendIO;
@@ -451,7 +453,7 @@ interface DCacheLoadIO;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) vaddr;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
     RobIdx `N(`LOAD_PIPELINE) robIdx;
-    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) ptag;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) ptag;
 
     logic `N(`LOAD_PIPELINE) hit;
     logic `N(`LOAD_PIPELINE) conflict;
@@ -469,7 +471,7 @@ endinterface
 interface DCacheStoreIO;
     logic req;
     logic `N(`STORE_COMMIT_WIDTH) scIdx;
-    logic `N(`VADDR_SIZE) paddr;
+    logic `N(`PADDR_SIZE) paddr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) data;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) mask;
 
@@ -492,7 +494,7 @@ endinterface
 
 interface StoreCommitIO;
     logic `N(`STORE_PIPELINE) en;
-    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE-2) addr;
+    logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE-`DCACHE_BYTE_WIDTH) addr;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) mask;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BITS) data;
 
@@ -518,6 +520,126 @@ interface DCacheAxi;
     modport replace(output maw, mw, mb, input saw, sw, sb);
     modport miss(output mar, mr, input sar, sr);
     modport axi(input mar, mr, maw, mw, mb, output sar, sr, saw, sw, sb);
+endinterface
+
+interface ITLBCacheIO;
+    logic `N(2) req;
+    logic `ARRAY(2, `VADDR_SIZE) vaddr;
+    logic req_cancel;
+
+    logic miss;
+    logic `N(2) exception;
+    logic `ARRAY(2, `PADDR_SIZE) paddr;
+
+    modport tlb(input req, vaddr, req_cancel, output miss, exception, paddr);
+    modport cache(output req, vaddr, req_cancel, input miss, exception, paddr);
+endinterface
+
+interface DTLBLsuIO;
+    logic `N(`LOAD_PIPELINE) lreq;
+    logic `N(`LOAD_PIPELINE) lreq_cancel;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lidx;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) laddr;
+    
+    logic `N(`LOAD_PIPELINE) lmiss;
+    logic `N(`LOAD_PIPELINE) lexception;
+    logic `N(`LOAD_PIPELINE) lcancel;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) lpaddr;
+
+    logic `N(`LOAD_PIPELINE) lwb;
+    logic `N(`LOAD_PIPELINE) lwb_exception;
+    logic `N(`LOAD_PIPELINE) lwb_error;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lwb_idx;
+
+    logic `N(`STORE_PIPELINE) sreq;
+    logic `N(`STORE_PIPELINE) sreq_cancel;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sidx;
+    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) saddr;
+
+    logic `N(`STORE_PIPELINE) smiss;
+    logic `N(`STORE_PIPELINE) sexception;
+    logic `N(`STORE_PIPELINE) scancel;
+    logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE) spaddr;
+
+    logic `N(`STORE_PIPELINE) swb;
+    logic `N(`STORE_PIPELINE) swb_exception;
+    logic `N(`STORE_PIPELINE) swb_error;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) swb_idx;
+
+    modport tlb(input lreq, laddr, sreq, saddr,  lreq_cancel, sreq_cancel,
+                output lmiss, lexception, lcancel, lpaddr, smiss, sexception, scancel, spaddr,
+                lwb, lwb_exception, lwb_error, lwb_idx, swb, swb_exception, swb_error, swb_idx);
+    modport lq (input lwb, lwb_exception, lwb_error, lwb_idx);
+    modport sq (input swb, swb_exception, swb_error, swb_idx);
+endinterface
+
+interface CsrTlbIO;
+    logic `N(`TLB_ASID) asid;
+    logic sum;
+    logic `N(2) mode;
+    logic `N(`TLB_MODE) satp_mode;
+
+    modport csr (output asid, sum, mode, satp_mode);
+    modport tlb (input asid, sum, mode, satp_mode);
+endinterface
+
+interface TlbL2IO;
+    logic req;
+    logic `VADDR_BUS req_addr;
+    TLBInfo info;
+
+    logic ready;
+    logic dataValid;
+    logic error;
+    logic exception;
+    TLBInfo info_o;
+    PTEEntry entry;
+    logic `N(2) wpn;
+    logic `N(`VADDR_SIZE) waddr;
+
+    modport tlb(output req, req_addr, info, input ready, dataValid, error, exception, info_o, entry, wpn, waddr);
+    modport l2 (input req, req_addr, info, output ready, dataValid, error, exception, info_o, entry, wpn, waddr);
+endinterface
+
+interface CsrL2IO;
+    logic sum;
+    logic mxr;
+    logic `N(2) mode;
+    PPNAddr ppn;
+
+    modport csr (output sum, mxr, mode, ppn);
+    modport tlb (input sum, mxr, mode, ppn);
+endinterface
+
+interface CachePTWIO;
+    logic req;
+    TLBInfo info;
+    logic `N(`VADDR_SIZE) vaddr;
+    logic `N(`TLB_PN) valid;
+    logic `ARRAY(`TLB_PN, `PADDR_SIZE) paddr;
+    logic full;
+
+    logic refill_req;
+    logic refill_ready;
+    logic `N(`TLB_PN) refill_pn;
+    logic `N(`VADDR_SIZE) refill_addr;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refill_data;
+
+    modport cache(output req, info, vaddr, valid, paddr, refill_ready, input full, refill_req, refill_pn, refill_addr, refill_data);
+    modport ptw (input req, info, vaddr, valid, paddr, refill_ready, output full, refill_req, refill_pn, refill_addr, refill_data);
+endinterface
+
+interface PTWRequest;
+    logic req;
+    logic `N(`PADDR_SIZE) paddr;
+
+    logic ready;
+    logic full;
+    logic data_valid;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) rdata;
+    
+    modport ptw (output req, paddr, input ready, full, data_valid, rdata);
+    modport cache (input req, paddr, output ready, full, data_valid, rdata);
 endinterface
 
 `ifdef DIFFTEST

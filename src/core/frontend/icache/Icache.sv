@@ -5,7 +5,9 @@ module ICache(
     input logic rst,
     FsqCacheIO.cache fsq_cache_io,
     CachePreDecodeIO.cache cache_pd_io,
-    ICacheAxi.cache axi_io
+    ICacheAxi.cache axi_io,
+    TlbL2IO.tlb itlb_io,
+    CsrTlbIO.tlb csr_itlb_io
 );
 `ifdef DIFFTEST
     typedef struct packed {
@@ -15,7 +17,7 @@ module ICache(
         logic `N(`ICACHE_SET_WIDTH) index1, index2;
         logic `ARRAY(2, `ICACHE_BANK) expand_en;
         logic `N(`BLOCK_INST_SIZE) expand_en_shift;
-        logic `N(`ICACHE_BANK_WIDTH) start_offset;
+        logic `N(`ICACHE_BANK_WIDTH+1) start_offset;
         logic span;
         logic multi_tag;
         FetchStream stream;
@@ -49,7 +51,9 @@ module ICache(
     MainState main_state;
 
     ICacheWayIO way_io [`ICACHE_WAY-1: 0]();
-    logic `N(`ICACHE_BANK * 2) expand_en;
+    ITLBCacheIO itlb_cache_io();
+    ITLB itlb(.*, .tlb_l2_io(itlb_io));
+    logic `N(`ICACHE_BANK * 2) expand_en, expand_exception;
     logic `N(`BLOCK_INST_SIZE) expand_en_shift;
     logic `N(`ICACHE_BANK_WIDTH+1) end_addr, start_addr;
     logic `N(`PREDICTION_WIDTH+1) stream_size;
@@ -57,7 +61,7 @@ module ICache(
     logic `ARRAY(`ICACHE_BANK, 32) rdata `N(`ICACHE_WAY);
     logic `N(`ICACHE_SET_WIDTH) index;
     logic `N(`ICACHE_SET_WIDTH+1) indexp1;
-    logic `N(`ICACHE_TAG) vtag, ptag1, ptag2;
+    logic `N(`ICACHE_TAG) ptag1, ptag2;
     logic span;
     logic `ARRAY(2, `ICACHE_WAY) hit;
     logic `ARRAY(2, `ICACHE_WAY_WIDTH) hit_index;
@@ -74,17 +78,16 @@ module ICache(
     assign start_addr_mask = (1 << start_addr) - 1;
     assign expand_en = ((1 << end_addr) - 1) ^ start_addr_mask;
     assign expand_en_shift = expand_en >> (start_addr);
+    assign expand_exception = request_buffer.expand_en[0] & {`ICACHE_BANK{itlb_cache_io.exception[0]}} |
+                              request_buffer.expand_en[1] & {`ICACHE_BANK{itlb_cache_io.exception[1]}};
     assign index = fsq_cache_io.stream.start_addr`ICACHE_SET_BUS;
     assign indexp1 = index + 1;
-    assign vtag = fsq_cache_io.stream.start_addr`ICACHE_TAG_BUS;
     assign refill_en = main_state == REFILL && axi_io.sr.valid && next_stream_index == 0;
     assign abandon_success = main_state == LOOKUP && 
                              fsq_cache_io.abandon &&
                              request_buffer.fsqIdx.idx == fsq_cache_io.abandonIdx;
-    always_ff @(posedge clk)begin
-        ptag1 <= vtag & 20'h7fff;
-        ptag2 <= (vtag + indexp1[`ICACHE_SET_WIDTH]) & 20'h7fff;
-    end
+    assign ptag1 = itlb_cache_io.paddr[0][`PADDR_SIZE-1: `TLB_OFFSET];
+    assign ptag2 = itlb_cache_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET];
 
     generate;
         for(genvar i=0; i<`ICACHE_WAY; i++)begin
@@ -146,9 +149,11 @@ module ICache(
 
 
     assign fsq_cache_io.ready = (main_state == IDLE) ||
-                                (main_state == LOOKUP && (!(|cache_miss)));
+                                (main_state == LOOKUP && (!(|cache_miss))) ||
+                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception));
     assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss))) | miss_data_en}}
                              & request_buffer.expand_en_shift;
+    assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
     assign cache_pd_io.stream.start_addr = request_buffer.stream.start_addr;
     assign cache_pd_io.fsqIdx = request_buffer.fsqIdx;
     assign cache_pd_io.stream.taken = request_buffer.stream.taken;
@@ -222,10 +227,10 @@ module ICache(
                 if(fsq_cache_io.flush | abandon_success)begin
                     main_state <= IDLE;
                 end
-                else if(fsq_cache_io.stall)begin
+                else if(fsq_cache_io.stall | (itlb_cache_io.miss & ~(|itlb_cache_io.exception)))begin
                     
                 end
-                else if((|cache_miss))begin
+                else if((|cache_miss) & ~(|itlb_cache_io.exception))begin
                     main_state <= MISS;
                     miss_buffer.replace_way <= replace_way;
                     if(cache_miss[0])begin

@@ -3,6 +3,7 @@
 module DecodeUnit(
     input logic [31: 0] inst,
     input logic iam,
+    input logic ipf,
     /* verilator lint_off UNOPTFLAT */
     output DecodeInfo info
 );
@@ -173,6 +174,7 @@ module DecodeUnit(
     // exception from frontend and illegal inst
     // all of these exception are sent to csr issue queue due to it's simple structure
     assign info.exccode = unknown ? `EXC_II :
+                          ipf ? `EXC_IPF :
                           iam ? `EXC_IAM :
                           ecall | ebreak | mret | sret ?
                                {`EXC_WIDTH{ecall}} & `EXC_EC | 

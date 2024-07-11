@@ -15,6 +15,7 @@ generate;
         DecodeUnit decodeUnit(
             .inst(insts.inst[i]),
             .iam(insts.iam[i]),
+            .ipf(insts.ipf[i]),
             .info(decodeInfo[i])
         );
     end

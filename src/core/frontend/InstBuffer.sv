@@ -11,6 +11,7 @@ module InstBuffer (
 );
     typedef struct packed {
         logic iam;
+        logic ipf;
         FsqIdxInfo fsqInfo;
         logic [31: 0] inst;
     } IBufData;
@@ -67,6 +68,7 @@ module InstBuffer (
             assign offset = j + pd_ibuffer_io.shiftIdx;
             assign ibuf[j].we = inst_buffer_we[j];
             assign in_data[j] = '{iam: pd_ibuffer_io.iam, 
+                                  ipf: pd_ibuffer_io.ipf[j],
                                   fsqInfo: '{idx: pd_ibuffer_io.fsqIdx, offset: offset}, 
                                   inst: pd_ibuffer_io.inst[j]};
             assign ibuf[j].wdata = in_data[writeIdx];
@@ -77,6 +79,7 @@ module InstBuffer (
             assign fetchBundle.fsqInfo[i] = ibuf[readIdx].rdata.fsqInfo;
             assign fetchBundle.inst[i] = ibuf[readIdx].rdata.inst;
             assign fetchBundle.iam[i] = ibuf[readIdx].rdata.iam;
+            assign fetchBundle.ipf[i] = ibuf[readIdx].rdata.ipf;
         end
     endgenerate
     assign fetchBundle.en = out_en_compose;

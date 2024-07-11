@@ -5,7 +5,7 @@ interface LoadQueueIO;
     logic `N(`LOAD_PIPELINE) en;
     logic `N(`LOAD_PIPELINE) miss;
     LoadIssueData `N(`LOAD_PIPELINE) data;
-    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) paddr;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) paddr;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) mask;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) rmask;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) rdata;
@@ -256,7 +256,7 @@ endgenerate
         .ready()
     );
 
-    logic `N(`VADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`PADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             addr_mask <= '{default: 0};
@@ -264,7 +264,7 @@ endgenerate
         else begin
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
                 if(io.en[i])begin
-                    addr_mask[eqIdx[i]] <= {io.paddr[i][`VADDR_SIZE-1: 2], io.mask[i]};
+                    addr_mask[eqIdx[i]] <= {io.paddr[i][`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH], io.mask[i]};
                 end
             end
         end
@@ -285,8 +285,8 @@ generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_QUEUE_SIZE; j++)begin
             assign cmp_vec[i][j] = io.write_violation[i].en & 
-                                   (io.write_violation[i].addr[`VADDR_SIZE-1: 2] == addr_mask[j][`VADDR_SIZE+1: 4]) &
-                                   (|(io.write_violation[i].mask & addr_mask[j][3: 0]));
+                                   (io.write_violation[i].addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] == addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-1: `DCACHE_BYTE]) &
+                                   (|(io.write_violation[i].mask & addr_mask[j][`DCACHE_BYTE-1: 0]));
         end
         logic `N(`LOAD_QUEUE_SIZE) store_mask;
         assign span[i] = hdir ^ io.write_violation[i].lqIdx.dir;

@@ -134,7 +134,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic mode;
-    logic `N(9) asid;
-    logic `N(22) ppn;
+    logic `N(`TLB_ASID) asid;
+    logic `N(`TLB_PPN) ppn;
 } SATP;
 `endif

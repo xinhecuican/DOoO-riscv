@@ -12,12 +12,12 @@
 `define XLEN_32
 `define MXL 32
 `define SV32
+`define PADDR_SIZE 34
 `endif
 `define DATA_BYTE (`XLEN / 8)
 `define DATA_BUS `N(`XLEN)
 `define VADDR_SIZE `XLEN
 `define VADDR_BUS [(`VADDR_SIZE)-1: 0]
-`define PADDR_SIZE `XLEN
 `define PADDR_BUS [(`PADDR_SIZE)-1: 0]
 `define IALIGN 32
 
@@ -97,8 +97,8 @@ typedef enum logic [1: 0] {
 `define ICACHE_WAY_WIDTH $clog2(`ICACHE_WAY)
 `define ICACHE_SET_WIDTH $clog2(`ICACHE_SET)
 `define ICACHE_LINE_WIDTH $clog2(`ICACHE_LINE)
-`define ICACHE_TAG (`VADDR_SIZE-`ICACHE_SET_WIDTH-`ICACHE_LINE_WIDTH)
-`define ICACHE_TAG_BUS [`VADDR_SIZE-1: `ICACHE_SET_WIDTH+`ICACHE_LINE_WIDTH]
+`define ICACHE_TAG (`PADDR_SIZE-`ICACHE_SET_WIDTH-`ICACHE_LINE_WIDTH)
+`define ICACHE_VTAG_BUS [`VADDR_SIZE-1: `ICACHE_SET_WIDTH+`ICACHE_LINE_WIDTH]
 `define ICACHE_SET_BUS [`ICACHE_SET_WIDTH+`ICACHE_LINE_WIDTH-1: `ICACHE_LINE_WIDTH]
 
 // InstBuffer
@@ -144,6 +144,7 @@ typedef enum logic [1: 0] {
 `define LOAD_ISSUE_BANK_NUM `LOAD_DIS_PORT
 `define STORE_ISSUE_BANK_SIZE 8
 `define STORE_ISSUE_BANK_NUM `STORE_DIS_PORT
+`define STORE_ISSUE_BANK_WIDTH $clog2(`STORE_ISSUE_BANK_SIZE)
 `define CSR_ISSUE_SIZE 4
 `define CSR_ISSUE_WIDTH $clog2(`CSR_ISSUE_SIZE)
 
@@ -192,11 +193,6 @@ typedef enum logic [1: 0] {
 `define DCACHE_REPLACE_SIZE 4
 `define DCACHE_REPLACE_WIDTH $clog2(`DCACHE_REPLACE_SIZE)
 
-// mmu
-`define TLB_OFFSET 12
-`define TLB_TAG (`VADDR_SIZE-`TLB_OFFSET)
-`define TLB_TAG_BUS [`VADDR_SIZE-1: `TLB_OFFSET]
-
 // exccode
 `define EXC_WIDTH 5
 `define EXC_NONE        `EXC_WIDTH'b11111
@@ -214,7 +210,7 @@ typedef enum logic [1: 0] {
 `define EXC_LAM         `EXC_WIDTH'd4 // load address misaligned
 `define EXC_LAF         `EXC_WIDTH'd5 // load address fault
 `define EXC_SAM         `EXC_WIDTH'd6 // store address misaligned
-`define EXC_SAF         `EXC_WIDTH'd7 // store address misaligned
+`define EXC_SAF         `EXC_WIDTH'd7 // store address fault
 `define EXC_ECU         `EXC_WIDTH'd8 // environment call from U-mode
 `define EXC_ECS         `EXC_WIDTH'd9 // environment call from S-mode
 `define EXC_ECM         `EXC_WIDTH'd11 // environment call from M-mode
@@ -228,4 +224,43 @@ typedef enum logic [1: 0] {
 `define EXC_MRET        `EXC_WIDTH'd27 // user defined.mret
 `define EXC_EC          `EXC_WIDTH'd28 // user defined.environment call
 
+// tlb
+`define TLB_OFFSET 12
+`define TLB_TAG (`VADDR_SIZE-`TLB_OFFSET)
+`define TLB_TAG_BUS [`VADDR_SIZE-1: `TLB_OFFSET]
+`define TLB_IDX_SIZE $clog2(`LOAD_ISSUE_BANK_SIZE) + $clog2(`LOAD_PIPELINE)
+`ifdef SV32
+`define TLB_MODE 1
+`define TLB_ASID 9
+`define TLB_PPN  22
+`define TLB_VPN  10
+`define TLB_PPN1 12
+`define TLB_PPN0 10
+`define TLB_PN 2
+`define PTE_SIZE 4
+`define PTE_BITS (`PTE_SIZE * 8)
+`define PTE_WIDTH $clog2(`PTE_SIZE)
+`endif
+`define TLB_VPN_BASE(i) (`TLB_VPN * i + `TLB_OFFSET)
+`define TLB_VPN_BUS(i) [`TLB_VPN * (i+1) + `TLB_OFFSET - 1 : `TLB_VPN * i + `TLB_OFFSET]
+
+`define DTLB_SIZE 32
+`define ITLB_SIZE 32
+
+// tlb cache
+parameter [6: 0] TLB_P_SET `N(`TLB_PN) = {64, 32};
+parameter [4: 0] TLB_P_BANK `N(`TLB_PN) = {`DCACHE_BANK, `DCACHE_BANK};
+`define TLB_P0_SET 64
+`define TLB_P0_BANK `DCACHE_BANK
+`define TLB_P0_SET_WIDTH $clog2(`TLB_P0_SET)
+`define TLB_P0_TAG `TLB_TAG - $clog2(`TLB_P0_BANK) - `TLB_P0_SET_WIDTH
+`define TLB_P1_SET 32
+`define TLB_P1_BANK (`DCACHE_BANK)
+`define TLB_P1_SET_WIDTH $clog2(`TLB_P1_SET)
+`define TLB_P1_TAG `TLB_TAG - $clog2(`TLB_P1_BANK) - `TLB_P1_SET_WIDTH - `TLB_VPN
+`define TLB_VPN_IBUS(i) [`TLB_VPN * i + `TLB_OFFSET + $clog2(TLB_P_BANK[``i]) + $clog2(TLB_P_SET[``i]) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(TLB_P_BANK[``i])]
+`define TLB_VPN_TBUS(i) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(TLB_P_SET[``i]) + $clog2(TLB_P_BANK[``i])]
+
+`define TLB_PTB0_SIZE 8
+`define TLB_PTB1_SIZE 4
 `endif

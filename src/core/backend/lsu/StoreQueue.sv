@@ -3,7 +3,7 @@
 interface StoreQueueIO;
     logic `N(`STORE_PIPELINE) en;
     StoreIssueData `N(`STORE_PIPELINE) data;
-    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) paddr;
+    logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE) paddr;
     logic `ARRAY(`STORE_PIPELINE, 4) mask;
     StoreIdx sqIdx;
 
@@ -88,7 +88,7 @@ endgenerate
 
     logic `N(`STORE_QUEUE_SIZE) valid, addrValid, dataValid, commited;
 
-    logic `N(`VADDR_SIZE+`DCACHE_BYTE) addr_mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`PADDR_SIZE+`DCACHE_BYTE) addr_mask `N(`LOAD_QUEUE_SIZE);
     logic `N(`STORE_QUEUE_SIZE) data_dir;
     logic `ARRAY(`LOAD_QUEUE_SIZE, `DCACHE_BITS) data;
 
@@ -114,7 +114,7 @@ endgenerate
             end
             for(int i=0; i<`STORE_PIPELINE; i++)begin
                 if(io.en[i])begin
-                    addr_mask[addr_eqIdx[i]] <= {io.paddr[i][`VADDR_SIZE-1: `DCACHE_BYTE_WIDTH], io.mask[i]};
+                    addr_mask[addr_eqIdx[i]] <= {io.paddr[i][`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH], io.mask[i]};
                     addrValid[addr_eqIdx[i]] <= 1'b1;
                     data_dir[addr_eqIdx[i]] <= io.data[i].sqIdx.dir;
                 end
@@ -184,7 +184,7 @@ generate
         logic `N(`STORE_QUEUE_WIDTH) queue_idx;
         assign queue_idx = head + i;
         assign queue_commit_io.en[i] = valid[queue_idx] & addrValid[queue_idx] & dataValid[queue_idx] & commited[queue_idx];
-        assign queue_commit_io.addr[i] = addr_mask[queue_idx][`VADDR_SIZE+`DCACHE_BYTE-1: `DCACHE_BYTE];
+        assign queue_commit_io.addr[i] = addr_mask[queue_idx][`PADDR_SIZE+`DCACHE_BYTE-1: `DCACHE_BYTE];
         assign queue_commit_io.mask[i] = addr_mask[queue_idx][`DCACHE_BYTE-1: 0];
         assign queue_commit_io.data[i] = data[queue_idx];
     end
@@ -203,7 +203,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
             assign offset_vec[i][j] = loadFwd.fwdData[i].en &
-                                      (loadFwd.fwdData[i].vaddrOffset[11: `DCACHE_BYTE_WIDTH] == addr_mask[j][`DCACHE_BYTE+9: `DCACHE_BYTE]);
+                                      (loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_BYTE_WIDTH] == addr_mask[j][`DCACHE_BYTE+`TLB_OFFSET-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE]);
         end
         logic `N(`STORE_QUEUE_SIZE) store_mask;
         MaskGen #(`STORE_QUEUE_SIZE) maskgen_store (loadFwd.fwdData[i].sqIdx.idx, store_mask);
@@ -217,7 +217,7 @@ generate
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
-            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addr_mask[j][`VADDR_SIZE+`DCACHE_BYTE-1: `TLB_OFFSET+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH];
+            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-1: `TLB_OFFSET+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH];
             assign forward_mask[i][j] = {`DCACHE_BYTE{forward_vec[i][j]}} & addr_mask[j][`DCACHE_BYTE-1: 0];
         end
         assign forward_vec[i] = ptag_vec[i] & fwd_offset_vec[i] & addrValid;

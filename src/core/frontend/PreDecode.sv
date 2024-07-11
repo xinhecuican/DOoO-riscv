@@ -20,6 +20,7 @@ module PreDecode(
     logic `N($clog2(`BLOCK_INST_SIZE)+1) instNum, instNumNext;
     logic `N(`VADDR_SIZE) next_pc;
     logic `N(`PREDICTION_WIDTH+1) shiftIdx;
+    logic `N(`BLOCK_INST_SIZE) ipf;
 
     generate;
         for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
@@ -41,6 +42,7 @@ module PreDecode(
             instNumNext <= 0;
             next_pc <= 0;
             shiftIdx <= 0;
+            ipf <= 0;
         end
         else if(!frontendCtrl.ibuf_full) begin
             bundles_next <= bundles;
@@ -52,6 +54,7 @@ module PreDecode(
             instNumNext <= instNum;
             next_pc <= cache_pd_io.stream.start_addr + cache_pd_io.stream.size + 4;
             shiftIdx <= cache_pd_io.shiftIdx;
+            ipf <= cache_pd_io.exception;
         end
     end
 
@@ -94,6 +97,7 @@ module PreDecode(
     assign pd_ibuffer_io.inst = data_next;
     assign pd_ibuffer_io.fsqIdx = fsqIdx.idx;
     assign pd_ibuffer_io.iam = stream_next.start_addr[1: 0] != 0;
+    assign pd_ibuffer_io.ipf = ipf;
     assign pd_ibuffer_io.shiftIdx = shiftIdx;
 
     generate;

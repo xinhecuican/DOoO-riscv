@@ -12,38 +12,45 @@ module PLRU#(
     input logic rst,
     ReplaceIO.replace replace_io
 );
-    logic `N(WAY_NUM-1) plru `N(DEPTH);
-    logic `N(WAY_NUM-1) rdata `N(READ_PORT);
-    logic `N(WAY_NUM-1) updateData `N(READ_PORT);
-
 generate
-    for(genvar i=0; i<READ_PORT; i++)begin
-        assign rdata[i] = plru[replace_io.hit_index[i]];
-        PLRUUpdate #(WAY_NUM) update (rdata[i], replace_io.hit_way[i], updateData[i]);
+    if(WAY_NUM == 1)begin
+        assign replace_io.miss_way = 0;
     end
-endgenerate
-
-    logic `N(WAY_NUM-1) replaceData;
-    logic `N(WAY_WIDTH) replaceOut;
-    assign replaceData = plru[replace_io.miss_index];
-    PLRUReplace #(WAY_NUM) replace (replaceData, replaceOut);
-    always_ff @(posedge clk)begin
-        replace_io.miss_way <= replaceOut;
-    end
+    else begin
+        logic `N(WAY_NUM-1) plru `N(DEPTH);
+        logic `N(WAY_NUM-1) rdata `N(READ_PORT);
+        logic `N(WAY_NUM-1) updateData `N(READ_PORT);
 
 
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            plru <= '{default: 0};
+        for(genvar i=0; i<READ_PORT; i++)begin
+            assign rdata[i] = plru[replace_io.hit_index[i]];
+            PLRUUpdate #(WAY_NUM) update (rdata[i], replace_io.hit_way[i], updateData[i]);
         end
-        else begin
-            for(int i=0; i<READ_PORT; i++)begin
-                if(replace_io.hit_en[i])begin
-                    plru[replace_io.hit_index[i]] <= updateData[i];
+
+
+        logic `N(WAY_NUM-1) replaceData;
+        logic `N(WAY_WIDTH) replaceOut;
+        assign replaceData = plru[replace_io.miss_index];
+        PLRUReplace #(WAY_NUM) replace (replaceData, replaceOut);
+        always_ff @(posedge clk)begin
+            replace_io.miss_way <= replaceOut;
+        end
+
+
+        always_ff @(posedge clk or posedge rst)begin
+            if(rst == `RST)begin
+                plru <= '{default: 0};
+            end
+            else begin
+                for(int i=0; i<READ_PORT; i++)begin
+                    if(replace_io.hit_en[i])begin
+                        plru[replace_io.hit_index[i]] <= updateData[i];
+                    end
                 end
             end
         end
     end
+endgenerate
 
 
 endmodule

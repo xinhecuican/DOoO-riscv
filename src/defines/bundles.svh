@@ -154,6 +154,7 @@ typedef struct packed {
 typedef struct packed {
     logic `N(`FETCH_WIDTH) en;
     logic `N(`FETCH_WIDTH) iam;
+    logic `N(`FETCH_WIDTH) ipf;
     FsqIdxInfo `N(`FETCH_WIDTH) fsqInfo;
     logic `ARRAY(`FETCH_WIDTH, 32) inst;
 } FetchBundle;
@@ -309,7 +310,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
-    logic `N(`VADDR_SIZE) addr;
+    logic `N(`PADDR_SIZE) addr;
     logic `N(4) mask;
     LoadIdx lqIdx;
     RobIdx robIdx;
@@ -327,7 +328,7 @@ typedef struct packed {
     logic en;
     logic [1: 0] reason;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) issue_idx;
-} LoadReplyRequest;
+} ReplyRequest;
 
 typedef struct packed {
     logic en;
@@ -335,4 +336,49 @@ typedef struct packed {
     logic `N(`EXC_WIDTH) exccode;
 } StoreWBData;
 
+typedef struct packed {
+    logic `ARRAY(`TLB_PN, `TLB_VPN) vpn;
+} VPNAddr;
+
+typedef struct packed {
+    logic `N(`TLB_PPN1) ppn1;
+    logic `N(`TLB_PPN0) ppn0;
+} PPNAddr;
+
+typedef struct packed {
+    logic g;
+    logic u;
+    logic `N(2) size;
+    // logic `N(`TLB_ASID) asid;
+    VPNAddr vpn;
+    PPNAddr ppn;
+} L1TLBEntry;
+
+typedef struct packed {
+    PPNAddr ppn;
+    logic `N(2) rsw;
+    logic d;
+    logic a;
+    logic g;
+    logic u;
+    logic x;
+    logic w;
+    logic r;
+    logic v;
+} PTEEntry;
+
+typedef struct packed {
+    logic `N(2) source; // 2'b00: icache, 2'b01: load, 2'b10: store
+    logic `N(`TLB_IDX_SIZE) idx;
+} TLBInfo;
+
+typedef struct packed {
+    logic dataValid;
+    logic error;
+    logic exception;
+    TLBInfo info_o;
+    PTEEntry entry;
+    logic `N(2) wpn;
+    logic `N(`VADDR_SIZE) waddr;
+} L2TLBResponse;
 `endif

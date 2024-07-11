@@ -3,14 +3,19 @@
 interface StoreUnitIO;
     logic `N(`STORE_ISSUE_BANK_NUM) en;
     StoreIssueData `N(`STORE_ISSUE_BANK_NUM) storeIssueData;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) issue_idx;
+    logic `N(`STORE_ISSUE_BANK_NUM) exception;
     logic `N(`STORE_DIS_PORT) dis_en;
     RobIdx `N(`STORE_DIS_PORT) dis_rob_idx;
     StoreIdx `N(`STORE_DIS_PORT) dis_sq_idx;
     logic `N(`STORE_ISSUE_BANK_NUM) data_en;
     StoreIdx `N(`STORE_ISSUE_BANK_NUM) data_sqIdx;
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, 2) data_size;
+    logic `N(`STORE_PIPELINE) success;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) success_idx;
+    ReplyRequest `N(`STORE_PIPELINE) reply;
 
-    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size);
+    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size, issue_idx, exception, input reply, success, success_idx);
     modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx, data_size);
 endinterface
 
@@ -23,7 +28,8 @@ module StoreIssueQueue(
     IssueWakeupIO.issue store_wakeup_io,
     WriteBackBus wbBus,
     BackendCtrl backendCtrl,
-    StoreUnitIO.store store_io
+    StoreUnitIO.store store_io,
+    DTLBLsuIO.sq tlb_lsu_io
 );
     StoreAddrBankIO addr_io [`STORE_ISSUE_BANK_NUM-1: 0]();
     StoreDataBankIO data_io [`STORE_ISSUE_BANK_NUM-1: 0]();
@@ -54,12 +60,18 @@ generate
         assign addr_io[i].data = dis_store_io.data[order[i]];
         assign addr_io[i].sqIdx = sqIdx[order[i]];
         assign addr_io[i].lqIdx = lqIdx[order[i]];
+        assign addr_io[i].reply = store_io.reply[i];
+        assign addr_io[i].tlb_en = tlb_lsu_io.swb[i];
+        assign addr_io[i].tlb_exception = tlb_lsu_io.swb_exception[i];
+        assign addr_io[i].tlb_error = tlb_lsu_io.swb_error[i];
+        assign addr_io[i].tlb_bank_idx = tlb_lsu_io.swb_idx[i];
         assign full[i] = addr_io[i].full & data_io[i].full;
         
         assign store_wakeup_io.en[i] = addr_io[i].reg_en;
         assign store_wakeup_io.preg[i] = addr_io[i].rs1;
         assign store_wakeup_io.rd[i] = 0;
         assign store_io.storeIssueData[i] = addr_io[i].data_o;
+        assign store_io.exception[i] = addr_io[i].exception_o;
 
         assign data_io[i].en = addr_io[i].en;
         assign data_io[i].status = addr_io[i].status;
@@ -105,10 +117,19 @@ interface StoreAddrBankIO;
     logic `N(`PREG_WIDTH) rs1;
     logic full;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)+1) bankNum;
+    logic `N(`STORE_ISSUE_BANK_WIDTH) issue_idx;
     StoreIssueData data_o;
     RobIdx robIdx_o;
+    logic exception_o;
+    ReplyRequest reply;
+    logic success;
+    logic `N(`STORE_ISSUE_BANK_WIDTH) success_idx;
+    logic tlb_en;
+    logic tlb_exception;
+    logic tlb_error;
+    logic `N(`STORE_ISSUE_BANK_WIDTH) tlb_bank_idx;
 
-    modport bank(input en, status, data, sqIdx, lqIdx, output full, reg_en, rs1, bankNum, data_o, robIdx_o);
+    modport bank(input en, status, data, sqIdx, lqIdx, reply, success, success_idx, tlb_en, tlb_exception, tlb_error, tlb_bank_idx, output full, reg_en, rs1, bankNum, data_o, robIdx_o, exception_o, issue_idx);
 endinterface
 
 module StoreAddrBank(
@@ -124,7 +145,7 @@ module StoreAddrBank(
         RobIdx robIdx;
     } StatusBundle;
 
-    logic `N(`STORE_ISSUE_BANK_SIZE) en;
+    logic `N(`STORE_ISSUE_BANK_SIZE) en, issue, exception;
     StatusBundle `N(`STORE_ISSUE_BANK_SIZE) status_ram;
     logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
@@ -154,7 +175,7 @@ module StoreAddrBank(
 
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
-        assign ready[i] = en[i] & status_ram[i].rs1v;
+        assign ready[i] = en[i] & status_ram[i].rs1v & ~issue[i];
     end
 endgenerate
     DirectionSelector #(`STORE_ISSUE_BANK_SIZE) selector (
@@ -192,14 +213,21 @@ generate
     end
 endgenerate
 
+    logic `N(`LOAD_ISSUE_BANK_SIZE) success_idx_decode;
+    Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
+
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
+        io.issue_idx <= selectIdxNext;
+        io.exception_o <= exception[selectIdxNext];
     end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             status_ram <= 0;
             en <= 0;
             io.data_o <= 0;
+            issue <= 0;
+            exception <= 0;
         end
         else begin
             if(backendCtrl.redirect)begin
@@ -207,13 +235,31 @@ endgenerate
             end
             else begin
                 en <= (en | ({`STORE_ISSUE_BANK_SIZE{io.en}} & free_en)) &
-                      ~(select_en);
+                      ~({`LOAD_ISSUE_BANK_SIZE{io.success}} & success_idx_decode);
             end
             
             if(io.en)begin
                 status_ram[freeIdx].rs1v <= io.status.rs1v;
                 status_ram[freeIdx].rs1 <= io.status.rs1;
                 status_ram[freeIdx].robIdx <= io.status.robIdx;
+                issue[freeIdx] <= 1'b0;
+                exception[freeIdx] <= 1'b0;
+            end
+
+            if((|ready) & ~backendCtrl.redirect)begin
+                issue[selectIdx] <= 1'b1;
+            end
+
+            if(io.reply.en && (io.reply.reason != 2'b11))begin
+                issue[io.reply.issue_idx] <= 1'b0;
+            end
+
+            if(io.tlb_en)begin
+                issue[io.tlb_bank_idx] <= 1'b0;
+            end
+
+            if(io.tlb_en & io.tlb_exception)begin
+                exception[io.tlb_bank_idx] <= 1'b1;
             end
 
             for(int i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
