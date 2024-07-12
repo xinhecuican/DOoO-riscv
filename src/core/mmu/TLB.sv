@@ -6,6 +6,7 @@ interface TLBIO #(
 );
     logic req;
     logic `VADDR_BUS vaddr;
+    logic flush;
 
     logic miss;
     logic exception;
@@ -18,7 +19,7 @@ interface TLBIO #(
     logic `N(2) wpn;
     logic `N(`VADDR_SIZE) waddr;
 
-    modport tlb(input req, vaddr, we, wbInfo, wentry, wpn, widx, waddr, output miss, exception, paddr);
+    modport tlb(input req, flush, vaddr, we, wbInfo, wentry, wpn, widx, waddr, output miss, exception, paddr);
 endinterface
 
 module TLB #(
@@ -76,9 +77,9 @@ endgenerate
 
 
     always_ff @(posedge clk)begin
-        io.paddr <= mmode ? io.vaddr : {lookup_paddr, io.vaddr[`TLB_OFFSET-1: 0]};
-        io.miss <= ~mmode & ~(|hit) & io.req;
-        io.exception <= ~mmode & io.req & (|hit) & mode_exc[hit_idx];
+        io.paddr <= mmode ? io.vaddr & 32'h7fffffff : {lookup_paddr, io.vaddr[`TLB_OFFSET-1: 0]};
+        io.miss <= ~mmode & ~(|hit) & io.req & ~io.flush;
+        io.exception <= ~mmode & io.req & ~io.flush & (|hit) & mode_exc[hit_idx];
     end
 
 // update

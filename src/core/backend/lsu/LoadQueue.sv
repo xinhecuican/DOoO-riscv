@@ -256,7 +256,7 @@ endgenerate
         .ready()
     );
 
-    logic `N(`PADDR_SIZE+2) addr_mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`PADDR_SIZE+`DCACHE_BYTE) addr_mask `N(`LOAD_QUEUE_SIZE);
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             addr_mask <= '{default: 0};

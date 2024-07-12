@@ -15,6 +15,7 @@ endinterface
 module PTW(
     input logic clk,
     input logic rst,
+    input logic flush,
     CachePTWIO.ptw cache_ptw_io,
     CsrL2IO.tlb csr_io,
     PTWRequest.ptw ptw_request,
@@ -98,7 +99,7 @@ module PTW(
     assign pn1_exception = pn0_exception & pn1_unalign;
 
     always_ff @(posedge clk)begin
-        unique if(state == WB_PN1)begin
+        if(state == WB_PN1)begin
             ptw_io.valid <= (pn1_exception | pn1_leaf);
             ptw_io.exception <= pn1_exception;
             ptw_io.info <= req_buf.info;
@@ -145,9 +146,9 @@ module PTW(
     end
 
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
+        if(rst == `RST || flush)begin
             state <= IDLE;
-            req_buf.req <= '{default: 0};
+            req_buf <= '{default: 0};
         end
         else begin
             case(state)
@@ -179,7 +180,7 @@ module PTW(
                 if(ptw_request.data_valid)begin
                     state <= WB_PN1;
                     req_buf.wb_entry <= ptw_request.rdata[req_buf.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: `TLB_VPN_BASE(1)]];
-                    req_buf.wb_req <= 1'b1;
+                    req_buf.wb_valid <= 1'b1;
                 end
             end
             WB_PN1: begin
@@ -239,6 +240,7 @@ interface PTBufferIO #(
     logic `N(DATA_WIDTH) data;
     logic data_valid;
     logic `N(TAG_WIDTH) ctag;
+    logic flush;
 
     logic full;
     logic valid;
@@ -247,7 +249,7 @@ interface PTBufferIO #(
     logic wb_ready;
     logic `N(TAG_WIDTH + DATA_WIDTH) wb_data;
 
-    modport buffer (input en, data_valid, tag, ctag, data, wb_ready, output full, valid, data_o, wb_valid, wb_data);
+    modport buffer (input en, data_valid, tag, ctag, flush, data, wb_ready, output full, valid, data_o, wb_valid, wb_data);
 endinterface
 
 module PTBuffer #(
@@ -276,7 +278,7 @@ module PTBuffer #(
     assign io.data_o = {tag[valid_idx], data[valid_idx]};
 
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
+        if(rst == `RST || io.flush)begin
             en <= 0;
         end
         else begin
@@ -310,11 +312,16 @@ generate
         PEncoder #(DEPTH) encoder_wb_idx (io.wb_valid, wb_idx);
         assign io.wb_data = {tag[wb_idx], data[wb_idx]};
         always_ff @(posedge clk)begin
-            if(data_valid)begin
-                data_valid <= tag_cmp & ~valid_idx_decode;
+            if(io.flush)begin
+                data_valid <= 0;
             end
-            if(io.wb_valid & io.wb_ready)begin
-                data_valid[wb_idx] <= 1'b0;
+            else begin
+                if(data_valid)begin
+                    data_valid <= tag_cmp & ~valid_idx_decode;
+                end
+                if(io.wb_valid & io.wb_ready)begin
+                    data_valid[wb_idx] <= 1'b0;
+                end
             end
         end
     end

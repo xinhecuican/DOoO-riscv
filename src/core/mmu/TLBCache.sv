@@ -4,6 +4,7 @@ interface TLBCacheIO;
     logic req;
     TLBInfo info;
     logic `VADDR_BUS req_addr;
+    logic flush;
 
     logic hit;
     logic error;
@@ -13,7 +14,7 @@ interface TLBCacheIO;
     logic `N(`PADDR_SIZE) hit_addr;
     logic `N(2) wpn;
 
-    modport cache (input req, info, req_addr,
+    modport cache (input req, info, req_addr, flush,
                    output hit, error, exception, info_o, hit_entry, hit_addr, wpn);
 endinterface
 
@@ -32,12 +33,12 @@ module TLBCache(
     } RequestBuffer;
     RequestBuffer req_buf;
 
-    TLBPageIO #(0, `TLB_P0_BANK) pn0_io();
+    TLBPageIO #(`TLB_P0_BANK, `TLB_P0_BANK) pn0_io();
     TLBPage #(
         .PN(0),
         .WAY_NUM(1),
         .TAG_WIDTH(`TLB_VPN * `TLB_PN -`TLB_P0_SET_WIDTH),
-        .META_WIDTH(0),
+        .META_WIDTH(`TLB_P0_BANK),
         .DEPTH(`TLB_P0_SET),
         .BANK(`TLB_P0_BANK)
     ) page_pn0 (.*, .page_io(pn0_io), .cache_io(io));
@@ -79,7 +80,7 @@ module TLBCache(
     PAddrGen gen_paddr1(pn1_entry, req_buf.vaddr, paddr[1]);
 
     always_ff @(posedge clk)begin
-        io.hit <= req_buf.req & ((|(hit_first & (leaf | exception))) | cache_ptw_io.full);
+        io.hit <= req_buf.req & ((|(hit_first & (leaf | exception))) | cache_ptw_io.full) & ~io.flush;
         io.exception <= |(hit_first & exception);
         io.error <= (|(hit_first & ~leaf & ~exception)) & cache_ptw_io.full;
         io.hit_entry <= valid[0] ? pn0_io.entry : pn1_io.entry;
@@ -87,7 +88,7 @@ module TLBCache(
         io.info_o <= req_buf.info;
         io.wpn <= hit_first[1] ? 2'b01 : 2'b00;
 
-        cache_ptw_io.req <= req_buf.req & (~(|(hit_first & (leaf | exception)))) & ~cache_ptw_io.full;
+        cache_ptw_io.req <= req_buf.req & (~(|(hit_first & (leaf | exception)))) & ~cache_ptw_io.full & ~io.flush;
         cache_ptw_io.info <= req_buf.info;
         cache_ptw_io.vaddr <= req_buf.vaddr;
         cache_ptw_io.valid <= hit_first;
@@ -98,7 +99,7 @@ module TLBCache(
 endmodule
 
 interface TLBPageIO #(
-    parameter META_WIDTH=4,
+    parameter META_WIDTH=16,
     parameter BANK=16
 );
     logic hit;
@@ -169,7 +170,7 @@ endgenerate
     always_ff @(posedge clk)begin
         tag <= cache_io.req_addr`TLB_VPN_TBUS(PN);
         offset <= cache_io.req_addr[`TLB_VPN_BASE(PN)+BANK_WIDTH-1: `TLB_VPN_BASE(PN)];
-        req_n <= cache_io.req;
+        req_n <= cache_io.req & ~cache_io.flush;
     end
 
     logic `N(WAY_NUM) tag_hits;

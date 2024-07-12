@@ -3,6 +3,7 @@
 module L2TLB(
     input logic clk,
     input logic rst,
+    input logic flush,
     TlbL2IO.l2 itlb_io,
     TlbL2IO.l2 dtlb_io,
     CsrL2IO.tlb csr_io,
@@ -11,6 +12,7 @@ module L2TLB(
     TLBCacheIO tlbCache_io();
     CachePTWIO cache_ptw_io();
     PTWL2IO ptw_io();
+    logic cache_flush, ptw_flush;
 
     Arbiter #(2, `VADDR_SIZE+$bits(TLBInfo)) arbiter_l1tlb (
         .valid({dtlb_io.req, itlb_io.req}),
@@ -20,7 +22,14 @@ module L2TLB(
         .data_o({tlbCache_io.info, tlbCache_io.req_addr})
     );
     TLBCache tlb_cache (.*, .io(tlbCache_io));
-    PTW ptw(.*);
+    PTW ptw(.*, .flush(ptw_flush));
+
+    always_ff @(posedge clk)begin
+        cache_flush <= flush;
+        ptw_flush <= flush;
+    end
+    assign tlbCache_io.flush = cache_flush;
+
 
     logic `N(2) iready, dready;
     Arbiter #(2, `PADDR_SIZE+$bits(TLBInfo)+$bits(PTEEntry)+2) arbiter_itlb (

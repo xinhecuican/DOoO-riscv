@@ -24,5 +24,5 @@ module CPUCore (
                     .commitBus_out(commitBus),
                     .axi_io(dcache_io));
     AxiInterface axi_interface(.*);
-    L2TLB l2_tlb(.*, .csr_io(csr_l2_io));
+    L2TLB l2_tlb(.*, .csr_io(csr_l2_io), .flush(fsq_back_io.redirect.en));
 endmodule

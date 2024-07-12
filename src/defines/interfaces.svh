@@ -525,17 +525,19 @@ endinterface
 interface ITLBCacheIO;
     logic `N(2) req;
     logic `ARRAY(2, `VADDR_SIZE) vaddr;
-    logic req_cancel;
+    logic flush;
 
     logic miss;
     logic `N(2) exception;
     logic `ARRAY(2, `PADDR_SIZE) paddr;
 
-    modport tlb(input req, vaddr, req_cancel, output miss, exception, paddr);
-    modport cache(output req, vaddr, req_cancel, input miss, exception, paddr);
+    modport tlb(input req, vaddr, flush, output miss, exception, paddr);
+    modport cache(output req, vaddr, flush, input miss, exception, paddr);
 endinterface
 
 interface DTLBLsuIO;
+    logic flush;
+
     logic `N(`LOAD_PIPELINE) lreq;
     logic `N(`LOAD_PIPELINE) lreq_cancel;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lidx;
@@ -566,7 +568,7 @@ interface DTLBLsuIO;
     logic `N(`STORE_PIPELINE) swb_error;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) swb_idx;
 
-    modport tlb(input lreq, laddr, sreq, saddr,  lreq_cancel, sreq_cancel,
+    modport tlb(input flush, lreq, lidx, laddr, sreq, sidx, saddr,  lreq_cancel, sreq_cancel,
                 output lmiss, lexception, lcancel, lpaddr, smiss, sexception, scancel, spaddr,
                 lwb, lwb_exception, lwb_error, lwb_idx, swb, swb_exception, swb_error, swb_idx);
     modport lq (input lwb, lwb_exception, lwb_error, lwb_idx);

@@ -158,6 +158,7 @@ endgenerate
     assign tlb_lsu_io.lidx = load_io.issue_idx;
     assign tlb_lsu_io.laddr = loadVAddr;
     assign tlb_lsu_io.lreq_cancel = lmisalign_s2;
+    assign tlb_lsu_io.flush = backendCtrl.redirect;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -448,7 +449,7 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign store_io.reply[i].en = store_en_s4[i] & (stlb_miss_s4[i] | tlb_lsu_io.scancel[i]);
-        assign store_io.reply[i].idx = sissue_idx_s4;
+        assign store_io.reply[i].issue_idx = sissue_idx_s4;
         assign store_io.reply[i].reason = tlb_lsu_io.scancel[i] ? 2'b00 : 2'b11;
     end
 endgenerate

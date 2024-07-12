@@ -11,7 +11,7 @@ module ITLB(
         logic `ARRAY(2, `VADDR_SIZE) vaddr;
         logic `N(2) miss;
         logic `N(2) exception;
-        logic req,req_s2;
+        logic req,req_s2, req_s3;
         logic `N(`VADDR_SIZE) req_addr;
         logic `ARRAY(2, `PADDR_SIZE) paddr;
     } RequestBuffer;
@@ -27,7 +27,7 @@ module ITLB(
     assign tlb_l2_io0.req = req_buf.req;
     assign tlb_l2_io0.info = 0;
     assign tlb_l2_io0.req_addr = req_buf.req_addr;
-    TLBRepeater #(.FRONT(1)) repeater0(.*, .in(tlb_l2_io0), .out(tlb_l2_io));
+    TLBRepeater #(.FRONT(1)) repeater0(.*, .flush(itlb_cache_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io));
 
     ReplaceIO #(.DEPTH(1), .WAY_NUM(`DTLB_SIZE)) replace_io();
     RandomReplace #(1, `DTLB_SIZE) replace (.*);
@@ -40,6 +40,7 @@ generate
         assign itlb_io[i].req = itlb_cache_io.req;
         // assign itlb_io.asid = itlb_cache_io.asid;
         assign itlb_io[i].vaddr = itlb_cache_io.vaddr;
+        assign itlb_io[i].flush = itlb_cache_io.flush;
 
         assign itlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception & (tlb_l2_io0.info_o.source == 2'b00);
         assign itlb_io[i].widx = replace_io.miss_way;
@@ -59,7 +60,7 @@ endgenerate
     assign itlb_cache_io.miss = (|miss) | (state != IDLE);
 
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
+        if(rst == `RST || itlb_cache_io.flush)begin
             state <= IDLE;
             req_buf <= 0;
             miss_end <= 0;
@@ -87,7 +88,7 @@ endgenerate
                 end
             end
             WALK_ADDR0: begin
-                if((req_buf.req_s2 & ~tlb_l2_io.ready) | 
+                if((req_buf.req_s3 & ~tlb_l2_io0.ready) | 
                    (tlb_l2_io.dataValid & tlb_l2_io.error))begin
                     req_buf.req <= 1'b1;
                 end
@@ -110,7 +111,7 @@ endgenerate
                 end
             end
             WALK_ADDR1: begin
-                if((req_buf.req_s2 & ~tlb_l2_io.ready) | 
+                if((req_buf.req_s3 & ~tlb_l2_io0.ready) | 
                    (tlb_l2_io.dataValid & tlb_l2_io.error))begin
                     req_buf.req <= 1'b1;
                 end
@@ -132,10 +133,9 @@ endgenerate
             if(miss_end)begin
                 miss_end <= 1'b0;
             end
+            req_buf.req_s2 <= req_buf.req;
+            req_buf.req_s3 <= req_buf.req_s2;
         end
-    end
-    always_ff @(posedge clk)begin
-        req_buf.req_s2 <= req_buf.req;
     end
 
     VPNAddr vpn;

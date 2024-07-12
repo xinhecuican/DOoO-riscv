@@ -61,6 +61,7 @@ module ICache(
     logic `ARRAY(`ICACHE_BANK, 32) rdata `N(`ICACHE_WAY);
     logic `N(`ICACHE_SET_WIDTH) index;
     logic `N(`ICACHE_SET_WIDTH+1) indexp1;
+    logic `N(`VADDR_SIZE-`TLB_OFFSET) vtag1, vtag2;
     logic `N(`ICACHE_TAG) ptag1, ptag2;
     logic span;
     logic `ARRAY(2, `ICACHE_WAY) hit;
@@ -86,6 +87,12 @@ module ICache(
     assign abandon_success = main_state == LOOKUP && 
                              fsq_cache_io.abandon &&
                              request_buffer.fsqIdx.idx == fsq_cache_io.abandonIdx;
+
+    assign itlb_cache_io.req = {span & fsq_cache_io.en & ~fsq_cache_io.stall, fsq_cache_io.en & ~fsq_cache_io.stall};
+    assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
+    assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
+    assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};
+    assign itlb_cache_io.flush = fsq_cache_io.flush;
     assign ptag1 = itlb_cache_io.paddr[0][`PADDR_SIZE-1: `TLB_OFFSET];
     assign ptag2 = itlb_cache_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET];
 
