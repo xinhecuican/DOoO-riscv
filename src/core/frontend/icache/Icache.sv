@@ -156,8 +156,8 @@ module ICache(
 
 
     assign fsq_cache_io.ready = (main_state == IDLE) ||
-                                (main_state == LOOKUP && (!(|cache_miss))) ||
-                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception));
+                                (main_state == LOOKUP && (!(|cache_miss) &&
+                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))));
     assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss))) | miss_data_en}}
                              & request_buffer.expand_en_shift;
     assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);

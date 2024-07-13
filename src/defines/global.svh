@@ -226,8 +226,8 @@ typedef enum logic [1: 0] {
 
 // tlb
 `define TLB_OFFSET 12
-`define TLB_TAG (`VADDR_SIZE-`TLB_OFFSET)
-`define TLB_TAG_BUS [`VADDR_SIZE-1: `TLB_OFFSET]
+`define TLB_TAG (`PADDR_SIZE-`TLB_OFFSET)
+`define TLB_TAG_BUS [`PADDR_SIZE-1: `TLB_OFFSET]
 `define TLB_IDX_SIZE $clog2(`LOAD_ISSUE_BANK_SIZE) + $clog2(`LOAD_PIPELINE)
 `ifdef SV32
 `define TLB_MODE 1

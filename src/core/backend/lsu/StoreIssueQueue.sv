@@ -60,6 +60,8 @@ generate
         assign addr_io[i].data = dis_store_io.data[order[i]];
         assign addr_io[i].sqIdx = sqIdx[order[i]];
         assign addr_io[i].lqIdx = lqIdx[order[i]];
+        assign addr_io[i].success = store_io.success[i];
+        assign addr_io[i].success_idx = store_io.success_idx[i];
         assign addr_io[i].reply = store_io.reply[i];
         assign addr_io[i].tlb_en = tlb_lsu_io.swb[i];
         assign addr_io[i].tlb_exception = tlb_lsu_io.swb_exception[i];
@@ -72,6 +74,7 @@ generate
         assign store_wakeup_io.rd[i] = 0;
         assign store_io.storeIssueData[i] = addr_io[i].data_o;
         assign store_io.exception[i] = addr_io[i].exception_o;
+        assign store_io.issue_idx[i] = addr_io[i].issue_idx;
 
         assign data_io[i].en = addr_io[i].en;
         assign data_io[i].status = addr_io[i].status;

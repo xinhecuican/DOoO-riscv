@@ -165,7 +165,7 @@ generate
         logic older;
         LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_io.loadIssueData[i].robIdx, older);
         assign redirect_clear_req[i] = backendCtrl.redirect & older;
-        assign lptag = tlb_lsu_io.lpaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];
+        assign lptag[i] = tlb_lsu_io.lpaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];
     end
 endgenerate
     assign rio.req_cancel = redirect_clear_req;
@@ -181,7 +181,7 @@ endgenerate
     end
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign lpaddr[i] = {lptag[i], loadAddrNext[i][11: 0]};
+        assign lpaddr[i] = {lptag[i], loadAddrNext[i][`TLB_OFFSET-1: 0]};
         assign rio.lqIdx[i] = load_issue_data[i].lqIdx.idx;
         assign rio.robIdx[i] = load_issue_data[i].robIdx;
     end
@@ -201,13 +201,13 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, 32) rdata;
     logic `N(`LOAD_PIPELINE) rdata_valid;
 generate
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : data_gen
         logic `N(`DCACHE_BITS) combine_queue_data;
         logic `N(`DCACHE_BITS) expand_mask, expand_commit_mask;
         MaskExpand #(`DCACHE_BYTE) mask_expand(store_queue_fwd.mask[i], expand_mask);
         MaskExpand #(`DCACHE_BYTE) mask_expand_commit(commit_queue_fwd.mask[i], expand_commit_mask);
-        assign combine_queue_data = (rio.rdata[i] & ~expand_mask) | (store_queue_fwd.data[i] & expand_mask);
-        assign rdata[i] = (combine_queue_data & ~expand_commit_mask) | (commit_queue_fwd.data[i] & expand_commit_mask);
+        assign combine_queue_data = (rio.rdata[i] & ~expand_commit_mask) | (commit_queue_fwd.data[i] & expand_commit_mask);
+        assign rdata[i] = (combine_queue_data & ~expand_mask) | (store_queue_fwd.data[i] & expand_mask);
         assign rdata_valid[i] = ((store_queue_fwd.mask[i] | commit_queue_fwd.mask[i]) & lmaskNext[i]) == lmaskNext[i];
     end
 endgenerate
@@ -364,7 +364,7 @@ generate
         );
         assign sptag[i] = tlb_lsu_io.spaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];
         always_ff @(posedge clk)begin
-            store_en[i] <= store_io.en[i] & ~store_redirect_clear_req;
+            store_en[i] <= store_io.en[i] & ~store_redirect_clear_req[i];
             store_issue_data[i] <= store_io.storeIssueData[i];
             storeAddrNext[i] <= storeVAddr[i];
             smisalign_s2[i] <= smisalign[i];
@@ -444,7 +444,7 @@ generate
     end
 endgenerate
 
-    assign store_io.success = store_en_s4 & ~stlb_miss_s4;
+    assign store_io.success = store_en_s4 & ~store_redirect_s4 & ~stlb_miss_s4 & ~tlb_lsu_io.scancel;
     assign store_io.success_idx = sissue_idx_s4;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
@@ -511,12 +511,15 @@ module ViolationDetect(
     input logic clk,
     input logic rst,
     ViolationIO.violation io,
-    BackendRedirectIO.mem redirect_io
+    BackendRedirectIO.mem redirect_io,
+    BackendCtrl backendCtrl
 );
     ViolationData `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) s1_cmp;
     ViolationData `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) s2_cmp;
     ViolationData `N(`STORE_PIPELINE) s1_result, s1_result_o;
     ViolationData `N(`STORE_PIPELINE) s2_result, s2_result_o;
+    logic redirect_s1, redirect_s2, redirect_s2_o, redirect_s3;
+    RobIdx redirectIdx_s1, redirectIdx_s2, redirectIdx_s2_o, redirectIdx_s3;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
@@ -532,6 +535,8 @@ endgenerate
     always_ff @(posedge clk)begin
         s1_result_o <= s1_result;
         s2_result_o <= s2_result;
+        redirect_s1 <= backendCtrl.redirect;
+        redirectIdx_s1 <= backendCtrl.redirectIdx;
     end
     ViolationData s1_older, s2_older, pipeline_result, pipeline_o;
     /* UNPARAM */
@@ -539,14 +544,29 @@ endgenerate
     ViolationOlderCompare cmp_s2_older (s2_result_o[0], s2_result_o[1], s2_older);
     ViolationOlderCompare cmp_pipeline (s1_older, s2_older, pipeline_result);
 
+    logic redirect_s2_older;
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_s2 (backendCtrl.redirectIdx, redirectIdx_s1, redirect_s2_older);
+    assign redirect_s2 = redirect_s1 | backendCtrl.redirect;
+    assign redirectIdx_s2 = ~redirect_s1 | backendCtrl.redirect & redirect_s2_older ? backendCtrl.redirectIdx :  redirectIdx_s1;
     always_ff @(posedge clk)begin
         pipeline_o <= pipeline_result;
+        redirect_s2_o <= redirect_s2;
+        redirectIdx_s2_o <= redirectIdx_s2;
     end
+
+    logic redirect_s3_older;
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_s3 (backendCtrl.redirectIdx, redirectIdx_s2_o, redirect_s3_older);
+    assign redirect_s3 = redirect_s2_o | backendCtrl.redirect;
+    assign redirectIdx_s3 = ~redirect_s2_o | backendCtrl.redirect & redirect_s3_older ? backendCtrl.redirectIdx : redirectIdx_s2_o;
+
     ViolationData out;
     ViolationOlderCompare cmp_out (pipeline_o, io.lq_data, out);
+
+    logic out_older;
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_out (out.robIdx, redirectIdx_s3, out_older);
     logic `N(`ROB_WIDTH) robIdx_p;
     assign robIdx_p = out.robIdx.idx - 1;
-    assign redirect_io.memRedirect.en = out.en;
+    assign redirect_io.memRedirect.en = out.en & (~redirect_s3 | out_older);
     assign redirect_io.memRedirect.robIdx.idx = robIdx_p;
     assign redirect_io.memRedirect.robIdx.dir = robIdx_p[`ROB_WIDTH-1] & ~out.robIdx.idx[`ROB_WIDTH-1] ? ~out.robIdx.dir : out.robIdx.dir;
     assign redirect_io.memRedirect.fsqInfo = out.fsqInfo;

@@ -256,7 +256,7 @@ endgenerate
         .ready()
     );
 
-    logic `N(`PADDR_SIZE+`DCACHE_BYTE) addr_mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH) addr_mask `N(`LOAD_QUEUE_SIZE);
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             addr_mask <= '{default: 0};
@@ -285,15 +285,15 @@ generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_QUEUE_SIZE; j++)begin
             assign cmp_vec[i][j] = io.write_violation[i].en & 
-                                   (io.write_violation[i].addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] == addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-1: `DCACHE_BYTE]) &
+                                   (io.write_violation[i].addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] == addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE]) &
                                    (|(io.write_violation[i].mask & addr_mask[j][`DCACHE_BYTE-1: 0]));
         end
         logic `N(`LOAD_QUEUE_SIZE) store_mask;
         assign span[i] = hdir ^ io.write_violation[i].lqIdx.dir;
         MaskGen #(`LOAD_QUEUE_SIZE) maskgen_store (io.write_violation[i].lqIdx.idx, store_mask);
         assign valid_vec[i] = span[i] ? (head_mask ^ store_mask) : ~(head_mask ^ store_mask);
+        assign wb_vec[i] = valid & addrValid;
     end
-    assign wb_vec = valid & addrValid;
     assign violation_vec = wb_vec & valid_vec & cmp_vec;
     ParallelOR #(`LOAD_QUEUE_SIZE, `STORE_PIPELINE) or_violation_vec(violation_vec, violation_vec_combine);
     ParallelOR #(1, `STORE_PIPELINE) or_span (span, span_combine);
