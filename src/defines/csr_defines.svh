@@ -6,7 +6,7 @@
 `define S_MODE 2'b01
 `define M_MODE 2'b11
 
-`define CSR_NUM 19
+`define CSR_NUM 26
 `define CSRID_misa      12'h301
 `define CSRID_mvendorid 12'hf11
 `define CSRID_marchid   12'hf12

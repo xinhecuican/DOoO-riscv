@@ -18,7 +18,7 @@ module ICache(
         logic `ARRAY(2, `ICACHE_BANK) expand_en;
         logic `N(`BLOCK_INST_SIZE) expand_en_shift;
         logic `N(`ICACHE_BANK_WIDTH+1) start_offset;
-        logic span;
+        logic `N(2) span;
         logic multi_tag;
         FetchStream stream;
         FsqIdx fsqIdx;
@@ -63,7 +63,7 @@ module ICache(
     logic `N(`ICACHE_SET_WIDTH+1) indexp1;
     logic `N(`VADDR_SIZE-`TLB_OFFSET) vtag1, vtag2;
     logic `N(`ICACHE_TAG) ptag1, ptag2;
-    logic span;
+    logic `N(2) span;
     logic `ARRAY(2, `ICACHE_WAY) hit;
     logic `ARRAY(2, `ICACHE_WAY_WIDTH) hit_index;
     logic [1: 0] cache_hit, cache_miss;
@@ -75,7 +75,8 @@ module ICache(
     assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx;
     assign stream_size = fsq_cache_io.stream.size + 1;
     assign end_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + stream_size;
-    assign span = end_addr[`ICACHE_BANK_WIDTH] & (|end_addr[`ICACHE_BANK_WIDTH-1: 0]);
+    assign span[1] = end_addr[`ICACHE_BANK_WIDTH] & (|end_addr[`ICACHE_BANK_WIDTH-1: 0]);
+    assign span[0] = start_addr[`ICACHE_BANK_WIDTH];
     assign start_addr_mask = (1 << start_addr) - 1;
     assign expand_en = ((1 << end_addr) - 1) ^ start_addr_mask;
     assign expand_en_shift = expand_en >> (start_addr);
@@ -88,7 +89,7 @@ module ICache(
                              fsq_cache_io.abandon &&
                              request_buffer.fsqIdx.idx == fsq_cache_io.abandonIdx;
 
-    assign itlb_cache_io.req = {span & fsq_cache_io.en & ~fsq_cache_io.stall, fsq_cache_io.en & ~fsq_cache_io.stall};
+    assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall};
     assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
     assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};
@@ -108,7 +109,7 @@ module ICache(
             assign way_io[i].tagv_windex = miss_buffer.windex;
             assign way_io[i].tagv_wdata = {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
             assign way_io[i].tagv_index = index;
-            assign way_io[i].span = span;
+            assign way_io[i].span = span[1];
             // assign way_io[i].en = {`ICACHE_BANK{fsq_cache_io.en}} &
             //                       (({`ICACHE_BANK{span}} &
             //                       expand_en[`ICACHE_BANK * 2 - 1: `ICACHE_BANK]) |
@@ -134,8 +135,8 @@ module ICache(
     Encoder #(`ICACHE_WAY) encoder_hit_index1(hit[1], hit_index[1]);
     assign cache_hit[0] = |hit[0];
     assign cache_hit[1] = (|hit[1]);
-    assign cache_miss[0] = !cache_hit[0];
-    assign cache_miss[1] = request_buffer.span && !cache_hit[1];
+    assign cache_miss[0] = !request_buffer.span[0] && !cache_hit[0];
+    assign cache_miss[1] = request_buffer.span[1] && !cache_hit[1];
 
 
     ReplaceIO #(.DEPTH(`ICACHE_SET),.WAY_NUM(`ICACHE_WAY)) replace_io();
@@ -260,7 +261,7 @@ module ICache(
                     miss_buffer.addition_request <= (&cache_miss) & request_buffer.multi_tag;
                     miss_buffer.data <= cache_pd_io.data;
                     miss_buffer.stream_index <= 0;
-                    if(cache_miss[1])begin
+                    if(cache_miss[1] & ~cache_miss[0] & ~request_buffer.span[0])begin
                         miss_buffer.current_index <= `ICACHE_BANK - request_buffer.start_offset;
                     end
                     else begin
