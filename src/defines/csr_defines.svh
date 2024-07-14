@@ -6,7 +6,7 @@
 `define S_MODE 2'b01
 `define M_MODE 2'b11
 
-`define CSR_NUM 26
+`define CSR_NUM 19
 `define CSRID_misa      12'h301
 `define CSRID_mvendorid 12'hf11
 `define CSRID_marchid   12'hf12
@@ -77,7 +77,8 @@ typedef struct packed {
 
 typedef struct packed {
     logic sd;
-    logic `N(7) unuse;
+    logic `N(6) unuse;
+    logic sdt;
     logic spelp;
     logic tsr;
     logic tw;
@@ -101,6 +102,7 @@ typedef struct packed {
 } STATUS;
 
 `define STATUS_MASK {1'b1, 7'h0, 19'h7fff, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
+`define SSTATUS_MASK {1'b1, 6'h0, 2'h3, 3'h0, 2'h3, 1'b0, 4'hf, 2'h0, 3'h7, 1'b0, 2'h3, 3'h0, 1'b1, 1'b0}
 
 typedef struct packed {
     logic `N(21) unuse;
@@ -121,9 +123,12 @@ typedef struct packed {
     logic `N(2) mode;
 } TVEC;
 
-`define TVEC_MASK {{`MXL-2{1'b1}}, 2'b00}
+`define TVEC_MASK {{`MXL-2{1'b1}}, 1'b0, 1'b1}
 
-`define IP_MASK{{`MXL-18{1'b0}}, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
+`define EPC_MASK {{`MXL-2{1'b1}}, 2'b00}
+
+`define IP_MASK{{`MXL-14{1'b0}}, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
+`define SIP_MASK{{`MXL-14{1'b0}}, 1'b1, 3'b0, 1'b1, 3'b0, 1'b1, 3'b0, 1'b1, 1'b0}
 
 typedef struct packed {
     logic intr;
@@ -131,6 +136,7 @@ typedef struct packed {
 } CAUSE;
 
 `define CAUSE_MASK {1'b1, {`MXL-7{1'b0}}, 6'h3f}
+`define MEDELEG_INIT {{`MXL-16{1'b0}}, 16'hb3ff}
 
 typedef struct packed {
     logic mode;

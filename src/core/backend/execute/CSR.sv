@@ -41,13 +41,6 @@ module CSR(
     logic `N(`MXL) mconfigptr;
 
     // superviser
-    STATUS sstatus;
-    TVEC stvec;
-    logic `N(`MXL) sip;
-    logic `N(`MXL) sie;
-    logic `N(`MXL) sepc;
-    CAUSE scause;
-    logic `N(`MXL) stval;
     SATP satp;
 
 // csr write
@@ -68,62 +61,77 @@ module CSR(
                    csrrs ? rdata | origin_data : rdata & ~origin_data;
 // csr read
     logic `ARRAY(`CSR_NUM, 12) cmp_csrid;
+    logic `ARRAY(`CSR_NUM, 10) cmp_csrid_base;
     logic `ARRAY(`CSR_NUM, `MXL) cmp_csr_data;
     logic `N(`CSR_NUM) cmp_eq;
+    logic mode_valid;
+    logic s_map;
     logic redirect_older;
     LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.bundle.robIdx, redirect_older);
+    assign mode_valid = mode >= issue_csr_io.bundle.csrid[11: 10];
     assign wen = cmp_eq  & 
        {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
                  ~(backendCtrl.redirect & redirect_older) & 
-                 issue_csr_io.en}};
+                 issue_csr_io.en & mode_valid &
+                 (csrrw | csrrs | csrrc)}};
+    assign s_map = issue_csr_io.bundle.csrid[11: 10] == 2'b01;
 
-`define CSR_CMP_DEF(name, i, WARL, mask)        \
-    localparam [7: 0] ``name``_id = i;                 \
-    assign cmp_csrid[i] = `CSRID_``name;        \
-generate                                        \
-    if(WARL)begin                               \
-        assign cmp_csr_data[i] = name & mask;   \
-    end                                         \
-    else begin                                  \
-        assign cmp_csr_data[i] = name;          \
-    end                                         \
-endgenerate                                     \
+`define CSR_CMP_DEF(name, i, WARL, mask, S_MAP, smask)        \
+    localparam [7: 0] ``name``_id = i;                        \
+    assign cmp_csrid[i] = `CSRID_``name;                      \
+generate                                                      \
+    if(WARL)begin                                             \
+        if(S_MAP)begin                                        \
+            always_comb begin                                 \
+                if(s_map)begin                                \
+                    cmp_csr_data[i] = name & smask;           \
+                end                                           \
+                else begin                                    \
+                    cmp_csr_data[i] = name & mask;            \
+                end                                           \
+            end                                               \
+        end                                                   \
+        assign cmp_csr_data[i] = name & mask;                 \
+    end                                                       \
+    else begin                                                \
+        assign cmp_csr_data[i] = name;                        \
+    end                                                       \
+endgenerate                                                   \
 
-    `CSR_CMP_DEF(misa,      0, 1, `ISA_MASK)
-    `CSR_CMP_DEF(mvendorid, 1, 0, 0)
-    `CSR_CMP_DEF(marchid,   2, 0, 0)
-    `CSR_CMP_DEF(mimpid,    3, 0, 0)
-    `CSR_CMP_DEF(mhartid,   4, 0, 0)
-    `CSR_CMP_DEF(mstatus,   5, 0, 0)
-    `CSR_CMP_DEF(mtvec,     6, 1, `TVEC_MASK)
-    `CSR_CMP_DEF(medeleg,   7, 0, 0)
-    `CSR_CMP_DEF(mideleg,   8, 0, 0)
-    `CSR_CMP_DEF(mip,       9, 1, `IP_MASK)
-    `CSR_CMP_DEF(mie,       10,1, `IP_MASK)
-    `CSR_CMP_DEF(mscratch,  11,0, 0)
-    `CSR_CMP_DEF(mepc,      12,0, 0)
-    `CSR_CMP_DEF(mcause,    13,1, `CAUSE_MASK)
-    `CSR_CMP_DEF(mtval,     14,0, 0)
-
-    `CSR_CMP_DEF(sstatus,   15,0, 0)
-    `CSR_CMP_DEF(stvec,     16,1, `TVEC_MASK)
-    `CSR_CMP_DEF(sip,       17,1, `IP_MASK)
-    `CSR_CMP_DEF(sie,       18,1, `IP_MASK)
-    `CSR_CMP_DEF(sepc,      19,0, 0)
-    `CSR_CMP_DEF(scause,    20,1, `CAUSE_MASK)
-    `CSR_CMP_DEF(stval,     21,0, 0)
-    `CSR_CMP_DEF(satp,      22,0, 0)
-    `CSR_CMP_DEF(mconfigptr,23,0, 0)
-`ifdef RV32I
-    `CSR_CMP_DEF(mstatush,  24,0, 0)
-    `CSR_CMP_DEF(medelegh,  25,0, 0)
+    `CSR_CMP_DEF(misa,      0, 1, `ISA_MASK     , 0, 0              )
+    `CSR_CMP_DEF(mvendorid, 1, 0, 0             , 0, 0              )
+    `CSR_CMP_DEF(marchid,   2, 0, 0             , 0, 0              )
+    `CSR_CMP_DEF(mimpid,    3, 0, 0             , 0, 0              )
+    `CSR_CMP_DEF(mhartid,   4, 0, 0             , 0, 0              )
+    `CSR_CMP_DEF(mstatus,   5, 0, 0             , 1, `SSTATUS_MASK  )
+    `CSR_CMP_DEF(mtvec,     6, 1, `TVEC_MASK    , 0, 0              )
+    `CSR_CMP_DEF(medeleg,   7, 0, 0             , 0, 0)
+    `CSR_CMP_DEF(mideleg,   8, 0, 0             , 0, 0)
+    `CSR_CMP_DEF(mip,       9, 1, `IP_MASK      , 1, `SIP_MASK      )
+    `CSR_CMP_DEF(mie,       10,1, `IP_MASK      , 1, `SIP_MASK      )
+    `CSR_CMP_DEF(mscratch,  11,0, 0             , 0, 0              )
+    `CSR_CMP_DEF(mepc,      12,1, `EPC_MASK     , 0, 0              )
+    `CSR_CMP_DEF(mcause,    13,1, `CAUSE_MASK   , 0,             )
+    `CSR_CMP_DEF(mtval,     14,0, 0             , 0, )
+    `CSR_CMP_DEF(mconfigptr,15,0, 0             , 0, )
+    `CSR_CMP_DEF(satp,      16,0, 0             , 0, )
+`ifdef RV32I 0, 
+    `CSR_CMP_DEF(mstatush,  17,0, 0             , 0, )
+    `CSR_CMP_DEF(medelegh,  18,0, 0             , 0, )
 `endif
+
+generate
+    for(genvar i=0; i<`CSR_NUM; i++)begin
+        assign cmp_csrid_base[i] = cmp_csrid[9: 0];
+    end
+endgenerate
+
     ParallelEQ #(
         .RADIX(`CSR_NUM),
         .WIDTH(12),
         .DATA_WIDTH(`MXL)
     ) parallel_eq_rdata (
-        .origin(issue_csr_io.bundle.csrid),
+        .origin(issue_csr_io.bundle.csrid[9: 0]),
         .cmp_en({`CSR_NUM{1'b1}}),
         .cmp(cmp_csrid),
         .data_i(cmp_csr_data),
@@ -131,17 +139,36 @@ endgenerate                                     \
         .data_o(rdata)
     );
 
-`define CSR_WRITE_DEF(name, init_value, WRITE_ENABLE, MASK_VALID, mask) \
+`define CSR_WRITE_DEF(name, init_value, WRITE_ENABLE, MASK_VALID, mask, S_MAP, smask) \
 generate                                                                \
     if(WRITE_ENABLE)begin                                               \
         if(MASK_VALID)begin                                             \
-            always_ff @(posedge clk or posedge rst)begin                \
-                if(rst == `RST)begin                                    \
-                    name <= init_value;                                 \
+            if(S_MAP)begin                                              \
+                always_ff @(posedge clk or posedge rst)begin            \
+                    if(rst == `RST)begin                                \
+                        name <= init_value;                             \
+                    end                                                 \
+                    else begin                                          \
+                        if(wen[``name``_id])begin                       \
+                            if(s_map)begin                              \
+                                name <= wdata & smask;                  \
+                            end                                         \
+                            else begin                                  \
+                            name <= wdata & mask;                       \
+                            end                                         \
+                        end                                             \
+                    end                                                 \
                 end                                                     \
-                else begin                                              \
-                    if(wen[``name``_id])begin                           \
-                        name <= wdata & mask;                           \
+            end                                                         \
+            else begin                                                  \
+                always_ff @(posedge clk or posedge rst)begin            \
+                    if(rst == `RST)begin                                \
+                        name <= init_value;                             \
+                    end                                                 \
+                    else begin                                          \
+                        if(wen[``name``_id])begin                       \
+                            name <= wdata & mask;                       \
+                        end                                             \
                     end                                                 \
                 end                                                     \
             end                                                         \
@@ -168,31 +195,27 @@ generate                                                                \
     end                                                                 \
 endgenerate                                                             \
 
-    `CSR_WRITE_DEF(misa,        `MISA_INIT, 1, 0, 0)
-    `CSR_WRITE_DEF(mvendorid,   0,          0, 0, 0)
-    `CSR_WRITE_DEF(marchid,     0,          0, 0, 0)
-    `CSR_WRITE_DEF(mimpid,      0,          0, 0, 0)
-    `CSR_WRITE_DEF(mhartid,     0,          0, 0, 0)
-    `CSR_WRITE_DEF(mtvec,       0,          1, 0, 0)
-    `CSR_WRITE_DEF(medeleg,     0,          1, 0, 0)
-    `CSR_WRITE_DEF(mideleg,     0,          1, 0, 0)
-    `CSR_WRITE_DEF(mscratch,    0,          1, 0, 0)
-    `CSR_WRITE_DEF(sstatus,     0,          1, 1, `STATUS_MASK)
-    `CSR_WRITE_DEF(stvec,       0,          1, 0, 0)
-    `CSR_WRITE_DEF(sip,         0,          1, 0, 0)
-    `CSR_WRITE_DEF(sie,         0,          1, 0, 0)
-    `CSR_WRITE_DEF(sepc,        0,          1, 0, 0)
-    `CSR_WRITE_DEF(scause,      0,          1, 1, `CAUSE_MASK)
-    `CSR_WRITE_DEF(stval,       0,          1, 0, 0)
-    `CSR_WRITE_DEF(satp,        0,          1, 0, 0)
-    `CSR_WRITE_DEF(mconfigptr,  0,          0, 0, 0)
-`ifdef RV32I
-    `CSR_WRITE_DEF(mstatush,    0,          1, 0, 0)
-    `CSR_WRITE_DEF(medelegh,    0,          1, 0, 0)
+    `CSR_WRITE_DEF(misa,        `MISA_INIT,     1, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(mvendorid,   0,              0, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(marchid,     0,              0, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(mimpid,      0,              0, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(mhartid,     0,              0, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(mtvec,       0,              1, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(medeleg,     0,              1, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(mideleg,     `MEDELEG_INIT,  1, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(mscratch,    0,              1, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(satp,        0,              1, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(mconfigptr,  0,              0, 0, 0, 0, 0     )
+`ifdef RV32I,
+    `CSR_WRITE_DEF(mstatush,    0,              1, 0, 0, 0, 0     )
+    `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0, 0, 0     )
 `endif
 
     logic `N(`VADDR_SIZE-2) vec_pc;
     logic `N(`EXC_WIDTH) ecall_exccode;
+    logic `N(`MXL) exccode_decode;
+    logic `N(`MXL) edelege;
+    logic edelege_valid;
     /* verilator lint_off UNOPTFLAT */
     logic ret, ret_priv_error, ret_valid;
     assign vec_pc = mtvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
@@ -204,7 +227,11 @@ endgenerate                                                             \
     assign ret_priv_error = mode < redirect.exccode[1: 0];
     assign ret_valid = ret & ~ret_priv_error;
     assign exccode = redirect.exccode == `EXC_EC ? ecall_exccode : 
-                     ret & ret_priv_error ? `EXC_II : redirect.exccode;
+                     (ret & ret_priv_error) | 
+                     ((csrrw | csrrs | csrrc) & ~mode_valid) ? `EXC_II : redirect.exccode;
+    Decoder #(`MXL) deocder_exccode (exccode, exccode_decode);
+    assign edelege = medeleg & exccode_decode;
+    assign edelege_valid = (|edelege) & (mode != 2'b11);
 
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -215,7 +242,12 @@ endgenerate                                                             \
         end
         else begin
             if(wen[mstatus_id])begin
-                mstatus <= wdata & `STATUS_MASK;
+                if(s_map)begin
+                    mstatus <= wdata & `SSTATUS_MASK;
+                end
+                else begin
+                    mstatus <= wdata & `STATUS_MASK;
+                end
             end
             if(wen[mcause_id])begin
                 mcause <= wdata & `CAUSE_MASK;
@@ -224,6 +256,11 @@ endgenerate                                                             \
                 mepc <= wdata;
             end
             if(redirect.en & ~ret_valid)begin
+                if(edelege_valid)begin
+                    mstatus.spp <= mode;
+                    mstatus.spie <= mstatus.sie;
+                    mstatus.sie <= 0;
+                end
                 mstatus.mpp <= mode;
                 mstatus.mpie <= mstatus.mie;
                 mstatus.mie <= 0;
@@ -231,6 +268,10 @@ endgenerate                                                             \
             if(redirect.en && exccode == `EXC_MRET && ret_valid)begin
                 mstatus.mie <= mstatus.mpie;
                 mstatus.mpie <= 1;
+            end
+            if(redirect.en && exccode == `EXC_SRET && ret_valid)begin
+                mstatus.sie <= status.spie;
+                status.spie <= 1;
             end
             if(redirect.en & ~ret_valid)begin
                 mcause[`EXC_WIDTH-1: 0] <= exccode;
@@ -254,7 +295,12 @@ endgenerate                                                             \
         end
         else begin
             if(redirect.en & ~ret_valid)begin
-                mode <= 2'b11;
+                if(edelege_valid)begin
+                    mode <= 2'b01;
+                end
+                else begin
+                    mode <= 2'b11;
+                end
             end
             if(redirect.en && redirect.exccode == `EXC_MRET && !ret_priv_error)begin
                 mode <= mstatus.mpp;
