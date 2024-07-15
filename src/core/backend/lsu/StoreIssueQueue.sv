@@ -67,7 +67,7 @@ generate
         assign addr_io[i].tlb_exception = tlb_lsu_io.swb_exception[i];
         assign addr_io[i].tlb_error = tlb_lsu_io.swb_error[i];
         assign addr_io[i].tlb_bank_idx = tlb_lsu_io.swb_idx[i];
-        assign full[i] = addr_io[i].full & data_io[i].full;
+        assign full[i] = addr_io[i].full | data_io[i].full;
         
         assign store_wakeup_io.en[i] = addr_io[i].reg_en;
         assign store_wakeup_io.preg[i] = addr_io[i].rs1;

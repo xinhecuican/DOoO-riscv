@@ -26,7 +26,7 @@ module DCache(
     logic miss_req, miss_req_n;
     logic `N(`DCACHE_SET_WIDTH) widx;
     logic `ARRAY(`DCACHE_WAY, `DCACHE_TAG+1) wtagv;
-    logic `N(`VADDR_SIZE) waddr, waddr_n;
+    logic `N(`PADDR_SIZE) waddr, waddr_n;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) wdata, wdata_n;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask, wmask_n;
     logic `N(`DCACHE_WAY) w_wayhit;
@@ -36,7 +36,7 @@ module DCache(
     logic `N(`LOAD_PIPELINE) write_valid;
 
     logic ptw_req, ptw_req_n;
-    logic `N(`VADDR_SIZE) ptw_addr;
+    logic `N(`PADDR_SIZE) ptw_addr;
 
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
@@ -124,7 +124,7 @@ endgenerate
 
     LoadIdx `N(`LOAD_PIPELINE) lqIdx;
     RobIdx `N(`LOAD_PIPELINE) robIdx;
-    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) miss_addr;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) miss_addr;
     /* UNPARAM */
     always_ff @(posedge clk)begin
         rio.conflict[0] <= write_valid;
@@ -216,22 +216,23 @@ endgenerate
 
     // write hit
     logic `N(`DCACHE_WAY) refill_way;
+    logic `N(`DCACHE_SET_WIDTH) refillIdx;
     Decoder #(`DCACHE_WAY) decoder_refill_way (miss_io.refillWay, refill_way);
+    assign refillIdx = miss_io.refill_valid ? miss_io.refillAddr`DCACHE_SET_BUS :
+                  waddr_n`DCACHE_SET_BUS;
 generate
     for(genvar i=0; i<`DCACHE_WAY; i++)begin
         for(genvar j=0; j<`DCACHE_BANK; j++)begin
             assign way_io[i].we[j] = {`DCACHE_BYTE{wreq_n & w_wayhit[i]}} & wmask_n[j] |
                                      {`DCACHE_BYTE{miss_io.refill_valid & miss_io.refill_en & refill_way[i]}};
+        assign way_io[i].windex[j] = refillIdx;
         end
-        assign way_io[i].windex = waddr_n`DCACHE_SET_BUS | 
-                                  {`DCACHE_SET_WIDTH{miss_io.refill_valid}} & miss_io.refillAddr`DCACHE_SET_BUS;
         assign way_io[i].wdata = wdata_n |
                                  {`DCACHE_BANK*`DCACHE_BITS{miss_io.refill_valid}} & miss_io.refillData;
         assign way_dirty[i] = way_io[i].dirty;
 
         assign way_io[i].dirty_we = wreq_n & w_wayhit[i] | miss_io.refill_valid & miss_io.refill_en & refill_way[i];
-        assign way_io[i].dirty_windex = waddr_n`DCACHE_SET_BUS | 
-                                        {`DCACHE_SET_WIDTH{miss_io.refill_valid}} & miss_io.refillAddr`DCACHE_SET_BUS;
+        assign way_io[i].dirty_windex = refillIdx;
         assign way_io[i].dirty_wdata = wreq_n & w_wayhit[i];
 
         assign way_io[i].tagv_we = miss_io.refill_valid & miss_io.refill_en & refill_way[i];

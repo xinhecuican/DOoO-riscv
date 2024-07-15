@@ -150,7 +150,7 @@ generate
         logic `N(`DCACHE_BITS) expand_mask;
         MaskExpand #(`DCACHE_BYTE) expand_refill_mask (refillMask[i], expand_mask);
         assign refillDataCombine[i] = refillData[i] & expand_mask | rio.lqData[i] & ~expand_mask;
-        RDataGen data_gen (mask_data.uext, mask_data.size, mask_data.offset, refillDataCombine, refillDataShift);
+        RDataGen data_gen (mask_data.uext, mask_data.size, mask_data.offset, refillDataCombine[i], refillDataShift[i]);
     end
 endgenerate
 

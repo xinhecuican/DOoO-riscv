@@ -3,7 +3,7 @@
 interface ReplaceQueueIO;
     logic en;
     logic `N(`DCACHE_MISS_WIDTH) missIdx;
-    logic `N(`VADDR_SIZE) addr;
+    logic `N(`PADDR_SIZE) addr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data;
     logic full;
 
@@ -23,7 +23,7 @@ module ReplaceQueue(
     localparam TRANSFER_BANK = `DCACHE_LINE / `DATA_BYTE;
     typedef struct packed {
         logic `N(`DCACHE_MISS_WIDTH) missIdx;
-        logic `N(`VADDR_SIZE) addr;
+        logic `N(`PADDR_SIZE) addr;
         logic `ARRAY(TRANSFER_BANK, `XLEN) data;
     } ReplaceEntry;
 

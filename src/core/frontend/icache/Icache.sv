@@ -34,7 +34,7 @@ module ICache(
         logic `N(`ICACHE_TAG + `ICACHE_SET_WIDTH) addition_paddr;
         logic addition_request;
         logic flush;
-        logic [3: 0] length;
+        logic [4: 0] length;
         logic `N(`ICACHE_WAY) replace_way;
         logic `N(`BLOCK_INST_WIDTH) current_index;
         logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
@@ -69,7 +69,7 @@ module ICache(
     logic [1: 0] cache_hit, cache_miss;
     logic refill_en; // refill data to cache
     logic miss_data_en; // send miss data to ifu
-    logic abandon_success;
+    logic abandon_lookup, abandon_idle;
     logic stall_wait;
 
     assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx;
@@ -85,9 +85,12 @@ module ICache(
     assign index = fsq_cache_io.stream.start_addr`ICACHE_SET_BUS;
     assign indexp1 = index + 1;
     assign refill_en = main_state == REFILL && axi_io.sr.valid && next_stream_index == 0;
-    assign abandon_success = main_state == LOOKUP && 
+    assign abandon_lookup = main_state == LOOKUP && 
                              fsq_cache_io.abandon &&
                              request_buffer.fsqIdx.idx == fsq_cache_io.abandonIdx;
+    assign abandon_idle = main_state == IDLE &&
+                          fsq_cache_io.abandon &&
+                          fsq_cache_io.fsqIdx.idx == fsq_cache_io.abandonIdx;
 
     assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall};
     assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
@@ -159,7 +162,7 @@ module ICache(
     assign fsq_cache_io.ready = (main_state == IDLE) ||
                                 (main_state == LOOKUP && (!(|cache_miss) &&
                                 !(itlb_cache_io.miss && !(|itlb_cache_io.exception))));
-    assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss))) | miss_data_en}}
+    assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss)) & ~abandon_lookup) | miss_data_en}}
                              & request_buffer.expand_en_shift;
     assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
     assign cache_pd_io.stream.start_addr = request_buffer.stream.start_addr;
@@ -226,13 +229,13 @@ module ICache(
         else begin
             case(main_state)
             IDLE:begin
-                if(fsq_cache_io.en & ~fsq_cache_io.flush & ~fsq_cache_io.stall)begin
+                if(fsq_cache_io.en & ~fsq_cache_io.flush & ~fsq_cache_io.stall & ~abandon_idle)begin
                     `REQ_DEF
                     main_state <= LOOKUP;
                 end
             end
             LOOKUP:begin
-                if(fsq_cache_io.flush | abandon_success)begin
+                if(fsq_cache_io.flush | abandon_lookup | abandon_idle)begin
                     main_state <= IDLE;
                 end
                 else if(fsq_cache_io.stall | (itlb_cache_io.miss & ~(|itlb_cache_io.exception)))begin

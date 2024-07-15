@@ -57,6 +57,10 @@ module DCacheWay(
 
 generate
     for(genvar i=0; i<`ICACHE_BANK; i++)begin
+        logic `N(`DCACHE_SET_WIDTH) idx;
+        logic `N(`DCACHE_BITS) wdata;
+        assign wdata = io.wdata[i];
+        assign idx = |io.we[i] ? io.windex[i] : io.index[i];
         SPRAM #(
             .WIDTH(`DCACHE_BITS),
             .DEPTH(`DCACHE_SET),
@@ -65,9 +69,9 @@ generate
         ) bank (
             .clk(clk),
             .en(io.en[i]),
-            .addr(((|io.we[i]) ? io.windex[i] : io.index[i])),
+            .addr(idx),
             .we(io.we[i]),
-            .wdata(io.wdata[i]),
+            .wdata(wdata),
             .rdata(io.data[i])
         );
     end

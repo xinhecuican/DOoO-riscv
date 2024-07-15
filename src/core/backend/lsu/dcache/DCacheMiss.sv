@@ -2,13 +2,13 @@
 
 interface DCacheMissIO;
     logic `N(`LOAD_PIPELINE) ren;
-    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) raddr;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) raddr;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
     RobIdx `N(`LOAD_PIPELINE) robIdx;
     logic `N(`LOAD_PIPELINE) rfull;
 
     logic wen;
-    logic `N(`VADDR_SIZE) waddr;
+    logic `N(`PADDR_SIZE) waddr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) wdata;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask;
     logic wfull;
@@ -18,7 +18,7 @@ interface DCacheMissIO;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) ptw_refill_data;
 
     logic req;
-    logic `N(`VADDR_SIZE) req_addr;
+    logic `N(`PADDR_SIZE) req_addr;
     logic req_success;
     logic write_ready;
     logic `N(`DCACHE_WAY_WIDTH) replaceWay;
@@ -26,7 +26,7 @@ interface DCacheMissIO;
     logic refill_en;
     logic refill_valid;
     logic `N(`DCACHE_WAY_WIDTH) refillWay;
-    logic `N(`VADDR_SIZE) refillAddr;
+    logic `N(`PADDR_SIZE) refillAddr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refillData;
 
     logic `N(`LOAD_REFILL_SIZE) lq_en;
@@ -82,18 +82,32 @@ module DCacheMiss(
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
     logic `N(`LOAD_PIPELINE) mshr_remain_valid, rhit_combine, remain_valid;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) rfree_eq;
+    logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) rfree_idx;
 
-    CalValidNum #(`LOAD_PIPELINE) cal_req_order (io.ren, req_order);
+    CalValidNum #(`LOAD_PIPELINE) cal_en (io.ren, req_order);
 generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
+            if(i <= j)begin
+                assign rfree_eq[i][j] = 0;
+            end
+            else begin
+                assign rfree_eq[i][j] = io.ren[i] & io.ren[j] & (io.raddr[i]`DCACHE_BLOCK_BUS == io.raddr[j]`DCACHE_BLOCK_BUS);
+            end
+        end
+    end
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign freeIdx[i] = tail + req_order[i];
         for(genvar j=0; j<`DCACHE_MISS_SIZE; j++)begin
             assign rhit[i][j] = en[j] & (io.raddr[i]`DCACHE_BLOCK_BUS == addr[j]);
         end
         Encoder #(`DCACHE_MISS_SIZE) encoder_rhit(rhit[i], rhit_idx[i]);
+        PEncoder #(`LOAD_PIPELINE) encoder_rfree_eq_idx (rfree_eq[i], rfree_idx[i]);
         assign remain_valid[i] = remain_count > req_order[i];
-        assign rhit_combine[i] = |rhit[i];
-        assign ridx[i] = rhit_combine[i] ? rhit_idx[i] : freeIdx[i];
+        assign rhit_combine[i] = (|rhit[i]) | (|rfree_eq[i]);
+        assign ridx[i] = (|rhit[i]) ? rhit_idx[i] : 
+                         |rfree_eq[i] ? freeIdx[rfree_idx[i]] : freeIdx[i];
 
         always_ff @(posedge clk)begin
             io.rfull[i] <= io.ren[i] & ((~(mshr_remain_valid[i]) & ~io.ptw_req) | (~remain_valid[i])) & (~rhit_combine[i]);
@@ -115,13 +129,22 @@ endgenerate
     logic `N(`DCACHE_MISS_WIDTH) widx, whitIdx;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) read_data, combine_data;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) read_mask, combine_mask;
+    logic `N(`LOAD_PIPELINE) rwfree_eq;
+    logic `N($clog2(`LOAD_PIPELINE)) rwfree_idx;
 
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign rwfree_eq[i] = io.ren[i] && io.wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS);
+    end
+endgenerate
     assign write_req_order = req_order[`LOAD_PIPELINE-1]  + io.wen;
     assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
     assign write_remain_valid = remain_count > write_req_order;
-    assign whit_combine = |whit;
+    assign whit_combine = |whit | (|rwfree_eq);
     Encoder #(`DCACHE_MISS_SIZE) encoder_whit(whit, whitIdx);
-    assign widx = whit_combine ? whitIdx : freeIdx[`LOAD_PIPELINE];
+    PEncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
+    assign widx = |whit ? whitIdx : 
+                  |rwfree_eq ? freeIdx[rwfree_idx] : freeIdx[`LOAD_PIPELINE];
     always_ff @(posedge clk)begin
         io.wfull <= io.wen & ~rlast & ~req_last & ~write_remain_valid & ~whit_combine;
     end
@@ -278,7 +301,7 @@ endgenerate
 
 // req
     logic req_cache;
-    logic `N(`VADDR_SIZE) cache_addr;
+    logic `N(`PADDR_SIZE) cache_addr;
     logic `N($clog2(`DCACHE_LINE / `DATA_BYTE)) cacheIdx;
     logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `XLEN) cacheData, req_data;
     logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `DATA_BYTE) req_mask;

@@ -23,7 +23,7 @@ module SPRAM#(
         end
         else if(READ_LATENCY == 1)begin
             always_ff @(posedge clk)begin
-                if(en & ~(|we))begin
+                if(en & (~(|we)))begin
                     rdata <= data[addr];
                 end
             end

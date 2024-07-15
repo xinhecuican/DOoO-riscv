@@ -453,7 +453,7 @@ interface DCacheLoadIO;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) vaddr;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
     RobIdx `N(`LOAD_PIPELINE) robIdx;
-    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) ptag;
+    logic `ARRAY(`LOAD_PIPELINE, `TLB_TAG) ptag;
 
     logic `N(`LOAD_PIPELINE) hit;
     logic `N(`LOAD_PIPELINE) conflict;

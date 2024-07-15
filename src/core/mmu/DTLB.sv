@@ -53,7 +53,7 @@ generate
         assign tlb_lsu_io.lpaddr[i] = ltlb_io[i].paddr;
     end
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        TLB stlb(
+        TLB #(`DTLB_SIZE) stlb(
             .*,
             .io(stlb_io[i]),
             .csr_tlb_io(csr_stlb_io)

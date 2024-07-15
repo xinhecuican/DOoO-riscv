@@ -345,7 +345,7 @@ endgenerate                                                             \
         .mtvec(mtvec),
         .stvec(stvec),
         .mcause(mcause),
-        .scause(mcause),
+        .scause(scause),
         .satp(satp),
         .mip(mip),
         .mie(mie),

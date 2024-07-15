@@ -596,7 +596,9 @@ endgenerate
             for(int i=0; i<`SLOT_NUM-1; i++)begin
                 updateEntry.slots[i].en = we[i] | oldEntry.slots[i].en;
                 updateEntry.slots[i].carry = (updateEntry.slots[i].carry | free_p[i]) & ~equal[i];
-                updateEntry.slots[i].offset = we[i] ? offsets[i] : oldEntry.slots[i].offset;
+                updateEntry.slots[i].offset = we[i] ? fsqInfo.offset : 
+                                              oldEntry.slots[i].en ? oldEntry.slots[i].offset :
+                                              `BLOCK_INST_SIZE - 1;
                 updateEntry.slots[i].target = we[i] ? target[`JAL_OFFSET: 1] : oldEntry.slots[i].target;
                 updateEntry.slots[i].tar_state = we[i] ? tarState : oldEntry.slots[i].tar_state;
             end
@@ -604,11 +606,14 @@ endgenerate
             updateEntry.tailSlot.carry = (updateEntry.tailSlot.carry | free_p[`SLOT_NUM-1]) & ~equal[`SLOT_NUM-1];
             updateEntry.tailSlot.br_type = we[`SLOT_NUM-1] ? br_type : oldEntry.tailSlot.br_type;
             updateEntry.tailSlot.ras_type = we[`SLOT_NUM-1] ? ras_type : oldEntry.tailSlot.ras_type;
-            updateEntry.tailSlot.offset = we[`SLOT_NUM-1] ? offsets[`SLOT_NUM-1] : oldEntry.tailSlot.offset;
+            updateEntry.tailSlot.offset = we[`SLOT_NUM-1] ? fsqInfo.offset : 
+                                          oldEntry.tailSlot.en ? oldEntry.tailSlot.offset :
+                                          `BLOCK_INST_SIZE - 1;
             updateEntry.tailSlot.target = we[`SLOT_NUM-1] ? target : oldEntry.tailSlot.target;
             updateEntry.tailSlot.tar_state = we[`SLOT_NUM-1] ? tarState : oldEntry.tailSlot.tar_state;
 
-            updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-1 : oldEntry.fthAddr;
+            updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-1 : 
+                                  oldEntry.en ? oldEntry.fthAddr : `BLOCK_INST_SIZE-1;
         end
     end
 
