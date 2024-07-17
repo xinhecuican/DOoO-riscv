@@ -34,9 +34,14 @@ module CSR(
     logic `N(`MXL) mepc;
     CAUSE mcause;
     logic `N(`MXL) mtval;
+    logic `N(`MXL) sscratch;
+    logic `N(`MXL) mcycle;
+    logic `N(`MXL) minstret;
 `ifdef RV32I
     STATUSH mstatush;
     logic `N(`MXL) medelegh;
+    logic `N(`MXL) mcycleh;
+    logic `N(`MXL) minstreth;
 `endif
     logic `N(`MXL) mconfigptr;
 
@@ -115,9 +120,14 @@ endgenerate                                                   \
     `CSR_CMP_DEF(sip, mip,              21,1, `SIP_MASK     )
     `CSR_CMP_DEF(sie, mie,              22,1, `SIP_MASK     )
     `CSR_CMP_DEF(scause, scause,        23,1, `CAUSE_MASK   )
+    `CSR_CMP_DEF(sscratch, sscratch,    24,0, 0             )
+    `CSR_CMP_DEF(mcycle, mcycle,        25,0, 0             )
+    `CSR_CMP_DEF(minstret, minstret,    26,0, 0             )
 `ifdef RV32I
-    `CSR_CMP_DEF(mstatush, mstatush,    24,0, 0             )
-    `CSR_CMP_DEF(medelegh, medelegh,    25,0, 0             )
+    `CSR_CMP_DEF(mstatush, mstatush,    27,0, 0             )
+    `CSR_CMP_DEF(medelegh, medelegh,    28,0, 0             )
+    `CSR_CMP_DEF(mcycleh, mcycleh,      29,0, 0             )
+    `CSR_CMP_DEF(minstreth, minstreth,  30,0, 0             )
 `endif
 
     ParallelEQ #(
@@ -181,6 +191,7 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(mscratch,    0,              1, 0, 0)
     `CSR_WRITE_DEF(satp,        0,              1, 0, 0)
     `CSR_WRITE_DEF(mconfigptr,  0,              0, 0, 0)
+    `CSR_WRITE_DEF(sscratch,    0,              1, 0, 0)
 `ifdef RV32I
     `CSR_WRITE_DEF(mstatush,    0,              1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0)
@@ -208,6 +219,9 @@ endgenerate                                                             \
     assign edelege = medeleg & exccode_decode;
     assign edelege_valid = (|edelege) & (mode != 2'b11);
 
+    logic `N(64) mcycle_n;
+    assign mcycle_n = {mcycleh, mcycle} + 1;
+
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
@@ -219,8 +233,15 @@ endgenerate                                                             \
             stval <= 0;
             mip <= 0;
             mie <= 0;
+            mcycle <= 0;
+            mcycleh <= 0;
+            minstret <= 0;
+            minstreth <= 0;
         end
         else begin
+`ifndef DIFFTEST
+            {mcycleh, mcycle} <= mcycle_n;
+`endif
             if(wen[mstatus_id])begin
                 if(s_map)begin
                     mstatus <= wdata & `SSTATUS_MASK;

@@ -51,7 +51,7 @@ endgenerate
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin
         always_ff @(posedge clk)begin
-            enNext[i] <= bank_io[i].reg_en;
+            enNext[i] <= bank_io[i].reg_en & int_wakeup_io.ready[i];
             issue_exu_io.bundle[i] <= bank_io[i].data_o;
             issue_exu_io.br_type[i] <= bank_io[i].br_type;
             issue_exu_io.ras_type[i] <= bank_io[i].ras_type;

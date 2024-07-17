@@ -10,15 +10,17 @@ interface LoadUnitIO;
     logic `N(`LOAD_DIS_PORT) dis_en;
     RobIdx `N(`LOAD_DIS_PORT) dis_rob_idx;
     LoadIdx `N(`LOAD_DIS_PORT) dis_lq_idx;
+    logic full;
+    logic dis_stall;
 
     ReplyRequest `N(`LOAD_PIPELINE) reply_fast;
     ReplyRequest `N(`LOAD_PIPELINE) reply_slow;
     logic `N(`LOAD_PIPELINE) success;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) success_idx;
 
-    modport load (output en, loadIssueData, eqNum, issue_idx, dis_en, dis_rob_idx, dis_lq_idx, exception,
-                  input reply_fast, reply_slow, success, success_idx);
-    modport queue (input dis_en, dis_rob_idx, dis_lq_idx);
+    modport load (output en, loadIssueData, eqNum, issue_idx, dis_en, dis_rob_idx, dis_lq_idx, exception, dis_stall,
+                  input reply_fast, reply_slow, success, success_idx, full);
+    modport queue (input dis_en, eqNum, dis_rob_idx, dis_lq_idx, dis_stall, output full);
 endinterface
 
 module LoadIssueQueue(
@@ -79,11 +81,12 @@ generate
         LoopCompare #(`ROB_WIDTH) cmp_bigger(bank_io[i].robIdx_o, backendCtrl.redirectIdx, bigger[i]);
     end
 endgenerate
-    assign dis_load_io.full = |full;
+    assign dis_load_io.full = (|full) | load_io.full;
     Sort #(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_SIZE), $clog2(`LOAD_ISSUE_BANK_NUM)) sort_order (bankNum, originOrder, sortOrder); 
-    assign load_io.dis_en = full ? 0 : dis_load_io.en;
+    assign load_io.dis_en = dis_load_io.en;
+    assign load_io.dis_stall = dis_load_io.full;
     ParallelAdder #(1, `LOAD_ISSUE_BANK_NUM) adder_dis_num (dis_load_io.en, disNum);
-    assign load_io.eqNum = full ? 0 : disNum;
+    assign load_io.eqNum = disNum;
     always_ff @(posedge clk)begin
         order <= sortOrder;
         enNext <= load_wakeup_io.en;
@@ -221,7 +224,8 @@ endgenerate
         end
         else begin
             if(backendCtrl.redirect)begin
-                en <= walk_en;
+                en <= walk_en &
+                      ~({`LOAD_ISSUE_BANK_SIZE{io.success}} & success_idx_decode);
             end
             else begin
                 en <= (en | ({`LOAD_ISSUE_BANK_SIZE{io.en}} & free_en)) &

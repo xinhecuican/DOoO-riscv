@@ -119,6 +119,7 @@ module S2Control(
     logic tail_taken;
     logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
     logic `N(`PREDICTION_WIDTH) br_size, tail_size, br_size_normal;
+    logic `N(`PREDICTION_WIDTH+1) fthOffset;
     TargetState br_tar_state, tail_tar_state, br_tar_state_normal;
     logic [`VADDR_SIZE-`JAL_OFFSET-2: 0] br_target_high;
     logic [`VADDR_SIZE-`JALR_OFFSET-2: 0] tail_target_high;
@@ -149,17 +150,18 @@ module S2Control(
     PMux2 #(2) pmux2_br_tar(br_takens,
                             entry.slots[0].tar_state, entry.tailSlot.tar_state,
                             br_tar_state_normal);
-    assign tail_size = entry.tailSlot.en ? entry.tailSlot.offset : entry.fthAddr;
+    assign tail_size = tail_taken ? entry.tailSlot.offset : entry.fthAddr;
     assign tail_tar_state = entry.tailSlot.tar_state;
     assign tail_target_high = tail_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
                             tail_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
     assign tail_taken = entry.tailSlot.en && entry.tailSlot.br_type != CONDITION;
-    assign tail_target = tail_taken ? tail_indirect_target : entry.fthAddr + pc;
+    assign fthOffset = entry.fthAddr + 1;
+    assign tail_target = tail_taken ? tail_indirect_target : {fthOffset, 2'b00} + pc;
     assign br_target_high = br_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
                             br_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
-    assign br_target = {br_target_high, br_offset_normal, 1'b0};
+    assign br_target = {br_target_high, br_offset, 1'b0};
     assign predict_pc = |br_takens ? br_target : tail_target;
     assign older = entry.slots[0].offset < entry.tailSlot.offset;
 
@@ -199,7 +201,7 @@ module S2Control(
             result_o.cond_valid = cond_valid;
             result_o.taken = (|br_takens) | tail_taken;
             result_o.predTaken = br_takens;
-            result_o.btbEntry = entry;
+            result_o.btbEntry = hit ? entry : 0;
         end
         else begin
             result_o.stream.taken = result_i.stream.taken;

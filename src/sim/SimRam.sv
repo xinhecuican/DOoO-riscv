@@ -48,7 +48,7 @@ module SimRam(
         else begin
             if(axi.mar.valid && axi.sar.ready)begin
                 axi.sar.ready <= 1'b0;
-                rIdx <= axi.mar.addr >> 3;
+                rIdx <= (axi.mar.addr & 32'h7fffffff) >> 3;
                 if(axi.mar.burst == 0)begin
                     arlen <= 1;
                 end
@@ -94,7 +94,7 @@ module SimRam(
             end
 
             if(axi.maw.valid && axi.saw.ready)begin
-                wIdx <= axi.maw.addr >> 3;
+                wIdx <= (axi.maw.addr & 32'h7fffffff) >> 3;
                 axi.saw.ready <= 1'b0;
                 axi.sw.ready <= 1'b1;
                 axi.sb.id <= axi.maw.id;
@@ -115,6 +115,7 @@ module SimRam(
                 if(axi.mw.valid)begin
                     if(wsize <= awsize)begin
                         wIdx <= wIdx + 1;
+                        wshift <= 0;
                         wsize <= 8;
                     end
                     else begin

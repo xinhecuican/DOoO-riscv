@@ -221,11 +221,12 @@ module DispatchQueue #(
 );
 
     typedef struct packed {
-        logic `N(`PREG_WIDTH) rs1, rs2;
+        logic `N(`PREG_WIDTH) rs1;
+        logic `N(`PREG_WIDTH) rs2;
         logic `N(DATA_WIDTH) data;
     } Entry;
     RobIdx robIdx `N(DEPTH);
-    logic `N($bits(Entry)) entrys `N(DEPTH);
+    Entry entrys `N(DEPTH);
     logic `N(ADDR_WIDTH) head, tail;
     logic `N(ADDR_WIDTH+1) num;
     logic `N($clog2(`FETCH_WIDTH)+1) addNum, eqNum;
@@ -254,7 +255,7 @@ generate
         assign raddr = head + i;
         assign bigger = num > i;
         LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older);
-        assign io.en_o[i] = bigger & ~io.issue_full & (~backendCtrl.redirect | older);
+        assign io.en_o[i] = bigger & (~backendCtrl.redirect | older);
         assign io.rs1_o[i] = entry.rs1;
         assign io.rs2_o[i] = entry.rs2;
         assign io.data_o[i] = entry.data;

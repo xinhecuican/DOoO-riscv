@@ -91,7 +91,7 @@ interface FsqCacheIO;
     FetchStream stream;
     logic en;
     logic abandon; // cancel request at idle and lookup state
-    logic `N(`FSQ_WIDTH) abandonIdx;
+    FsqIdx abandonIdx;
     logic ready;
     FsqIdx fsqIdx;
     logic flush;
@@ -472,16 +472,18 @@ interface DCacheStoreIO;
     logic req;
     logic `N(`STORE_COMMIT_WIDTH) scIdx;
     logic `N(`PADDR_SIZE) paddr;
-    logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) data;
-    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) mask;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask;
 
     logic valid;
     logic success;
     logic conflict;
     logic `N(`STORE_COMMIT_WIDTH) conflictIdx;
+    logic refill;
+    logic `N(`STORE_COMMIT_WIDTH) refillIdx;
 
-    modport dcache (input req, scIdx, paddr, data, mask, output valid, success, conflict, conflictIdx);
-    modport buffer (output req, scIdx, paddr, data, mask, input valid, success, conflict, conflictIdx);
+    modport dcache (input req, scIdx, paddr, data, mask, output valid, success, conflict, conflictIdx, refill, refillIdx);
+    modport buffer (output req, scIdx, paddr, data, mask, input valid, success, conflict, conflictIdx, refill, refillIdx);
 endinterface
 
 interface LoadForwardIO;

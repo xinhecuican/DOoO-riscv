@@ -53,7 +53,7 @@ generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         logic `N(`PREG_SIZE) rd_decode;
         Decoder #(`PREG_SIZE) decoder_rd (commitWalk.prd[i], rd_decode);
-        assign walk_valids[i] = (rd_decode & {`PREG_SIZE{commitWalk.walk & commitWalk.we[i]}});
+        assign walk_valids[i] = (rd_decode & {`PREG_SIZE{commitWalk.walk & commitWalk.en[i] & commitWalk.we[i]}});
     end
     ParallelOR #(`PREG_SIZE, `COMMIT_WIDTH) or_walk_valid (walk_valids, walk_valid);
 endgenerate

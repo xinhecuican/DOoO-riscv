@@ -22,7 +22,7 @@ module FSQ (
     logic last_search;
     logic cache_req;
     logic cache_req_ok;
-    BTBEntry oldEntry;
+    BTBUpdateInfo oldEntry;
     logic directionTable `N(`FSQ_SIZE);
     logic tdir, hdir, shdir;
     logic `N(`FSQ_WIDTH) searchIdx;
@@ -32,10 +32,10 @@ module FSQ (
 
     assign tail_n1 = tail + 1;
     assign search_head_n1 = search_head + 1;
-    assign write_tail = bpu_fsq_io.redirect ? bpu_fsq_io.stream_idx : tail;
+    assign write_tail = bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
     assign queue_we = bpu_fsq_io.en & ~full;
     assign write_index = pd_redirect.en ? pd_redirect.fsqIdx.idx :
-                         bpu_fsq_io.redirect ? bpu_fsq_io.stream_idx : tail;
+                         bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
     assign searchIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : search_head;
     assign writeStream = pd_redirect.en ? pd_redirect.stream :
                             bpu_fsq_io.prediction.stream;
@@ -80,7 +80,7 @@ module FSQ (
     );
 
     MPRAM #(
-        .WIDTH($bits(BTBEntry)),
+        .WIDTH($bits(BTBUpdateInfo)),
         .DEPTH(`FSQ_SIZE),
         .READ_PORT(1),
         .WRITE_PORT(1),
@@ -93,7 +93,7 @@ module FSQ (
         .rdata(oldEntry),
         .we(queue_we),
         .waddr(write_tail),
-        .wdata(bpu_fsq_io.prediction.btbEntry),
+        .wdata(bpu_fsq_io.prediction.btbEntry[$bits(BTBUpdateInfo)-1: 0]),
         .ready()
     );
 
@@ -162,7 +162,8 @@ endgenerate
         if(cache_req_ok | fsq_back_io.redirect.en | pd_redirect.en)begin
             fsq_cache_io.en <= cache_req & ~fsq_back_io.redirect.en & ~pd_redirect.en;
             fsq_cache_io.abandon <= bpu_fsq_io.redirect;
-            fsq_cache_io.abandonIdx <= bpu_fsq_io.prediction.stream_idx;
+            fsq_cache_io.abandonIdx.idx <= bpu_fsq_io.prediction.stream_idx;
+            fsq_cache_io.abandonIdx.dir <= bpu_fsq_io.prediction.stream_dir;
             fsq_cache_io.fsqIdx.idx <= search_head;
             fsq_cache_io.fsqIdx.dir <= directionTable[search_head];
         end
@@ -242,7 +243,7 @@ endgenerate
     logic memRedirectValid;
 
     assign pd_redirect_n1 = pd_redirect.fsqIdx.idx + 1;
-    assign bpu_fsq_redirect_n1 = bpu_fsq_io.stream_idx + 1;
+    assign bpu_fsq_redirect_n1 = bpu_fsq_io.prediction.stream_idx + 1;
     assign redirect_n1 = fsq_back_io.redirect.fsqInfo.idx + 1;
 
     CondPredInfo squash_pred_info;
@@ -268,6 +269,10 @@ endgenerate
     end
 
 // idx maintain
+    logic search_bigger, search_eq, search_abandon;
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_search({bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir}, {search_head, shdir}, search_bigger);
+    assign search_eq = {bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir} == {search_head, shdir};
+    assign search_abandon = search_bigger | search_eq;
     always_ff @(posedge clk)begin
         last_search <= search_head == tail && fsq_cache_io.en;
     end
@@ -287,6 +292,9 @@ endgenerate
             else if(pd_redirect.en)begin
                 search_head <= pd_redirect_n1;
             end
+            else if(bpu_fsq_io.redirect & ~full & search_abandon)begin
+                search_head <= bpu_fsq_io.prediction.stream_idx;
+            end
             else if(cache_req_ok & cache_req) begin
                 search_head <= search_head_n1;
             end
@@ -297,7 +305,7 @@ endgenerate
             else if(pd_redirect.en)begin
                 tail <= pd_redirect_n1;
             end
-            else if(bpu_fsq_io.redirect)begin
+            else if(bpu_fsq_io.redirect & ~full)begin
                 tail <= bpu_fsq_redirect_n1;
             end
             else if(bpu_fsq_io.en & ~full)begin
@@ -330,8 +338,8 @@ endgenerate
             else if(pd_redirect.en)begin
                 tdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
             end
-            else if(bpu_fsq_io.redirect)begin
-                tdir <= bpu_fsq_io.stream_idx[`FSQ_WIDTH-1] & ~bpu_fsq_redirect_n1[`FSQ_WIDTH-1] ? ~bpu_fsq_io.stream_dir : bpu_fsq_io.stream_dir;
+            else if(bpu_fsq_io.redirect & ~full)begin
+                tdir <= bpu_fsq_io.prediction.stream_idx[`FSQ_WIDTH-1] & ~bpu_fsq_redirect_n1[`FSQ_WIDTH-1] ? ~bpu_fsq_io.stream_dir : bpu_fsq_io.stream_dir;
             end
             else if(bpu_fsq_io.en & ~full)begin
                 tdir <= tail[`FSQ_WIDTH-1] & ~tail_n1[`FSQ_WIDTH-1] ? ~tdir : tdir;
@@ -345,6 +353,9 @@ endgenerate
             end
             else if(pd_redirect.en)begin
                 shdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
+            end
+            else if(bpu_fsq_io.redirect & ~full & search_abandon)begin
+                shdir <= bpu_fsq_io.prediction.stream_dir;
             end
             else if(cache_req_ok & cache_req)begin
                 shdir <= search_head[`FSQ_WIDTH-1] & ~search_head_n1[`FSQ_WIDTH-1] ? ~shdir : shdir;
@@ -404,7 +415,7 @@ endgenerate
 
     logic `N(8) commitNum;
     logic commitValid;
-    BTBEntry commitUpdateEntry;
+    BTBUpdateInfo commitUpdateEntry;
     FsqIdxInfo commitFsqInfo;
     // because streamVec is not init
     assign commitValid = initReady & (
@@ -453,7 +464,7 @@ endgenerate
     logic update_taken;
     logic `N(`VADDR_SIZE) update_start_addr;
     logic `N(`VADDR_SIZE) update_target_pc;
-    BTBEntry update_btb_entry; 
+    BTBUpdateInfo update_btb_entry; 
     logic update_real_taken;
     logic `N(`SLOT_NUM) update_alloc_slot;
     assign bpu_fsq_io.updateInfo.redirectInfo = u_redirectInfo;
@@ -509,7 +520,7 @@ endgenerate
 endmodule
 
 module BTBEntryGen(
-    input BTBEntry oldEntry,
+    input BTBUpdateInfo oldEntry,
     input logic `VADDR_BUS pc,
     input FsqIdxInfo fsqInfo,
     input BranchType br_type,
@@ -519,7 +530,7 @@ module BTBEntryGen(
     input logic `VADDR_BUS target,
     input logic `N(`SLOT_NUM) predTaken,
     input logic taken,
-    output BTBEntry updateEntry,
+    output BTBUpdateInfo updateEntry,
     output logic `N(`SLOT_NUM) allocSlot,
     output logic `N(`SLOT_NUM) realTaken
 );
@@ -578,7 +589,6 @@ endgenerate
     assign tailTarState = target[`VADDR_SIZE-1: `JALR_OFFSET+1] > pc[`VADDR_SIZE-1: `JALR_OFFSET+1] ? TAR_OV :
                       target[`VADDR_SIZE-1: `JALR_OFFSET+1] < pc[`VADDR_SIZE-1: `JALR_OFFSET+1] ? TAR_UN : TAR_NONE;
     assign updateEntry.en = 1'b1;
-    BTBTagGen gen_tag(pc, updateEntry.tag);
     always_comb begin
         if(br_type != CONDITION)begin
             updateEntry.fthAddr = fsqInfo.offset;
@@ -609,7 +619,7 @@ endgenerate
             updateEntry.tailSlot.offset = we[`SLOT_NUM-1] ? fsqInfo.offset : 
                                           oldEntry.tailSlot.en ? oldEntry.tailSlot.offset :
                                           `BLOCK_INST_SIZE - 1;
-            updateEntry.tailSlot.target = we[`SLOT_NUM-1] ? target : oldEntry.tailSlot.target;
+            updateEntry.tailSlot.target = we[`SLOT_NUM-1] ? target[`JAL_OFFSET: 1] : oldEntry.tailSlot.target;
             updateEntry.tailSlot.tar_state = we[`SLOT_NUM-1] ? tarState : oldEntry.tailSlot.tar_state;
 
             updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-1 : 

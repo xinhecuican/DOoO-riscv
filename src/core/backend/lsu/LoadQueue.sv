@@ -1,7 +1,6 @@
 `include "../../../defines/defines.svh"
 
 interface LoadQueueIO;
-    logic `N($clog2(`LOAD_DIS_PORT)+1) disNum;
     logic `N(`LOAD_PIPELINE) en;
     logic `N(`LOAD_PIPELINE) miss;
     LoadIssueData `N(`LOAD_PIPELINE) data;
@@ -17,7 +16,7 @@ interface LoadQueueIO;
     logic `N(`LOAD_PIPELINE) wb_valid;
 
 
-    modport queue(input en, miss, disNum, data, paddr, rdata, rmask, mask, write_violation, wb_valid,
+    modport queue(input en, miss, data, paddr, rdata, rmask, mask, write_violation, wb_valid,
                   output lqIdx, lq_violation, wbData);
 endinterface
 
@@ -48,6 +47,7 @@ module LoadQueue(
     LoadIdx `N(`LOAD_PIPELINE) redirectLqIdx;
     logic redirect_next;
     logic `ARRAY(`LOAD_PIPELINE, `ROB_WIDTH) dis_rob_idx;
+    logic `N(`LOAD_PIPELINE) full;
 
     typedef struct packed {
         logic uext;
@@ -64,6 +64,7 @@ generate
         assign eqIdx[i] = io.data[i].lqIdx.idx;
         assign redirectRobIdx[i] = io.data[i].robIdx.idx;
         assign redirectLqIdx[i] = io.data[i].lqIdx;
+        assign full[i] = load_io.dis_en[i] & (load_io.dis_lq_idx[i].idx == head & (load_io.dis_lq_idx[i] ^ hdir));
     end
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitIdx[i] = head + i;
@@ -82,7 +83,7 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         always_ff @(posedge clk) begin
-            if(load_io.dis_en[i])begin
+            if(load_io.dis_en[i] & ~load_io.dis_stall)begin
                 redirect_robIdxs[load_io.dis_lq_idx[i].idx] <= load_io.dis_rob_idx[i];
             end
         end
@@ -108,8 +109,9 @@ endgenerate
 
     assign io.lqIdx.idx = tail;
     assign io.lqIdx.dir = tdir;
+    assign load_io.full = |full;
     assign head_n = head + commitBus.loadNum;
-    assign tail_n = tail + io.disNum;
+    assign tail_n = tail + load_io.eqNum;
     assign hdir_n = head[`LOAD_QUEUE_WIDTH-1] & ~head_n[`LOAD_QUEUE_WIDTH-1] ? ~hdir : hdir;
     
     always_ff @(posedge clk)begin
@@ -129,7 +131,7 @@ endgenerate
                 tail <= walk_valid ? walk_tail : head_n;
                 tdir <= walk_valid ? walk_dir : hdir_n;
             end
-            else begin
+            else if(~load_io.dis_stall)begin
                 tail <= tail_n;
                 tdir <= tail[`LOAD_QUEUE_WIDTH-1] & ~tail_n[`LOAD_QUEUE_WIDTH-1] ? ~tdir : tdir;
             end
@@ -162,8 +164,8 @@ endgenerate
     /* UNPRARM */
     PEncoder #(`LOAD_QUEUE_SIZE) pencoder_wb_idx (waiting_wb, wbIdx[0]);
     PREncoder #(`LOAD_QUEUE_SIZE) prencoder_wb_idx (waiting_wb, wbIdx[1]);
-    assign io.wbData[0].en = |waiting_wb;
-    assign io.wbData[1].en = (|waiting_wb) && wbIdx[0] != wbIdx[1];
+    assign io.wbData[0].en = (|waiting_wb) & ~backendCtrl.redirect & ~redirect_next;
+    assign io.wbData[1].en = (|waiting_wb) && (wbIdx[0] != wbIdx[1]) && !backendCtrl.redirect && !redirect_next;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign io.wbData[i].robIdx = wb_queue_data[i].robIdx;
@@ -188,7 +190,7 @@ endgenerate
         end
         else begin
             for(int i=0; i<`LOAD_DIS_PORT; i++)begin
-                if(load_io.dis_en[i])begin
+                if(load_io.dis_en[i] & ~load_io.dis_stall)begin
                     valid[load_io.dis_lq_idx[i].idx] <= 1'b1;
                     dataValid[load_io.dis_lq_idx[i].idx] <= 1'b0;
                     addrValid[load_io.dis_lq_idx[i].idx] <= 1'b0;

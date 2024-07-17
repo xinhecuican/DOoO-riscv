@@ -37,13 +37,14 @@ module BTB (
     logic `N(`BTB_SET_WIDTH) index, updateIdx;
     logic `N($clog2(`BTB_WAY)) s2_bank;
     logic `N(`BTB_WAY) bank_en, bank_we;
+    logic `N(`BTB_TAG_SIZE) update_tag;
 
     localparam INDEX_POS = `BTB_SET_WIDTH+1+$clog2(`BTB_WAY);
     BTBIndexGen index_gen(btb_io.pc, index);
     BTBIndexGen update_index_gen(btb_io.updateInfo.start_addr, updateIdx);
     Decoder #(`BTB_WAY) decoder_bank(btb_io.pc[1+$clog2(`BTB_WAY): 2], bank_en);
     Decoder #(`BTB_WAY) decoder_we(btb_io.updateInfo.start_addr[1+$clog2(`BTB_WAY): 2], bank_we);
-
+    BTBTagGen gen_update_tag(btb_io.updateInfo.start_addr, update_tag);
     generate;
         for(genvar i=0; i<`BTB_WAY; i++)begin
             MPRAM #(
@@ -65,8 +66,8 @@ module BTB (
             );
             assign bank_ctrl[i].raddr = index;
             assign bank_ctrl[i].waddr = updateIdx;
-            assign bank_ctrl[i].we = btb_io.update & bank_we[i];
-            assign bank_ctrl[i].wdata = btb_io.updateInfo.btbEntry;
+            assign bank_ctrl[i].we = btb_io.update & bank_we[i] & btb_io.updateInfo.btbEntry.en;
+            assign bank_ctrl[i].wdata = {update_tag, btb_io.updateInfo.btbEntry};
         end
     endgenerate
     assign btb_io.entry = bank_ctrl[s2_bank].rdata;

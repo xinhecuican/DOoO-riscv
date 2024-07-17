@@ -191,7 +191,7 @@ endgenerate
     // reply fast
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign load_io.reply_fast[i].en = load_en[i] & rio.conflict[i] | tlb_lsu_io.lmiss[i];
+        assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | tlb_lsu_io.lmiss[i]);
         assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
         assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] ? 2'b11 : 2'b00;
     end
@@ -221,6 +221,7 @@ endgenerate
     logic `N(`LOAD_PIPELINE) redirect_clear_s2, redirect_clear_s3;
     logic `N(`LOAD_PIPELINE) lmisalign_s3;
     logic `N(`LOAD_PIPELINE) tlb_exception_s3;
+    logic `N(`LOAD_PIPELINE) rhit;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
@@ -244,29 +245,41 @@ endgenerate
         issue_idx_next <= load_issue_idx;
         lmisalign_s3 <= lmisalign_s2;
         tlb_exception_s3 <= tlb_exception_s2;
+        rhit <= rio.hit;
     end
     assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3;
-    assign load_queue_io.disNum = load_io.eqNum;
     assign load_queue_io.en = leq_valid;
     assign load_queue_io.data = leq_data;
     assign load_queue_io.paddr = lpaddrNext;
     assign load_queue_io.mask = lmaskNext;
     assign load_queue_io.rmask = (store_queue_fwd.mask | commit_queue_fwd.mask);
     assign load_queue_io.rdata = rdata;
-    assign load_queue_io.miss = ~rio.hit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
+    assign load_queue_io.miss = ~rhit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
     assign load_queue_io.wb_valid = ~leq_valid;
 
     // reply slow
     logic `N(`LOAD_PIPELINE) fwd_data_invalid_n, lreply_en;
     logic `N(`LOAD_PIPELINE) lmiss;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_n2;
+    logic `N(`LOAD_PIPELINE) redirect_clear_s4;
+    RobIdx `N(`LOAD_PIPELINE) robIdx_s4;
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        logic older;
+        always_ff @(posedge clk)begin
+            robIdx_s4[i] <= leq_data[i].robIdx;
+        end
+        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx_s4[i], older);
+        assign redirect_clear_s4[i] = backendCtrl.redirect & older;
+    end
+endgenerate
     always_ff @(posedge clk)begin
         fwd_data_invalid_n <= fwd_data_invalid  & ~lmisalign_s3 & ~tlb_exception_s3;
         lreply_en <= leq_en & ~redirect_clear_s3;
         issue_idx_n2 <= issue_idx_next;
-        lmiss <= ~rio.hit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
+        lmiss <= ~rhit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
     end
-    assign load_io.success = lreply_en & ~fwd_data_invalid_n  & ~(lmiss & rio.full);
+    assign load_io.success = lreply_en & ~fwd_data_invalid_n & ~redirect_clear_s4 & ~(lmiss & rio.full);
     assign load_io.success_idx = issue_idx_n2;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -285,9 +298,9 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
         logic wb_data_en, wb_pipeline_en;
-        RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
+        RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
         assign wb_pipeline_en = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3 | 
-                                ((rio.hit[i] | rdata_valid[i]) & ~fwd_data_invalid[i])) &
+                                ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i])) &
                                 ~redirect_clear_s3[i];
         always_ff @(posedge clk)begin
             wb_data_en <= wb_pipeline_en | load_queue_io.wbData[i].en;
@@ -302,7 +315,7 @@ generate
         assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
         assign lsu_wb_io.datas[i].rd = from_issue[i] ? lrd_n[i] : load_queue_io.wbData[i].rd;
         assign lsu_wb_io.datas[i].res = from_issue[i] ? ldata_n[i] : load_queue_io.wbData[i].res;
-        assign lsu_wb_io.datas[i].exccode = lexccode;
+        assign lsu_wb_io.datas[i].exccode = from_issue[i] ? lexccode[i] : `EXC_NONE;
         assign load_wakeup_io.wakeup_en[i] = wb_data_en;
         assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].rd;
     end

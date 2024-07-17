@@ -35,7 +35,6 @@ module ICache(
         logic addition_request;
         logic flush;
         logic [4: 0] length;
-        logic `N(`ICACHE_WAY) replace_way;
         logic `N(`BLOCK_INST_WIDTH) current_index;
         logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
         logic `ARRAY(`ICACHE_BANK, 32) replace_data;
@@ -85,12 +84,10 @@ module ICache(
     assign index = fsq_cache_io.stream.start_addr`ICACHE_SET_BUS;
     assign indexp1 = index + 1;
     assign refill_en = main_state == REFILL && axi_io.sr.valid && next_stream_index == 0;
-    assign abandon_lookup = main_state == LOOKUP && 
-                             fsq_cache_io.abandon &&
-                             request_buffer.fsqIdx.idx == fsq_cache_io.abandonIdx;
-    assign abandon_idle = main_state == IDLE &&
-                          fsq_cache_io.abandon &&
-                          fsq_cache_io.fsqIdx.idx == fsq_cache_io.abandonIdx;
+    assign abandon_lookup = fsq_cache_io.abandon &&
+                            request_buffer.fsqIdx == fsq_cache_io.abandonIdx;
+    assign abandon_idle = fsq_cache_io.abandon &&
+                          fsq_cache_io.fsqIdx == fsq_cache_io.abandonIdx;
 
     assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall};
     assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
@@ -108,7 +105,7 @@ module ICache(
                 .io(way_io[i])
             );
             assign way_io[i].tagv_en = fsq_cache_io.en & ~fsq_cache_io.stall;
-            assign way_io[i].tagv_we = {`ICACHE_BANK{miss_buffer.replace_way[i] & refill_en}};
+            assign way_io[i].tagv_we = {`ICACHE_BANK{replace_way[i] & refill_en}};
             assign way_io[i].tagv_windex = miss_buffer.windex;
             assign way_io[i].tagv_wdata = {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
             assign way_io[i].tagv_index = index;
@@ -126,7 +123,7 @@ module ICache(
                 assign way_io[i].wdata[j] = miss_buffer.replace_data[j];
             end
             assign way_io[i].wdata[`ICACHE_BANK-1] = axi_io.sr.data;
-            assign way_io[i].we = {`ICACHE_BANK{miss_buffer.replace_way[i] & refill_en}};
+            assign way_io[i].we = {`ICACHE_BANK{replace_way[i] & refill_en}};
 
             assign hit[0][i] = way_io[i].tagv[0][`ICACHE_TAG] && (way_io[i].tagv[0][`ICACHE_TAG-1: 0] == ptag1);
             assign hit[1][i] = way_io[i].tagv[1][`ICACHE_TAG] && (way_io[i].tagv[1][`ICACHE_TAG-1: 0] == ptag2);
@@ -144,10 +141,11 @@ module ICache(
 
     ReplaceIO #(.DEPTH(`ICACHE_SET),.WAY_NUM(`ICACHE_WAY)) replace_io();
     logic `N(`ICACHE_WAY) replace_way;
-    assign replace_io.hit_en = main_state == LOOKUP && (!cache_miss[0] && !cache_miss[1]);
-    assign replace_io.hit_way = hit_index[0];
-    assign replace_io.hit_index = request_buffer.index1;
-    assign replace_io.miss_index = cache_miss[0] ? request_buffer.index1 : request_buffer.index2;
+    assign replace_io.hit_en = main_state == LOOKUP && (!cache_miss[0] && !cache_miss[1]) ||
+                               refill_en;
+    assign replace_io.hit_way = refill_en ? replace_io.miss_way : hit_index[0];
+    assign replace_io.hit_index = refill_en ? miss_buffer.windex : request_buffer.index1;
+    assign replace_io.miss_index = miss_buffer.windex;
     PLRU #(
         .DEPTH(`ICACHE_SET),
         .WAY_NUM(`ICACHE_WAY)
@@ -243,7 +241,6 @@ module ICache(
                 end
                 else if((|cache_miss) & ~(|itlb_cache_io.exception))begin
                     main_state <= MISS;
-                    miss_buffer.replace_way <= replace_way;
                     if(cache_miss[0])begin
                         miss_buffer.paddr <= {ptag1, request_buffer.index1};
                         miss_buffer.windex <= request_buffer.index1;

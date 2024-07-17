@@ -22,12 +22,19 @@ typedef struct packed {
 } TailSlot;
 
 typedef struct packed {
-    logic en;
     logic `N(`BTB_TAG_SIZE) tag;
+    logic en;
     BranchSlot `N(`SLOT_NUM-1) slots;
     TailSlot tailSlot;
     logic `N(`PREDICTION_WIDTH) fthAddr;
 } BTBEntry;
+
+typedef struct packed {
+    logic en;
+    BranchSlot `N(`SLOT_NUM-1) slots;
+    TailSlot tailSlot;
+    logic `N(`PREDICTION_WIDTH) fthAddr;
+} BTBUpdateInfo;
 
 typedef struct packed {
     logic `N(`TAGE_TAG_SIZE) tag;
@@ -137,7 +144,7 @@ typedef struct packed {
     logic `VADDR_BUS start_addr;
     logic `VADDR_BUS target_pc;
     RedirectInfo redirectInfo;
-    BTBEntry btbEntry;
+    BTBUpdateInfo btbEntry;
     PredictionMeta meta;
 } BranchUpdateInfo;
 

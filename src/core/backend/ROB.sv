@@ -155,20 +155,26 @@ generate
         assign commitWalk.old_prd[i] = robData[i].old_prd;
     end
 
-    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        always_ff @(posedge clk)begin
-            if(!walk_state && initReady && !exc_exist_n)begin
+    always_ff @(posedge clk)begin
+        if(!walk_state && initReady && !exc_exist_n)begin
+            for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 commitBus.en[i] <= commit_en[i];
-                commitBus.num <= commitNum;
-                commitBus.loadNum <= commitLoadNum;
-                commitBus.storeNum <= commitStoreNum;
             end
-            else begin
+            commitBus.num <= commitNum;
+        end
+        else begin
+            for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 commitBus.en[i] <= 0;
-                commitBus.num <= 0;
-                commitBus.loadNum <= 0;
-                commitBus.storeNum <= 0;
             end
+            commitBus.num <= 0;
+        end
+        if(initReady)begin
+            commitBus.loadNum <= commitLoadNum;
+            commitBus.storeNum <= commitStoreNum;
+        end
+        else begin
+            commitBus.loadNum <= 0;
+            commitBus.storeNum <= 0;
         end
     end
 endgenerate

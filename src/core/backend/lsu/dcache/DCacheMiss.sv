@@ -9,6 +9,7 @@ interface DCacheMissIO;
 
     logic wen;
     logic `N(`PADDR_SIZE) waddr;
+    logic `N(`STORE_COMMIT_WIDTH) scIdx;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) wdata;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask;
     logic wfull;
@@ -25,17 +26,21 @@ interface DCacheMissIO;
 
     logic refill_en;
     logic refill_valid;
+    logic refill_dirty;
     logic `N(`DCACHE_WAY_WIDTH) refillWay;
     logic `N(`PADDR_SIZE) refillAddr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refillData;
+    logic `N(`STORE_COMMIT_WIDTH) refill_scIdx;
 
     logic `N(`LOAD_REFILL_SIZE) lq_en;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
     modport miss (input ren, raddr, lqIdx, robIdx, req_success, write_ready, replaceWay, refill_valid,
-                        wen, waddr, wdata, wmask, ptw_req,
-                  output rfull, req, req_addr, wfull, refill_en, refillWay, refillAddr, refillData, lq_en, lqData, lqIdx_o, ptw_refill, ptw_refill_data);
+                        wen, waddr, scIdx, wdata, wmask, ptw_req,
+                  output rfull, req, req_addr, wfull, 
+                        refill_en, refill_dirty, refillWay, refillAddr, refillData, refill_scIdx,
+                        lq_en, lqData, lqIdx_o, ptw_refill, ptw_refill_data);
 endinterface
 
 module DCacheMiss(
@@ -64,6 +69,7 @@ module DCacheMiss(
     logic `N(`DCACHE_WAY_WIDTH) way `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`DCACHE_MISS_SIZE);
+    logic `N(`STORE_COMMIT_WIDTH) scIdxs `N(`DCACHE_MISS_SIZE);
 
     logic `N(`DCACHE_MISS_WIDTH) mshr_head, head, tail;
     logic `N(`DCACHE_MISS_WIDTH+1) remain_count;
@@ -85,7 +91,7 @@ module DCacheMiss(
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) rfree_eq;
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) rfree_idx;
 
-    CalValidNum #(`LOAD_PIPELINE) cal_en (io.ren, req_order);
+    CalValidNum #(`LOAD_PIPELINE) cal_en (io.ren & ~rhit_combine, req_order);
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
@@ -110,17 +116,17 @@ generate
                          |rfree_eq[i] ? freeIdx[rfree_idx[i]] : freeIdx[i];
 
         always_ff @(posedge clk)begin
-            io.rfull[i] <= io.ren[i] & ((~(mshr_remain_valid[i]) & ~io.ptw_req) | (~remain_valid[i])) & (~rhit_combine[i]);
+            io.rfull[i] <= io.ren[i] & ((~(mshr_remain_valid[i] | io.ptw_req)) | ((~remain_valid[i]) & (~rhit_combine[i])));
         end
 
-        assign free_en[i] = io.ren[i] & (mshr_remain_valid[i] & remain_valid[i] & ~rhit_combine[i]);
+        assign free_en[i] = io.ren[i] & ((mshr_remain_valid[i] | io.ptw_req) & remain_valid[i] & ~rhit_combine[i]);
     end
 endgenerate
     /* UNPARAM */
     PEncoder #(`DCACHE_MSHR_SIZE) encoder_mshr1 (~mshr_en, mshrFreeIdx[0]);
     PREncoder #(`DCACHE_MSHR_SIZE) encoder_mshr2 (~mshr_en, mshrFreeIdx[1]);
     assign mshr_remain_valid[0] = |(~mshr_en);
-    assign mshr_remain_valid[1] = mshrFreeIdx[0] != mshrFreeIdx[1];
+    assign mshr_remain_valid[1] = (|(~mshr_en)) && (~io.ren[0] | (mshrFreeIdx[0] != mshrFreeIdx[1]));
 
 // write enqueue
     logic write_remain_valid, whit_combine;
@@ -137,7 +143,7 @@ generate
         assign rwfree_eq[i] = io.ren[i] && io.wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS);
     end
 endgenerate
-    assign write_req_order = req_order[`LOAD_PIPELINE-1]  + io.wen;
+    assign write_req_order = req_order[`LOAD_PIPELINE-1]  + (io.ren[`LOAD_PIPELINE-1] & ~rhit_combine[`LOAD_PIPELINE-1]);
     assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
     assign write_remain_valid = remain_count > write_req_order;
     assign whit_combine = |whit | (|rwfree_eq);
@@ -170,9 +176,11 @@ endgenerate
 
 // refill
     assign io.refill_en = en[head] & we[head] & dataValid[head];
+    assign io.refill_dirty = |mask[head];
     assign io.refillWay = way[head];
     assign io.refillAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign io.refillData = data[head];
+    assign io.refill_scIdx = scIdxs[head];
     assign io.ptw_refill = req_last & req_ptw;
     assign io.ptw_refill_data = cache_eq_data;
 
@@ -208,16 +216,18 @@ endgenerate
 // mshr redirect
     logic `N(`DCACHE_MSHR_SIZE) redirect_valid, redirect_valid_n;
     logic redirect_n;
+    RobIdx redirectIdx;
 generate
     for(genvar i=0; i<`DCACHE_MSHR_SIZE; i++)begin
         logic older;
-        LoopCompare #(`ROB_WIDTH) compare_rob (mshr[i].robIdx, backendCtrl.redirectIdx, older);
+        LoopCompare #(`ROB_WIDTH) compare_rob (mshr[i].robIdx, redirectIdx, older);
         assign redirect_valid[i] = older & mshr_en[i];
     end
 endgenerate
     always_ff @(posedge clk)begin
         redirect_n <= backendCtrl.redirect;
-        redirect_valid_n <= redirect_valid;
+        redirectIdx <= backendCtrl.redirectIdx;
+        // redirect_valid_n <= redirect_valid;
     end
 
     ParallelAdder #(1, `LOAD_PIPELINE+1) adder_free (free_en, free_num);
@@ -240,14 +250,18 @@ endgenerate
             tail <= tail + free_num;
             remain_count <= remain_count + (refilled[mshr_head] & ~(|mshr_hit)) - free_num;
 
+            if(redirect_n)begin
+                mshr_en <= redirect_valid;
+            end
+
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
-                if(io.ren[i] & ((mshr_remain_valid[i] | io.ptw_req) & remain_valid[i] & ~rhit_combine[i]))begin
+                if(io.ren[i] & ((mshr_remain_valid[i] | io.ptw_req) & (remain_valid[i] & ~rhit_combine[i])))begin
                     en[freeIdx[i]] <= 1'b1;
                     addr[freeIdx[i]] <= io.raddr[i]`DCACHE_BLOCK_BUS;
                     dataValid[freeIdx[i]] <= 1'b0;
                 end
 
-                if(io.ren[i] & ~io.ptw_req & (mshr_remain_valid[i] & remain_valid[i] | rhit_combine[i]))begin
+                if(io.ren[i] & ~io.ptw_req & mshr_remain_valid[i] & (remain_valid[i] | rhit_combine[i]))begin
                     mshr_en[mshrFreeIdx[i]] <= 1'b1;
                     mshr[mshrFreeIdx[i]].robIdx <= io.robIdx[i];
                     mshr[mshrFreeIdx[i]].missIdx <= ridx[i];
@@ -262,10 +276,6 @@ endgenerate
                 end
             end
 
-            if(redirect_n)begin
-                mshr_en <= redirect_valid_n;
-            end
-
             if(io.ptw_req & (remain_valid[0] & ~rhit_combine[0]))begin
                 ptw_en[freeIdx[0]] <= 1'b1;
             end
@@ -278,6 +288,7 @@ endgenerate
             if(io.wen & ~rlast & ~req_last & (write_remain_valid | whit_combine))begin
                 data[widx] <= combine_data;
                 mask[widx] <= combine_mask;
+                scIdxs[widx] <= io.scIdx;
             end
             if(req_last)begin
                 data[head] <= cache_eq_data;
@@ -292,6 +303,7 @@ endgenerate
             if(io.refill_en & io.refill_valid)begin
                 refilled[head] <= 1'b1;
                 en[head] <= 1'b0;
+                mask[head] <= 0;
             end
             if(refilled[mshr_head] & ~(|mshr_hit))begin
                 refilled[mshr_head] <= 1'b0;

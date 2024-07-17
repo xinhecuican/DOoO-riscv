@@ -82,7 +82,7 @@ generate;
         assign rename_io.vrs2[i] = dec_rename_io.op[i].di.rs2;
         assign rename_io.vrd[i] = dec_rename_io.op[i].di.rd;
         assign rd_we[i] = rd_en[i] & ~(|waw[i]);
-        assign rename_io.rename_we[i] = rd_we[i] & ~backendCtrl.redirect & ~stall;
+        assign rename_io.rename_we[i] = rd_we[i] & ~backendCtrl.redirect & ~stall & ~backendCtrl.rename_full;
         assign rename_io.rename_vrd[i] = dec_rename_io.op[i].di.rd;
         assign rename_io.rename_prd[i] = prd[i];
         assign robIdx[i] = rob_rename_io.robIdx.idx + i;

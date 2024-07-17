@@ -15,8 +15,11 @@ interface StoreUnitIO;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) success_idx;
     ReplyRequest `N(`STORE_PIPELINE) reply;
 
-    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size, issue_idx, exception, input reply, success, success_idx);
-    modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx, data_size);
+    logic full;
+    logic dis_stall;
+
+    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size, issue_idx, exception, dis_stall, input reply, success, success_idx, full);
+    modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx, data_size, dis_stall, output full);
 endinterface
 
 module StoreIssueQueue(
@@ -92,9 +95,10 @@ generate
         LoopCompare #(`ROB_WIDTH) cmp_data_bigger (data_io[i].robIdx_o, backendCtrl.redirectIdx, data_bigger[i]);
     end
 endgenerate
-    assign dis_store_io.full = |full;
+    assign dis_store_io.full = (|full) | store_io.full;
     Sort #(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_SIZE), $clog2(`STORE_ISSUE_BANK_NUM)) sort_order (bankNum, originOrder, sortOrder); 
-    assign store_io.dis_en = full ? 0 : dis_store_io.en;
+    assign store_io.dis_en = dis_store_io.en;
+    assign store_io.dis_stall = dis_store_io.full;
     always_ff @(posedge clk)begin
         order <= sortOrder;
     end
@@ -234,7 +238,8 @@ endgenerate
         end
         else begin
             if(backendCtrl.redirect)begin
-                en <= walk_en;
+                en <= walk_en &
+                      ~({`LOAD_ISSUE_BANK_SIZE{io.success}} & success_idx_decode);
             end
             else begin
                 en <= (en | ({`STORE_ISSUE_BANK_SIZE{io.en}} & free_en)) &

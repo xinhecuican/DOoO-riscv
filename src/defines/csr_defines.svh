@@ -6,30 +6,37 @@
 `define S_MODE 2'b01
 `define M_MODE 2'b11
 
-`define CSR_NUM 26
+`ifdef SV32
+`define CSR_NUM 31
+`endif
+`define CSRID_mstatus   12'h300
 `define CSRID_misa      12'h301
+`define CSRID_medeleg   12'h302
+`define CSRID_mideleg   12'h303
+`define CSRID_mie       12'h304
+`define CSRID_mtvec     12'h305
+`define CSRID_mstatush  12'h310
+`define CSRID_medelegh  12'h312
+`define CSRID_mscratch  12'h340
+`define CSRID_mepc      12'h341
+`define CSRID_mcause    12'h342
+`define CSRID_mtval     12'h343
+`define CSRID_mip       12'h344
+`define CSRID_mcycle    12'hb00
+`define CSRID_minstret  12'hb02
+`define CSRID_mcycleh   12'hb80
+`define CSRID_minstreth 12'hb82
 `define CSRID_mvendorid 12'hf11
 `define CSRID_marchid   12'hf12
 `define CSRID_mimpid    12'hf13
 `define CSRID_mhartid   12'hf14
 `define CSRID_mconfigptr 12'hf15
-`define CSRID_mstatus   12'h300
-`define CSRID_mtvec     12'h305
-`define CSRID_medeleg   12'h302
-`define CSRID_mideleg   12'h303
-`define CSRID_mip       12'h344
-`define CSRID_mie       12'h304
-`define CSRID_mscratch  12'h340
-`define CSRID_mepc      12'h341
-`define CSRID_mcause    12'h342
-`define CSRID_mtval     12'h343
-`define CSRID_mstatush  12'h310
-`define CSRID_medelegh  12'h312
 
 `define CSRID_sstatus   12'h100
 `define CSRID_stvec     12'h105
 `define CSRID_sip       12'h144
 `define CSRID_sie       12'h104
+`define CSRID_sscratch  12'h140
 `define CSRID_sepc      12'h141
 `define CSRID_scause    12'h142
 `define CSRID_stval     12'h143

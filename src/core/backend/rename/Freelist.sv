@@ -43,18 +43,10 @@ endgenerate
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<`FREELIST_DEPTH; i++)begin
-`ifdef DIFFTEST
                 freelist[i] <= i + 32;
-`else
-                freelist[i] <= i + 32;
-`endif
             end
             for(int i=`FREELIST_DEPTH; i<`PREG_SIZE; i++)begin
-`ifdef DIFFTEST
                 freelist[i] <= 0;
-`else
-                freelist[i] <= 0;
-`endif
             end
             head <= `FREELIST_DEPTH;
             tail <= 0;
@@ -63,12 +55,7 @@ endgenerate
         else begin
             tail <= tail_n;
             head <= head + commitBus.wenum;
-            if(commitWalk.walk)begin
-                remainCount <= remainCount + commitWalk.weNum;
-            end
-            else begin
-                remainCount <= remainCount - tail_add_num + commitBus.wenum;
-            end
+            remainCount <= remainCount - tail_add_num + commitBus.wenum + commitWalk.weNum;
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 if(we[i])begin
                     freelist[weIdx[i]] <= fl_io.commit_prd[i];

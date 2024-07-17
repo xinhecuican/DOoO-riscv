@@ -64,4 +64,8 @@ module AxiInterface(
     assign axi.mw = dcache_io.mw;
     assign axi.mb.ready = 1'b1;
 
+    assign dcache_io.saw = axi.saw;
+    assign dcache_io.sw = axi.sw;
+    assign dcache_io.sb = axi.sb;
+
 endmodule

@@ -16,7 +16,7 @@ generate
     if(WAY_NUM == 1)begin
         assign replace_io.miss_way = 0;
     end
-    else begin
+    else begin 
         logic `N(WAY_NUM-1) plru `N(DEPTH);
         logic `N(WAY_NUM-1) rdata `N(READ_PORT);
         logic `N(WAY_NUM-1) updateData `N(READ_PORT);
@@ -67,24 +67,24 @@ generate
     if(WAY_NUM == 4)begin
         always_comb begin
             case (hit_way)
-                2'b00: out = {rdata[2:1], 1'b1};
-                2'b01: out = {rdata[2], 1'b1, rdata[0]};
-                2'b10: out = {1'b1, rdata[1:0]};
-                2'b11: out = {1'b0, rdata[1:0]};
+                2'b00: out = {2'b11, rdata[0]};
+                2'b01: out = {2'b01, rdata[0]};
+                2'b10: out = {rdata[2], 2'b01};
+                2'b11: out = {rdata[2], 2'b00};
             endcase
         end
     end
     else if (WAY_NUM == 8) begin
         always_comb begin
             case (hit_way)
-                3'b000: out = {rdata[6:3], 1'b1, rdata[2:1], 1'b1};
-                3'b001: out = {rdata[6:3], 1'b1, rdata[2:1], 1'b0};
-                3'b010: out = {rdata[6:3], 1'b0, rdata[2:1], 1'b1};
-                3'b011: out = {rdata[6:3], 1'b0, rdata[2:1], 1'b0};
-                3'b100: out = {rdata[6:5], 1'b1, rdata[4:3], 1'b1, rdata[2:0]};
-                3'b101: out = {rdata[6:5], 1'b1, rdata[4:3], 1'b0, rdata[2:0]};
-                3'b110: out = {rdata[6:5], 1'b0, rdata[4:3], 1'b1, rdata[2:0]};
-                3'b111: out = {rdata[6:5], 1'b0, rdata[4:3], 1'b0, rdata[2:0]};
+                3'b000: out = {2'b11, rdata[5], 1'b1, rdata[2:0]};
+                3'b001: out = {2'b01, rdata[5], 1'b1, rdata[2:0]};
+                3'b010: out = {rdata[6], 3'b011, rdata[2:0]};
+                3'b011: out = {rdata[6], 3'b001, rdata[2:0]};
+                3'b100: out = {rdata[6: 4], 3'b011, rdata[0]};
+                3'b101: out = {rdata[6: 4], 3'b010, rdata[0]};
+                3'b110: out = {rdata[6: 4], 2'b00, rdata[1], 1'b1};
+                3'b111: out = {rdata[6: 4], 2'b00, rdata[1], 1'b0};
             endcase
         end
     end
@@ -105,32 +105,30 @@ module PLRUReplace #(
 generate
     if(WAY_NUM == 4)begin
         always_comb begin
-        case (rdata)
-            3'b000: out = 2'b00;
-            3'b001: out = 2'b01;
-            3'b010: out = 2'b10;
-            3'b011: out = 2'b11;
-            3'b100: out = 2'b00;
-            3'b101: out = 2'b01;
-            3'b110: out = 2'b10;
-            3'b111: out = 2'b11;
-        endcase
+            casez (rdata)
+            3'b00?: out = 2'b00;
+            3'b10?: out = 2'b01;
+            3'b?10: out = 2'b10;
+            3'b?11: out = 2'b11;
+            default: out = 0;
+            endcase
         end
     end
     else if (WAY_NUM == 8) begin
         always_comb begin
-            case (rdata)
-                7'b0000000, 7'b0000001, 7'b0000010, 7'b0000011, 7'b0000100, 7'b0000101, 7'b0000110, 7'b0000111: out = 3'b000;
-                7'b0001000, 7'b0001001, 7'b0001010, 7'b0001011, 7'b0001100, 7'b0001101, 7'b0001110, 7'b0001111: out = 3'b001;
-                7'b0010000, 7'b0010001, 7'b0010010, 7'b0010011, 7'b0010100, 7'b0010101, 7'b0010110, 7'b0010111: out = 3'b010;
-                7'b0011000, 7'b0011001, 7'b0011010, 7'b0011011, 7'b0011100, 7'b0011101, 7'b0011110, 7'b0011111: out = 3'b011;
-                7'b0100000, 7'b0100001, 7'b0100010, 7'b0100011, 7'b0100100, 7'b0100101, 7'b0100110, 7'b0100111: out = 3'b100;
-                7'b0101000, 7'b0101001, 7'b0101010, 7'b0101011, 7'b0101100, 7'b0101101, 7'b0101110, 7'b0101111: out = 3'b101;
-                7'b0110000, 7'b0110001, 7'b0110010, 7'b0110011, 7'b0110100, 7'b0110101, 7'b0110110, 7'b0110111: out = 3'b110;
-                7'b0111000, 7'b0111001, 7'b0111010, 7'b0111011, 7'b0111100, 7'b0111101, 7'b0111110, 7'b0111111: out = 3'b111;
-                default: out = 3'b000;
+            casez (rdata)
+                7'b00?0???: out = 0;
+                7'b10?0???: out = 1;
+                7'b?100???: out = 2;
+                7'b?110???: out = 3;
+                7'b???100?: out = 4;
+                7'b???110?: out = 5;
+                7'b???1?10: out = 6;
+                7'b???1?11: out = 7;
+                default: out    = 0;
             endcase
         end
+
     end
     else begin
         assign out = 0;

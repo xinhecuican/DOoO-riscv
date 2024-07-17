@@ -17,6 +17,7 @@ module UBTB(
     logic `N(`SLOT_NUM) br_takens;
     logic tail_taken;
     logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
+    logic `N(`PREDICTION_WIDTH+1) fthOffset;
     logic [`VADDR_SIZE-`JAL_OFFSET-2: 0] br_target_high;
     logic [`VADDR_SIZE-`JALR_OFFSET-2: 0] tail_target_high;
     logic `VADDR_BUS tail_target, br_target;
@@ -43,8 +44,10 @@ module UBTB(
                             tail_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
     assign tail_taken = lookup_entry.tailSlot.en && lookup_entry.tailSlot.br_type != CONDITION;
-    assign tail_target = tail_taken ? {tail_target_high, lookup_entry.tailSlot.target, 1'b0} : lookup_entry.fthAddr + ubtb_io.pc;
-    assign tail_size = lookup_entry.tailSlot.en ? lookup_entry.tailSlot.offset : lookup_entry.fthAddr;
+    assign fthOffset = lookup_entry.fthAddr + 1;
+    assign tail_target = tail_taken ? {tail_target_high, lookup_entry.tailSlot.target, 1'b0} : 
+                         {fthOffset, 2'b00} + ubtb_io.pc;
+    assign tail_size = tail_taken ? lookup_entry.tailSlot.offset : lookup_entry.fthAddr;
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
                                         lookup_entry.slots[0].target,lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0],
                                         br_offset_normal);
@@ -115,7 +118,7 @@ endgenerate
         ubtb_io.result.redirect_info.ghistIdx = ubtb_io.history.ghistIdx;
         ubtb_io.result.redirect_info.tage_history = ubtb_io.history.tage_history;
         ubtb_io.result.redirect_info.rasIdx = 0;
-        ubtb_io.result.btbEntry = lookup_entry;
+        ubtb_io.result.btbEntry = (|lookup_hits) ? lookup_entry : 0;
         ubtb_io.meta.ctr = lookup_ctr;
     end
 
@@ -147,8 +150,8 @@ endgenerate
             ctrs <= '{default: 0};
         end
         else begin
-            if(ubtb_io.update)begin
-                entrys[updateSelectIdx] <= ubtb_io.updateInfo.btbEntry;
+            if(ubtb_io.update & ubtb_io.updateInfo.btbEntry.en)begin
+                entrys[updateSelectIdx] <= {update_tag, ubtb_io.updateInfo.btbEntry};
                 for(int i=0; i<`SLOT_NUM; i++)begin
                     if(!update_carry)begin
                         ctrs[updateSelectIdx] <= u_ctr;

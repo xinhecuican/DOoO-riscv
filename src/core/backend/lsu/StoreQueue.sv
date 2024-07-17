@@ -40,6 +40,7 @@ module StoreQueue(
     logic `N(`STORE_QUEUE_WIDTH) validSelect1, validSelect2, walk_tail, valid_select, valid_select_n;
     logic walk_valid, walk_dir;
     logic `ARRAY(`STORE_PIPELINE, `XLEN) storeData;
+    logic `N(`STORE_PIPELINE) full;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign addr_eqIdx[i] = io.data[i].sqIdx.idx;
@@ -49,6 +50,7 @@ generate
     end
     for(genvar i=0; i<`STORE_DIS_PORT; i++)begin
         assign disWIdx[i] = tail + i;
+        assign full[i] = issue_queue_io.dis_en[i] & ((issue_queue_io.dis_sq_idx[i].idx == head) & (issue_queue_io.dis_sq_idx[i].dir ^ hdir));
     end
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitIdx[i] = commitHead + i;
@@ -59,6 +61,7 @@ endgenerate
     ParallelAdder #(1, `STORE_PIPELINE) addr_commit_num (queue_commit_io.en, commitNum);
     assign io.sqIdx.idx = tail;
     assign io.sqIdx.dir = tdir;
+    assign issue_queue_io.full = |full;
     assign head_n = queue_commit_io.conflict ? head : head + commitNum;
     assign tail_n = tail + disNum;
     assign hdir_n = head[`STORE_QUEUE_WIDTH-1] & ~head_n[`STORE_QUEUE_WIDTH-1] ? ~hdir : hdir;
@@ -77,7 +80,7 @@ endgenerate
                 tail <= walk_valid ? walk_tail: head_n;
                 tdir <= walk_valid ? walk_dir : hdir_n;
             end
-            else begin
+            else if(~issue_queue_io.dis_stall)begin
                 tail <= tail_n;
                 tdir <= tail[`STORE_QUEUE_WIDTH-1] & ~tail_n[`STORE_QUEUE_WIDTH-1] ? ~tdir : tdir;
             end
@@ -105,7 +108,7 @@ endgenerate
         end
         else begin
             for(int i=0; i<`STORE_DIS_PORT; i++)begin
-                if(issue_queue_io.dis_en[i])begin
+                if(issue_queue_io.dis_en[i] & ~issue_queue_io.dis_stall)begin
                     addrValid[disWIdx[i]] <= 1'b0;
                     dataValid[disWIdx[i]] <= 1'b0;
                     commited[disWIdx[i]] <= 1'b0;
@@ -153,7 +156,7 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         always_ff @(posedge clk) begin
-            if(issue_queue_io.dis_en[i])begin
+            if(issue_queue_io.dis_en[i] & ~issue_queue_io.dis_stall)begin
                 redirect_robIdxs[issue_queue_io.dis_sq_idx[i].idx] <= issue_queue_io.dis_rob_idx[i];
             end
         end

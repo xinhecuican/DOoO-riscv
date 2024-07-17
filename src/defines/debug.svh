@@ -1,5 +1,8 @@
 `ifndef __CORE_DEBUG_SVH
 `define __CORE_DEBUG_SVH
+
+`define ENABLE_LOG
+
 `define PERF(name, cond) \
 `ifdef DIFFTEST \
     logic [31: 0] perf_counter_``name; \
@@ -34,5 +37,7 @@ generate; \
     end \
 endgenerate \
 `endif \
+
+`define UNPARAM /* UNPARAM */
 
 `endif

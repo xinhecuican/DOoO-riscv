@@ -3,7 +3,7 @@
 interface ReplaceQueueIO;
     logic en;
     logic `N(`DCACHE_MISS_WIDTH) missIdx;
-    logic `N(`PADDR_SIZE) addr;
+    logic `N(`DCACHE_TAG+`DCACHE_SET_WIDTH) addr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data;
     logic full;
 
@@ -23,7 +23,7 @@ module ReplaceQueue(
     localparam TRANSFER_BANK = `DCACHE_LINE / `DATA_BYTE;
     typedef struct packed {
         logic `N(`DCACHE_MISS_WIDTH) missIdx;
-        logic `N(`PADDR_SIZE) addr;
+        logic `N(`DCACHE_TAG+`DCACHE_SET_WIDTH) addr;
         logic `ARRAY(TRANSFER_BANK, `XLEN) data;
     } ReplaceEntry;
 
@@ -119,7 +119,7 @@ module ReplaceQueue(
 
     assign w_axi_io.maw.valid = aw_valid;
     assign w_axi_io.maw.id = `DCACHE_ID;
-    assign w_axi_io.maw.addr = entrys[head].addr;
+    assign w_axi_io.maw.addr = {entrys[head].addr, {`DCACHE_LINE_WIDTH{1'b0}}};
     assign w_axi_io.maw.len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign w_axi_io.maw.size = $clog2(`DATA_BYTE);
     assign w_axi_io.maw.burst = 2'b01;
