@@ -215,6 +215,7 @@ endgenerate
     assign miss_io.req_success = miss_req_n & ~replace_queue_io.full;
     assign miss_io.write_ready = (whit | (~(wtagv[replace_io.miss_way][0] & way_dirty[replace_io.miss_way])));
     assign miss_io.replaceWay = replace_io.miss_way;
+    assign miss_io.scIdx = scIdx_n;
     assign wio.conflict = miss_io.wfull;
     assign wio.success = wreq_n2;
     always_ff @(posedge clk)begin

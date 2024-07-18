@@ -39,6 +39,7 @@ module StoreQueue(
     logic `N(`STORE_QUEUE_SIZE) bigger, walk_en, validStart, validEnd;
     logic `N(`STORE_QUEUE_WIDTH) validSelect1, validSelect2, walk_tail, valid_select, valid_select_n;
     logic walk_valid, walk_dir;
+    logic walk_full;
     logic `ARRAY(`STORE_PIPELINE, `XLEN) storeData;
     logic `N(`STORE_PIPELINE) full;
 generate
@@ -94,6 +95,8 @@ endgenerate
     logic `N(`PADDR_SIZE+`DCACHE_BYTE) addr_mask `N(`LOAD_QUEUE_SIZE);
     logic `N(`STORE_QUEUE_SIZE) data_dir;
     logic `ARRAY(`LOAD_QUEUE_SIZE, `DCACHE_BITS) data;
+    logic `N(`COMMIT_WIDTH) commitMask;
+    MaskGen #(`COMMIT_WIDTH+1) mask_gen_commit (commitBus.storeNum, commitMask);
 
     always_ff @(posedge clk)begin
         redirect_next <= backendCtrl.redirect;
@@ -127,7 +130,7 @@ endgenerate
                 end
             end
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
-                if(i < commitBus.storeNum)begin
+                if(commitMask[i])begin
                     commited[commitIdx[i]] <= 1'b1;
                 end
             end
@@ -175,10 +178,11 @@ endgenerate
     assign valid_select = validSelect1 == head ? validSelect2 : validSelect1;
     assign walk_en = valid & bigger;
     assign valid_select_n = valid_select + 1;
+    assign walk_full = &walk_en;
     always_ff @(posedge clk)begin
         walk_valid <= |walk_en;
-        walk_tail <= valid_select_n;
-        walk_dir <= valid_select_n <= tail ? tdir : ~tdir;
+        walk_tail <= walk_full ? tail : valid_select_n;
+        walk_dir <= walk_full || (valid_select_n <= tail) ? tdir : ~tdir;
     end
 
 // write to commit

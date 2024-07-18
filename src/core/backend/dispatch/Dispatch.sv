@@ -270,10 +270,12 @@ generate
         logic `N(ADDR_WIDTH) validSelect1, validSelect2;
         logic `N(ADDR_WIDTH) walk_tail;
         logic `N(ADDR_WIDTH + 1) walkNum;
+        logic valid_full;
         assign headShift = (1 << head) - 1;
         assign tailShift = (1 << tail) - 1;
         assign en = tail > head || num == 0 ? headShift ^ tailShift : ~(headShift ^ tailShift);
         assign valid = en & bigger;
+        assign valid_full = &valid;
 
         for(genvar i=0; i<DEPTH; i++)begin
             assign bigger[i] = (robIdx[i].dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > robIdx[i].idx);
@@ -295,7 +297,7 @@ generate
             end
             else begin
             if(backendCtrl.redirect)begin
-                tail <= |valid ? walk_tail + 1 : head;
+                tail <= valid_full ? tail : |valid ? walk_tail + 1 : head;
                 num <= walkNum;
             end
             else begin

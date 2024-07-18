@@ -56,7 +56,7 @@ module DCacheWay(
     end
 
 generate
-    for(genvar i=0; i<`ICACHE_BANK; i++)begin
+    for(genvar i=0; i<`DCACHE_BANK; i++)begin
         logic `N(`DCACHE_SET_WIDTH) idx;
         logic `N(`DCACHE_BITS) wdata;
         assign wdata = io.wdata[i];

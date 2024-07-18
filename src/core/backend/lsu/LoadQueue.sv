@@ -78,8 +78,9 @@ endgenerate
     RobIdx redirect_robIdxs `N(`LOAD_QUEUE_SIZE);
     logic `N(`LOAD_QUEUE_SIZE) bigger, walk_en, validStart, validEnd;
     logic `N(`LOAD_QUEUE_WIDTH) validSelect1, validSelect2, walk_tail, valid_select, valid_select_n;
-    logic walk_valid, walk_dir;
+    logic walk_valid, walk_dir, walk_full;
     assign walk_en = valid & bigger;
+    assign walk_full = &walk_en;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         always_ff @(posedge clk) begin
@@ -103,8 +104,8 @@ endgenerate
     assign valid_select_n = valid_select + 1;
     always_ff @(posedge clk)begin
         walk_valid <= |walk_en;
-        walk_tail <= valid_select_n;
-        walk_dir <= valid_select_n <= tail ? tdir : ~tdir;
+        walk_tail <= walk_full ? tail : valid_select_n;
+        walk_dir <= walk_full || valid_select_n <= tail ? tdir : ~tdir;
     end
 
     assign io.lqIdx.idx = tail;

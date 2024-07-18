@@ -23,6 +23,9 @@ module StoreCommitBuffer(
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) wmask;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BITS) wdata;
     logic `N(`STORE_PIPELINE) conflict;
+    logic `N(`STORE_PIPELINE) data_we, data_we_combine, weq_combine;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_PIPELINE) weq;
+    logic `ARRAY(`STORE_PIPELINE, $clog2(`STORE_PIPELINE)) weq_idx;
 
     always_ff @(posedge clk)begin
         if(!io.conflict)begin
@@ -36,8 +39,8 @@ module StoreCommitBuffer(
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_COMMIT_SIZE; j++)begin
-            assign whit[i][j] = addr_en[j] & (addrs[j] == waddr[i][`VADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH]);
-            assign whit_writing[i][j] = whit[i][j] & writing[j];
+            assign whit[i][j] = addr_en[j] & (addrs[j] == waddr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH]);
+            assign whit_writing[i][j] = whit[i][j] & addr_en[j] & writing[j];
         end
         Encoder #(`STORE_COMMIT_SIZE) encoder_whit (whit[i], whit_idx[i]);
     end
@@ -45,6 +48,16 @@ generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
             assign hit[i] = |whit[i];
             assign hit_writing[i] = |whit_writing[i];
+            for(genvar j=0; j<`STORE_PIPELINE; j++)begin
+                if(i <= j)begin
+                    assign weq[i][j] = 0;
+                end
+                else begin
+                    assign weq[i][j] = wen[i] & wen[j] & (waddr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH] == waddr[j][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH]);
+                end
+            end
+            assign weq_combine[i] = |weq[i];
+            Encoder #(`STORE_PIPELINE) encoder_weq (weq[i], weq_idx[i]);
     end
 endgenerate
 
@@ -57,14 +70,17 @@ endgenerate
     PEncoder #(`STORE_COMMIT_SIZE) encoder_free (~addr_en, free_idx[0]);
     PREncoder #(`STORE_COMMIT_SIZE) encoder_free_rev (~addr_en, free_idx[1]);
     assign free_valid[0] = ~full;
-    assign free_valid[1] = ~full && free_idx[0] != free_idx[1];
+    assign free_valid[1] = ~full && (~hit[0] | (free_idx[0] != free_idx[1]));
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        assign conflict[i] = wen[i] & (whit_writing[i] | (~free_valid[i] & ~hit[i]));
-        assign data_io.wen[i] = wen[i] & (hit[i] | free_valid[i]) & ~whit_writing[i];
-        assign data_io.we_new[i] = ~hit[i];
-        assign data_io.windex[i] = hit[i] ? whit_idx[i] : free_idx[i];
+        assign conflict[i] = wen[i] & (whit_writing[i] | (~free_valid[i] & ~(hit[i] | weq_combine[i])));
+        assign data_we[i] = wen[i] & (hit[i] | weq_combine[i] | free_valid[i]) & ~whit_writing[i];
+        assign data_we_combine[i] = data_we[i] & ~io.conflict;
+        assign data_io.wen[i] = data_we_combine[i];
+        assign data_io.we_new[i] = ~(hit[i]);
+        assign data_io.windex[i] = weq_combine[i] ? free_idx[weq_idx[i]] :
+                                   hit[i] ? whit_idx[i] : free_idx[i];
         assign data_io.wbank[i] = waddr[i][`DCACHE_BANK_WIDTH-1: 0];
         assign data_io.wdata[i] = wdata[i];
         assign data_io.wmask[i] = wmask[i];
@@ -167,7 +183,7 @@ endgenerate
         end
         else begin
             for(int i=0; i<`STORE_PIPELINE; i++)begin
-                if(wen[i] & ~hit[i] & free_valid[i])begin
+                if(wen[i] & ~(hit[i] | weq_combine[i]) & free_valid[i] & ~io.conflict)begin
                     addr_en[free_idx[i]] <= 1'b1;
                     addrs[free_idx[i]] <= waddr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH];
                     writing[free_idx[i]] <= 0;
@@ -176,10 +192,6 @@ endgenerate
 
             if(|write_ready & wio.valid)begin
                 writing[widx] <= 1'b1;
-            end
-
-            if(wio.conflict)begin
-                writing[wio.conflictIdx] <= 1'b0;
             end
 
             if(wio.success)begin
@@ -197,16 +209,17 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic `N(8) difftestMask;
-        logic `N(64) difftestData;
+        logic `N(64) difftestData, expandMask;
+        MaskExpand #(8) mask_expand(difftestMask, expandMask);
         assign difftestMask = {wmask[i] & {`DCACHE_BYTE{waddr[i][0]}},
                                wmask[i] & {`DCACHE_BYTE{~waddr[i][0]}}};
         assign difftestData = {wdata[i] & {`DCACHE_BITS{waddr[i][0]}},
-                               wdata[i] & {`DCACHE_BITS{~waddr[i][0]}}};
+                               wdata[i] & {`DCACHE_BITS{~waddr[i][0]}}} & expandMask;
         DifftestStoreEvent difftest_store_event(
             .clock(clk),
             .coreid(0),
             .index(i),
-            .valid(wen[i] & (hit[i] | free_valid[i]) & ~whit_writing[i]),
+            .valid(data_we_combine[i]),
             .storeAddr((waddr[i] << `DCACHE_BYTE_WIDTH) & 32'hfffffffb),
             .storeData(difftestData),
             .storeMask(difftestMask)
@@ -222,14 +235,14 @@ interface SCDataIO;
     logic `N(`STORE_PIPELINE) we_new;
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_WIDTH) windex;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BANK_WIDTH) wbank;
-    logic `ARRAY(`STORE_PIPELINE, 32) wdata;
-    logic `ARRAY(`STORE_PIPELINE, 4) wmask;
+    logic `ARRAY(`STORE_PIPELINE, `DCACHE_BITS) wdata;
+    logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) wmask;
 
     logic `N(`LOAD_PIPELINE) fwd_req;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_COMMIT_WIDTH) fwd_idx;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BANK_WIDTH) fwd_bank;
-    logic `ARRAY(`LOAD_PIPELINE, 32) fwd_data;
-    logic `ARRAY(`LOAD_PIPELINE, 4) fwd_mask;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) fwd_data;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) fwd_mask;
 
     logic `N(`STORE_COMMIT_WIDTH) cacheIdx;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) cacheData;
@@ -245,43 +258,116 @@ module SCDataModule(
     input logic rst,
     SCDataIO.data io
 );
-    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data `N(`STORE_COMMIT_SIZE);
-    logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`STORE_COMMIT_SIZE);
+    localparam RPORT = `STORE_PIPELINE+1;
+    logic `TENSOR(`DCACHE_BANK, `STORE_PIPELINE, `DCACHE_BYTE) wen;
+    logic `TENSOR(`DCACHE_BANK, RPORT, `STORE_COMMIT_WIDTH) raddr;
+    logic `TENSOR(`DCACHE_BANK, `STORE_PIPELINE, `STORE_COMMIT_WIDTH) waddr;
+    logic `TENSOR(`DCACHE_BANK, RPORT, `DCACHE_BITS) rdata;
+    logic `TENSOR(`DCACHE_BANK, RPORT, `DCACHE_BYTE) rmask;
+    logic `TENSOR(`DCACHE_BANK, `STORE_PIPELINE, `DCACHE_BITS) wdata;
 
-
+    logic `ARRAY(`STORE_PIPELINE, `DCACHE_BANK) fwd_bank_dec;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BANK) wbank_decode;
+    
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        Decoder #(`DCACHE_BANK) decoder_fwd_bank (io.fwd_bank[i], fwd_bank_dec[i]);
         Decoder #(`DCACHE_BANK) decoder_bank(io.wbank[i], wbank_decode[i]);
-        logic `N(`DCACHE_BITS) expand_mask;
-        MaskExpand #(`DCACHE_BYTE) expand_wmask (io.wmask[i], expand_mask);
-        always_ff @(posedge clk)begin
-            if(io.wen[i])begin
-                for(int j=0; j<`DCACHE_BYTE; j++)begin
-                    if(io.wmask[i][j])begin
-                        data[io.windex[i]][io.wbank[i]] <= io.wdata[i] & expand_mask | data[io.windex[i]][io.wbank[i]] & ~expand_mask;
-                    end
-                end
-                for(int j=0; j<`DCACHE_BANK; j++)begin
-                    mask[io.windex[i]][j] <= (mask[io.windex[i]][j] & {`DCACHE_BYTE{~io.we_new[i]}}) | 
-                                             ({`DCACHE_BYTE{wbank_decode[i][j]}} & io.wmask[i]);
-                end
-            end
-        end
-        
         always_ff @(posedge clk)begin
             if(io.fwd_req[i])begin
-                io.fwd_data[i] <= data[io.fwd_idx[i]][io.fwd_bank[i]];
-                io.fwd_mask[i] <= mask[io.fwd_idx[i]][io.fwd_bank[i]];
+                io.fwd_data[i] <= rdata[io.fwd_bank[i]][i];
+                io.fwd_mask[i] <= rmask[io.fwd_bank[i]][i];
             end
             else begin
                 io.fwd_mask[i] <= 0;
             end
         end
     end
-endgenerate
-    always_ff @(posedge clk)begin
-        io.cacheData <= data[io.cacheIdx];
-        io.cacheMask <= mask[io.cacheIdx];
+
+    for(genvar i=0; i<`DCACHE_BANK; i++)begin
+        SCDataBank data_bank(
+            .clk(clk),
+            .rst(rst),
+            .raddr(raddr[i]),
+            .we_new(io.we_new),
+            .wmask(wen[i]),
+            .waddr(waddr[i]),
+            .wdata(wdata[i]),
+            .rdata(rdata[i]),
+            .rmask(rmask[i])
+        );
+        for(genvar j=0; j<`STORE_PIPELINE; j++)begin
+            assign raddr[i][j] = io.fwd_idx[j];
+        end
+        assign raddr[i][`STORE_PIPELINE] = io.cacheIdx;
+
+        for(genvar j=0; j<`STORE_PIPELINE; j++)begin
+            assign wen[i][j] = {`DCACHE_BYTE{io.wen[j] & wbank_decode[j][i]}} & io.wmask[j];
+            assign waddr[i][j] = io.windex[j];
+            assign wdata[i][j] = io.wdata[j];
+        end
+
+        always_ff @(posedge clk)begin
+            io.cacheData[i] <= rdata[i][`STORE_PIPELINE];
+            io.cacheMask[i] <= rmask[i][`STORE_PIPELINE];
+        end
     end
+endgenerate
+
+endmodule
+
+module SCDataBank(
+    input logic clk,
+    input logic rst,
+    input logic `ARRAY(`STORE_PIPELINE+1, `STORE_COMMIT_WIDTH) raddr,
+    input logic `N(`STORE_PIPELINE) we_new,
+    input logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) wmask,
+    input logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_WIDTH) waddr,
+    input logic `ARRAY(`STORE_PIPELINE, `DCACHE_BITS) wdata,
+    output logic `ARRAY(`STORE_PIPELINE+1, `DCACHE_BITS) rdata,
+    output logic `ARRAY(`STORE_PIPELINE+1, `DCACHE_BYTE) rmask
+);
+    typedef struct packed {
+        logic [7: 0] d;
+        logic v;
+    } ByteMask;
+    logic `ARRAY(`DCACHE_BYTE, 8) d `N(`STORE_COMMIT_SIZE);
+    logic `N(`DCACHE_BYTE) v `N(`STORE_COMMIT_SIZE);
+    logic wconflict;
+    logic `N(`STORE_PIPELINE) we_new_conflict;
+    `UNPARAM
+    assign wconflict = (|we_new) & (waddr[0] == waddr[1]);
+    assign we_new_conflict[0] = we_new[0];
+    assign we_new_conflict[1] = we_new[1] & ~wconflict;
+
+generate
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        logic `ARRAY(`DCACHE_BYTE, 8) pipe_data;
+        assign pipe_data = wdata[i];
+        for(genvar j=0; j<`DCACHE_BYTE; j++)begin
+            always_ff @(posedge clk)begin
+                if(wmask[i][j])begin
+                    d[waddr[i]][j] <= pipe_data[j];
+                end
+                if(we_new_conflict[i] | wmask[i][j])begin
+                    v[waddr[i]][j] <= wmask[i][j];
+                end
+            end
+        end
+    end
+endgenerate
+
+generate
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        for(genvar j=0; j<`DCACHE_BYTE; j++)begin
+            assign rdata[i][(j+1)*8-1: j*8] = d[raddr[i]][j];
+            assign rmask[i][j] = v[raddr[i]][j];
+        end
+    end
+    for(genvar i=0; i<`DCACHE_BYTE; i++)begin
+        assign rdata[`STORE_PIPELINE][(i+1)*8-1: i*8] = d[raddr[`STORE_PIPELINE]][i];
+        assign rmask[`STORE_PIPELINE][i] = v[raddr[`STORE_PIPELINE]][i];
+    end
+
+endgenerate
 endmodule

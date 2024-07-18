@@ -211,7 +211,7 @@ module SDPRAM#(
     end
 endmodule
 
-module MPRAM #(
+module MPREG #(
     parameter WIDTH = 32,
     parameter DEPTH = 8,
     parameter READ_PORT = 4,
@@ -325,6 +325,40 @@ generate
     end
 endgenerate
 
+
+endmodule
+
+module MPRAM #(
+    parameter WIDTH = 32,
+    parameter DEPTH = 8,
+    parameter READ_PORT = 4,
+    parameter WRITE_PORT = 4,
+    parameter ADDR_WIDTH = $clog2(DEPTH),
+    parameter READ_LATENCY = 1,
+    parameter BYTE_WRITE = 0,
+    parameter RESET = 0,
+    parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
+)(
+    input logic clk,
+    input logic rst,
+    input logic `N(READ_PORT) en,
+    input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
+    input logic `ARRAY(WRITE_PORT, ADDR_WIDTH) waddr,
+    input logic [WRITE_PORT-1: 0][BYTES-1: 0] we,
+    input logic [WRITE_PORT-1: 0][BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
+    output logic `ARRAY(READ_PORT, WIDTH) rdata,
+    output logic ready
+);
+
+    MPREG #(
+        .WIDTH(WIDTH),
+        .DEPTH(DEPTH),
+        .READ_PORT(READ_PORT),
+        .WRITE_PORT(WRITE_PORT),
+        .READ_LATENCY(READ_LATENCY),
+        .BYTE_WRITE(BYTE_WRITE),
+        .RESET(RESET)
+    ) regs (.*);
 
 endmodule
 
