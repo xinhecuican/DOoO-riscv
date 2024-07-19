@@ -91,8 +91,7 @@ module BranchPredictor(
         .pc(s2_result_in.stream.start_addr),
         .entry(btb_io.entry),
         .prediction(tage_io.prediction),
-        .rasIdx(ras_io.rasIdx),
-        .ras_entry(ras_io.entry),
+        .ras_io(ras_io.control),
         .result_i(s2_result_in),
         .result_o(s2_result_out)
     );
@@ -107,8 +106,7 @@ module S2Control(
     input logic `VADDR_BUS pc,
     input BTBEntry entry,
     input logic `N(`SLOT_NUM) prediction,
-    input logic `N(`RAS_WIDTH) rasIdx,
-    input RasEntry ras_entry,
+    BpuRASIO.control ras_io,
     input PredictionResult result_i,
     output PredictionResult result_o
 );
@@ -181,15 +179,18 @@ module S2Control(
             br_tar_state = br_tar_state_normal;
         end
     end
+
+    assign ras_io.request = result_i.en & hit & ~(|br_takens);
+    assign ras_io.ras_type = entry.tailSlot.ras_type;
+    assign ras_io.target = pc + {entry.tailSlot.offset, 2'b00} + 4;
+
     always_comb begin
-        case(entry.tailSlot.br_type)
-        CONDITION, INDIRECT, DIRECT:begin
+        if(ras_io.en && entry.tailSlot.ras_type != NONE)begin
+            tail_indirect_target = ras_io.entry.pc;
+        end
+        else begin
             tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
         end
-        CALL:begin
-            tail_indirect_target = ras_entry.pc;
-        end
-        endcase
         if(hit && predict_pc != result_i.stream.target)begin
             result_o.stream.taken = (|br_takens) | tail_taken;
             result_o.stream.branch_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
@@ -220,9 +221,8 @@ module S2Control(
         result_o.stream.start_addr= result_i.stream.start_addr;
         result_o.stream_idx = result_i.stream_idx;
         result_o.stream_dir = result_i.stream_dir;
-        result_o.redirect_info.ghistIdx = result_i.redirect_info.ghistIdx;
-        result_o.redirect_info.tage_history = result_i.redirect_info.tage_history;
-        result_o.redirect_info.rasIdx = rasIdx;
+        result_o.redirect_info = result_i.redirect_info;
+        result_o.redirect_info.rasInfo = ras_io.rasInfo;
         // result_o.redirect_info.ras_ctr = ras_entry.ctr;
     end
 endmodule

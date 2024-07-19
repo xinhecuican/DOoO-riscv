@@ -2,6 +2,9 @@
 `define __CORE_DEBUG_SVH
 
 `define ENABLE_LOG
+`define T_LOG_ALL
+`define T_FSQ
+`define T_RAS
 
 `define PERF(name, cond) \
 `ifdef DIFFTEST \
@@ -25,8 +28,9 @@ package DLog;
 
 endpackage
 
-`define Log(level, cond, msg) \
+`define Log(level, tag=T_LOG_ALL, cond, msg) \
 `ifdef ENABLE_LOG \
+`ifdef tag \
 generate; \
     if(level >= DLog::logLevel)begin \
         always_ff @(posedge clk)begin \
@@ -36,6 +40,7 @@ generate; \
         end \
     end \
 endgenerate \
+`endif \
 `endif \
 
 `define UNPARAM /* UNPARAM */

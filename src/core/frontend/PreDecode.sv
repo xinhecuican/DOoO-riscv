@@ -78,6 +78,7 @@ module PreDecode(
     assign pd_redirect.stream.ras_type = stream_next.ras_type;
     assign pd_redirect.stream.target = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? next_pc : bundles_next[selectIdx].target;
     assign pd_redirect.stream.size = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? stream_next.size : selectIdx;
+    assign pd_redirect.ras_type = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? NONE : bundles_next[selectIdx].ras_type;
 
     always_comb begin
         case (selectIdx)
@@ -124,6 +125,7 @@ module PreDecoder(
     assign rd = inst[11: 7];
 
     logic jal, jalr, branch;
+    RasType ras_type;
     assign jal = op[6] & op[5] & ~op[4] & op[3] & op[2] & op[1] & op[0];
     assign jalr = op[6] & op[5] & ~op[4] & ~op[3] & op[2] & op[1] & op[0];
     assign branch = op[6] & op[5] & ~op[4] & ~op[3] & ~op[2] & op[1] & op[0];
@@ -135,21 +137,18 @@ module PreDecoder(
     assign pop = rs == 5'h1 || rs == 5'h5;
     always_comb begin
         case({push, pop})
-        2'b00: pdBundle.ras_type = NONE;
-        2'b01: pdBundle.ras_type = POP;
-        2'b10: pdBundle.ras_type = PUSH;
-        2'b11: pdBundle.ras_type = POP_PUSH;
+        2'b00: ras_type = NONE;
+        2'b01: ras_type = POP;
+        2'b10: ras_type = PUSH;
+        2'b11: ras_type = POP_PUSH;
         endcase
+        pdBundle.ras_type = jal & push ? PUSH :
+                            jalr ? ras_type : NONE;
         unique if(jal)begin
             pdBundle.br_type = DIRECT;
         end
         else if(jalr)begin
-            unique if(push | pop)begin
-                pdBundle.br_type = CALL;
-            end
-            else begin
-                pdBundle.br_type = INDIRECT;
-            end
+            pdBundle.br_type = INDIRECT;
         end
         else begin
             pdBundle.br_type = CONDITION;

@@ -81,9 +81,16 @@ typedef struct packed {
 } TageFoldHistory;
 
 typedef struct packed {
+    logic `N(`RAS_WIDTH) rasTop;
+    logic `N(`RAS_WIDTH) rasBottom;
+    logic ras_tdir;
+    logic ras_bdir;
+} RasRedirectInfo;
+
+typedef struct packed {
     logic `N(`GHIST_WIDTH) ghistIdx;
     TageFoldHistory tage_history;
-    logic `N(`RAS_WIDTH) rasIdx;
+    RasRedirectInfo rasInfo;
     // logic `N(`RAS_CTR_SIZE) ras_ctr;
 } RedirectInfo;
 
@@ -130,6 +137,8 @@ typedef struct packed {
 } CondPredInfo;
 
 typedef struct packed {
+    logic `VADDR_BUS start_addr;
+    logic `N(`PREDICTION_WIDTH) offset;
     logic `VADDR_BUS target_pc;
     RedirectInfo redirectInfo;
     CondPredInfo predInfo;
@@ -218,6 +227,8 @@ typedef struct packed {
     logic `N(`PREG_WIDTH) rd;
     logic `N(`DEC_IMM_WIDTH) imm;
     FsqIdxInfo fsqInfo;
+    BranchType br_type;
+    RasType ras_type;
 } IntIssueBundle;
 
 typedef struct packed {

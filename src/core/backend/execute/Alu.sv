@@ -108,7 +108,7 @@ module BranchModel(
     assign streamHit = stream.size == offset;
     assign branchError = streamHit ? stream.taken ^ dir | (stream.taken & (stream.target != br_target)) : dir;
     assign indirectError = ~streamHit | (stream.target != jalr_target);
-    assign branchRes.direction = dir;
+    assign branchRes.direction = (op == `BRANCH_JALR) | dir;
     assign branchRes.error = op == `BRANCH_JALR ? indirectError :
                         op != `BRANCH_JAL ? branchError : 0;
     assign branchRes.br_type = br_type;

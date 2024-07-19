@@ -62,9 +62,10 @@ interface BpuRASIO(
     logic en;
     logic `VADDR_BUS target;
     RasEntry entry;
-    logic `N(`RAS_WIDTH) rasIdx;
+    RasRedirectInfo rasInfo;
 
-    modport ras (input request, ras_type, target, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasIdx);
+    modport ras (input request, ras_type, target, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasInfo);
+    modport control(input en, entry, rasInfo, output request, ras_type, target);
 
 endinterface
 
@@ -172,11 +173,12 @@ endinterface
 interface PreDecodeRedirect;
     logic en;
     logic direct;
+    RasType ras_type;
     FsqIdx fsqIdx;
     FetchStream stream;
 
-    modport predecode(output en, direct, fsqIdx, stream);
-    modport redirect(input en, direct, fsqIdx, stream);
+    modport predecode(output en, direct, ras_type, fsqIdx, stream);
+    modport redirect(input en, direct, ras_type, fsqIdx, stream);
 endinterface
 
 interface PreDecodeIBufferIO;
@@ -311,11 +313,9 @@ interface IntIssueExuIO;
     IntIssueBundle `N(`ALU_SIZE) bundle;
     FetchStream `N(`ALU_SIZE) streams;
     logic `N(`ALU_SIZE) directions; // fsq dir
-    BranchType `N(`ALU_SIZE) br_type;
-    RasType `N(`ALU_SIZE) ras_type;
 
-    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions, br_type, ras_type, output valid);
-    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions, br_type, ras_type, input valid);
+    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions, output valid);
+    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions, input valid);
 endinterface
 
 interface IssueAluIO;

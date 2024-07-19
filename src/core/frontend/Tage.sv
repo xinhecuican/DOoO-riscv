@@ -217,6 +217,9 @@ generate
 		);
 	end
 endgenerate
+
+	`Log(DLog::Debug, T_TAGE, ~tage_io.redirect.stall, $sformatf("tage lookup. %8h %10h %8h", tage_io.pc, bank_ctrl[0].lookup_idx, bank_ctrl[0].lookup_tag))
+	`Log(DLog::Debug, T_TAGE, tage_io.update, $sformatf("tage update. %2b %8h %10h %8h", update_en, tage_io.updateInfo.start_addr, bank_ctrl[0].update_idx, bank_ctrl[0].update_tag))
 endmodule
 
 module TageTable #(

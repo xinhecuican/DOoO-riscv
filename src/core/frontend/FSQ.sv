@@ -249,14 +249,22 @@ endgenerate
     CondPredInfo squash_pred_info;
     BranchType squash_br_type;
     RasType squash_ras_type;
+    logic squash_redirect_en, squsah_pd_en;
+    logic `VADDR_BUS pd_start_addr;
+    logic `N(`PREDICTION_WIDTH) squash_offset;
     assign n_commit_head = commitValid ? commit_head + 1 : commit_head;
     assign full = commit_head == tail && (hdir ^ tdir);
     assign bpu_fsq_io.squashInfo.redirectInfo = u_redirectInfo;
+    assign bpu_fsq_io.squashInfo.start_addr = squash_redirect_en ? searchStream.start_addr : pd_start_addr;
+    assign bpu_fsq_io.squashInfo.offset = squash_offset;
     assign bpu_fsq_io.squashInfo.target_pc = memRedirectValid ? searchStream.target : squash_target_pc;
     assign bpu_fsq_io.squashInfo.predInfo = squash_pred_info;
     assign bpu_fsq_io.squashInfo.br_type = squash_br_type;
     assign bpu_fsq_io.squashInfo.ras_type = squash_ras_type;
     always_ff @(posedge clk)begin
+        squash_redirect_en <= fsq_back_io.redirectBr.en;
+        squsah_pd_en <= pd_redirect.en;
+        pd_start_addr <= pd_redirect.stream.start_addr;
         memRedirectValid <= fsq_back_io.redirect.en & ~fsq_back_io.redirectBr.en & ~fsq_back_io.redirectCsr.en;
         bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirect.en;
         // bpu_fsq_io.squashInfo.redirectInfo <= u_redirectInfo;
@@ -265,7 +273,9 @@ endgenerate
                                                         pd_redirect.stream.target;
         squash_pred_info <= fsq_back_io.redirectBr.en | fsq_back_io.redirectCsr.en ? redirectCondInfo : pd_condInfo;
         squash_br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : DIRECT;
-        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : NONE;
+        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : 
+                           fsq_back_io.redirect.en ? NONE : pd_redirect.ras_type;
+        squash_offset <= fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.offset : pd_redirect.stream.size;
     end
 
 // idx maintain
@@ -395,11 +405,11 @@ endgenerate
             pred_error_en <= 0;
         end
         else begin
+            if(pd_redirect.en & pd_redirect.direct)begin
+                wbInfos[pd_redirect.fsqIdx.idx] <= {1'b0, 1'b1, DIRECT, pd_redirect.ras_type, pd_redirect.stream.target, pd_redirect.stream.size};
+            end
             if(rd.en | cr.en)begin
                 wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {cr.en, rd.taken, rd.br_type, rd.ras_type, rd.target, fsq_back_io.redirect.fsqInfo.offset};
-            end
-            if(pd_redirect.en & pd_redirect.direct)begin
-                wbInfos[pd_redirect.fsqIdx.idx] <= {1'b0, 1'b1, DIRECT, NONE, pd_redirect.stream.target, pd_redirect.stream.size};
             end
             if(queue_we)begin
                 pred_error_en[tail] <= 1'b0;
@@ -465,7 +475,7 @@ endgenerate
     logic `N(`VADDR_SIZE) update_start_addr;
     logic `N(`VADDR_SIZE) update_target_pc;
     BTBUpdateInfo update_btb_entry; 
-    logic update_real_taken;
+    logic `N(`SLOT_NUM) update_real_taken;
     logic `N(`SLOT_NUM) update_alloc_slot;
     assign bpu_fsq_io.updateInfo.redirectInfo = u_redirectInfo;
     assign bpu_fsq_io.updateInfo.meta = updateMeta;
@@ -513,8 +523,13 @@ endgenerate
             
         end
     end
-
-    `Log(DLog::Debug, bpu_fsq_io.update, $sformatf("update BP%4d. taken: %b target: %8h allocSlot: %2d", commit_head, update_taken, update_target_pc, update_alloc_slot))
+    FetchStream logStream;
+    logic logError;
+    always_ff @(posedge clk)begin
+        logStream <= commitStream;
+        logError <= pred_error;
+    end
+    `Log(DLog::Debug, T_FSQ, bpu_fsq_io.update, $sformatf("update BP%4d. [%8h %4d]->%8h %8h %b", commit_head, logStream.start_addr, logStream.size, logStream.target, update_target_pc, logError))
 `endif
 
 endmodule

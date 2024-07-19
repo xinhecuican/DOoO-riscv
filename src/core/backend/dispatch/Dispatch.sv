@@ -22,13 +22,45 @@ generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : int_in
         DecodeInfo di;
         assign di = rename_dis_io.op[i].di;
+
+        // br type & ras type
+        logic push, pop;
+        logic `N(`PREG_WIDTH) rd, rs;
+        logic `N(`BRANCHOP_WIDTH) op;
+        RasType ras_type, ras_type_all;
+        BranchType br_type;
+        assign rd = di.rd;
+        assign rs = di.rs1;
+        assign op = di.branchop;
+        assign push = rd == 5'h1 || rd == 5'h5;
+        assign pop = rs == 5'h1 || rs == 5'h5;
+        always_comb begin
+            case({push, pop})
+            2'b00: ras_type = NONE;
+            2'b01: ras_type = POP;
+            2'b10: ras_type = PUSH;
+            2'b11: ras_type = POP_PUSH;
+            endcase
+            ras_type_all = (op == `BRANCH_JAL) & push ? PUSH :
+                        (op == `BRANCH_JALR) ? ras_type : NONE;
+            if(op == `BRANCH_JAL)begin
+                br_type = DIRECT;
+            end
+            else if(op == `BRANCH_JALR)begin
+                br_type = INDIRECT;
+            end
+            else begin
+                br_type = CONDITION;
+            end
+        end
+
         assign int_io.en[i] = rename_dis_io.op[i].en & 
                               (di.intv | di.branchv) &
                               (~(backendCtrl.redirect));
         assign int_io.rs1[i] = rename_dis_io.prs1[i];
         assign int_io.rs2[i] = rename_dis_io.prs2[i];
         assign int_io.data[i] = {di.intv, di.branchv, di.uext, di.immv, di.intop, di.branchop,
-            rename_dis_io.robIdx[i], rename_dis_io.prd[i], di.imm, rename_dis_io.op[i].fsqInfo};
+            rename_dis_io.robIdx[i], rename_dis_io.prd[i], di.imm, rename_dis_io.op[i].fsqInfo, br_type, ras_type};
     end
     assign int_io.robIdx = rename_dis_io.robIdx;
 endgenerate

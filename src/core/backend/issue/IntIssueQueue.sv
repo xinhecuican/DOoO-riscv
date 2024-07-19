@@ -53,8 +53,6 @@ generate
         always_ff @(posedge clk)begin
             enNext[i] <= bank_io[i].reg_en & int_wakeup_io.ready[i];
             issue_exu_io.bundle[i] <= bank_io[i].data_o;
-            issue_exu_io.br_type[i] <= bank_io[i].br_type;
-            issue_exu_io.ras_type[i] <= bank_io[i].ras_type;
         end
     end
 endgenerate
@@ -81,10 +79,8 @@ interface IntBankIO #(parameter DEPTH=8);
     logic `N(`PREG_WIDTH) rs1, rs2, rd;
     IntIssueBundle data_o;
     logic `N(`FSQ_WIDTH) fsqIdx;
-    BranchType br_type;
-    RasType ras_type;
 
-    modport bank(input en, status, data, ready, output full, bankNum, reg_en, rs1, rs2, rd, data_o, fsqIdx, br_type, ras_type);
+    modport bank(input en, status, data, ready, output full, bankNum, reg_en, rs1, rs2, rd, data_o, fsqIdx);
 endinterface
 
 module IntIssueBank #(
@@ -201,38 +197,6 @@ endgenerate
                 end
             end
             io.data_o <= data_o;
-        end
-    end
-
-    // br type & ras type
-    logic push, pop;
-    logic `N(`PREG_WIDTH) rd, rs;
-    logic `N(`BRANCHOP_WIDTH) op;
-    assign rd = io.data_o.rd;
-    assign rs = status_ram[selectIdxNext].rs1;
-    assign op = io.data_o.branchop;
-    assign push = rd == 5'h1 || rd == 5'h5;
-    assign pop = rs == 5'h1 || rs == 5'h5;
-    always_comb begin
-        case({push, pop})
-        2'b00: io.ras_type = NONE;
-        2'b01: io.ras_type = POP;
-        2'b10: io.ras_type = PUSH;
-        2'b11: io.ras_type = POP_PUSH;
-        endcase
-        if(op == `BRANCH_JAL)begin
-            io.br_type = DIRECT;
-        end
-        else if(op == `BRANCH_JALR)begin
-            if(push | pop)begin
-                io.br_type = CALL;
-            end
-            else begin
-                io.br_type = INDIRECT;
-            end
-        end
-        else begin
-            io.br_type = CONDITION;
         end
     end
 endmodule
