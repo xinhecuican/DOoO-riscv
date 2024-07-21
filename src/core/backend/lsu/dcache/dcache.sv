@@ -72,7 +72,7 @@ generate
     assign req_bank_conflict = (rio.req[0] & rio.req[1] & (rio.vaddr[0]`DCACHE_BANK_BUS == rio.vaddr[1]`DCACHE_BANK_BUS));
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign loadIdx[i] = rio.vaddr[i]`DCACHE_SET_BUS;
-        assign loadOffset[i] = rio.vaddr[i][`DCACHE_LINE_WIDTH-1: 2];
+        assign loadOffset[i] = rio.vaddr[i][`DCACHE_LINE_WIDTH-1: `DCACHE_BYTE_WIDTH];
         assign tagvIdx[i] = ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
                             loadIdx[i];
         Decoder #(`DCACHE_BANK) decoder_offset (loadOffset[i], loadBankDecode[i]);
@@ -135,8 +135,8 @@ endgenerate
     logic `N(`LOAD_PIPELINE) load_refill_reply;
     /* UNPARAM */
     always_ff @(posedge clk)begin
-        rio.conflict[0] <= write_valid;
-        rio.conflict[1] <= write_valid | req_bank_conflict;
+        rio.conflict[0] <= write_valid[0];
+        rio.conflict[1] <= write_valid[1] | req_bank_conflict;
         r_req_s3 <= r_req & ~rio.req_cancel_s2;
         lqIdx <= rio.lqIdx;
         robIdx <= rio.robIdx;
@@ -196,6 +196,7 @@ generate
 endgenerate
     logic `N(`DCACHE_WAY) way_dirty;
     logic `N(`STORE_COMMIT_WIDTH) scIdx_n;
+    logic `N(`DCACHE_WAY) miss_way_decode;
     always_ff @(posedge clk)begin
         wreq_n <= wio.req & ~miss_io.req;
         miss_req_n <= miss_io.req;
@@ -237,6 +238,7 @@ endgenerate
     // write hit
     logic `N(`DCACHE_WAY) refill_way;
     Decoder #(`DCACHE_WAY) decoder_refill_way (miss_io.refillWay, refill_way);
+    Decoder #(`DCACHE_WAY) decoder_miss_way (replace_io.miss_way, miss_way_decode);
 generate
     for(genvar i=0; i<`DCACHE_WAY; i++)begin
         logic `N(`DCACHE_SET_WIDTH) refillIdx;
@@ -258,7 +260,7 @@ generate
                                        (miss_io.refill_valid & miss_io.refill_en & refill_way[i] & miss_io.refill_dirty);
 
         assign way_io[i].tagv_we = miss_io.refill_valid & miss_io.refill_en & refill_way[i] |
-                                   replace_wb_en;
+                                   replace_wb_en & miss_way_decode[i];
         assign way_io[i].tagv_windex = replace_wb_en ? waddr_n`DCACHE_SET_BUS :
                                                        miss_io.refillAddr`DCACHE_SET_BUS;
         assign way_io[i].tagv_wdata = {miss_io.refillAddr`DCACHE_TAG_BUS, ~replace_wb_en};
@@ -296,4 +298,14 @@ endgenerate
         ptw_io.data_valid <= miss_io.ptw_refill | (ptw_req & (|ptw_way_hit));
         ptw_io.rdata <= miss_io.ptw_refill ? miss_io.ptw_refill_data : rdata[ptw_hit_way];
     end
+
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) dbg_wmask, dbg_wdatan;
+    MaskExpand #(`DCACHE_BANK * `DCACHE_BYTE) mask_expand_dbg_wmask (wmask_n, dbg_wmask);
+    assign dbg_wdatan = wdata_n & dbg_wmask;
+    `LOG_ARRAY(T_DCACHE, dbg_refillData, miss_io.refillData, `DCACHE_BANK)
+    `LOG_ARRAY(T_DCACHE, dbg_wdata, dbg_wdatan, `DCACHE_BANK)
+    `Log(DLog::Debug, T_DCACHE, miss_io.refill_en & miss_io.refill_valid,
+        $sformatf("dcache refill. [%8h %d %b] %s", miss_io.refillAddr, miss_io.refillWay, miss_io.refill_dirty, dbg_refillData))
+    `Log(DLog::Debug, T_DCACHE, wreq_n & whit,
+        $sformatf("dcache write. [%h %d] %s", waddr_n, w_wayIdx, dbg_wdata))
 endmodule

@@ -3,8 +3,9 @@
 
 `define ENABLE_LOG
 `define T_LOG_ALL
-`define T_FSQ
-`define T_RAS
+// `define T_FSQ
+`define T_DCACHE
+`define T_SCB
 
 `define PERF(name, cond) \
 `ifdef DIFFTEST \
@@ -31,17 +32,32 @@ endpackage
 `define Log(level, tag=T_LOG_ALL, cond, msg) \
 `ifdef ENABLE_LOG \
 `ifdef tag \
-generate; \
-    if(level >= DLog::logLevel)begin \
-        always_ff @(posedge clk)begin \
-            if(DLog::logValid && (cond))begin \
-                $display("[%16d] %m: %s", DLog::cycleCnt, msg); \
-            end \
+    always_ff @(posedge clk)begin \
+        if(DLog::logValid && level >= DLog::logLevel && (cond))begin \
+            $display("[%16d] %s", DLog::cycleCnt, msg); \
         end \
     end \
-endgenerate \
 `endif \
 `endif \
+
+`define LOG_ARRAY(tag=T_LOG_ALL, name, arr_name, num) \
+`ifdef ENABLE_LOG \
+`ifdef tag \
+    string name; \
+    always_comb begin \
+        if(DLog::logValid)begin \
+            name = ""; \
+            for (int i = 0; i < num; i++) begin \
+                name = $sformatf("%s %h", name, arr_name[i]); \
+            end \
+        end \
+        else begin \
+            name = ""; \
+        end \
+    end \
+`endif \
+`endif \
+
 
 `define UNPARAM /* UNPARAM */
 

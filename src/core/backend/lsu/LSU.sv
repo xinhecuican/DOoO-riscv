@@ -484,14 +484,14 @@ generate
         assign violation_io.s1_data[i].addr = lpaddr[i];
         assign violation_io.s1_data[i].mask = lmask[i];
         assign violation_io.s1_data[i].lqIdx = load_issue_data[i].lqIdx;
-        assign violation_io.s1_data[i].robIdx = load_issue_data[i].lqIdx;
+        assign violation_io.s1_data[i].robIdx = load_issue_data[i].robIdx;
         assign violation_io.s1_data[i].fsqInfo = load_issue_data[i].fsqInfo;
 
         assign violation_io.s2_data[i].en = leq_en[i];
         assign violation_io.s2_data[i].addr = lpaddrNext[i];
         assign violation_io.s2_data[i].mask = lmaskNext[i];
         assign violation_io.s2_data[i].lqIdx = leq_data[i].lqIdx;
-        assign violation_io.s2_data[i].robIdx = leq_data[i].lqIdx;
+        assign violation_io.s2_data[i].robIdx = leq_data[i].robIdx;
         assign violation_io.s2_data[i].fsqInfo = leq_data[i].fsqInfo;
     end
 endgenerate
@@ -591,8 +591,9 @@ module ViolationCompare(
     input ViolationData cmp2,
     output ViolationData out
 );
-    logic older, conflict;
+    logic older, equal, conflict;
     LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older);
+    assign equal = cmp1.lqIdx == cmp2.lqIdx;
     assign conflict = (cmp1.addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] == cmp2.addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH]) &&
                       (|(cmp1.mask & cmp2.mask));
     assign out.addr = cmp2.addr;
@@ -600,7 +601,8 @@ module ViolationCompare(
     assign out.lqIdx = cmp2.lqIdx;
     assign out.robIdx = cmp2.robIdx;
     assign out.fsqInfo = cmp2.fsqInfo;
-    assign out.en = cmp1.en & cmp2.en & older & conflict;
+    // BUG: consider load queue full
+    assign out.en = cmp1.en & cmp2.en & (older | equal) & conflict;
 endmodule
 
 module ViolationOlderCompare(

@@ -242,7 +242,6 @@ module DispatchQueue #(
     parameter DATA_WIDTH = 1,
     parameter DEPTH = 16,
     parameter OUT_WIDTH = 4,
-    parameter NEED_WALK = 1,
     parameter ADDR_WIDTH = $clog2(DEPTH)
 )(
     input logic clk,
@@ -286,8 +285,8 @@ generate
         assign entry = entrys[raddr];
         assign raddr = head + i;
         assign bigger = num > i;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older);
-        assign io.en_o[i] = bigger & (~backendCtrl.redirect | older);
+        // LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older);
+        assign io.en_o[i] = bigger & (~backendCtrl.redirect);
         assign io.rs1_o[i] = entry.rs1;
         assign io.rs2_o[i] = entry.rs2;
         assign io.data_o[i] = entry.data;
@@ -295,67 +294,48 @@ generate
 endgenerate
 
 // redirect
-generate
-    if(NEED_WALK)begin
-        logic `N(DEPTH) valid, bigger, en, validStart, validEnd;
-        logic `N(DEPTH) headShift, tailShift;
-        logic `N(ADDR_WIDTH) validSelect1, validSelect2;
-        logic `N(ADDR_WIDTH) walk_tail;
-        logic `N(ADDR_WIDTH + 1) walkNum;
-        logic valid_full;
-        assign headShift = (1 << head) - 1;
-        assign tailShift = (1 << tail) - 1;
-        assign en = tail > head || num == 0 ? headShift ^ tailShift : ~(headShift ^ tailShift);
-        assign valid = en & bigger;
-        assign valid_full = &valid;
+    logic `N(DEPTH) valid, bigger, en, validStart, validEnd;
+    logic `N(DEPTH) headShift, tailShift;
+    logic `N(ADDR_WIDTH) validSelect1, validSelect2;
+    logic `N(ADDR_WIDTH) walk_tail;
+    logic `N(ADDR_WIDTH + 1) walkNum;
+    logic valid_full;
+    assign headShift = (1 << head) - 1;
+    assign tailShift = (1 << tail) - 1;
+    assign en = tail > head || num == 0 ? headShift ^ tailShift : ~(headShift ^ tailShift);
+    assign valid = en & bigger;
+    assign valid_full = &valid;
 
-        for(genvar i=0; i<DEPTH; i++)begin
-            assign bigger[i] = (robIdx[i].dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > robIdx[i].idx);
-            logic `N(ADDR_WIDTH) i_n, i_p;
-            assign i_n = i + 1;
-            assign i_p = i - 1;
-            assign validStart[i] = valid[i] & ~valid[i_n]; // valid[i] == 1 && valid[i + 1] == 0
-            assign validEnd[i] = valid[i] & ~valid[i_p];
+    for(genvar i=0; i<DEPTH; i++)begin
+        assign bigger[i] = (robIdx[i].dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > robIdx[i].idx);
+        logic `N(ADDR_WIDTH) i_n, i_p;
+        assign i_n = i + 1;
+        assign i_p = i - 1;
+        assign validStart[i] = valid[i] & ~valid[i_n]; // valid[i] == 1 && valid[i + 1] == 0
+        assign validEnd[i] = valid[i] & ~valid[i_p];
+    end
+    Encoder #(DEPTH) encoder1 (validStart, validSelect1);
+    Encoder #(DEPTH) encoder2 (validEnd, validSelect2);
+    ParallelAdder #(.DEPTH(DEPTH)) adder_walk_num (valid, walkNum);
+    assign walk_tail = validSelect1 == head ? validSelect2 : validSelect1;
+    always_ff @(posedge clk or posedge rst)begin
+        if(rst == `RST)begin
+            head <= 0;
+            tail <= 0;
+            num <= 0;
         end
-        Encoder #(DEPTH) encoder1 (validStart, validSelect1);
-        Encoder #(DEPTH) encoder2 (validEnd, validSelect2);
-        ParallelAdder #(.DEPTH(DEPTH)) adder_walk_num (valid, walkNum);
-        assign walk_tail = validSelect1 == head ? validSelect2 : validSelect1;
-        always_ff @(posedge clk or posedge rst)begin
-            if(rst == `RST)begin
-                head <= 0;
-                tail <= 0;
-                num <= 0;
-            end
-            else begin
-            if(backendCtrl.redirect)begin
-                tail <= valid_full ? tail : |valid ? walk_tail + 1 : head;
-                num <= walkNum;
-            end
-            else begin
-                head <= head + subNum;
-                tail <= tail + eqNum;
-                num <= num + eqNum - subNum;
-            end
-            end
+        else begin
+        if(backendCtrl.redirect)begin
+            tail <= valid_full ? tail : |valid ? walk_tail + 1 : head;
+            num <= walkNum;
+        end
+        else begin
+            head <= head + subNum;
+            tail <= tail + eqNum;
+            num <= num + eqNum - subNum;
+        end
         end
     end
-    else begin
-        always_ff @(posedge clk or posedge rst)begin
-            if(rst == `RST)begin
-                head <= 0;
-                tail <= 0;
-                num <= 0;
-            end
-            else begin
-                head <= head + subNum;
-                tail <= tail + eqNum;
-                num <= num + eqNum - subNum;
-            end
-        end
-    end
-
-endgenerate
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             entrys <= '{default: 0};

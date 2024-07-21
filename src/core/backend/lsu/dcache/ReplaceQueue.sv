@@ -134,4 +134,8 @@ module ReplaceQueue(
     assign w_axi_io.mw.user = 0;
 
     assign w_axi_io.mb.ready = 1'b1;
+
+    `LOG_ARRAY(T_DCACHE, dbg_data, newEntry.data, TRANSFER_BANK)
+    `Log(DLog::Debug, T_DCACHE, io.en & ~full,
+        $sformatf("dcache replace. [%h] %s", newEntry.addr << `DCACHE_LINE_WIDTH, dbg_data))
 endmodule

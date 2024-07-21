@@ -363,6 +363,7 @@ module CalValidNum #(
 generate
 	case(WIDTH)
 	4: CalValidNum4 #($clog2(WIDTH)) calValidNum(en, out);
+	3: CalValidNum3 #($clog2(WIDTH)) calValidNum(en, out);
 	2: CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
 	default: begin
 		CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);

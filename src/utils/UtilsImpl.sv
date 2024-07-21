@@ -398,15 +398,25 @@ module CalValidNum2 #(
 	assign out[1] = en[0];
 endmodule
 
+module CalValidNum3 #(
+	parameter DATA_WIDTH=2
+)(
+	input logic [2: 0] en,
+	output logic [2: 0][DATA_WIDTH-1: 0] out
+);
+	assign out[0] = 0;
+	assign out[1] = en[0];
+	assign out[2] = en[0] & en[1] ? 2 :
+					en[0] | en[1] ? 1 : 0;
+endmodule
+
 module CalValidNum4 #(
 	parameter DATA_WIDTH=2
 )(
 	input logic [3: 0] en,
 	output logic [3: 0][1: 0] out
 );
-	CalValidNum2 #(DATA_WIDTH) calValidNum(en[1: 0], out[1: 0]);
-	assign out[2] = en[0] & en[1] ? 2 :
-					en[0] | en[1] ? 1 : 0;
+	CalValidNum3 #(DATA_WIDTH) calValidNum(en[2: 0], out[2: 0]);
 	assign out[3] = en[0] & en[1] & en[2] ? 3 :
 					en[0] & en[1] | en[0] & en[2] | en[1] & en[2] ? 2 :
 					en[0] | en[1] | en[2] ? 1 : 0;

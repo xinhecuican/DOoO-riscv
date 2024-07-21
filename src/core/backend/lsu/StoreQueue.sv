@@ -22,11 +22,11 @@ module StoreQueue(
     BackendCtrl backendCtrl,
     output logic `N(`LOAD_PIPELINE) fwd_data_invalid
 );
-    logic `N(`STORE_QUEUE_WIDTH) head, tail, head_n, tail_n, commitHead;
+    logic `N(`STORE_QUEUE_WIDTH) head, tail, head_n, tail_n, commitHead, storeHead, storeHead_n;
     logic hdir, tdir, hdir_n;
     logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_WIDTH) addr_eqIdx, data_eqIdx;
     logic `N($clog2(`STORE_DIS_PORT)+1) disNum;
-    logic `N($clog2(`STORE_PIPELINE)+1) commitNum;
+    logic `N($clog2(`STORE_PIPELINE)+1) commitNum, commitNum_n;
     logic `ARRAY(`STORE_DIS_PORT, `STORE_QUEUE_WIDTH) disWIdx;
     logic `ARRAY(`COMMIT_WIDTH, `STORE_QUEUE_WIDTH) commitIdx;
     logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_WIDTH) headCommitIdx;
@@ -42,6 +42,7 @@ module StoreQueue(
     logic walk_full;
     logic `ARRAY(`STORE_PIPELINE, `XLEN) storeData;
     logic `N(`STORE_PIPELINE) full;
+    logic `N(`STORE_PIPELINE) store_commit_en_n;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign addr_eqIdx[i] = io.data[i].sqIdx.idx;
@@ -62,20 +63,23 @@ endgenerate
     ParallelAdder #(1, `STORE_PIPELINE) addr_commit_num (queue_commit_io.en, commitNum);
     assign io.sqIdx.idx = tail;
     assign io.sqIdx.dir = tdir;
-    assign issue_queue_io.full = |full;
-    assign head_n = queue_commit_io.conflict ? head : head + commitNum;
+    assign issue_queue_io.full = (|full) | redirect_next;
+    assign head_n = queue_commit_io.conflict ? head : head + commitNum_n;
+    assign storeHead_n = queue_commit_io.conflict ? storeHead : storeHead + commitNum;
     assign tail_n = tail + disNum;
     assign hdir_n = head[`STORE_QUEUE_WIDTH-1] & ~head_n[`STORE_QUEUE_WIDTH-1] ? ~hdir : hdir;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
+            storeHead <= 0;
             commitHead <= 0;
             hdir <= 0;
             tdir <= 0;
         end
         else begin
             head <= head_n;
+            storeHead <= storeHead_n;
             hdir <= hdir_n;
             if(redirect_next)begin
                 tail <= walk_valid ? walk_tail: head_n;
@@ -135,7 +139,7 @@ endgenerate
                 end
             end
             for(int i=0; i<`STORE_PIPELINE; i++)begin
-                if(queue_commit_io.en[i] & ~queue_commit_io.conflict)begin
+                if(store_commit_en_n[i] & ~queue_commit_io.conflict)begin
                     valid[headCommitIdx[i]] <= 1'b0;
                 end
             end
@@ -176,7 +180,7 @@ endgenerate
     Encoder #(`STORE_QUEUE_SIZE) encoder1 (validStart, validSelect1);
     Encoder #(`STORE_QUEUE_SIZE) encoder2 (validEnd, validSelect2);
     assign valid_select = validSelect1 == head ? validSelect2 : validSelect1;
-    assign walk_en = valid & bigger;
+    assign walk_en = valid & (bigger | commited);
     assign valid_select_n = valid_select + 1;
     assign walk_full = &walk_en;
     always_ff @(posedge clk)begin
@@ -189,11 +193,21 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic `N(`STORE_QUEUE_WIDTH) queue_idx;
-        assign queue_idx = head + i;
+        assign queue_idx = storeHead + i;
         assign queue_commit_io.en[i] = valid[queue_idx] & addrValid[queue_idx] & dataValid[queue_idx] & commited[queue_idx];
         assign queue_commit_io.addr[i] = addr_mask[queue_idx][`PADDR_SIZE+`DCACHE_BYTE-1: `DCACHE_BYTE];
         assign queue_commit_io.mask[i] = addr_mask[queue_idx][`DCACHE_BYTE-1: 0];
         assign queue_commit_io.data[i] = data[queue_idx];
+        always_ff @(posedge clk)begin
+            if(~queue_commit_io.conflict)begin
+                store_commit_en_n[i] <= queue_commit_io.en[i];
+            end
+        end
+    end
+    always_ff @(posedge clk)begin
+        if(~queue_commit_io.conflict)begin
+            commitNum_n <= commitNum;
+        end
     end
 endgenerate
 
@@ -204,18 +218,25 @@ endgenerate
     logic [`LOAD_PIPELINE-1: 0][`STORE_QUEUE_SIZE-1: 0][`DCACHE_BYTE-1: 0] forward_mask;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) forward_mask_o, forward_data_valid_o;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BITS) forward_data_o;
+    logic `ARRAY(`LOAD_PIPELINE, `TLB_OFFSET-`DCACHE_BYTE_WIDTH) load_voffset;
 
     MaskGen #(`STORE_QUEUE_SIZE) maskgen_head (head, head_mask);
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
-            assign offset_vec[i][j] = loadFwd.fwdData[i].en &
-                                      (loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_BYTE_WIDTH] == addr_mask[j][`DCACHE_BYTE+`TLB_OFFSET-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE]);
+            // assign offset_vec[i][j] = loadFwd.fwdData[i].en &
+                                    //   (loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_BYTE_WIDTH] == 
+                                    //   addr_mask[j][`DCACHE_BYTE+`TLB_OFFSET-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE]);
+            assign offset_vec[i][j] = loadFwd.fwdData[i].en;
         end
         logic `N(`STORE_QUEUE_SIZE) store_mask;
         MaskGen #(`STORE_QUEUE_SIZE) maskgen_store (loadFwd.fwdData[i].sqIdx.idx, store_mask);
         logic span;
+        assign span = hdir ^ loadFwd.fwdData[i].sqIdx.dir;
         assign valid_vec[i] = span ? ~(head_mask ^ store_mask) : head_mask ^ store_mask;
+        always_ff @(posedge clk)begin
+            load_voffset[i] <= loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_BYTE_WIDTH];
+        end
     end
 
     always_ff @(posedge clk)begin
@@ -224,7 +245,7 @@ generate
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
-            assign ptag_vec[i][j] = loadFwd.fwdData[i].ptag == addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-1: `TLB_OFFSET+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH];
+            assign ptag_vec[i][j] = {loadFwd.fwdData[i].ptag, load_voffset[i]} == addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-1: `DCACHE_BYTE];
             assign forward_mask[i][j] = {`DCACHE_BYTE{forward_vec[i][j]}} & addr_mask[j][`DCACHE_BYTE-1: 0];
         end
         assign forward_vec[i] = ptag_vec[i] & fwd_offset_vec[i] & addrValid;

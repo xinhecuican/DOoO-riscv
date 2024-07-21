@@ -23,7 +23,7 @@ module FSQ (
     logic cache_req;
     logic cache_req_ok;
     BTBUpdateInfo oldEntry;
-    logic directionTable `N(`FSQ_SIZE);
+    logic `N(`FSQ_SIZE) directionTable;
     logic tdir, hdir, shdir;
     logic `N(`FSQ_WIDTH) searchIdx;
     FetchStream commitStream, searchStream, writeStream;
@@ -326,7 +326,7 @@ endgenerate
         end
     end
 
-    logic `N(`FSQ_WIDTH) redirect_dir_idx;
+    logic `N(`FSQ_WIDTH) redirect_dir_idx, redirect_dir_idx_n1;
     assign redirect_dir_idx = fsq_back_io.redirect.fsqInfo.idx;
 
     always_ff @(posedge clk)begin
@@ -349,7 +349,7 @@ endgenerate
                 tdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
             end
             else if(bpu_fsq_io.redirect & ~full)begin
-                tdir <= bpu_fsq_io.prediction.stream_idx[`FSQ_WIDTH-1] & ~bpu_fsq_redirect_n1[`FSQ_WIDTH-1] ? ~bpu_fsq_io.stream_dir : bpu_fsq_io.stream_dir;
+                tdir <= bpu_fsq_io.prediction.stream_idx[`FSQ_WIDTH-1] & ~bpu_fsq_redirect_n1[`FSQ_WIDTH-1] ? ~bpu_fsq_io.prediction.stream_dir : bpu_fsq_io.prediction.stream_dir;
             end
             else if(bpu_fsq_io.en & ~full)begin
                 tdir <= tail[`FSQ_WIDTH-1] & ~tail_n1[`FSQ_WIDTH-1] ? ~tdir : tdir;

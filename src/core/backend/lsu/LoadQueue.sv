@@ -110,7 +110,7 @@ endgenerate
 
     assign io.lqIdx.idx = tail;
     assign io.lqIdx.dir = tdir;
-    assign load_io.full = |full;
+    assign load_io.full = (|full) | redirect_next;
     assign head_n = head + commitBus.loadNum;
     assign tail_n = tail + load_io.eqNum;
     assign hdir_n = head[`LOAD_QUEUE_WIDTH-1] & ~head_n[`LOAD_QUEUE_WIDTH-1] ? ~hdir : hdir;

@@ -85,13 +85,15 @@ module DCacheMiss(
 
 //load enqueue
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
-    logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) req_order;
+    logic `ARRAY(`LOAD_PIPELINE+1, $clog2(`LOAD_PIPELINE+1)) req_order;
+    logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) r_req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
     logic `N(`LOAD_PIPELINE) mshr_remain_valid, rhit_combine, remain_valid;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) rfree_eq;
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) rfree_idx;
 
-    CalValidNum #(`LOAD_PIPELINE) cal_en (io.ren & ~rhit_combine, req_order);
+    CalValidNum #(`LOAD_PIPELINE+1) cal_req_order (free_en, req_order);
+    CalValidNum #(`LOAD_PIPELINE) cal_rorder (io.ren & ~rhit_combine, r_req_order);
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
@@ -110,7 +112,7 @@ generate
         end
         Encoder #(`DCACHE_MISS_SIZE) encoder_rhit(rhit[i], rhit_idx[i]);
         PEncoder #(`LOAD_PIPELINE) encoder_rfree_eq_idx (rfree_eq[i], rfree_idx[i]);
-        assign remain_valid[i] = remain_count > req_order[i];
+        assign remain_valid[i] = remain_count > r_req_order[i];
         assign rhit_combine[i] = (|rhit[i]) | (|rfree_eq[i]);
         assign ridx[i] = (|rhit[i]) ? rhit_idx[i] : 
                          |rfree_eq[i] ? freeIdx[rfree_idx[i]] : freeIdx[i];
@@ -131,6 +133,7 @@ endgenerate
 // write enqueue
     logic write_remain_valid, whit_combine;
     logic `N($clog2(`LOAD_PIPELINE+1)+1) write_req_order;
+    logic `N($clog2(`LOAD_PIPELINE+1)+1) w_req_order;
     logic `N(`DCACHE_MISS_SIZE) whit;
     logic `N(`DCACHE_MISS_WIDTH) widx, whitIdx;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) read_data, combine_data;
@@ -143,19 +146,20 @@ generate
         assign rwfree_eq[i] = io.ren[i] && io.wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS);
     end
 endgenerate
-    assign write_req_order = req_order[`LOAD_PIPELINE-1]  + (io.ren[`LOAD_PIPELINE-1] & ~rhit_combine[`LOAD_PIPELINE-1]);
+    assign write_req_order = req_order[`LOAD_PIPELINE];
+    assign w_req_order = r_req_order[`LOAD_PIPELINE-1] + (io.ren[`LOAD_PIPELINE-1] & ~rhit_combine[`LOAD_PIPELINE-1]);
     assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
-    assign write_remain_valid = remain_count > write_req_order;
+    assign write_remain_valid = remain_count > w_req_order;
     assign whit_combine = |whit | (|rwfree_eq);
     Encoder #(`DCACHE_MISS_SIZE) encoder_whit(whit, whitIdx);
     PEncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
     assign widx = |whit ? whitIdx : 
                   |rwfree_eq ? freeIdx[rwfree_idx] : freeIdx[`LOAD_PIPELINE];
     always_ff @(posedge clk)begin
-        io.wfull <= io.wen & ~rlast & ~req_last & ~write_remain_valid & ~whit_combine;
+        io.wfull <= io.wen & (req_last | rlast | (~write_remain_valid & ~whit_combine));
     end
 
-    assign free_en[`LOAD_PIPELINE] = io.wen & ~rlast & ~req_last & (write_remain_valid & ~whit_combine);
+    assign free_en[`LOAD_PIPELINE] = io.wen & ~req_last & ~rlast & (write_remain_valid & ~whit_combine);
 
     assign read_data = data[widx];
     assign read_mask = mask[widx];
