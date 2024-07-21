@@ -155,6 +155,9 @@ endgenerate
     PEncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
     assign widx = |whit ? whitIdx : 
                   |rwfree_eq ? freeIdx[rwfree_idx] : freeIdx[`LOAD_PIPELINE];
+    // note: 因为现在CommitBuffer同一时间只允许一个cacheline，所以不存在冲突问题
+    // 实际上只需要req_last时禁止写入即可，如果CommitBuffer同一时间有多个同一地址的项
+    // 那么req_last, rlast, io.refill_en & io.refill_end都需要考虑冲突问题
     always_ff @(posedge clk)begin
         io.wfull <= io.wen & (req_last | rlast | (~write_remain_valid & ~whit_combine));
     end

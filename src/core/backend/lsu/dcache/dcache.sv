@@ -123,7 +123,7 @@ generate
         assign write_valid[i] = replace_wb_en |
                                 miss_io.refill_en |
                                 ptw_io.req |
-                                wreq_n & whit & (|wmask[rio.vaddr[i]`DCACHE_BANK_BUS]);
+                                wreq_n & whit & (|wmask_n[rio.vaddr[i]`DCACHE_BANK_BUS]);
     end
 endgenerate
 

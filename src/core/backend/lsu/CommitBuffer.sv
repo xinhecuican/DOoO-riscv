@@ -12,6 +12,7 @@ module StoreCommitBuffer(
     logic `N(`DCACHE_BLOCK_SIZE) addrs `N(`STORE_COMMIT_SIZE);
     // write back counter info
     logic `N(`STORE_COUNTER_WIDTH) counter `N(`STORE_COMMIT_SIZE);
+    logic `N(`STORE_COMMIT_WIDTH) addr_num;
     SCDataIO data_io();
     SCDataModule data_module (.*, .io(data_io));
 
@@ -95,6 +96,7 @@ endgenerate
     logic wreq, wreq_n;
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) widx_decode, widx_valid;
     logic `N(`STORE_COMMIT_SIZE) widx_valid_combine;
+    logic thresh_write;
 generate
     assign write_ready = ready & addr_en & ~writing;
     PEncoder #(`STORE_COMMIT_SIZE) encoder_write_ready (write_ready, widx);
@@ -104,12 +106,12 @@ generate
     end
     ParallelOR #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) or_widx ( widx_valid, widx_valid_combine);
     for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
-        assign ready[i] = counter[i][0];
+        assign ready[i] = counter[i][0] | thresh_write;
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter[i] <= 1;
             end
-            else begin
+            else if(|data_we_combine)begin
                 if(widx_valid_combine[i])begin
                     counter[i] <= {1'b1, {`STORE_COUNTER_WIDTH-1{1'b0}}};
                 end
@@ -120,6 +122,11 @@ generate
         end
     end
 endgenerate
+    ParallelAdder #(1, `STORE_COMMIT_SIZE) adder_addr_num ( addr_en, addr_num);
+    always_ff @(posedge clk)begin
+        thresh_write <= addr_num > `STORE_COMMIT_THRESH;
+    end
+
     always_ff @(posedge clk)begin
         if(wio.valid)begin
             widx_next <= widx;
