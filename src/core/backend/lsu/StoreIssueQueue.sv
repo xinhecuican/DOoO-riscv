@@ -25,8 +25,6 @@ endinterface
 module StoreIssueQueue(
     input logic clk,
     input logic rst,
-    input StoreIdx `N(`STORE_PIPELINE) sqIdx,
-    input LoadIdx `N(`STORE_PIPELINE) lqIdx,
     DisIssueIO.issue dis_store_io,
     IssueWakeupIO.issue store_wakeup_io,
     WriteBackBus wbBus,
@@ -41,7 +39,6 @@ module StoreIssueQueue(
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_NUM)) originOrder, sortOrder;
     logic `N(`STORE_ISSUE_BANK_NUM) full, addr_bigger, data_bigger;
     logic `N(`STORE_ISSUE_BANK_NUM) addr_en_next, data_en_next;
-    StoreIdx `N(`STORE_ISSUE_BANK_NUM) sqIdxs;
     logic `N($clog2(`STORE_DIS_PORT)+1) disNum;
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_NUM; i++)begin
@@ -61,8 +58,6 @@ generate
         assign addr_io[i].en = dis_store_io.en[order[i]] & ~dis_store_io.full;
         assign addr_io[i].status = dis_store_io.status[order[i]];
         assign addr_io[i].data = dis_store_io.data[order[i]];
-        assign addr_io[i].sqIdx = sqIdx[order[i]];
-        assign addr_io[i].lqIdx = lqIdx[order[i]];
         assign addr_io[i].success = store_io.success[i];
         assign addr_io[i].success_idx = store_io.success_idx[i];
         assign addr_io[i].reply = store_io.reply[i];
@@ -82,13 +77,12 @@ generate
         assign data_io[i].en = addr_io[i].en;
         assign data_io[i].status = addr_io[i].status;
         assign data_io[i].data = addr_io[i].data;
-        assign data_io[i].sqIdx = addr_io[i].sqIdx;
         
         assign store_wakeup_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en;
         assign store_wakeup_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
         assign store_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
-        assign store_io.dis_sq_idx[i] = sqIdx[i];
+        assign store_io.dis_sq_idx[i] = mem_issue_bundle.sqIdx;
         assign store_io.data_size[i] = data_io[i].size_o;
 
         LoopCompare #(`ROB_WIDTH) cmp_addr_bigger (addr_io[i].robIdx_o, backendCtrl.redirectIdx, addr_bigger[i]);
@@ -118,8 +112,6 @@ interface StoreAddrBankIO;
     logic en;
     IssueStatusBundle status;
     MemIssueBundle data;
-    StoreIdx sqIdx;
-    LoadIdx lqIdx;
     logic reg_en;
     logic `N(`PREG_WIDTH) rs1;
     logic full;
@@ -136,7 +128,7 @@ interface StoreAddrBankIO;
     logic tlb_error;
     logic `N(`STORE_ISSUE_BANK_WIDTH) tlb_bank_idx;
 
-    modport bank(input en, status, data, sqIdx, lqIdx, reply, success, success_idx, tlb_en, tlb_exception, tlb_error, tlb_bank_idx, output full, reg_en, rs1, bankNum, data_o, robIdx_o, exception_o, issue_idx);
+    modport bank(input en, status, data, reply, success, success_idx, tlb_en, tlb_exception, tlb_error, tlb_bank_idx, output full, reg_en, rs1, bankNum, data_o, robIdx_o, exception_o, issue_idx);
 endinterface
 
 module StoreAddrBank(
@@ -176,7 +168,7 @@ module StoreAddrBank(
         .addr0(freeIdx),
         .addr1(selectIdxNext),
         .we(io.en),
-        .wdata({io.data.uext, size, io.data.imm, io.sqIdx, io.lqIdx, io.data.robIdx, io.data.fsqInfo}),
+        .wdata({io.data.uext, size, io.data.imm, io.data.sqIdx, io.data.lqIdx, io.data.robIdx, io.data.fsqInfo}),
         .rdata1(data_o)
     );
 
@@ -287,7 +279,6 @@ interface StoreDataBankIO;
     logic en;
     IssueStatusBundle status;
     MemIssueBundle data;
-    StoreIdx sqIdx;
     logic reg_en;
     logic `N(`PREG_WIDTH) rs2;
     StoreIdx sqIdx_o;
@@ -295,7 +286,7 @@ interface StoreDataBankIO;
     RobIdx robIdx_o;
     logic [1: 0] size_o;
 
-    modport bank(input en, status, data, sqIdx, output reg_en, rs2, sqIdx_o, full, robIdx_o, size_o);
+    modport bank(input en, status, data, output reg_en, rs2, sqIdx_o, full, robIdx_o, size_o);
 endinterface
 
 module StoreDataBank(
@@ -368,7 +359,7 @@ endgenerate
 
     always_ff @(posedge clk)begin
         if(io.en)begin
-            sqIdxs[freeIdx] <= io.sqIdx;
+            sqIdxs[freeIdx] <= io.data.sqIdx;
             sqSize[freeIdx] <= size;
         end
         selectIdxNext <= selectIdx;

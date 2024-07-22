@@ -44,15 +44,11 @@ module LSU(
     CsrTlbIO.tlb csr_stlb_io,
     PTWRequest.cache ptw_request,
     TlbL2IO.tlb dtlb_io,
-    output StoreWBData `N(`STORE_PIPELINE) storeWBData
+    output StoreWBData `N(`STORE_PIPELINE) storeWBData,
+    output LoadIdx lqIdx,
+    output StoreIdx sqIdx
 );
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr, storeVAddr;
-    /* verilator lint_off UNOPTFLAT */
-    LoadIdx `N(`LOAD_PIPELINE) lqIdxs;
-    LoadIdx `N(`STORE_PIPELINE) s_lqIdxs;
-    /* verilator lint_off UNOPTFLAT */
-    StoreIdx `N(`STORE_PIPELINE) sqIdxs;
-    StoreIdx `N(`LOAD_PIPELINE) l_sqIdxs;
     LoadIssueData `N(`LOAD_PIPELINE) load_issue_data;
     logic `N(`LOAD_PIPELINE) load_en, fwd_data_invalid; // fwd_data_invalid from StoreQueue
     LoadUnitIO load_io();
@@ -70,16 +66,12 @@ module LSU(
 
     LoadIssueQueue load_issue_queue(
         .load_wakeup_io(li_w_io),
-        .lqIdx(lqIdxs),
-        .sqIdx(l_sqIdxs),
         .*
     );
     DCache dcache(.*, .ptw_io(ptw_request));
     LoadQueue load_queue(.*, .io(load_queue_io));
     StoreIssueQueue store_issue_queue(
-        .*,
-        .sqIdx(sqIdxs), 
-        .lqIdx(s_lqIdxs)
+        .*
     );
     StoreQueue store_queue(
         .*,
@@ -97,6 +89,8 @@ module LSU(
     ViolationDetect violation_detect(.*, .io(violation_io));
     DTLB dtlb(.*, .tlb_l2_io(dtlb_io));
 
+    assign lqIdx = load_queue_io.lqIdx;
+    assign sqIdx = store_queue_io.sqIdx;
     assign load_wakeup_io.en = li_w_io.en;
     assign load_wakeup_io.preg = li_w_io.preg;
     assign li_w_io.data = load_wakeup_io.data;
@@ -106,27 +100,6 @@ module LSU(
     logic `ARRAY(`LOAD_PIPELINE, `STORE_PIPELINE) dis_ls_older;
     logic `N(`LOAD_PIPELINE) lmisalign;
 generate
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign lqIdxs[i].idx = load_queue_io.lqIdx.idx + i;
-        assign lqIdxs[i].dir = load_queue_io.lqIdx.idx[`LOAD_QUEUE_WIDTH-1] & ~lqIdxs[i].idx[`LOAD_QUEUE_WIDTH-1] ? ~load_queue_io.lqIdx.dir : load_queue_io.lqIdx.dir;
-    end
-
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : load_sqIdx
-        MemIssueBundle loadBundle;
-        assign loadBundle = dis_load_io.data[i];
-        for(genvar j=0; j<`STORE_PIPELINE; j++)begin
-            MemIssueBundle storeBundle;
-            logic older;
-            assign storeBundle = dis_store_io.data[j];
-            LoopCompare #(`ROB_WIDTH) compare_older (storeBundle.robIdx, loadBundle.robIdx, older);
-            assign dis_ls_older[i][j] = older & dis_store_io.en[j] & ~dis_store_io.full;
-        end
-        logic `N($clog2(`STORE_PIPELINE)+1) store_idx;
-        StoreIdx l_sqIdx;
-        ParallelAdder #(1, `STORE_PIPELINE) adder_store_idx (dis_ls_older[i], store_idx);
-        LoopAdder #(`STORE_QUEUE_WIDTH, $clog2(`STORE_PIPELINE)+1) adder_lqIdx(store_idx, store_queue_io.sqIdx, l_sqIdx);
-        assign l_sqIdxs[i] = l_sqIdx;
-    end
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : load_addr
         AGU agu(
@@ -299,7 +272,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
         logic wb_data_en, wb_pipeline_en;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
-        assign wb_pipeline_en = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3 | 
+        assign wb_pipeline_en = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3[i] | 
                                 ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i])) &
                                 ~redirect_clear_s3[i];
         always_ff @(posedge clk)begin
@@ -348,27 +321,7 @@ endgenerate
 
 
 generate
-    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        assign sqIdxs[i].idx = store_queue_io.sqIdx.idx + i;
-        assign sqIdxs[i].dir = store_queue_io.sqIdx.idx[`STORE_QUEUE_WIDTH-1] & ~sqIdxs[i].idx[`STORE_QUEUE_WIDTH-1] ? ~store_queue_io.sqIdx.dir : store_queue_io.sqIdx.dir;
-    end
 
-    for(genvar i=0; i<`STORE_PIPELINE; i++)begin : store_lqIdx
-        MemIssueBundle storeBundle;
-        assign storeBundle = dis_store_io.data[i];
-        for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
-            MemIssueBundle loadBundle;
-            logic older;
-            assign loadBundle = dis_load_io.data[j];
-            LoopCompare #(`ROB_WIDTH) compare_older (loadBundle.robIdx, storeBundle.robIdx, older);
-            assign dis_sl_older[i][j] = older & dis_load_io.en[j] & ~dis_load_io.full;
-        end
-        logic `N($clog2(`LOAD_PIPELINE)+1) load_idx;
-        LoadIdx s_lqIdx;
-        ParallelAdder #(1, `LOAD_PIPELINE) adder_load_idx (dis_sl_older[i], load_idx);
-        LoopAdder #(`LOAD_QUEUE_WIDTH, $clog2(`LOAD_PIPELINE)+1) adder_lqIdx(load_idx, load_queue_io.lqIdx, s_lqIdx);
-        assign s_lqIdxs[i] = s_lqIdx;
-    end
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin : store_addr
         AGU agu(
             .imm(store_io.storeIssueData[i].imm),

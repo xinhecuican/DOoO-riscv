@@ -267,7 +267,7 @@ generate
     end
 endgenerate
     // refill
-    assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit & miss_io.refillWay))) & ~miss_io.req & ~replace_wb_en;
+    assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit & refill_way))) & ~miss_io.req & ~replace_wb_en;
     always_ff @(posedge clk)begin
         wio.refill <= miss_io.refill_en & miss_io.refill_valid & miss_io.refill_dirty;
         wio.refillIdx <= miss_io.refill_scIdx;

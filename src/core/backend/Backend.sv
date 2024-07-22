@@ -40,6 +40,8 @@ module Backend(
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
     logic rename_full, rob_full;
     logic `N(`VADDR_SIZE) exc_pc;
+    LoadIdx lqIdx;
+    StoreIdx sqIdx;
 
 `ifdef DIFFTEST
     DiffRAT diff_rat();

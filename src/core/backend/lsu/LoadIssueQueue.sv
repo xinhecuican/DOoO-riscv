@@ -26,8 +26,6 @@ endinterface
 module LoadIssueQueue(
     input logic clk,
     input logic rst,
-    input LoadIdx `N(`LOAD_PIPELINE) lqIdx,
-    input StoreIdx `N(`LOAD_PIPELINE) sqIdx,
     DisIssueIO.issue dis_load_io,
     IssueWakeupIO.regfile load_wakeup_io,
     WakeupBus wakeupBus,
@@ -58,8 +56,6 @@ generate
         assign bank_io[i].en = dis_load_io.en[order[i]] & ~dis_load_io.full;
         assign bank_io[i].status = dis_load_io.status[order[i]];
         assign bank_io[i].data = dis_load_io.data[order[i]];
-        assign bank_io[i].lqIdx = lqIdx[order[i]];
-        assign bank_io[i].sqIdx = sqIdx[order[i]];
         assign bank_io[i].reply_fast = load_io.reply_fast[i];
         assign bank_io[i].reply_slow = load_io.reply_slow[i];
         assign bank_io[i].success = load_io.success[i];
@@ -75,7 +71,7 @@ generate
         assign load_io.loadIssueData[i] = bank_io[i].data_o;
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
         assign load_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
-        assign load_io.dis_lq_idx[i] = lqIdx[i];
+        assign load_io.dis_lq_idx[i] = mem_issue_bundle.lqIdx;
         assign load_io.exception[i] = bank_io[i].exception_o;
 
         LoopCompare #(`ROB_WIDTH) cmp_bigger(bank_io[i].robIdx_o, backendCtrl.redirectIdx, bigger[i]);
@@ -100,8 +96,6 @@ interface LoadIssueBankIO;
     logic en;
     IssueStatusBundle status;
     MemIssueBundle data;
-    LoadIdx lqIdx;
-    StoreIdx sqIdx;
     logic reg_en;
     logic `N(`PREG_WIDTH) rs1;
     logic full;
@@ -119,7 +113,7 @@ interface LoadIssueBankIO;
     logic tlb_error;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) tlb_bank_idx;
 
-    modport bank(input en, status, data, lqIdx, sqIdx, reply_fast, reply_slow, success, success_idx,
+    modport bank(input en, status, data, reply_fast, reply_slow, success, success_idx,
                  tlb_en, tlb_exception, tlb_error, tlb_bank_idx,
                  output full, reg_en, rs1, bankNum, data_o, issue_idx, robIdx_o, exception_o);
 endinterface
@@ -162,7 +156,7 @@ module LoadIssueBank(
         .addr0(freeIdx),
         .addr1(selectIdxNext),
         .we(io.en),
-        .wdata({io.data.uext, size, io.data.imm, io.data.rd, io.lqIdx, io.sqIdx, io.data.robIdx, io.data.fsqInfo}),
+        .wdata({io.data.uext, size, io.data.imm, io.data.rd, io.data.lqIdx, io.data.sqIdx, io.data.robIdx, io.data.fsqInfo}),
         .rdata1(data_o)
     );
 

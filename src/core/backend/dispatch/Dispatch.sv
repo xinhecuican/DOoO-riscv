@@ -3,6 +3,8 @@
 module Dispatch(
     input logic clk,
     input logic rst,
+    input LoadIdx lqIdx,
+    input StoreIdx sqIdx,
     RenameDisIO.dis rename_dis_io,
     DisIssueIO.dis dis_intissue_io,
     DisIssueIO.dis dis_load_io,
@@ -75,8 +77,64 @@ endgenerate
 
     DispatchQueueIO #($bits(MemIssueBundle), `LOAD_DIS_PORT) load_io();
     DispatchQueueIO #($bits(MemIssueBundle), `STORE_DIS_PORT) store_io();
+    LoadIdx lq_tail, lq_tail_n;
+    StoreIdx sq_tail, sq_tail_n;
+    logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) lq_add_num, sq_add_num;
+    LoadIdx `N(`FETCH_WIDTH) lq_eq_tail;
+    StoreIdx `N(`FETCH_WIDTH) sq_eq_tail;
+    logic `N($clog2(`FETCH_WIDTH)+1) lq_num, sq_num;
+    logic redirect_n1, redirect_n2;
+    logic load_redirect, store_redirect, load_redirect_n, store_redirect_n;
+    logic load_rd_free, store_rd_free, load_rd_free_n, store_rd_free_n;
+    LoadIdx load_redirect_idx, load_redirectIdx_n, load_redirectIdx_n2;
+    StoreIdx store_redirect_idx, store_redirectIdx_n, store_redirectIdx_n2;
+
+    CalValidNum #(`FETCH_WIDTH) cal_lq_valid (load_io.en, lq_add_num);
+    CalValidNum #(`FETCH_WIDTH) cal_sq_valid (store_io.en, sq_add_num);
+    ParallelAdder #(1, `FETCH_WIDTH) adder_lq_num (load_io.en , lq_num);
+    ParallelAdder #(1, `FETCH_WIDTH) adder_sq_num (store_io.en, sq_num);
+    LoopAdder #(`LOAD_QUEUE_WIDTH, $clog2(`FETCH_WIDTH)+1) adder_lq_tail (lq_num, lq_tail, lq_tail_n);
+    LoopAdder #(`STORE_QUEUE_WIDTH, $clog2(`FETCH_WIDTH)+1) adder_sq_tail (sq_num, sq_tail, sq_tail_n);
+    LoopAdder #(`LOAD_QUEUE_WIDTH, 1) adder_lq_redirect (1'b1, load_redirect_idx, load_redirectIdx_n);
+    LoopAdder #(`STORE_QUEUE_WIDTH, 1) adder_sq_redirect (1'b1, store_redirect_idx, store_redirectIdx_n);
+    always_ff @(posedge clk)begin
+        redirect_n1 <= backendCtrl.redirect;
+        redirect_n2 <= redirect_n1;
+        load_redirect_n <= load_redirect;
+        store_redirect_n <= store_redirect;
+        load_rd_free_n <= load_rd_free;
+        store_rd_free_n <= store_rd_free;
+        load_redirectIdx_n2 <= load_redirectIdx_n;
+        store_redirectIdx_n2 <= store_redirectIdx_n;
+    end
+    always_ff @(posedge clk or posedge rst)begin
+        if(rst == `RST)begin
+            lq_tail <= 0;
+            sq_tail <= 0;
+        end
+        else if(redirect_n2)begin
+            if(load_rd_free_n)begin
+                lq_tail <= lqIdx;
+            end
+            else if(load_redirect_n)begin
+                lq_tail <= load_redirectIdx_n2;
+            end
+            if(store_rd_free_n)begin
+                sq_tail <= sqIdx;
+            end
+            else if(store_redirect_n)begin
+                sq_tail <= store_redirectIdx_n2;
+            end
+        end
+        else if(~backendCtrl.dis_full)begin
+            lq_tail <= lq_tail_n;
+            sq_tail <= sq_tail_n;
+        end
+    end
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : load_in
+        LoopAdder #(`LOAD_QUEUE_WIDTH, $clog2(`FETCH_WIDTH)) adder_lqIdx (lq_add_num[i], lq_tail, lq_eq_tail[i]);
+        LoopAdder #(`STORE_QUEUE_WIDTH, $clog2(`FETCH_WIDTH)) adder_sqIdx (sq_add_num[i], sq_tail, sq_eq_tail[i]);
         DecodeInfo di;
         MemIssueBundle data;
         assign data.uext = di.uext;
@@ -85,6 +143,8 @@ generate
         assign data.rd = rename_dis_io.prd[i];
         assign data.imm = di.imm[11: 0];
         assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
+        assign data.lqIdx = lq_eq_tail[i];
+        assign data.sqIdx = sq_eq_tail[i];
         assign di = rename_dis_io.op[i].di;
         assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
                                (~(backendCtrl.redirect));
@@ -100,21 +160,31 @@ generate
         assign store_io.robIdx[i] = rename_dis_io.robIdx[i];
     end
 endgenerate
-    DispatchQueue #(
+    MemDispatchQueue #(
         .DATA_WIDTH($bits(MemIssueBundle)),
+        .IDX_WIDTH($bits(LoadIdx)),
         .DEPTH(`LOAD_DIS_SIZE),
         .OUT_WIDTH(`LOAD_DIS_PORT)
     ) load_dispatch_queue(
         .*,
-        .io(load_io)
+        .idx(lq_eq_tail),
+        .io(load_io),
+        .need_redirect(load_redirect),
+        .redirect_free(load_rd_free),
+        .redirect_idx(load_redirect_idx)
     );
-    DispatchQueue #(
+    MemDispatchQueue #(
         .DATA_WIDTH($bits(MemIssueBundle)),
+        .IDX_WIDTH($bits(StoreIdx)),
         .DEPTH(`STORE_DIS_SIZE),
         .OUT_WIDTH(`STORE_DIS_PORT)
     ) store_dispatch_queue(
         .*,
-        .io(store_io)
+        .idx(sq_eq_tail),
+        .io(store_io),
+        .need_redirect(store_redirect),
+        .redirect_free(store_rd_free),
+        .redirect_idx(store_redirect_idx)
     );
 
     DispatchQueueIO #($bits(CsrIssueBundle), `CSR_DIS_PORT) csr_io();
@@ -299,12 +369,13 @@ endgenerate
     logic `N(ADDR_WIDTH) validSelect1, validSelect2;
     logic `N(ADDR_WIDTH) walk_tail;
     logic `N(ADDR_WIDTH + 1) walkNum;
-    logic valid_full;
+    logic valid_full, valid_empty;
     assign headShift = (1 << head) - 1;
     assign tailShift = (1 << tail) - 1;
     assign en = tail > head || num == 0 ? headShift ^ tailShift : ~(headShift ^ tailShift);
     assign valid = en & bigger;
     assign valid_full = &valid;
+    assign valid_empty = ~(|valid);
 
     for(genvar i=0; i<DEPTH; i++)begin
         assign bigger[i] = (robIdx[i].dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > robIdx[i].idx);
@@ -326,7 +397,7 @@ endgenerate
         end
         else begin
         if(backendCtrl.redirect)begin
-            tail <= valid_full ? tail : |valid ? walk_tail + 1 : head;
+            tail <= valid_full | valid_empty ? head : walk_tail + 1;
             num <= walkNum;
         end
         else begin
@@ -346,6 +417,135 @@ endgenerate
                 if(io.en[i] & ~backendCtrl.dis_full)begin
                     entrys[index[i]] <= {io.rs1[i], io.rs2[i], io.data[i]};
                     robIdx[index[i]] <= io.robIdx[i];
+                end
+            end
+        end
+    end
+
+endmodule
+
+module MemDispatchQueue #(
+    parameter DATA_WIDTH = 1,
+    parameter IDX_WIDTH = 1,
+    parameter DEPTH = 16,
+    parameter OUT_WIDTH = 4,
+    parameter ADDR_WIDTH = $clog2(DEPTH)
+)(
+    input logic clk,
+    input logic rst,
+    input logic `ARRAY(`FETCH_WIDTH, IDX_WIDTH) idx,
+    DispatchQueueIO.dis_queue io,
+    CommitWalk commitWalk,
+    BackendCtrl backendCtrl,
+    output logic need_redirect,
+    output logic redirect_free,
+    output `N(IDX_WIDTH) redirect_idx
+);
+
+    typedef struct packed {
+        logic `N(`PREG_WIDTH) rs1;
+        logic `N(`PREG_WIDTH) rs2;
+        logic `N(DATA_WIDTH) data;
+    } Entry;
+    RobIdx robIdx `N(DEPTH);
+    logic `N(IDX_WIDTH) idxs `N(DEPTH);
+    Entry entrys `N(DEPTH);
+    logic `N(ADDR_WIDTH) head, tail;
+    logic `N(ADDR_WIDTH+1) num;
+    logic `N($clog2(`FETCH_WIDTH)+1) addNum, eqNum;
+    logic `N($clog2(OUT_WIDTH)+1) subNum;
+    logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) eq_add_num;
+    logic `N(ADDR_WIDTH) index `N(`FETCH_WIDTH);
+
+    ParallelAdder #(1, `FETCH_WIDTH) adder (io.en, addNum);
+    assign eqNum = backendCtrl.dis_full ? 0 : addNum;
+    assign subNum = io.issue_full ? 0 : 
+                    num >= OUT_WIDTH ? OUT_WIDTH : num;
+    assign io.full = num + addNum > DEPTH;
+
+    CalValidNum #(`FETCH_WIDTH) cal_en (io.en, eq_add_num);
+generate
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
+        assign index[i] = tail + eq_add_num[i];
+    end
+
+    for(genvar i=0; i<OUT_WIDTH; i++)begin
+        logic `N(ADDR_WIDTH) raddr;
+        logic bigger;
+        logic older;
+        Entry entry;
+        assign entry = entrys[raddr];
+        assign raddr = head + i;
+        assign bigger = num > i;
+        // LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older);
+        assign io.en_o[i] = bigger & (~backendCtrl.redirect);
+        assign io.rs1_o[i] = entry.rs1;
+        assign io.rs2_o[i] = entry.rs2;
+        assign io.data_o[i] = entry.data;
+    end
+endgenerate
+
+// redirect
+    logic `N(DEPTH) valid, bigger, en, validStart, validEnd;
+    logic `N(DEPTH) headShift, tailShift;
+    logic `N(ADDR_WIDTH) validSelect1, validSelect2;
+    logic `N(ADDR_WIDTH) walk_tail, idx_tail;
+    logic `N(ADDR_WIDTH + 1) walkNum;
+    logic valid_full, valid_empty;
+    assign headShift = (1 << head) - 1;
+    assign tailShift = (1 << tail) - 1;
+    assign en = tail > head || num == 0 ? headShift ^ tailShift : ~(headShift ^ tailShift);
+    assign valid = en & bigger;
+    assign valid_full = &valid;
+    assign valid_empty = ~(|valid);
+
+    for(genvar i=0; i<DEPTH; i++)begin
+        assign bigger[i] = (robIdx[i].dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > robIdx[i].idx);
+        logic `N(ADDR_WIDTH) i_n, i_p;
+        assign i_n = i + 1;
+        assign i_p = i - 1;
+        assign validStart[i] = valid[i] & ~valid[i_n]; // valid[i] == 1 && valid[i + 1] == 0
+        assign validEnd[i] = valid[i] & ~valid[i_p];
+    end
+    Encoder #(DEPTH) encoder1 (validStart, validSelect1);
+    Encoder #(DEPTH) encoder2 (validEnd, validSelect2);
+    ParallelAdder #(.DEPTH(DEPTH)) adder_walk_num (valid, walkNum);
+    assign walk_tail = validSelect1 == head ? validSelect2 : validSelect1;
+    always_ff @(posedge clk)begin
+        need_redirect <= ~(valid_full);
+        redirect_free <= valid_empty;
+        redirect_idx <= idxs[walk_tail];
+    end
+    always_ff @(posedge clk or posedge rst)begin
+        if(rst == `RST)begin
+            head <= 0;
+            tail <= 0;
+            num <= 0;
+        end
+        else begin
+        if(backendCtrl.redirect)begin
+            tail <= valid_full | valid_empty ? head : walk_tail + 1;
+            num <= walkNum;
+        end
+        else begin
+            head <= head + subNum;
+            tail <= tail + eqNum;
+            num <= num + eqNum - subNum;
+        end
+        end
+    end
+    always_ff @(posedge clk or posedge rst)begin
+        if(rst == `RST)begin
+            entrys <= '{default: 0};
+            robIdx <= '{default: 0};
+            idxs <= '{default: 0};
+        end
+        else begin
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                if(io.en[i] & ~backendCtrl.dis_full)begin
+                    entrys[index[i]] <= {io.rs1[i], io.rs2[i], io.data[i]};
+                    robIdx[index[i]] <= io.robIdx[i];
+                    idxs[index[i]] <= idx[i];
                 end
             end
         end

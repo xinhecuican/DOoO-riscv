@@ -232,12 +232,24 @@ typedef struct packed {
 } IntIssueBundle;
 
 typedef struct packed {
+    logic `N(`LOAD_QUEUE_WIDTH) idx;
+    logic dir;
+} LoadIdx;
+
+typedef struct packed {
+    logic `N(`STORE_QUEUE_WIDTH) idx;
+    logic dir;
+} StoreIdx;
+
+typedef struct packed {
     logic uext;
     logic `N(`MEMOP_WIDTH) memop;
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
     logic `N(12) imm;
     FsqIdxInfo fsqInfo;
+    LoadIdx lqIdx;
+    StoreIdx sqIdx;
 } MemIssueBundle;
 
 typedef struct packed {
@@ -294,16 +306,6 @@ typedef struct packed {
     logic `N(`EXC_WIDTH) exccode;
     logic `N(`XLEN) res;
 } WBData;
-
-typedef struct packed {
-    logic `N(`LOAD_QUEUE_WIDTH) idx;
-    logic dir;
-} LoadIdx;
-
-typedef struct packed {
-    logic `N(`STORE_QUEUE_WIDTH) idx;
-    logic dir;
-} StoreIdx;
 
 typedef struct packed {
     logic uext;
