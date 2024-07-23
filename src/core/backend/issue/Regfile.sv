@@ -3,13 +3,11 @@
 module Regfile(
     input logic clk,
     input logic rst,
-    RegfileIO.regfile io,
-    WriteBackBus wbBus
+    RegfileIO.regfile io
 `ifdef DIFFTEST
     ,DiffRAT.regfile diff_rat
 `endif
 );
-    logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata;
     MPRAM #(
         .WIDTH(`XLEN),
         .DEPTH(`PREG_SIZE),
@@ -21,37 +19,12 @@ module Regfile(
         .rst(rst),
         .en(io.en),
         .raddr(io.raddr),
-        .rdata(rdata),
+        .rdata(io.rdata),
         .we(io.we),
         .waddr(io.waddr),
         .wdata(io.wdata),
         .ready()
     );
-// bypass
-generate
-    for(genvar i=0; i<`REGFILE_READ_PORT; i++)begin
-        logic `N(`WB_SIZE) eq;
-        logic wb_valid;
-        logic `N(`XLEN) data, wb_data;
-        ParallelEQ #(
-            .WIDTH(`PREG_WIDTH),
-            .RADIX(`WB_SIZE),
-            .DATA_WIDTH(`XLEN)
-        ) parallel_eq_bypass(
-            .origin(io.raddr[i]),
-            .cmp_en(wbBus.en & wbBus.we),
-            .cmp(wbBus.rd),
-            .data_i(wbBus.res),
-            .eq(eq),
-            .data_o(data)
-        );
-        always_ff @(posedge clk)begin
-            wb_valid <= |eq;
-            wb_data <= data;
-        end
-        assign io.rdata[i] = wb_valid ? wb_data : rdata[i];
-    end
-endgenerate
     
 `ifdef DIFFTEST
     logic `N(`XLEN) data `N(`PREG_SIZE);

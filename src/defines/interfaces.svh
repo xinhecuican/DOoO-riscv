@@ -240,6 +240,7 @@ interface RegfileIO;
     logic `ARRAY(`REGFILE_WRITE_PORT, `XLEN) wdata;
 
     modport regfile (input raddr, waddr, wdata, en, we, output rdata);
+    modport bypass  (input raddr, rdata);
 endinterface
 
 interface DisIssueIO #(
