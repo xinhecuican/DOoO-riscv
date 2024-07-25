@@ -201,7 +201,7 @@ typedef enum logic [1: 0] {
 `define DCACHE_MSHR_SIZE 16
 `define DCACHE_MISS_WIDTH $clog2(`DCACHE_MISS_SIZE)
 `define DCACHE_MSHR_WIDTH $clog2(`DCACHE_MSHR_SIZE)
-`define DCACHE_REPLACE_SIZE 4
+`define DCACHE_REPLACE_SIZE 16
 `define DCACHE_REPLACE_WIDTH $clog2(`DCACHE_REPLACE_SIZE)
 
 // exccode

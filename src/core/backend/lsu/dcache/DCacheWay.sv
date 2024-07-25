@@ -4,7 +4,7 @@ interface DCacheWayIO;
     logic `N(`DCACHE_BANK) en;
     logic `N(`LOAD_PIPELINE+1) tagv_en;
     logic tagv_we;
-    logic `ARRAY(`LOAD_PIPELINE+1, `DCACHE_SET_WIDTH) tagv_index;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_SET_WIDTH) tagv_index;
     logic `N(`DCACHE_SET_WIDTH) tagv_windex;
     logic `ARRAY(`LOAD_PIPELINE+1, `ICACHE_TAG+1) tagv;
     logic `N(`ICACHE_TAG+1) tagv_wdata;
@@ -30,8 +30,9 @@ module DCacheWay(
     MPRAM #(
         .WIDTH(`DCACHE_TAG+1),
         .DEPTH(`DCACHE_SET),
-        .READ_PORT(`LOAD_PIPELINE+1),
-        .WRITE_PORT(1),
+        .READ_PORT(`LOAD_PIPELINE),
+        .WRITE_PORT(0),
+        .RW_PORT(1),
         .RESET(1)
     ) tagv (
         .clk(clk),

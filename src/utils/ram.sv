@@ -23,7 +23,7 @@ module SPRAM#(
         end
         else if(READ_LATENCY == 1)begin
             always_ff @(posedge clk)begin
-                if(en & (~(|we)))begin
+                if(en)begin
                     rdata <= data[addr];
                 end
             end
@@ -211,11 +211,13 @@ module SDPRAM#(
     end
 endmodule
 
+// rw port use waddr to read
 module MPREG #(
     parameter WIDTH = 32,
     parameter DEPTH = 8,
     parameter READ_PORT = 4,
     parameter WRITE_PORT = 4,
+    parameter RW_PORT = 0,
     parameter ADDR_WIDTH = $clog2(DEPTH),
     parameter READ_LATENCY = 1,
     parameter BYTE_WRITE = 0,
@@ -224,12 +226,12 @@ module MPREG #(
 )(
     input logic clk,
     input logic rst,
-    input logic `N(READ_PORT) en,
+    input logic `N(READ_PORT+RW_PORT) en,
     input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
-    input logic `ARRAY(WRITE_PORT, ADDR_WIDTH) waddr,
-    input logic [WRITE_PORT-1: 0][BYTES-1: 0] we,
-    input logic [WRITE_PORT-1: 0][BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
-    output logic `ARRAY(READ_PORT, WIDTH) rdata,
+    input logic `ARRAY(WRITE_PORT+RW_PORT, ADDR_WIDTH) waddr,
+    input logic [WRITE_PORT+RW_PORT-1: 0][BYTES-1: 0] we,
+    input logic [WRITE_PORT+RW_PORT-1: 0][BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
+    output logic `ARRAY(READ_PORT+RW_PORT, WIDTH) rdata,
     output logic ready
 );
     logic `ARRAY(BYTES, WIDTH / BYTES) mem `N(DEPTH);
@@ -286,7 +288,6 @@ generate;
         for(genvar i=0; i<READ_PORT; i++)begin
             assign rdata[i] = mem[raddr[i]];
         end
-        
     end
     else if(READ_LATENCY == 1)begin
         if(RESET)begin
@@ -300,6 +301,16 @@ generate;
                     end
                 end
             end
+            for(genvar i=0; i<RW_PORT; i++)begin
+                always_ff @(posedge clk or posedge rst)begin
+                    if(rst == `RST)begin
+                        rdata[READ_PORT+i] <= 0;
+                    end
+                    else if(en[READ_PORT+i]) begin
+                        rdata[READ_PORT+i] <= mem[waddr[i]];
+                    end
+                end
+            end
         end
         else begin
             always_ff @(posedge clk)begin
@@ -308,13 +319,18 @@ generate;
                         rdata[i] <= mem[raddr[i]];
                     end
                 end
+                for(int i=0; i<RW_PORT; i++)begin
+                    if(en[READ_PORT+i])begin
+                        rdata[READ_PORT+i] <= mem[waddr[i]];
+                    end
+                end
             end
         end
     end
 endgenerate
 
 generate
-    for(genvar i=1; i<WRITE_PORT; i++)begin
+    for(genvar i=1; i<WRITE_PORT+RW_PORT; i++)begin
         for(genvar j=0; j<BYTES; j++)begin
             always_ff @(posedge clk)begin
                 if(we[i][j])begin
@@ -333,6 +349,7 @@ module MPRAM #(
     parameter DEPTH = 8,
     parameter READ_PORT = 4,
     parameter WRITE_PORT = 4,
+    parameter RW_PORT = 0,
     parameter ADDR_WIDTH = $clog2(DEPTH),
     parameter READ_LATENCY = 1,
     parameter BYTE_WRITE = 0,
@@ -341,12 +358,12 @@ module MPRAM #(
 )(
     input logic clk,
     input logic rst,
-    input logic `N(READ_PORT) en,
+    input logic `N(READ_PORT+RW_PORT) en,
     input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
-    input logic `ARRAY(WRITE_PORT, ADDR_WIDTH) waddr,
-    input logic [WRITE_PORT-1: 0][BYTES-1: 0] we,
-    input logic [WRITE_PORT-1: 0][BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
-    output logic `ARRAY(READ_PORT, WIDTH) rdata,
+    input logic `ARRAY(WRITE_PORT+RW_PORT, ADDR_WIDTH) waddr,
+    input logic [WRITE_PORT+RW_PORT-1: 0][BYTES-1: 0] we,
+    input logic [WRITE_PORT+RW_PORT-1: 0][BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
+    output logic `ARRAY(READ_PORT+RW_PORT, WIDTH) rdata,
     output logic ready
 );
 
@@ -355,6 +372,7 @@ module MPRAM #(
         .DEPTH(DEPTH),
         .READ_PORT(READ_PORT),
         .WRITE_PORT(WRITE_PORT),
+        .RW_PORT(RW_PORT),
         .READ_LATENCY(READ_LATENCY),
         .BYTE_WRITE(BYTE_WRITE),
         .RESET(RESET)

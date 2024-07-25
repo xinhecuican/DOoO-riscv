@@ -65,8 +65,9 @@ module DCacheMiss(
     logic `N(`DCACHE_MISS_SIZE) ptw_en;
     MSHREntry mshr `N(`DCACHE_MSHR_SIZE);
     logic `N(`DCACHE_MSHR_SIZE) mshr_en;
-    logic `N(`DCACHE_MISS_SIZE) en, we, dataValid, refilled;
+    logic `N(`DCACHE_MISS_SIZE) en, dataValid, refilled;
     logic `N(`DCACHE_WAY_WIDTH) way `N(`DCACHE_MISS_SIZE);
+    logic `N(`DCACHE_REPLACE_WIDTH) replace_idx `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`DCACHE_MISS_SIZE);
     logic `N(`STORE_COMMIT_WIDTH) scIdxs `N(`DCACHE_MISS_SIZE);
@@ -182,7 +183,7 @@ generate
 endgenerate
 
 // refill
-    assign io.refill_en = en[head] & we[head] & dataValid[head];
+    assign io.refill_en = en[head] & dataValid[head];
     assign io.refill_dirty = |mask[head];
     assign io.refillWay = way[head];
     assign io.refillAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
@@ -234,6 +235,7 @@ endgenerate
     always_ff @(posedge clk)begin
         redirect_n <= backendCtrl.redirect;
         redirectIdx <= backendCtrl.redirectIdx;
+        replace_queue_io.replace_idx <= replace_idx[head];
         // redirect_valid_n <= redirect_valid;
     end
 
@@ -243,7 +245,6 @@ endgenerate
             en <= 0;
             ptw_en <= 0;
             dataValid <= 0;
-            we <= 0;
             refilled <= 0;
             mshr_en <= 0;
             mshr_head <= 0;
@@ -301,11 +302,8 @@ endgenerate
                 data[head] <= cache_eq_data;
                 dataValid[head] <= 1'b1;
             end
-            if(req_next & io.req_success)begin
-                we[head] <= io.write_ready;
-            end
-            if(replace_queue_io.wend)begin
-                we[replace_queue_io.missIdx_o] <= 1'b1;
+            if(io.req & io.req_success)begin
+                replace_idx[head] <= replace_queue_io.idx;
             end
             if(io.refill_en & io.refill_valid)begin
                 refilled[head] <= 1'b1;
@@ -330,7 +328,6 @@ endgenerate
     assign io.req = en[head] & ~req_start;
     assign io.req_addr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign rlast = r_axi_io.sr.valid & r_axi_io.sr.last;
-    assign replace_queue_io.missIdx = head;
 
 generate
     for(genvar i=0; i<`DCACHE_LINE / `DATA_BYTE; i++)begin
@@ -353,20 +350,20 @@ endgenerate
             way <= '{default: 0};
         end
         else begin
-            if(io.req)begin
+            if(io.req & io.req_success)begin
                 req_start <= 1'b1;
                 cache_addr <= io.req_addr;
             end
 
-            if(req_next & ~io.req_success)begin
-                req_start <= 1'b0;
-            end
+            // if(req_next & ~io.req_success)begin
+            //     req_start <= 1'b0;
+            // end
 
             if(io.refill_en & io.refill_valid)begin
                 req_start <= 1'b0;
             end
 
-            if(req_next & io.req_success)begin
+            if(io.req & io.req_success)begin
                 req_cache <= 1'b1;
                 req_ptw <= ptw_en[head];
                 way[head] <= io.replaceWay;
