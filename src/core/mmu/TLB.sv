@@ -77,9 +77,11 @@ endgenerate
 
 
     always_ff @(posedge clk)begin
-        io.paddr <= mmode ? io.vaddr : {lookup_paddr, io.vaddr[`TLB_OFFSET-1: 0]};
-        io.miss <= ~mmode & ~(|hit) & io.req & ~io.flush;
-        io.exception <= ~mmode & io.req & ~io.flush & (|hit) & mode_exc[hit_idx];
+        if(io.req)begin
+            io.paddr <= mmode ? io.vaddr : {lookup_paddr, io.vaddr[`TLB_OFFSET-1: 0]};
+            io.miss <= ~mmode & ~(|hit) & io.req & ~io.flush;
+            io.exception <= ~mmode & io.req & ~io.flush & (|hit) & mode_exc[hit_idx];
+        end
     end
 
 // update

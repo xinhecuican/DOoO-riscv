@@ -41,8 +41,9 @@ module DecodeUnit(
     assign info.branchop[1] = blt | bge | bgeu | bltu;
     assign info.branchop[0] = jalr | bne | bge | bgeu;
 
-    logic funct7_0, funct7_5, rs2_0, rs2_1, rs2_2, funct3_0;
+    logic funct7_0, funct7_5, funct7_1, rs2_0, rs2_1, rs2_2, funct3_0;
     assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_1 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_5 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct3_0 = ~funct3[2] & ~funct3[1] & ~funct3[0];
     assign rs2_0 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & ~inst[20];
@@ -124,6 +125,20 @@ module DecodeUnit(
     assign info.csrop[0] = csrrw | csrrc | csrrwi | csrrci;
     assign info.csrid = inst[31: 20];
 
+`ifdef EXT_M
+    logic mult, mul, mulh, mulhsu, mulhu, div, divu, rem ,remu;
+    assign mult = opreg & funct7_1;
+    assign mul = mult & ~funct3[2] & ~funct3[1] & ~funct3[0];
+    assign mulh = mult & ~funct3[2] & ~funct3[1] & funct3[0];
+    assign mulhsu = mult & ~funct3[2] & funct3[1] & ~funct3[0];
+    assign mulhu = mult & ~funct3[2] & funct3[1] & funct3[0];
+    assign div = mult & funct3[2] & ~funct3[1] & ~funct3[0];
+    assign divu = mult & funct3[2] & ~funct3[1] & funct3[0];
+    assign rem = mult & funct3[2] & funct3[1] & ~funct3[0];
+    assign remu = mult & funct3[2] & funct3[1] & funct3[0];
+    assign info.multop = funct3;
+`endif
+
     assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & 
                      ~lb & ~lh & ~lw & ~lbu & ~lhu & ~sb & ~sh & ~sw & 
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
@@ -133,6 +148,9 @@ module DecodeUnit(
                      ~(inst[0] & inst[1])
 `ifdef DIFFTEST
                      & ~sim_trap
+`endif
+`ifdef EXT_M
+                     & ~mult
 `endif
                      ;
 
@@ -166,6 +184,9 @@ module DecodeUnit(
     assign info.branchv = branch | jal | jalr;
     assign info.memv = load | store;
     assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam;
+`ifdef EXT_M
+    assign info.multv = mult;
+`endif
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw}} & inst[19: 15];
     assign info.rs2 = {5{branch | store | opreg}} & inst[24: 20];
     assign rd = {5{lui | auipc | jalr | jal | load | opimm | opreg | csr}} & inst[11: 7];

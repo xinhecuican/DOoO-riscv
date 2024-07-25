@@ -161,12 +161,12 @@ endgenerate
     always_ff @(posedge clk)begin
         if(cache_req_ok | fsq_back_io.redirect.en | pd_redirect.en)begin
             fsq_cache_io.en <= cache_req & ~fsq_back_io.redirect.en & ~pd_redirect.en;
-            fsq_cache_io.abandon <= bpu_fsq_io.redirect;
-            fsq_cache_io.abandonIdx.idx <= bpu_fsq_io.prediction.stream_idx;
-            fsq_cache_io.abandonIdx.dir <= bpu_fsq_io.prediction.stream_dir;
             fsq_cache_io.fsqIdx.idx <= search_head;
             fsq_cache_io.fsqIdx.dir <= directionTable[search_head];
         end
+        fsq_cache_io.abandon <= bpu_fsq_io.redirect;
+        fsq_cache_io.abandonIdx.idx <= bpu_fsq_io.prediction.stream_idx;
+        fsq_cache_io.abandonIdx.dir <= bpu_fsq_io.prediction.stream_dir;
     end
     assign fsq_cache_io.stream = searchStream;
     assign fsq_cache_io.flush = pd_redirect.en | fsq_back_io.redirect.en;
@@ -174,7 +174,7 @@ endgenerate
     assign bpu_fsq_io.stream_idx = tail;
     assign bpu_fsq_io.stream_dir = tdir;
     assign bpu_fsq_io.stall = full;
-    assign cache_req_ok = ~frontendCtrl.ibuf_full & fsq_cache_io.ready;
+    assign cache_req_ok = fsq_cache_io.ready;
 
     logic `N(`PREDICTION_WIDTH) shiftIdx;
     always_ff @(posedge clk or posedge rst)begin

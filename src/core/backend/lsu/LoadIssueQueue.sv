@@ -27,7 +27,7 @@ module LoadIssueQueue(
     input logic clk,
     input logic rst,
     DisIssueIO.issue dis_load_io,
-    IssueWakeupIO.regfile load_wakeup_io,
+    IssueRegIO.issue load_reg_io,
     WakeupBus wakeupBus,
     LoadUnitIO.load load_io,
     DTLBLsuIO.lq tlb_lsu_io,
@@ -66,11 +66,11 @@ generate
         assign bank_io[i].tlb_bank_idx = tlb_lsu_io.lwb_idx[i];
         assign full[i] = bank_io[i].full;
 
-        assign load_wakeup_io.en[i] = bank_io[i].reg_en;
-        assign load_wakeup_io.preg[i] = bank_io[i].rs1;
+        assign load_reg_io.en[i] = bank_io[i].reg_en;
+        assign load_reg_io.preg[i] = bank_io[i].rs1;
         assign load_io.loadIssueData[i] = bank_io[i].data_o;
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
-        assign load_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
+        assign load_io.dis_rob_idx[i] = dis_load_io.status[i].robIdx;
         assign load_io.dis_lq_idx[i] = mem_issue_bundle.lqIdx;
         assign load_io.exception[i] = bank_io[i].exception_o;
 
@@ -85,9 +85,9 @@ endgenerate
     assign load_io.eqNum = disNum;
     always_ff @(posedge clk)begin
         order <= sortOrder;
-        enNext <= load_wakeup_io.en;
+        enNext <= load_reg_io.en;
         for(int i=0; i<`LOAD_ISSUE_BANK_NUM; i++)begin
-            load_io.en[i] <= enNext[i] & (~backendCtrl.redirect | bigger[i]) & load_wakeup_io.ready[i];
+            load_io.en[i] <= enNext[i] & (~backendCtrl.redirect | bigger[i]) & load_reg_io.ready[i];
         end
     end
 endmodule
@@ -156,7 +156,7 @@ module LoadIssueBank(
         .addr0(freeIdx),
         .addr1(selectIdxNext),
         .we(io.en),
-        .wdata({io.data.uext, size, io.data.imm, io.data.rd, io.data.lqIdx, io.data.sqIdx, io.data.robIdx, io.data.fsqInfo}),
+        .wdata({io.status.we, io.data.uext, size, io.data.imm, io.status.rd, io.data.lqIdx, io.data.sqIdx, io.status.robIdx, io.data.fsqInfo}),
         .rdata1(data_o)
     );
 

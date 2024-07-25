@@ -4,6 +4,7 @@ module IntIssueQueue(
     input logic clk,
     input logic rst,
     DisIssueIO.issue dis_issue_io,
+    IssueRegIO.issue int_reg_io,
     IssueWakeupIO.issue int_wakeup_io,
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
@@ -14,189 +15,56 @@ module IntIssueQueue(
 
     localparam BANK_SIZE = `INT_ISSUE_SIZE / `ALU_SIZE;
     localparam BANK_NUM = `ALU_SIZE;
-    IntBankIO #(BANK_SIZE) bank_io [BANK_NUM-1: 0]();
+    IssueBankIO #($bits(IntIssueBundle), BANK_SIZE) bank_io [BANK_NUM-1: 0]();
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) order;
     logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
-    logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) originOrder, sortOrder;
     logic `N(BANK_NUM) full;
     logic `N(BANK_NUM) enNext, bigger;
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin
-        IntIssueBank #(BANK_SIZE) issue_bank (
+        IssueBank #($bits(IntIssueBundle), BANK_SIZE, 1, 1) issue_bank (
             .clk(clk),
             .rst(rst),
             .io(bank_io[i]),
             .*
         );
         assign bankNum[i] = bank_io[i].bankNum;
-        assign originOrder[i] = i;
 
         assign bank_io[i].en = dis_issue_io.en[order[i]] & ~dis_issue_io.full;
         assign bank_io[i].status = dis_issue_io.status[order[i]];
         assign bank_io[i].data = dis_issue_io.data[order[i]];
-        assign bank_io[i].ready = int_wakeup_io.ready[i];
+        assign bank_io[i].ready = int_wakeup_io.ready[i] & int_reg_io.ready[i];
         assign full[i] = bank_io[i].full;
 
-        assign int_wakeup_io.en[i] = bank_io[i].reg_en;
-        assign int_wakeup_io.preg[i] = bank_io[i].rs1;
-        assign int_wakeup_io.preg[BANK_NUM+i] = bank_io[i].rs2;
+        assign int_reg_io.en[i] = bank_io[i].reg_en;
+        assign int_reg_io.preg[i] = bank_io[i].rs1;
+        assign int_reg_io.preg[BANK_NUM+i] = bank_io[i].rs2;
+        assign int_wakeup_io.en[i] = bank_io[i].reg_en & int_reg_io.ready[i];
+        assign int_wakeup_io.we[i] = bank_io[i].we;
         assign int_wakeup_io.rd[i] = bank_io[i].rd;
         assign fsq_back_io.fsqIdx[i] = bank_io[i].fsqIdx;
 
-        LoopCompare #(`ROB_WIDTH) cmp_bigger (bank_io[i].data_o.robIdx, backendCtrl.redirectIdx, bigger[i]);
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (bank_io[i].status_o.robIdx, backendCtrl.redirectIdx, bigger[i]);
     end
 endgenerate
     assign dis_issue_io.full = |full;
-    Sort #(BANK_NUM, $clog2(BANK_SIZE), $clog2(BANK_NUM)) sort_order (bankNum, originOrder, sortOrder); 
+    OrderSelector #(BANK_NUM, BANK_SIZE) order_selector (.*);
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin
         always_ff @(posedge clk)begin
-            enNext[i] <= bank_io[i].reg_en & int_wakeup_io.ready[i];
+            enNext[i] <= bank_io[i].reg_en & int_wakeup_io.ready[i] & int_reg_io.ready[i];
+            issue_exu_io.status[i] <= bank_io[i].status_o;
             issue_exu_io.bundle[i] <= bank_io[i].data_o;
         end
     end
 endgenerate
 
-    assign issue_exu_io.rs1_data = int_wakeup_io.data[BANK_NUM-1: 0];
-    assign issue_exu_io.rs2_data = int_wakeup_io.data[BANK_NUM*2-1: BANK_NUM];
+    assign issue_exu_io.rs1_data = int_reg_io.data[BANK_NUM-1: 0];
+    assign issue_exu_io.rs2_data = int_reg_io.data[BANK_NUM*2-1: BANK_NUM];
     always_ff @(posedge clk)begin
-        order <= sortOrder;
         issue_exu_io.en <= enNext & ({BANK_NUM{~backendCtrl.redirect}} | bigger);
         issue_exu_io.streams <= fsq_back_io.streams;
         issue_exu_io.directions <= fsq_back_io.directions;
     end
 
-endmodule
-
-interface IntBankIO #(parameter DEPTH=8);
-    logic en;
-    IssueStatusBundle status;
-    IntIssueBundle data;
-    logic full;
-    logic `N($clog2(DEPTH)+1) bankNum;
-    logic reg_en;
-    logic ready;
-    logic `N(`PREG_WIDTH) rs1, rs2, rd;
-    IntIssueBundle data_o;
-    logic `N(`FSQ_WIDTH) fsqIdx;
-
-    modport bank(input en, status, data, ready, output full, bankNum, reg_en, rs1, rs2, rd, data_o, fsqIdx);
-endinterface
-
-module IntIssueBank #(
-    parameter DEPTH = 8,
-    parameter ADDR_WIDTH = $clog2(DEPTH)
-)(
-    input logic clk,
-    input logic rst,
-    IntBankIO.bank io,
-    WakeupBus wakeupBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl
-);
-    logic `N(DEPTH) en;
-    IssueStatusBundle `N(DEPTH) status_ram;
-    logic `N(DEPTH) free_en;
-    logic `N(ADDR_WIDTH) freeIdx;
-    logic `N(DEPTH) ready;
-    logic `N(DEPTH) select_en;
-    logic `N(ADDR_WIDTH) selectIdx, selectIdxNext;
-    IntIssueBundle data_o;
-    logic `ARRAY(DEPTH, `WB_SIZE) rs1_cmp, rs2_cmp;
-
-    SDPRAM #(
-        .WIDTH($bits(IntIssueBundle)),
-        .DEPTH(DEPTH)
-    ) data_ram (
-        .clk(clk),
-        .rst(rst),
-        .en(1'b1),
-        .addr0(freeIdx),
-        .addr1(selectIdx),
-        .we(io.en),
-        .wdata(io.data),
-        .rdata1(data_o)
-    );
-
-generate
-    for(genvar i=0; i<DEPTH; i++)begin
-        assign ready[i] = en[i] & status_ram[i].rs1v & status_ram[i].rs2v;
-    end
-endgenerate
-    DirectionSelector #(DEPTH) selector (
-        .clk(clk),
-        .rst(rst),
-        .en(io.en),
-        .idx(free_en),
-        .ready(ready),
-        .select(select_en)
-    );
-
-    assign io.full = &en;
-    assign io.reg_en = |ready & ~backendCtrl.redirect;
-    assign io.rs1 = status_ram[selectIdx].rs1;
-    assign io.rs2 = status_ram[selectIdx].rs2;
-    assign io.rd = data_o.rd;
-    assign io.fsqIdx = data_o.fsqInfo.idx;
-    PSelector #(DEPTH) selector_free_idx (~en, free_en);
-    Encoder #(DEPTH) encoder_free_idx (free_en, freeIdx);
-    Encoder #(DEPTH) encoder_select_idx (select_en, selectIdx);
-    ParallelAdder #(.DEPTH(DEPTH)) adder_bankNum(en, io.bankNum);
-generate
-    for(genvar i=0; i<DEPTH; i++)begin
-        for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs1_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs1);
-            assign rs2_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs2);
-        end
-    end
-endgenerate
-
-    // redirect
-    logic `N(DEPTH) bigger, walk_en;
-    assign walk_en = en & bigger;
-generate
-    for(genvar i=0; i<DEPTH; i++)begin
-        assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
-    end
-endgenerate
-
-    always_ff @(posedge clk)begin
-        selectIdxNext <= selectIdx;
-    end
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            status_ram <= 0;
-            en <= 0;
-            io.data_o <= 0;
-        end
-        else begin
-            if(backendCtrl.redirect)begin
-                en <= walk_en;
-            end
-            else begin
-                en <= (en | ({DEPTH{io.en}} & free_en)) &
-                      ~(select_en & {{DEPTH{io.ready}}});
-            end
-            
-            if(io.en)begin
-                status_ram[freeIdx].rs1v <= io.status.rs1v;
-                status_ram[freeIdx].rs2v <= io.status.rs2v;
-                status_ram[freeIdx].rs1 <= io.status.rs1;
-                status_ram[freeIdx].rs2 <= io.status.rs2;
-                status_ram[freeIdx].robIdx <= io.status.robIdx;
-            end
-
-            for(int i=0; i<DEPTH; i++)begin
-                if(io.en && free_en[i])begin
-                    status_ram[i].rs1v <= io.status.rs1v;
-                    status_ram[i].rs2v <= io.status.rs2v;
-                end
-                else begin
-                    status_ram[i].rs1v <= (status_ram[i].rs1v | (|rs1_cmp[i]));
-                    status_ram[i].rs2v <= status_ram[i].rs2v | (|rs2_cmp[i]);
-                end
-            end
-            io.data_o <= data_o;
-        end
-    end
 endmodule

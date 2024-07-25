@@ -6,12 +6,15 @@ module WriteBack(
     WriteBackIO.wb alu_wb_io,
     WriteBackIO.wb lsu_wb_io,
     WriteBackIO.wb csr_wb_io,
+    WriteBackIO.wb mult_wb_io,
     BackendCtrl backendCtrl,
     WriteBackBus.wb wbBus
 );
     WBData csrData;
+    WBData `N(`MULT_SIZE) multData;
     always_ff @(posedge clk)begin
         csrData <= csr_wb_io.datas[0];
+        multData <= mult_wb_io.datas;
     end
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
@@ -20,17 +23,27 @@ generate
         always_ff @(posedge clk)begin
             wbData <= alu_wb_io.datas[i];
         end
-        if(i == 1)begin
+        if(i == 0)begin
             assign wbBus.en[i] = csrData.en | wbData.en;
-            assign wbBus.we[i] = csrData.en ? csrData.rd != 0 : wbData.rd != 0;
+            assign wbBus.we[i] = csrData.en ? csrData.we : wbData.we;
             assign wbBus.robIdx[i] = csrData.en ? csrData.robIdx : wbData.robIdx;
             assign wbBus.rd[i] = csrData.en ? csrData.rd : wbData.rd;
             assign wbBus.res[i] = csrData.en ? csrData.res : wbData.res;
             assign wbBus.exccode[i] = csrData.en ? csrData.exccode : wbData.exccode;
         end
+`ifdef EXT_M
+        else if(i == 2)begin
+            assign wbBus.en[i] = multData[0].en | wbData.en;
+            assign wbBus.we[i] = multData[0].en ? multData[0].we : wbData.we;
+            assign wbBus.robIdx[i] = multData[0].en ? multData[0].robIdx : wbData.robIdx;
+            assign wbBus.rd[i] = multData[0].en ? multData[0].rd : wbData.rd;
+            assign wbBus.res[i] = multData[0].en ? multData[0].res : wbData.res;
+            assign wbBus.exccode[i] = multData[0].en ? multData[0].exccode : wbData.exccode;
+        end
+`endif
         else begin
             assign wbBus.en[i] = wbData.en;
-            assign wbBus.we[i] = wbData.rd != 0;
+            assign wbBus.we[i] = wbData.we;
             assign wbBus.robIdx[i] = wbData.robIdx;
             assign wbBus.rd[i] = wbData.rd;
             assign wbBus.res[i] = wbData.res;

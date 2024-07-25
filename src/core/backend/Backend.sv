@@ -16,16 +16,31 @@ module Backend(
     RenameDisIO rename_dis_io();
     ROBRenameIO rob_rename_io();
     WriteBackBus wbBus();
-    DisIssueIO #(.PORT_NUM(`INT_DIS_PORT), .DATA_SIZE($bits(IntIssueBundle))) dis_intissue_io();
+    DisIssueIO #(.PORT_NUM(`INT_DIS_PORT), .DATA_SIZE($bits(IntIssueBundle))) dis_int_io();
     DisIssueIO #(.PORT_NUM(`LOAD_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_load_io();
     DisIssueIO #(.PORT_NUM(`STORE_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_store_io();
-    WakeupBus wakeupBus();
-    IssueWakeupIO #(`ALU_SIZE, `ALU_SIZE * 2) int_wakeup_io();
-    IssueWakeupIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_wakeup_io();
-    IssueWakeupIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_wakeup_io();
     DisIssueIO #(.PORT_NUM(1), .DATA_SIZE($bits(CsrIssueBundle))) dis_csr_io();
-    IssueWakeupIO #(1, 1) csr_wakeup_io();
+`ifdef EXT_M
+    DisIssueIO #(.PORT_NUM(`MULT_DIS_PORT), .DATA_SIZE($bits(MultIssueBundle))) dis_mult_io();
+`endif
+    IssueRegIO #(`ALU_SIZE, `ALU_SIZE * 2) int_reg_io();
+    IssueRegIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_reg_io();
+    IssueRegIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_reg_io();
+    IssueRegIO #(1, 1) csr_reg_io();
+`ifdef EXT_M
+    IssueRegIO #(`MULT_SIZE, `MULT_SIZE * 2) mult_reg_io();
+`endif
+    WakeupBus wakeupBus();
+    IssueWakeupIO #(`ALU_SIZE) int_wakeup_io();
+    IssueWakeupIO #(`LOAD_PIPELINE) load_wakeup_io();
+    IssueWakeupIO #(1) csr_wakeup_io();
+`ifdef EXT_M
+    IssueWakeupIO #(`MULT_SIZE) mult_wakeup_io();
+`endif
     IssueCSRIO issue_csr_io();
+`ifdef EXT_M
+    IssueMultIO mult_exu_io();
+`endif
     WriteBackIO #(1) csr_wb_io();
     IntIssueExuIO int_exu_io();
     BackendCtrl backendCtrl();
@@ -35,6 +50,9 @@ module Backend(
     RobRedirectIO rob_redirect_io();
     WriteBackIO #(`ALU_SIZE) alu_wb_io();
     WriteBackIO #(`LSU_SIZE) lsu_wb_io();
+`ifdef EXT_M
+    WriteBackIO #(`MULT_SIZE) mult_wb_io();
+`endif
     CsrTlbIO csr_ltlb_io();
     CsrTlbIO csr_stlb_io();
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
@@ -74,14 +92,18 @@ module Backend(
                       .full(backendCtrl.dis_full));
     IntIssueQueue int_issue_queue(
         .*,
-        .dis_issue_io(dis_intissue_io),
+        .dis_issue_io(dis_int_io),
         .issue_exu_io(int_exu_io)
     );
     CsrIssueQueue csr_issue_queue(.*);
+`ifdef EXT_M
+    MultIssueQueue mult_issue_queue(.*);
+`endif
     LSU lsu(
         .*,
         .redirect_io(backendRedirect)
     );
+    RegfileWrapper regfile_wrapper(.*);
     Wakeup wakeup(.*);
     Execute execute(.*,
                     .backendRedirectInfo(backendRedirect.branchRedirect),

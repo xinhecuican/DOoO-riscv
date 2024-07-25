@@ -75,7 +75,7 @@ module CSR(
     logic mode_valid;
     logic s_map;
     logic redirect_older;
-    LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.bundle.robIdx, redirect_older);
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.status.robIdx, redirect_older);
     assign mode_valid = mode >= issue_csr_io.bundle.csrid[11: 10];
     assign wen = cmp_eq  & 
        {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
@@ -303,8 +303,9 @@ endgenerate                                                             \
 
 // wb
     assign csr_wb_io.datas[0].en = issue_csr_io.en;
-    assign csr_wb_io.datas[0].robIdx = issue_csr_io.bundle.robIdx;
-    assign csr_wb_io.datas[0].rd = issue_csr_io.bundle.rd;
+    assign csr_wb_io.datas[0].we = issue_csr_io.status.we;
+    assign csr_wb_io.datas[0].robIdx = issue_csr_io.status.robIdx;
+    assign csr_wb_io.datas[0].rd = issue_csr_io.status.rd;
     assign csr_wb_io.datas[0].res = rdata;
     assign csr_wb_io.datas[0].exccode = ((csrrw | csrrs | csrrc) & (~mode_valid | (~(|cmp_eq)))) |
                                         (wen[satp_id] & mstatus.tvm) ? `EXC_II :

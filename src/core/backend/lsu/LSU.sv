@@ -31,8 +31,9 @@ module LSU(
     input logic rst,
     DisIssueIO.issue dis_load_io,
     DisIssueIO.issue dis_store_io,
-    IssueWakeupIO.spec load_wakeup_io,
-    IssueWakeupIO.issue store_wakeup_io,
+    IssueRegIO.issue load_reg_io,
+    IssueRegIO.issue store_reg_io,
+    IssueWakeupIO.issue load_wakeup_io,
     WakeupBus wakeupBus,
     WriteBackIO.fu lsu_wb_io,
     WriteBackBus wbBus,
@@ -61,11 +62,9 @@ module LSU(
     ViolationIO violation_io();
     LoadForwardIO store_queue_fwd();
     LoadForwardIO commit_queue_fwd();
-    IssueWakeupIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) li_w_io();
     DTLBLsuIO tlb_lsu_io();
 
     LoadIssueQueue load_issue_queue(
-        .load_wakeup_io(li_w_io),
         .*
     );
     DCache dcache(.*, .ptw_io(ptw_request));
@@ -79,7 +78,7 @@ module LSU(
         .issue_queue_io(store_io),
         .queue_commit_io(store_commit_io),
         .loadFwd(store_queue_fwd),
-        .store_data(store_wakeup_io.data[`STORE_PIPELINE*2-1: `STORE_PIPELINE])
+        .store_data(store_reg_io.data[`STORE_PIPELINE*2-1: `STORE_PIPELINE])
     );
     StoreCommitBuffer store_commit_buffer (
         .*,
@@ -91,10 +90,6 @@ module LSU(
 
     assign lqIdx = load_queue_io.lqIdx;
     assign sqIdx = store_queue_io.sqIdx;
-    assign load_wakeup_io.en = li_w_io.en;
-    assign load_wakeup_io.preg = li_w_io.preg;
-    assign li_w_io.data = load_wakeup_io.data;
-    assign li_w_io.ready = load_wakeup_io.ready;
 // load
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) lmask_pre;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_PIPELINE) dis_ls_older;
@@ -104,7 +99,7 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : load_addr
         AGU agu(
             .imm(load_io.loadIssueData[i].imm),
-            .data(load_wakeup_io.data[i]),
+            .data(load_reg_io.data[i]),
             .addr(loadVAddr[i])
         );
         always_comb begin
@@ -265,6 +260,7 @@ endgenerate
     // wb
     logic `N(`LOAD_PIPELINE) from_issue;
     RobIdx `N(`LOAD_PIPELINE) lrobIdx_n;
+    logic `N(`LOAD_PIPELINE) lwe_n;
     logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) lrd_n;
     logic `ARRAY(`LOAD_PIPELINE, `XLEN) ldata_n, ldata_shift;
     logic `ARRAY(`LOAD_PIPELINE, `EXC_WIDTH) lexccode;
@@ -280,16 +276,19 @@ generate
             from_issue[i] <= wb_pipeline_en;
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
+            lwe_n[i] <= leq_data[i].we;
             ldata_n[i] <= ldata_shift[i];
             lexccode[i] <= tlb_exception_s3[i] ? `EXC_LPF : 
                            lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
         end
         assign lsu_wb_io.datas[i].en = wb_data_en;
+        assign lsu_wb_io.datas[i].we = from_issue[i] ? lwe_n[i] : load_queue_io.wbData[i].we;
         assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
         assign lsu_wb_io.datas[i].rd = from_issue[i] ? lrd_n[i] : load_queue_io.wbData[i].rd;
         assign lsu_wb_io.datas[i].res = from_issue[i] ? ldata_n[i] : load_queue_io.wbData[i].res;
         assign lsu_wb_io.datas[i].exccode = from_issue[i] ? lexccode[i] : `EXC_NONE;
-        assign load_wakeup_io.wakeup_en[i] = wb_data_en;
+        assign load_wakeup_io.en[i] = wb_data_en;
+        assign load_wakeup_io.we[i] = lsu_wb_io.datas[i].we;
         assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].rd;
     end
 endgenerate
@@ -325,7 +324,7 @@ generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin : store_addr
         AGU agu(
             .imm(store_io.storeIssueData[i].imm),
-            .data(store_wakeup_io.data[i]),
+            .data(store_reg_io.data[i]),
             .addr(storeVAddr[i])
         );
         assign sptag[i] = tlb_lsu_io.spaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];

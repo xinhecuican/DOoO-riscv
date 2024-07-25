@@ -36,8 +36,9 @@ module ALU(
         .result(branchResult)
     );
     assign wbData.en = io.en & valid;
-    assign wbData.robIdx = io.bundle.robIdx;
-    assign wbData.rd = io.bundle.rd;
+    assign wbData.we = io.status.we;
+    assign wbData.robIdx = io.status.robIdx;
+    assign wbData.rd = io.status.rd;
     assign wbData.res = io.bundle.intv ? result : branchResult;
     assign wbData.exccode = `EXC_NONE;
 

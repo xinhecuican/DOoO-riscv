@@ -4,6 +4,7 @@ module CsrIssueQueue(
     input logic clk,
     input logic rst,
     DisIssueIO.issue dis_csr_io,
+    IssueRegIO.issue csr_reg_io,
     IssueWakeupIO.issue csr_wakeup_io,
     IssueCSRIO.issue issue_csr_io,
     CommitBus.csr commitBus,
@@ -11,6 +12,7 @@ module CsrIssueQueue(
 );
 
     typedef struct {
+        logic we;
         logic `N(`PREG_WIDTH) rs1;
         logic `N(`PREG_WIDTH) rd;
         RobIdx robIdx;
@@ -18,7 +20,6 @@ module CsrIssueQueue(
 
     StatusEntry status_ram `N(`CSR_ISSUE_SIZE);
     logic select_en, wakeup_en;
-    RobIdx wakeup_robIdx;
     logic wakeup_older;
     logic `N(`CSR_ISSUE_WIDTH) head, tail, head_n, tail_n;
     logic hdir, tdir;
@@ -28,6 +29,7 @@ module CsrIssueQueue(
     CsrIssueBundle rdata, rdata_n;
     CsrIssueBundle bundle;
     IssueStatusBundle status;
+    StatusEntry statush, status_n;
 
     assign full = head == tail && (hdir ^ tdir);
     assign dis_csr_io.full = full;
@@ -36,27 +38,32 @@ module CsrIssueQueue(
     assign tail_n = tail + 1;
     assign bundle = dis_csr_io.data;
     assign status = dis_csr_io.status;
+    assign statush = status_ram[head];
     assign select_en = (head != tail || (hdir ^ tdir)) &&
-                        status_ram[head].robIdx == commitBus.robIdx &&
+                        statush.robIdx == commitBus.robIdx &&
                         !backendCtrl.redirect;
     always_ff @(posedge clk)begin
-        wakeup_en <= select_en & csr_wakeup_io.ready;
-        wakeup_robIdx <= status_ram[head].robIdx;
+        wakeup_en <= select_en & csr_wakeup_io.ready & csr_reg_io.ready;
+        status_n <= statush;
     end
-    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (wakeup_robIdx, backendCtrl.redirectIdx,  wakeup_older);
+    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (status_n.robIdx, backendCtrl.redirectIdx,  wakeup_older);
 
-    assign csr_wakeup_io.en = select_en;
-    assign csr_wakeup_io.preg = status_ram[head].rs1;
-    assign csr_wakeup_io.rd = status_ram[head].rd;
+    assign csr_reg_io.en = select_en;
+    assign csr_reg_io.preg = statush.rs1;
+    assign csr_wakeup_io.en = select_en & csr_reg_io.ready;
+    assign csr_wakeup_io.we = statush.we;
+    assign csr_wakeup_io.rd = statush.rd;
 
     always_ff @(posedge clk)begin
         issue_csr_io.en <= wakeup_en & (~backendCtrl.redirect | wakeup_older);
-        rdata_n <= rdata;
+        issue_csr_io.bundle <= rdata;
+        issue_csr_io.status.we <=  status_n.we;
+        issue_csr_io.status.rd <= status_n.rd;
+        issue_csr_io.status.robIdx <= status_n.robIdx;
     end
-    assign issue_csr_io.rdata = csr_wakeup_io.data;
-    assign issue_csr_io.bundle = rdata_n;
+    assign issue_csr_io.rdata = csr_reg_io.data;
 
-    MPRAM #(
+    MPREG #(
         .WIDTH($bits(CsrIssueBundle)),
         .DEPTH(`CSR_ISSUE_SIZE),
         .READ_PORT(1),
@@ -98,9 +105,10 @@ endgenerate
 
     always_ff @(posedge clk)begin
         if(enqueue)begin
+            status_ram[tail].we <= status.we;
             status_ram[tail].rs1 <= status.rs1;
             status_ram[tail].robIdx <= status.robIdx;
-            status_ram[tail].rd <= bundle.rd;
+            status_ram[tail].rd <= status.rd;
         end
     end
     always_ff @(posedge clk or posedge rst)begin

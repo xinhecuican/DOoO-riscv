@@ -134,9 +134,16 @@ typedef enum logic [1: 0] {
 `define STORE_DIS_PORT 2
 `define CSR_DIS_SIZE 8
 `define CSR_DIS_PORT 1
-`define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2)
+`define MULT_DIS_SIZE 8
+`define MULT_DIS_PORT 1
+`define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 \
+`ifdef EXT_M \
+    + `MULT_DIS_PORT * 2 \
+`endif \
+)
 
 // issue
+`define WAKEUP_DELAY_WIDTH 5
 `define INT_ISSUE_SIZE 32
 `define ALU_SIZE 4
 `define LOAD_ISSUE_BANK_SIZE 8
@@ -147,6 +154,9 @@ typedef enum logic [1: 0] {
 `define STORE_ISSUE_BANK_WIDTH $clog2(`STORE_ISSUE_BANK_SIZE)
 `define CSR_ISSUE_SIZE 4
 `define CSR_ISSUE_WIDTH $clog2(`CSR_ISSUE_SIZE)
+`define MULT_SIZE 1
+`define MULT_ISSUE_SIZE 8
+`define MULT_ISSUE_WIDTH $clog2(`MULT_ISSUE_SIZE)
 
 // lsu
 `define LOAD_QUEUE_SIZE 32

@@ -26,8 +26,8 @@ module StoreIssueQueue(
     input logic clk,
     input logic rst,
     DisIssueIO.issue dis_store_io,
-    IssueWakeupIO.issue store_wakeup_io,
-    WriteBackBus wbBus,
+    IssueRegIO.issue store_reg_io,
+    WakeupBus wakeupBus,
     BackendCtrl backendCtrl,
     StoreUnitIO.store store_io,
     DTLBLsuIO.sq tlb_lsu_io
@@ -67,9 +67,8 @@ generate
         assign addr_io[i].tlb_bank_idx = tlb_lsu_io.swb_idx[i];
         assign full[i] = addr_io[i].full | data_io[i].full;
         
-        assign store_wakeup_io.en[i] = addr_io[i].reg_en;
-        assign store_wakeup_io.preg[i] = addr_io[i].rs1;
-        assign store_wakeup_io.rd[i] = 0;
+        assign store_reg_io.en[i] = addr_io[i].reg_en;
+        assign store_reg_io.preg[i] = addr_io[i].rs1;
         assign store_io.storeIssueData[i] = addr_io[i].data_o;
         assign store_io.exception[i] = addr_io[i].exception_o;
         assign store_io.issue_idx[i] = addr_io[i].issue_idx;
@@ -78,10 +77,10 @@ generate
         assign data_io[i].status = addr_io[i].status;
         assign data_io[i].data = addr_io[i].data;
         
-        assign store_wakeup_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en;
-        assign store_wakeup_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
+        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en;
+        assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
-        assign store_io.dis_rob_idx[i] = mem_issue_bundle.robIdx;
+        assign store_io.dis_rob_idx[i] = dis_store_io.status[i].robIdx;
         assign store_io.dis_sq_idx[i] = mem_issue_bundle.sqIdx;
         assign store_io.data_size[i] = data_io[i].size_o;
 
@@ -101,8 +100,8 @@ generate
         always_ff @(posedge clk)begin
             addr_en_next[i] <= addr_io[i].reg_en;
             data_en_next[i] <= data_io[i].reg_en;
-            store_io.en[i] <= addr_en_next[i] & (~backendCtrl.redirect | addr_bigger[i]);
-            store_io.data_en[i] <= data_en_next[i] & (~backendCtrl.redirect | data_bigger[i]);
+            store_io.en[i] <= addr_en_next[i] & (~backendCtrl.redirect | addr_bigger[i]) & store_reg_io.ready[i];
+            store_io.data_en[i] <= data_en_next[i] & (~backendCtrl.redirect | data_bigger[i]) & store_reg_io.ready[`STORE_ISSUE_BANK_NUM+i];
         end
     end
 endgenerate
@@ -135,7 +134,7 @@ module StoreAddrBank(
     input logic clk,
     input logic rst,
     StoreAddrBankIO.bank io,
-    WriteBackBus wbBus,
+    WakeupBus wakeupBus,
     BackendCtrl backendCtrl
 );
     typedef struct packed {
@@ -168,7 +167,7 @@ module StoreAddrBank(
         .addr0(freeIdx),
         .addr1(selectIdxNext),
         .we(io.en),
-        .wdata({io.data.uext, size, io.data.imm, io.data.sqIdx, io.data.lqIdx, io.data.robIdx, io.data.fsqInfo}),
+        .wdata({io.data.uext, size, io.data.imm, io.data.sqIdx, io.data.lqIdx, io.status.robIdx, io.data.fsqInfo}),
         .rdata1(data_o)
     );
 
@@ -199,7 +198,7 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
         for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs1_cmp[i][j] = wbBus.en[j] & wbBus.we[j] & (wbBus.rd[j] == status_ram[i].rs1);
+            assign rs1_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs1);
         end
     end
 endgenerate
@@ -293,7 +292,7 @@ module StoreDataBank(
     input logic clk,
     input logic rst,
     StoreDataBankIO.bank io,
-    WriteBackBus wbBus,
+    WakeupBus wakeupBus,
     BackendCtrl backendCtrl
 );
     typedef struct packed {
@@ -343,7 +342,7 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
         for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs2_cmp[i][j] = wbBus.en[j] & wbBus.we[j] & (wbBus.rd[j] == status_ram[i].rs2);
+            assign rs2_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs2);
         end
     end
 endgenerate

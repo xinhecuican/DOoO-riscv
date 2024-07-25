@@ -5,8 +5,9 @@
 `define MEMOP_WIDTH 4
 `define BRANCHOP_WIDTH 3
 `define CSROP_WIDTH 3
-// intop
+`define MULTOP_WIDTH 4
 
+// intop
 `define INT_ADD     `INTOP_WIDTH'b00000
 `define INT_SUB     `INTOP_WIDTH'b01101
 `define INT_LUI     `INTOP_WIDTH'b00001
@@ -45,6 +46,15 @@
 `define CSR_RSI     `CSROP_WIDTH'b110
 `define CSR_RCI     `CSROP_WIDTH'b111
 
+// multop
+`define MULT_MUL       `MULTOP_WIDTH'b000
+`define MULT_MULH      `MULTOP_WIDTH'b001
+`define MULT_MULHSU    `MULTOP_WIDTH'b010
+`define MULT_MULHU     `MULTOP_WIDTH'b011
+`define MULT_DIV       `MULTOP_WIDTH'b100
+`define MULT_DIVU      `MULTOP_WIDTH'b101
+`define MULT_REM       `MULTOP_WIDTH'b110
+`define MULT_REMU      `MULTOP_WIDTH'b111
 
 // opcode
 
@@ -108,6 +118,15 @@
 
 `define FUNCT_SIMTRAP   3'b000
 
+`define FUNCT_MUL       3'b000
+`define FUNCT_MULH      3'b001
+`define FUNCT_MULHSU    3'b010
+`define FUNCT_MULHU     3'b011
+`define FUNCT_DIV       3'b100
+`define FUNCT_DIVU      3'b101
+`define FUNCT_REM       3'b110
+`define FUNCT_REMU      3'b111
+
 // funct7
 `define FUNCT7_SRLI 7'b0000000
 `define FUNCT7_SRAI 7'b0100000
@@ -115,6 +134,7 @@
 `define FUNCT7_SUB  7'b0100000
 `define FUNCT7_SRL  7'b0000000
 `define FUNCT7_SRA  7'b0100000
+`define FUNCT7_MULT 7'b0000001
 
 // funct12
 `define FUNCT12_ECALL   12'b0000_0000_0000

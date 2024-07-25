@@ -157,9 +157,10 @@ module ICache(
     Decoder #(`ICACHE_WAY) decoder_way(replace_io.miss_way, replace_way);
 
 
-    assign fsq_cache_io.ready = (main_state == IDLE) ||
+    assign fsq_cache_io.ready = (main_state == IDLE && (abandon_idle || (!fsq_cache_io.stall))) ||
                                 (main_state == LOOKUP && (!(|cache_miss) &&
-                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))));
+                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) &&
+                                (abandon_lookup || abandon_idle || !fsq_cache_io.stall));
     assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss)) & ~abandon_lookup) | miss_data_en}}
                              & request_buffer.expand_en_shift;
     assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
@@ -233,7 +234,7 @@ module ICache(
                 end
             end
             LOOKUP:begin
-                if(fsq_cache_io.flush | abandon_lookup | abandon_idle)begin
+                if(fsq_cache_io.flush | abandon_lookup | (abandon_idle & ~fsq_cache_io.stall))begin
                     main_state <= IDLE;
                 end
                 else if(fsq_cache_io.stall | (itlb_cache_io.miss & ~(|itlb_cache_io.exception)))begin

@@ -180,6 +180,9 @@ typedef struct packed {
     logic memv;
     logic branchv;
     logic csrv;
+`ifdef EXT_M
+    logic multv;
+`endif
     logic [11: 0] csrid;
     logic uext;
     logic we;
@@ -188,6 +191,9 @@ typedef struct packed {
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(`BRANCHOP_WIDTH) branchop;
     logic `N(`CSROP_WIDTH) csrop;
+`ifdef EXT_M
+    logic `N(`MULTOP_WIDTH) multop;
+`endif
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
     logic `N(`EXC_WIDTH) exccode;
@@ -211,8 +217,17 @@ typedef struct packed {
 } RobIdx;
 
 typedef struct packed {
-    logic rs1v, rs2v;
+    logic we;
     logic `N(`PREG_WIDTH) rs1, rs2;
+    logic `N(`PREG_WIDTH) rd;
+    RobIdx robIdx;
+} DisStatusBundle;
+
+typedef struct packed {
+    logic rs1v, rs2v;
+    logic we;
+    logic `N(`PREG_WIDTH) rs1, rs2;
+    logic `N(`PREG_WIDTH) rd;
     RobIdx robIdx;
 } IssueStatusBundle;
 
@@ -223,12 +238,10 @@ typedef struct packed {
     logic immv;
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;
-    RobIdx robIdx;
-    logic `N(`PREG_WIDTH) rd;
     logic `N(`DEC_IMM_WIDTH) imm;
-    FsqIdxInfo fsqInfo;
     BranchType br_type;
     RasType ras_type;
+    FsqIdxInfo fsqInfo;
 } IntIssueBundle;
 
 typedef struct packed {
@@ -244,24 +257,30 @@ typedef struct packed {
 typedef struct packed {
     logic uext;
     logic `N(`MEMOP_WIDTH) memop;
-    RobIdx robIdx;
-    logic `N(`PREG_WIDTH) rd;
     logic `N(12) imm;
-    FsqIdxInfo fsqInfo;
     LoadIdx lqIdx;
     StoreIdx sqIdx;
+    FsqIdxInfo fsqInfo;
 } MemIssueBundle;
 
 typedef struct packed {
     logic `N(`CSROP_WIDTH) csrop;
-    RobIdx robIdx;
-    logic `N(`PREG_WIDTH) rd;
     logic `N(5) imm;
     logic `N(12) csrid;
-    FsqIdxInfo fsqInfo;
     logic exc_valid;
     logic `N(`EXC_WIDTH) exccode;
+    FsqIdxInfo fsqInfo;
 } CsrIssueBundle;
+
+typedef struct packed {
+    logic `N(`MULTOP_WIDTH) multop;
+} MultIssueBundle;
+
+typedef struct packed {
+    logic we;
+    logic `N(`PREG_WIDTH) rd;
+    RobIdx robIdx;
+} ExStatusBundle;
 
 typedef struct packed {
     logic en;
@@ -301,6 +320,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
+    logic we;
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
     logic `N(`EXC_WIDTH) exccode;
@@ -308,6 +328,7 @@ typedef struct packed {
 } WBData;
 
 typedef struct packed {
+    logic we;
     logic uext;
     logic [1: 0] size;
     logic [11: 0] imm;

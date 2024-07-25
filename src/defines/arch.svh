@@ -2,8 +2,9 @@
 `define ARCH_H
 
 `define RV32I
-// `define ZICSR // always include
 `define DIFFTEST
+
+`define EXT_M
 
 // `ifdef ZICSR
 // parameter HAS_ZICSR=1;

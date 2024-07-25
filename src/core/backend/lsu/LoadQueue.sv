@@ -31,6 +31,7 @@ module LoadQueue(
 );
     typedef struct packed {
         logic dir;
+        logic we;
         logic `N(`PREG_WIDTH) rd;
         RobIdx robIdx;
         FsqIdxInfo fsqInfo;
@@ -169,6 +170,7 @@ endgenerate
     assign io.wbData[1].en = (|waiting_wb) && (wbIdx[0] != wbIdx[1]) && !backendCtrl.redirect && !redirect_next;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign io.wbData[i].we = wb_queue_data[i].we;
         assign io.wbData[i].robIdx = wb_queue_data[i].robIdx;
         assign io.wbData[i].rd = wb_queue_data[i].rd;
         logic `N(`XLEN) wbData;
@@ -236,6 +238,7 @@ endgenerate
     LoadQueueData `N(`LOAD_PIPELINE) writeData;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign writeData[i].we = io.data[i].we;
         assign writeData[i].dir = io.data[i].lqIdx.dir;
         assign writeData[i].rd = io.data[i].rd;
         assign writeData[i].robIdx = io.data[i].robIdx;

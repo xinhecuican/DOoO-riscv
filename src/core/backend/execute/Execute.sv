@@ -5,8 +5,11 @@ module Execute(
     input logic rst,
     IntIssueExuIO.exu int_exu_io,
     IssueCSRIO.csr issue_csr_io,
+    IssueMultIO.mult mult_exu_io,
     WriteBackIO.fu alu_wb_io,
+    WriteBackIO.fu mult_wb_io,
     WriteBackBus.wb wbBus,
+    IssueWakeupIO.issue mult_wakeup_io,
     BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo,
     output BranchRedirectInfo branchRedirectInfo
@@ -19,6 +22,7 @@ generate
         assign issue_alu_io.en = int_exu_io.en[i] & (~backendCtrl.redirect | older[i]);
         assign issue_alu_io.rs1_data = int_exu_io.rs1_data[i];
         assign issue_alu_io.rs2_data = int_exu_io.rs2_data[i];
+        assign issue_alu_io.status = int_exu_io.status[i];
         assign issue_alu_io.bundle = int_exu_io.bundle[i];
         assign issue_alu_io.stream = int_exu_io.streams[i];
         assign issue_alu_io.direction = int_exu_io.directions[i];
@@ -35,11 +39,11 @@ generate
             .backendCtrl(backendCtrl)
         );
 
-        LoopCompare #(`ROB_WIDTH) compare_older (issue_alu_io.bundle.robIdx, backendCtrl.redirectIdx, older[i]);
+        LoopCompare #(`ROB_WIDTH) compare_older (issue_alu_io.status.robIdx, backendCtrl.redirectIdx, older[i]);
 
         assign branch_ctrl_io.bundles[i].en = int_exu_io.en[i] & int_exu_io.bundle[i].branchv & int_exu_io.valid[i] & (~backendCtrl.redirect | older[i]);
         assign branch_ctrl_io.bundles[i].fsqInfo = int_exu_io.bundle[i].fsqInfo;
-        assign branch_ctrl_io.bundles[i].robIdx = int_exu_io.bundle[i].robIdx;
+        assign branch_ctrl_io.bundles[i].robIdx = int_exu_io.status[i].robIdx;
         assign branch_ctrl_io.bundles[i].fsqDir = int_exu_io.directions[i];
     end
 endgenerate
@@ -51,4 +55,21 @@ endgenerate
         .rst(rst),
         .io(branch_ctrl_io)
     );
+
+generate
+    for(genvar i=0; i<`MULT_SIZE; i++)begin
+        MultUnit mult(
+            .*,
+            .en(mult_exu_io.en[i]),
+            .rs1_data(mult_exu_io.rs1_data[i]),
+            .rs2_data(mult_exu_io.rs2_data[i]),
+            .status_i(mult_exu_io.status[i]),
+            .multop(mult_exu_io.bundle[i].multop),
+            .wakeup_en(mult_wakeup_io.en[i]),
+            .wakeup_we(mult_wakeup_io.we[i]),
+            .wakeup_rd(mult_wakeup_io.rd[i]),
+            .wbData(mult_wb_io.datas[i])
+        );
+    end
+endgenerate
 endmodule

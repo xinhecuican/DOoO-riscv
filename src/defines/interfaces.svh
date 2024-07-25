@@ -266,22 +266,30 @@ interface DisCsrIO;
     modport issue(input en, rs1, rs2, bundle, output full);
 endinterface
 
-interface IssueWakeupIO #(
+interface IssueRegIO #(
     parameter BANK_SIZE = 4,
     parameter PORT_SIZE = 4
 );
     logic `N(BANK_SIZE) en;
-    logic `N(BANK_SIZE) wakeup_en;
     logic `ARRAY(PORT_SIZE, `PREG_WIDTH) preg;
-    logic `ARRAY(BANK_SIZE, `PREG_WIDTH) rd;
 
     logic `N(BANK_SIZE) ready;
     logic `ARRAY(PORT_SIZE, `XLEN) data;
+    modport issue(output en, preg, input ready, data);
+    modport regfile(input en, preg, output ready, data);
+endinterface
 
-    modport issue(output en, preg, rd, input ready, data);
-    modport regfile(output en, preg, input ready, data);
-    modport spec(output en, preg, rd, wakeup_en, input ready, data);
-    modport wakeup(input en, preg, rd, wakeup_en, output ready, data);
+interface IssueWakeupIO #(
+    parameter BANK_SIZE = 4
+);
+    logic `N(BANK_SIZE) en;
+    logic `N(BANK_SIZE) we;
+    logic `ARRAY(BANK_SIZE, `PREG_WIDTH) rd;
+
+    logic `N(BANK_SIZE) ready;
+
+    modport issue(output en, we, rd, input ready);
+    modport wakeup(input en, we, rd, output ready);
 endinterface
 
 interface WakeupBus;
@@ -293,30 +301,18 @@ interface WakeupBus;
     modport wakeup(output en, we, rd);
 endinterface
 
-interface IssueRegfileIO #(
-    parameter PORT_SIZE = 4
-);
-    logic `N(PORT_SIZE) en;
-    logic `ARRAY(PORT_SIZE, `PREG_WIDTH) preg;
-
-    // 1 stage
-    logic `ARRAY(PORT_SIZE, `XLEN) data;
-
-    modport issue(output en, preg, input data);
-    modport regfile(input en, preg, output data);
-endinterface
-
 interface IntIssueExuIO;
     logic `N(`ALU_SIZE) en;
     logic `N(`ALU_SIZE) valid; // fu valid
     logic `ARRAY(`ALU_SIZE, `XLEN) rs1_data;
     logic `ARRAY(`ALU_SIZE, `XLEN) rs2_data;
+    ExStatusBundle `N(`ALU_SIZE) status;
     IntIssueBundle `N(`ALU_SIZE) bundle;
     FetchStream `N(`ALU_SIZE) streams;
     logic `N(`ALU_SIZE) directions; // fsq dir
 
-    modport exu (input en, rs1_data, rs2_data, bundle, streams, directions, output valid);
-    modport issue (output en, rs1_data, rs2_data, bundle, streams, directions, input valid);
+    modport exu (input en, rs1_data, rs2_data, status, bundle, streams, directions, output valid);
+    modport issue (output en, rs1_data, rs2_data, status, bundle, streams, directions, input valid);
 endinterface
 
 interface IssueAluIO;
@@ -324,33 +320,35 @@ interface IssueAluIO;
     logic valid; // fu valid
     logic `N(`XLEN) rs1_data;
     logic `N(`XLEN) rs2_data;
+    ExStatusBundle status;
     IntIssueBundle bundle;
     FetchStream stream;
     logic direction;
     RasType ras_type;
     BranchType br_type;
 
-    modport alu (input en, rs1_data, rs2_data, bundle, stream, direction, ras_type, br_type, output valid);
+    modport alu (input en, rs1_data, rs2_data, status, bundle, stream, direction, ras_type, br_type, output valid);
 endinterface
 
 interface IssueCSRIO;
     logic en;
     logic `N(`XLEN) rdata;
+    ExStatusBundle status;
     CsrIssueBundle bundle;
 
-    modport issue(output en, rdata, bundle);
-    modport csr (input en, rdata, bundle);
+    modport issue(output en, rdata, status, bundle);
+    modport csr (input en, rdata, status, bundle);
 endinterface
 
-interface IssueBranchIO;
-    logic en;
-    logic `N(`XLEN) rs1_data;
-    logic `N(`XLEN) rs2_data;
-    IntIssueBundle bundle;
-    FetchStream streams;
-    logic direction;
+interface IssueMultIO;
+    logic `N(`MULT_SIZE) en;
+    logic `ARRAY(`MULT_SIZE, `XLEN) rs1_data;
+    logic `ARRAY(`MULT_SIZE, `XLEN) rs2_data;
+    ExStatusBundle `N(`MULT_SIZE) status;
+    MultIssueBundle `N(`MULT_SIZE) bundle;
 
-    modport branch (input en, rs1_data, rs2_data, bundle, streams, direction);
+    modport issue(output en, rs1_data, rs2_data, status, bundle);
+    modport mult (input en, rs1_data, rs2_data, status, bundle);
 endinterface
 
 interface WriteBackIO#(

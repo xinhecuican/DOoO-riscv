@@ -82,3 +82,25 @@ module DirectionSelector #(
   end
 
 endmodule
+
+module OrderSelector #(
+  parameter BANK_SIZE=4,
+  parameter DEPTH=8,
+  parameter ADDR_WIDTH=$clog2(DEPTH)
+)(
+  input logic clk,
+  input logic rst,
+  input logic [BANK_SIZE-1: 0][ADDR_WIDTH-1: 0] bankNum,
+  output logic [BANK_SIZE-1: 0][$clog2(BANK_SIZE)-1: 0] order
+);
+  logic [BANK_SIZE-1: 0][$clog2(BANK_SIZE)-1: 0] originOrder, sortOrder;
+generate
+  for(genvar i=0; i<BANK_SIZE; i++)begin
+    assign originOrder[i] = i;
+  end
+endgenerate
+  Sort #(BANK_SIZE, ADDR_WIDTH, $clog2(BANK_SIZE)) sort_order (bankNum, originOrder, sortOrder);
+  always_ff @(posedge clk)begin
+    order <= sortOrder;
+  end
+endmodule
