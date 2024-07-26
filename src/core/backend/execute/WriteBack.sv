@@ -6,15 +6,21 @@ module WriteBack(
     WriteBackIO.wb alu_wb_io,
     WriteBackIO.wb lsu_wb_io,
     WriteBackIO.wb csr_wb_io,
+`ifdef EXT_M
     WriteBackIO.wb mult_wb_io,
+`endif
     BackendCtrl backendCtrl,
     WriteBackBus.wb wbBus
 );
     WBData csrData;
+`ifdef EXT_M
     WBData `N(`MULT_SIZE) multData;
+`endif
     always_ff @(posedge clk)begin
         csrData <= csr_wb_io.datas[0];
+`ifdef EXT_M
         multData <= mult_wb_io.datas;
+`endif
     end
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin

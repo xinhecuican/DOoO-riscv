@@ -7,9 +7,11 @@ module Execute(
     IssueCSRIO.csr issue_csr_io,
     IssueMultIO.mult mult_exu_io,
     WriteBackIO.fu alu_wb_io,
-    WriteBackIO.fu mult_wb_io,
     WriteBackBus.wb wbBus,
+`ifdef EXT_M
+    WriteBackIO.fu mult_wb_io,
     IssueWakeupIO.issue mult_wakeup_io,
+`endif
     BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo,
     output BranchRedirectInfo branchRedirectInfo
@@ -56,6 +58,7 @@ endgenerate
         .io(branch_ctrl_io)
     );
 
+`ifdef EXT_M
 generate
     for(genvar i=0; i<`MULT_SIZE; i++)begin
         MultUnit mult(
@@ -72,4 +75,5 @@ generate
         );
     end
 endgenerate
+`endif
 endmodule

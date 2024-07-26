@@ -176,7 +176,9 @@ module DecodeUnit(
 `endif
                       }} & imm;
 
-    assign info.intv = lui | opimm | opreg | auipc | fence
+    assign info.intv = lui | opimm |
+                       add | sub | sll | slt | sltu | _xor | srl | sra | _or | _and |
+                       auipc | fence
 `ifdef DIFFTEST
     | sim_trap
 `endif

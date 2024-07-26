@@ -176,6 +176,8 @@ endgenerate
     LoopCompare #(`ROB_WIDTH) cmp_bigger``stage (status_s``stage, backendCtrl.redirectIdx, bigger``stage); \
     always_ff @(posedge clk)begin \
         valid_s``stagen <= valid_s``stage & (~backendCtrl.redirect | bigger``stage); \
+        selh_s``stagen <= selh_s``stage``; \
+        status_s``stagen <= status_s``stage``; \
     end
 
 `define CSA_DEF(stage, stagen) \
@@ -190,6 +192,20 @@ endgenerate
     end \
     for(genvar i=0; i<S``stage``_ALL % 3; i++)begin \
         assign st``stagen``[2 * S``stagen`` + i] = st``stage``[3 * S``stage`` + i]; \
+    end
+
+`define CSAN_DEF(stage, stagen) \
+    for(genvar i=0; i<S``stagen``; i++)begin : cal_st``stagen \
+        CSA csa``stagen( \
+            .a(st``stage``_n[3*i]), \
+            .b(st``stage``_n[3*i+1]), \
+            .cin(st``stage``_n[3*i+2]), \
+            .sum(st``stagen``[2*i]), \
+            .cout(st``stagen``[2*i+1]) \
+        ); \
+    end \
+    for(genvar i=0; i<S``stage``_ALL % 3; i++)begin \
+        assign st``stagen``[2 * S``stagen`` + i] = st``stage``_n[3 * S``stage`` + i]; \
     end
 
 generate
@@ -209,11 +225,11 @@ generate
 
     `CSA_DEF(1, 2)
     `ST_REG(2, 0, 1)
-    `CSA_DEF(2, 3)
+    `CSAN_DEF(2, 3)
     `CSA_DEF(3, 4)
     `CSA_DEF(4, 5)
     `ST_REG(5, 1, 2)
-    `CSA_DEF(5, 6)
+    `CSAN_DEF(5, 6)
 `ifdef RV64
     `CSA_DEF(6, 7)
 `endif
@@ -225,9 +241,9 @@ endgenerate
     assign wbData.robIdx = status_s2.robIdx;
     assign wbData.exccode = `EXC_NONE;
 `ifdef RV32
-    assign wbData.res = mulh_s2 ? st6[1] : st6[0];
+    assign wbData.res = mulh_s2 ? st6[1][`XLEN-1: 0] : st6[0][`XLEN-1: 0];
 `elsif RV64
-    assign wbData.res = mulh_s2 ? st7[1] : st7[0];
+    assign wbData.res = mulh_s2 ? st7[1][`XLEN-1: 0] : st7[0][`XLEN-1: 0];
 `endif
 
 endmodule

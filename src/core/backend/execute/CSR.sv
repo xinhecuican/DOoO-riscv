@@ -276,10 +276,12 @@ endgenerate                                                             \
             end
             if(redirect.en && exccode == `EXC_MRET && ret_valid)begin
                 mstatus.mie <= mstatus.mpie;
+                mstatus.mpp <= 0;
                 mstatus.mpie <= 1;
             end
             if(redirect.en && exccode == `EXC_SRET && ret_valid)begin
                 mstatus.sie <= mstatus.spie;
+                mstatus.spp <= 0;
                 mstatus.spie <= 1;
             end
             if(redirect.en & ~ret_valid)begin
@@ -359,7 +361,7 @@ endgenerate                                                             \
         .coreid(mhartid),
         .priviledgeMode(mode),
         .mstatus(mstatus),
-        .sstatus(mstatus),
+        .sstatus((mstatus & `SSTATUS_MASK)),
         .mepc(mepc),
         .sepc(sepc),
         .mtval(mtval),
