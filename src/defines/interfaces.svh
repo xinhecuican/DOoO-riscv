@@ -262,8 +262,8 @@ interface DisCsrIO;
     CsrIssueBundle bundle;
     logic full;
 
-    modport dis (output en, rs1, rs2, bundle, input full);
-    modport issue(input en, rs1, rs2, bundle, output full);
+    modport dis (output en, rs1, bundle, input full);
+    modport issue(input en, rs1, bundle, output full);
 endinterface
 
 interface IssueRegIO #(

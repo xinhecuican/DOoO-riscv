@@ -1,9 +1,3 @@
-//-------------------------------------------------------------------
-//
-//  COPYRIGHT (C) 2023, devin
-//  balddonkey@outlook.com
-//
-//-------------------------------------------------------------------
 `include "../../../defines/defines.svh"
 
 module MultUnit(
@@ -24,17 +18,18 @@ module MultUnit(
     localparam HNUM = (NUM / 2); // 17 33
     localparam HM = HNUM-1;
     logic `N(NUM) d1, d2;
-    logic `N(NUM/2) z0, z1, n;
-    logic `N(NUM+1) pp   `N(NUM/2);
-    logic `N(NUM+1) pp2c `N(NUM/2);
+    logic `N(NUM/2) z0, z1, n, c0;
+    logic `N(NUM) pp   `N(NUM/2);
     logic `N(NUM*2) fpp  `N(NUM/2);
+    logic `ARRAY(NUM*2, NUM/2) st0;
+    logic `N(NUM*2) result;
     logic sext1, sext2;
     logic valid_s0, selh_s0;
+    logic zero;
     ExStatusBundle status_s0;
 
     assign sext1 = multop == `MULT_MUL ||
-                   multop == `MULT_MULH ||
-                   multop == `MULT_MULHSU;
+                   multop == `MULT_MULH;
     assign sext2 = multop == `MULT_MUL ||
                    multop == `MULT_MULH;
     
@@ -43,8 +38,9 @@ module MultUnit(
                      multop == `MULT_MULHSU ||
                      multop == `MULT_MULHU;
     assign status_s0 = status_i;
-    assign d1 = {{2{sext1}}, rs1_data};
-    assign d2 = {{2{sext2}}, rs2_data};
+    assign d1 = {{2{sext1 & rs1_data[`XLEN-1]}}, rs1_data};
+    assign d2 = {{2{sext2 & rs2_data[`XLEN-1]}}, rs2_data};
+    assign zero = ~(|rs1_data);
 
     assign wakeup_en = valid_s0;
     assign wakeup_we = status_s0.we;
@@ -55,14 +51,6 @@ generate
         if(i == 0)begin
             booth_encoder be0(
                 .y   ({d2[1], d2[0], 1'b0}),
-                .z0  (z0[i]),
-                .z1  (z1[i]),
-                .neg (n[i])
-            );
-        end
-        else if(i == HM)begin
-            booth_encoder be1(
-                .y   ({1'b0, 1'b0, d2[NUM-1]}),
                 .z0  (z0[i]),
                 .z1  (z1[i]),
                 .neg (n[i])
@@ -86,86 +74,73 @@ generate
                     .neg (n[i]),
                     .p   (pp[i][j])
                 );
-                booth_selector bs0(
-                    .z0  (z0[i]),
-                    .z1  (z1[i]),
-                    .x   (d1[j+1]),
-                    .xs  (d1[j]),
-                    .neg (n[i]),
-                    .p   (pp[i][j+1])
-                );
-            end 
-            else if(j==NUM-1) begin
-                booth_selector u_bs(
-                    .z0  (z0[i]),
-                    .z1  (z1[i]),
-                    .x   (1'b0),
-                    .xs  (d1[j]),
-                    .neg (n[i]),
-                    .p   (pp[i][j+1])
-                );
             end 
             else begin
                 booth_selector u_bs(
                     .z0  (z0[i]),
                     .z1  (z1[i]),
-                    .x   (d1[j+1]),
-                    .xs  (d1[j]),
+                    .x   (d1[j]),
+                    .xs  (d1[j-1]),
                     .neg (n[i]),
-                    .p   (pp[i][j+1])
+                    .p   (pp[i][j])
                 );
             end
         end
-        RCA #(NUM+1) u_rca(
-            .a    (pp[i]),
-            .b    ({{NUM{1'b0}},n[i]}),
-            .cin  (1'b0),
-            .sum  (pp2c[i]),
-            .cout ()
-        );
     end
 endgenerate
 
 generate
     for(genvar i=0; i<NUM/2; i++)begin
-        if(i == HM)begin
-            assign fpp[i] = {pp2c[HM][NUM-1:0], {NUM{1'b0}}};
-        end
-        else begin
-            assign fpp[i] = {{(NUM-1-2*i){n[i] & (z0[i] | z1[i])}}, pp2c[i], {(2*i){1'b0}}};
+        assign fpp[i] = {{(NUM-2*i){pp[i][NUM-1]}}, pp[i], {(2*i){n[i]}}};
+        for(genvar j=0; j<NUM*2; j++)begin
+            assign st0[j][i] = fpp[i][j];
         end
     end
 endgenerate
 
+`define STA_NUM_DEF(stage, stagen) \
+    localparam S``stagen`` = S``stage``_ALL / 3; \
+    localparam S``stagen``_REM = (S``stage``_ALL % 3); \
+    localparam S``stagen``_BASE = S``stage``_BASE + S``stage``; \
+    localparam S``stagen``_ALL = (S``stagen`` * 2 + S``stage``_ALL % 3);
 
     localparam S1 = HNUM / 3; // 5 11
+    localparam S1_REM = HNUM % 3; // 2 0
+    localparam S1_BASE = 0;
     localparam S1_ALL = (S1 * 2 + HNUM % 3); // 12 22
-    localparam S2 = S1_ALL / 3; // 4 7
-    localparam S2_ALL = (S2 * 2 + S1_ALL % 3); // 8 15
-    localparam S3 = S2_ALL / 3; // 2 5
-    localparam S3_ALL = (S3 * 2 + S2_ALL % 3); // 6 10
-    localparam S4 = S3_ALL / 3; // 2 3
-    localparam S4_ALL = (S4 * 2 + S3_ALL % 3); // 4 7
-    localparam S5 = S4_ALL / 3; // 1 2
-    localparam S5_ALL = (S5 * 2 + S4_ALL % 3); // 3 5
-    localparam S6 = S5_ALL / 3; // 1 1
-    localparam S6_ALL = (S6 * 2 + S5_ALL % 3); // 2 3
-    localparam S7 = S6_ALL / 3; // 0 1
-    localparam S7_ALL = (S7 * 2 + S6_ALL % 3); // 2 2
-    logic `N(NUM*2) st1  `N(S1_ALL);
-    logic `N(NUM*2) st2  `N(S2_ALL);
-    logic `N(NUM*2) st2_n `N(S2_ALL);
-    logic `N(NUM*2) st3  `N(S3_ALL);
-    logic `N(NUM*2) st4 `N(S4_ALL);
-    logic `N(NUM*2) st5 `N(S5_ALL);
-    logic `N(NUM*2) st5_n `N(S5_ALL);
-    logic `N(NUM*2) st6 `N(S6_ALL);
+    `STA_NUM_DEF(1, 2)
+    `STA_NUM_DEF(2, 3)
+    `STA_NUM_DEF(3, 4)
+    `STA_NUM_DEF(4, 5)
+    `STA_NUM_DEF(5, 6)
+    `STA_NUM_DEF(6, 7)
+    // localparam S2 = S1_ALL / 3; // 4 7
+    // localparam S2_REM = (S1_ALL % 3); // 0 1
+    // localparam S2_ALL = (S2 * 2 + S1_ALL % 3); // 8 15
+    // localparam S3 = S2_ALL / 3; // 2 5
+    // localparam S3_ALL = (S3 * 2 + S2_ALL % 3); // 6 10
+    // localparam S4 = S3_ALL / 3; // 2 3
+    // localparam S4_ALL = (S4 * 2 + S3_ALL % 3); // 4 7
+    // localparam S5 = S4_ALL / 3; // 1 2
+    // localparam S5_ALL = (S5 * 2 + S4_ALL % 3); // 3 5
+    // localparam S6 = S5_ALL / 3; // 1 1
+    // localparam S6_ALL = (S6 * 2 + S5_ALL % 3); // 2 3
+    // localparam S7 = S6_ALL / 3; // 0 1
+    // localparam S7_ALL = (S7 * 2 + S6_ALL % 3); // 2 2
+    logic `ARRAY(NUM*2+1, S1_ALL) st1;
+    logic `ARRAY(NUM*2+1, S2_ALL) st2;
+    logic `ARRAY(NUM*2, S2_ALL) st2_n;
+    logic `ARRAY(NUM*2+1, S3_ALL) st3;
+    logic `ARRAY(NUM*2+1, S4_ALL) st4;
+    logic `ARRAY(NUM*2+1, S5_ALL) st5;
+    logic `ARRAY(NUM*2, S5_ALL) st5_n;
+    logic `ARRAY(NUM*2+1, S6_ALL) st6;
 `ifdef RV64
     logic `N(NUM*2) st7 `N(S7_ALL);
 `endif
 
 `define ST_REG(num, stage, stagen) \
-    for(genvar i=0; i<S``num``_ALL; i++)begin \
+    for(genvar i=0; i<NUM*2; i++)begin \
         always_ff @(posedge clk)begin \
             st``num``_n[i] <= st``num``[i]; \
         end \
@@ -181,48 +156,53 @@ endgenerate
     end
 
 `define CSA_DEF(stage, stagen) \
+    logic `N(HNUM) c``stagen``; \
     for(genvar i=0; i<S``stagen``; i++)begin : cal_st``stagen \
-        CSA csa``stagen( \
-            .a(st``stage``[3*i]), \
-            .b(st``stage``[3*i+1]), \
-            .cin(st``stage``[3*i+2]), \
-            .sum(st``stagen``[2*i]), \
-            .cout(st``stagen``[2*i+1]) \
-        ); \
+        for(genvar j=0; j<NUM*2; j++)begin \
+            CSA #(1) csa``stagen( \
+                .a(st``stage``[j][3*i]), \
+                .b(st``stage``[j][3*i+1]), \
+                .cin(st``stage``[j][3*i+2]), \
+                .sum(st``stagen``[j][i]), \
+                .cout(st``stagen``[j+1][i+S``stagen``+S``stagen``_REM]) \
+            ); \
+        end \
+        assign st``stagen``[0][i+S``stagen``+S``stagen``_REM] = c``stagen``[i+S``stagen``_BASE]; \
     end \
-    for(genvar i=0; i<S``stage``_ALL % 3; i++)begin \
-        assign st``stagen``[2 * S``stagen`` + i] = st``stage``[3 * S``stage`` + i]; \
-    end
+    for(genvar i=0; i<S``stagen``_REM; i++)begin \
+        for(genvar j=0; j<NUM*2; j++)begin \
+            assign st``stagen``[j][S``stagen`` + i] = st``stage``[j][3 * S``stagen`` + i]; \
+        end \
+    end \
+    assign c``stagen`` = c``stage``;
 
 `define CSAN_DEF(stage, stagen) \
+    logic `N(HNUM) c``stagen``; \
     for(genvar i=0; i<S``stagen``; i++)begin : cal_st``stagen \
-        CSA csa``stagen( \
-            .a(st``stage``_n[3*i]), \
-            .b(st``stage``_n[3*i+1]), \
-            .cin(st``stage``_n[3*i+2]), \
-            .sum(st``stagen``[2*i]), \
-            .cout(st``stagen``[2*i+1]) \
-        ); \
+        for(genvar j=0; j<NUM*2; j++)begin \
+            CSA #(1) csa``stagen( \
+                .a(st``stage``_n[j][3*i]), \
+                .b(st``stage``_n[j][3*i+1]), \
+                .cin(st``stage``_n[j][3*i+2]), \
+                .sum(st``stagen``[j][i]), \
+                .cout(st``stagen``[j+1][i+S``stagen``+S``stagen``_REM]) \
+            ); \
+        end \
+        assign st``stagen``[0][i+S``stagen``+S``stagen``_REM] = c``stagen``[i+S``stagen``_BASE]; \
     end \
-    for(genvar i=0; i<S``stage``_ALL % 3; i++)begin \
-        assign st``stagen``[2 * S``stagen`` + i] = st``stage``_n[3 * S``stage`` + i]; \
+    for(genvar i=0; i<S``stagen``_REM; i++)begin \
+        for(genvar j=0; j<NUM*2; j++)begin \
+            assign st``stagen``[j][S``stagen`` + i] = st``stage``_n[j][3 * S``stagen`` + i]; \
+        end \
+    end \
+    always_ff @(posedge clk)begin \
+        c``stagen`` <= c``stage``; \
     end
 
 generate
 // stage1
-    for(genvar i=0; i<S1; i++)begin : cal_st1
-        CSA csa1(
-            .a(fpp[3*i]),
-            .b(fpp[3*i+1]),
-            .cin(fpp[3*i+2]),
-            .sum(st1[2*i]),
-            .cout(st1[2*i+1])
-        );
-    end
-    for(genvar i=0; i<HNUM % 3; i++)begin
-        assign st1[2 * S1 + i] =  fpp[3 * S1 + i];
-    end
-
+    assign c0 = n;
+    `CSA_DEF(0, 1)
     `CSA_DEF(1, 2)
     `ST_REG(2, 0, 1)
     `CSAN_DEF(2, 3)
@@ -240,11 +220,27 @@ endgenerate
     assign wbData.rd = status_s2.rd;
     assign wbData.robIdx = status_s2.robIdx;
     assign wbData.exccode = `EXC_NONE;
-`ifdef RV32
-    assign wbData.res = mulh_s2 ? st6[1][`XLEN-1: 0] : st6[0][`XLEN-1: 0];
-`elsif RV64
-    assign wbData.res = mulh_s2 ? st7[1][`XLEN-1: 0] : st7[0][`XLEN-1: 0];
+
+    logic `ARRAY(2, NUM*2) transpose;
+
+generate
+    for(genvar i=0; i<2; i++)begin
+        for(genvar j=0; j<NUM*2; j++)begin
+`ifdef SV32
+            assign transpose[i][j] = st6[j][i];
+`elsif SV64
+            assign transpose[i][j] = st7[j][i];
 `endif
+        end
+    end
+endgenerate
+    
+`ifdef SV32
+    assign result = transpose[0] + transpose[1] + c6[15];
+`elsif SV64
+    assign result = transpose[0] + transpose[1] + c7[15];
+`endif
+    assign wbData.res = selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];
 
 endmodule
 
@@ -281,27 +277,32 @@ output [WID-1:0] sum, cout;
 wire   [WID-1:0] c; // shift 1-bit
 genvar i;
 generate
-    for(i=0; i<WID; i=i+1) begin : for_csa
-        if(i==WID-1) begin
-            FA u_fa(
-                .a    (a[i]),
-                .b    (b[i]),
-                .cin  (cin[i]),
-                .sum  (sum[i]),
-                .cout ()
-            );
-        end else begin
-            FA u_fa(
-                .a    (a[i]),
-                .b    (b[i]),
-                .cin  (cin[i]),
-                .sum  (sum[i]),
-                .cout (c[i+1])
-            );
+    if(WID == 1)begin
+        FA u_fa(a, b, cin, sum, cout);
+    end
+    else begin
+        for(i=0; i<WID; i=i+1) begin : for_csa
+            if(i==WID-1) begin
+                FA u_fa(
+                    .a    (a[i]),
+                    .b    (b[i]),
+                    .cin  (cin[i]),
+                    .sum  (sum[i]),
+                    .cout ()
+                );
+            end else begin
+                FA u_fa(
+                    .a    (a[i]),
+                    .b    (b[i]),
+                    .cin  (cin[i]),
+                    .sum  (sum[i]),
+                    .cout (c[i+1])
+                );
+            end
         end
+        assign cout = {c[WID-1:1],1'b0};
     end
 endgenerate
-assign cout = {c[WID-1:1],1'b0};
 endmodule
 
 // Ripple Carry Adder
