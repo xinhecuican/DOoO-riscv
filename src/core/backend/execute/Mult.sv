@@ -214,8 +214,9 @@ generate
     `CSA_DEF(6, 7)
 `endif
 endgenerate
-
-    assign wbData.en = valid_s2;
+    logic bigger;
+    LoopCompare #(`ROB_WIDTH) cmp_bigger (status_s2.robIdx, backendCtrl.redirectIdx, bigger);
+    assign wbData.en = valid_s2 & (~backendCtrl.redirect | bigger);
     assign wbData.we = status_s2.we;
     assign wbData.rd = status_s2.rd;
     assign wbData.robIdx = status_s2.robIdx;

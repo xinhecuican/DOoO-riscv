@@ -36,6 +36,7 @@ module Backend(
     IssueWakeupIO #(1) csr_wakeup_io();
 `ifdef EXT_M
     IssueWakeupIO #(`MULT_SIZE) mult_wakeup_io();
+    IssueWakeupIO #(`MULT_SIZE) div_wakeup_io();
 `endif
     IssueCSRIO issue_csr_io();
 `ifdef EXT_M
@@ -52,6 +53,7 @@ module Backend(
     WriteBackIO #(`LSU_SIZE) lsu_wb_io();
 `ifdef EXT_M
     WriteBackIO #(`MULT_SIZE) mult_wb_io();
+    WriteBackIO #(`MULT_SIZE) div_wb_io();
 `endif
     CsrTlbIO csr_ltlb_io();
     CsrTlbIO csr_stlb_io();

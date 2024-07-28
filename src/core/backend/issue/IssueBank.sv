@@ -11,13 +11,15 @@ interface IssueBankIO #(
     logic `N($clog2(DEPTH)+1) bankNum;
     logic reg_en;
     logic ready;
+    logic `N($clog2(DEPTH)) freeIdx;
+    logic `N($clog2(DEPTH)) selectIdx;
     logic we;
     logic `N(`PREG_WIDTH) rs1, rs2, rd;
     ExStatusBundle status_o;
     logic `N(DATA_WIDTH) data_o;
     logic `N(`FSQ_WIDTH) fsqIdx;
 
-    modport bank(input en, status, data, ready, output full, bankNum, reg_en, rs1, rs2, we, rd, status_o, data_o, fsqIdx);
+    modport bank(input en, status, data, ready, output full, bankNum, reg_en, freeIdx, selectIdx, rs1, rs2, we, rd, status_o, data_o, fsqIdx);
 endinterface
 
 module IssueBank #(
@@ -115,6 +117,8 @@ endgenerate
     assign io.rs1 = rs1[selectIdx];
     assign io.we = we[selectIdx];
     assign io.rd = rd[selectIdx];
+    assign io.selectIdx = selectIdx;
+    assign io.freeIdx = freeIdx;
 generate
     if(FSQV)begin
         FsqIdxInfo fsqInfo;

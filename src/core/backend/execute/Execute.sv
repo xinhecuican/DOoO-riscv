@@ -11,6 +11,8 @@ module Execute(
 `ifdef EXT_M
     WriteBackIO.fu mult_wb_io,
     IssueWakeupIO.issue mult_wakeup_io,
+    WriteBackIO.fu div_wb_io,
+    IssueWakeupIO.issue div_wakeup_io,
 `endif
     BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo,
@@ -72,6 +74,20 @@ generate
             .wakeup_we(mult_wakeup_io.we[i]),
             .wakeup_rd(mult_wakeup_io.rd[i]),
             .wbData(mult_wb_io.datas[i])
+        );
+        DivUnit div(
+            .*,
+            .en(mult_exu_io.en[i]),
+            .rs1_data(mult_exu_io.rs1_data[i]),
+            .rs2_data(mult_exu_io.rs2_data[i]),
+            .status_i(mult_exu_io.status[i]),
+            .multop(mult_exu_io.bundle[i].multop),
+            .wakeup_en(div_wakeup_io.en[i]),
+            .wakeup_we(div_wakeup_io.we[i]),
+            .wakeup_rd(div_wakeup_io.rd[i]),
+            .wbData(div_wb_io.datas[i]),
+            .ready(mult_exu_io.div_ready),
+            .div_end(mult_exu_io.div_end)
         );
     end
 endgenerate

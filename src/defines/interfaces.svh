@@ -346,9 +346,11 @@ interface IssueMultIO;
     logic `ARRAY(`MULT_SIZE, `XLEN) rs2_data;
     ExStatusBundle `N(`MULT_SIZE) status;
     MultIssueBundle `N(`MULT_SIZE) bundle;
+    logic div_ready;
+    logic div_end;
 
-    modport issue(output en, rs1_data, rs2_data, status, bundle);
-    modport mult (input en, rs1_data, rs2_data, status, bundle);
+    modport issue(output en, rs1_data, rs2_data, status, bundle, input div_ready, div_end);
+    modport mult (input en, rs1_data, rs2_data, status, bundle, output div_ready, div_end);
 endinterface
 
 interface WriteBackIO#(

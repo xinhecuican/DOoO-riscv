@@ -14,6 +14,7 @@ module Wakeup(
     IssueWakeupIO.wakeup csr_wakeup_io,
 `ifdef EXT_M
     IssueWakeupIO.wakeup mult_wakeup_io,
+    IssueWakeupIO.wakeup div_wakeup_io,
 `endif
     WakeupBus.wakeup wakeupBus,
     WriteBackBus wbBus
@@ -37,6 +38,12 @@ generate
             assign int_en[i] = int_wakeup_io.en[i] | mult_wakeup_io.en;
             assign int_we[i] = mult_wakeup_io.en ? mult_wakeup_io.we : int_wakeup_io.we[i];
             assign int_rd[i] = mult_wakeup_io.en ? mult_wakeup_io.rd : int_wakeup_io.rd[i];
+        end
+        else if(i == 3)begin
+            assign int_wakeup_io.ready[i] = ~div_wakeup_io.en;
+            assign int_en[i] = int_wakeup_io.en[i] | div_wakeup_io.en;
+            assign int_we[i] = div_wakeup_io.en ? div_wakeup_io.we : int_wakeup_io.we[i];
+            assign int_rd[i] = div_wakeup_io.en ? div_wakeup_io.rd : int_wakeup_io.rd[i];
         end
 `endif
         else begin

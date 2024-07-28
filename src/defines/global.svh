@@ -5,6 +5,10 @@
 `define N(n) [(n)-1: 0]
 `define ARRAY(height, width) [(height-1): 0][(width-1): 0]
 `define TENSOR(x1, x2, x3) [x1-1: 0][x2-1: 0][x3-1: 0]
+`define SIG_N(name, name_n) \
+    always_ff @(posedge clk)begin \
+        name_n <= name; \
+    end
 
 `define RST 1'b1
 `ifdef RV32I

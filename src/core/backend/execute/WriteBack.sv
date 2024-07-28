@@ -8,18 +8,20 @@ module WriteBack(
     WriteBackIO.wb csr_wb_io,
 `ifdef EXT_M
     WriteBackIO.wb mult_wb_io,
+    WriteBackIO.wb div_wb_io,
 `endif
     BackendCtrl backendCtrl,
     WriteBackBus.wb wbBus
 );
     WBData csrData;
 `ifdef EXT_M
-    WBData `N(`MULT_SIZE) multData;
+    WBData `N(`MULT_SIZE) multData, divData;
 `endif
     always_ff @(posedge clk)begin
         csrData <= csr_wb_io.datas[0];
 `ifdef EXT_M
         multData <= mult_wb_io.datas;
+        divData <= div_wb_io.datas;
 `endif
     end
 generate
@@ -45,6 +47,14 @@ generate
             assign wbBus.rd[i] = multData[0].en ? multData[0].rd : wbData.rd;
             assign wbBus.res[i] = multData[0].en ? multData[0].res : wbData.res;
             assign wbBus.exccode[i] = multData[0].en ? multData[0].exccode : wbData.exccode;
+        end
+        else if(i == 3)begin
+            assign wbBus.en[i] = divData[0].en | wbData.en;
+            assign wbBus.we[i] = divData[0].en ? divData[0].we : wbData.we;
+            assign wbBus.robIdx[i] = divData[0].en ? divData[0].robIdx : wbData.robIdx;
+            assign wbBus.rd[i] = divData[0].en ? divData[0].rd : wbData.rd;
+            assign wbBus.res[i] = divData[0].en ? divData[0].res : wbData.res;
+            assign wbBus.exccode[i] = divData[0].en ? divData[0].exccode : wbData.exccode;
         end
 `endif
         else begin
