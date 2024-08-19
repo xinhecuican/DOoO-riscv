@@ -32,7 +32,7 @@ module PreDecode(
     endgenerate
 
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST || pd_redirect.en || frontendCtrl.redirect)begin
+        if(rst == `RST)begin
             bundles_next <= '{default: 0};
             en_next <= 0;
             fsqIdx <= 0;
@@ -43,6 +43,9 @@ module PreDecode(
             next_pc <= 0;
             shiftIdx <= 0;
             ipf <= 0;
+        end
+        else if(pd_redirect.en || frontendCtrl.redirect)begin
+            en_next <= 0;
         end
         else if(!frontendCtrl.ibuf_full) begin
             bundles_next <= bundles;

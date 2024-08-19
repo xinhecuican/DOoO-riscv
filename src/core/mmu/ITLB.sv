@@ -29,12 +29,10 @@ module ITLB(
     assign tlb_l2_io0.req_addr = req_buf.req_addr;
     TLBRepeater #(.FRONT(1)) repeater0(.*, .flush(itlb_cache_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io));
 
-    ReplaceIO #(.DEPTH(1), .WAY_NUM(`DTLB_SIZE)) replace_io();
-    RandomReplace #(1, `DTLB_SIZE) replace (.*);
+    ReplaceD1IO #(.WAY_NUM(`DTLB_SIZE)) replace_io();
+    RandomReplaceD1 #(1, `DTLB_SIZE) replace (.*);
     assign replace_io.hit_en = 0;
     assign replace_io.hit_way = 0;
-    assign replace_io.hit_index = 0;
-    assign replace_io.miss_index = 0;
 generate
     for(genvar i=0; i<2; i++)begin
         assign itlb_io[i].req = itlb_cache_io.req;
@@ -60,9 +58,13 @@ endgenerate
     assign itlb_cache_io.miss = (|miss) | (state != IDLE);
 
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST || itlb_cache_io.flush)begin
+        if(rst == `RST)begin
             state <= IDLE;
             req_buf <= 0;
+            miss_end <= 0;
+        end
+        else if(itlb_cache_io.flush)begin
+            state <= IDLE;
             miss_end <= 0;
         end
         else begin

@@ -159,8 +159,8 @@ generate
         assign way_io[i].tag_en = cache_io.req;
         assign way_io[i].en = cache_io.req;
 
-        assign way_io[i].idx = cache_io.req ? cache_io.req_addr`TLB_VPN_IBUS(PN) : 
-                                              cache_ptw_io.refill_addr`TLB_VPN_IBUS(PN);
+        assign way_io[i].idx = cache_io.req ? cache_io.req_addr`TLB_VPN_IBUS(PN, DEPTH, BANK) : 
+                                              cache_ptw_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
         assign rdata[i] = way_io[i].rdata;
         assign way_io[i].we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN] & ~cache_io.req;
         assign way_io[i].wdata = cache_ptw_io.refill_data;
@@ -168,7 +168,7 @@ generate
 endgenerate
 
     always_ff @(posedge clk)begin
-        tag <= cache_io.req_addr`TLB_VPN_TBUS(PN);
+        tag <= cache_io.req_addr`TLB_VPN_TBUS(PN, DEPTH, BANK);
         offset <= cache_io.req_addr[`TLB_VPN_BASE(PN)+BANK_WIDTH-1: `TLB_VPN_BASE(PN)];
         req_n <= cache_io.req & ~cache_io.flush;
     end
@@ -285,9 +285,11 @@ generate
         VPNAddr vpn;
         assign vpn = vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
         PPNAddr ppn;
-        for(genvar i=0; i<`TLB_PN; i++)begin
-            `PPN_ASSIGN(i)
-        end
+        `PPN_ASSIGN(0)
+        `PPN_ASSIGN(1)
+        // for(genvar i=0; i<`TLB_PN; i++)begin
+        //     `PPN_ASSIGN(i)
+        // end
         logic leaf;
         if(LEAF == 0)begin
             assign leaf = entry.r | entry.w | entry.x;

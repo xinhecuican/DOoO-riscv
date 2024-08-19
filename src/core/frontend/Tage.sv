@@ -31,12 +31,13 @@ module Tage(
 	logic `N(`SLOT_NUM) prediction `N(`TAGE_BANK);
 	logic `ARRAY(`SLOT_NUM, `TAGE_ALT_CTR) altCtr;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) provider;
-
+	parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd2048, 13'd2048, 13'd2048, 13'd2048};
     generate;
         for(genvar i=0; i<`TAGE_BANK; i++)begin
+			localparam SET_SIZE = tage_set_size[i];
 			GetIndex #(
 				.COMPRESS_LENGTH(`TAGE_SET_WIDTH),
-				.INDEX_SIZE($clog2(tage_set_size[i])),
+				.INDEX_SIZE($clog2(SET_SIZE)),
 				.BANK(i)
 			)get_index(
 				.pc(tage_io.pc),
@@ -60,7 +61,7 @@ module Tage(
 			);
 			assign bank_ctrl[i].en = 1'b1;
 			TageTable #(
-				.HEIGHT(tage_set_size[i])
+				.HEIGHT(SET_SIZE)
 			)tage_table(
 				.clk(clk),
 				.rst(rst),
@@ -191,9 +192,10 @@ generate
 		assign bank_ctrl[i].update_u = update_u;
 		assign bank_ctrl[i].update_u_en = update_u_en;
 		assign bank_ctrl[i].update_origin_ctr = u_ctrs[i];
+		localparam SET_SIZE = tage_set_size[i];
 		GetIndex #(
 			.COMPRESS_LENGTH(`TAGE_SET_WIDTH),
-			.INDEX_SIZE($clog2(tage_set_size[i])),
+			.INDEX_SIZE($clog2(SET_SIZE)),
 			.BANK(i)
 		)get_index(
 			.pc(tage_io.updateInfo.start_addr),
@@ -305,14 +307,14 @@ module TageTable #(
 
 endmodule
 
-module F #(
-	parameter INDEX_SIZE=7
-)(
-	input logic [31: 0] path_hist,
-	output logic [INDEX_SIZE-1: 0] out
-);
-	assign out = path_hist ^ (path_hist >> INDEX_SIZE);
-endmodule
+// module F #(
+// 	parameter INDEX_SIZE=7
+// )(
+// 	input logic [31: 0] path_hist,
+// 	output logic [INDEX_SIZE-1: 0] out
+// );
+// 	assign out = path_hist ^ (path_hist >> INDEX_SIZE);
+// endmodule
 
 module GetIndex #(
 	parameter COMPRESS_LENGTH=8,

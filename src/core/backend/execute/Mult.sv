@@ -307,38 +307,38 @@ endgenerate
 endmodule
 
 // Ripple Carry Adder
-module RCA #(
-    parameter WID = 64
-)(a, b, cin, sum, cout);
-input  [WID-1:0] a, b;
-input  cin;
-output [WID-1:0] sum;
-output cout;
-wire   [WID-1:0] c;
-genvar i;
-generate
-    for(i=0; i<WID; i=i+1) begin : for_rca
-        if(i==0) begin
-            FA u_fa(
-                .a    (a[i]),
-                .b    (b[i]),
-                .cin  (cin),
-                .sum  (sum[i]),
-                .cout (c[i])
-            );
-        end else begin
-            FA u_fa(
-                .a    (a[i]),
-                .b    (b[i]),
-                .cin  (c[i-1]),
-                .sum  (sum[i]),
-                .cout (c[i])
-            );
-        end
-    end
-endgenerate
-assign cout = c[WID-1];
-endmodule
+// module RCA #(
+//     parameter WID = 64
+// )(a, b, cin, sum, cout);
+// input  [WID-1:0] a, b;
+// input  cin;
+// output [WID-1:0] sum;
+// output cout;
+// wire   [WID-1:0] c;
+// genvar i;
+// generate
+//     for(i=0; i<WID; i=i+1) begin : for_rca
+//         if(i==0) begin
+//             FA u_fa(
+//                 .a    (a[i]),
+//                 .b    (b[i]),
+//                 .cin  (cin),
+//                 .sum  (sum[i]),
+//                 .cout (c[i])
+//             );
+//         end else begin
+//             FA u_fa(
+//                 .a    (a[i]),
+//                 .b    (b[i]),
+//                 .cin  (c[i-1]),
+//                 .sum  (sum[i]),
+//                 .cout (c[i])
+//             );
+//         end
+//     end
+// endgenerate
+// assign cout = c[WID-1];
+// endmodule
 
 // Full Adder
 module FA(a,b,cin,sum,cout);

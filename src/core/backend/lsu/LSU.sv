@@ -1,30 +1,32 @@
 `include "../../../defines/defines.svh"
 
-task getMask(
+module getMask(
     input logic [1: 0] offset,
     input logic [1: 0] size,
     output logic [3: 0] mask
 );
-    if(size == 2'b10)begin
-        mask = 4'b1111;
+    always_comb begin
+        if(size == 2'b10)begin
+            mask = 4'b1111;
+        end
+        else if(size == 2'b01)begin
+            case (offset)
+            2'b00: mask = 4'b0011;
+            2'b01: mask = 4'b0110;
+            2'b10: mask = 4'b1100;
+            2'b11: mask = 4'b1000;
+            endcase
+        end
+        else begin
+            case (offset)
+            2'b00: mask = 4'b0001;
+            2'b01: mask = 4'b0010;
+            2'b10: mask = 4'b0100;
+            2'b11: mask = 4'b1000;
+            endcase
+        end
     end
-    else if(size == 2'b01)begin
-        case (offset)
-        2'b00: mask = 4'b0011;
-        2'b01: mask = 4'b0110;
-        2'b10: mask = 4'b1100;
-        2'b11: mask = 4'b1000;
-        endcase
-    end
-    else begin
-        case (offset)
-        2'b00: mask = 4'b0001;
-        2'b01: mask = 4'b0010;
-        2'b10: mask = 4'b0100;
-        2'b11: mask = 4'b1000;
-        endcase
-    end
-endtask
+endmodule
 
 module LSU(
     input logic clk,
@@ -102,9 +104,7 @@ generate
             .data(load_reg_io.data[i]),
             .addr(loadVAddr[i])
         );
-        always_comb begin
-            getMask(loadVAddr[i][1: 0], load_io.loadIssueData[i].size, lmask_pre[i]);
-        end
+        getMask get_mask(loadVAddr[i][1: 0], load_io.loadIssueData[i].size, lmask_pre[i]);
         MisalignDetect misalign_detect (load_io.loadIssueData[i].size, loadVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], lmisalign[i]);
     end
 endgenerate
@@ -336,9 +336,7 @@ generate
             stlb_exception[i] <= store_io.exception[i];
             sissue_idx_s2[i] <= sissue_idx[i];
         end
-        always_comb begin
-            getMask(storeAddrNext[i][1: 0], store_issue_data[i].size, smask[i]);
-        end
+        getMask get_mask(storeAddrNext[i][1: 0], store_issue_data[i].size, smask[i]);
         MisalignDetect misalign_detect (store_io.storeIssueData[i].size, storeVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], smisalign[i]);
         assign spaddr[i] = {sptag[i], storeAddrNext[i][11: 0]};
     end

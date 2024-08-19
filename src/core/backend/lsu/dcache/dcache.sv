@@ -105,7 +105,7 @@ generate
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`DCACHE_WAY; j++)begin
-            assign wayHit[i][j] = way_io[j].tagv[i][0] & (way_io[j].tagv[i][`DCACHE_TAG: 1] == rio.ptag[i]);
+            assign wayHit[i][j] = way_io[j].tagv[i * (`DCACHE_TAG+1)] & (way_io[j].tagv[((i + 1) * (`DCACHE_TAG+1) - 2)-: `DCACHE_TAG] == rio.ptag[i]);
         end
         Encoder #(`DCACHE_WAY) encoder_hit_way (wayHit[i], hitWay_encode[i]);
         always_ff @(posedge clk)begin
@@ -188,7 +188,7 @@ endgenerate
 generate
     for(genvar i=0; i<`DCACHE_WAY; i++)begin
         assign way_io[i].tagv_en[`LOAD_PIPELINE] = wreq | miss_io.refill_en;
-        assign wtagv[i] = way_io[i].tagv[`LOAD_PIPELINE];
+        assign wtagv[i] = way_io[i].tagv[`LOAD_PIPELINE*(`DCACHE_TAG+1)+: (`DCACHE_TAG+1)];
         assign w_wayhit[i] = wtagv[i][0] & (wtagv[i][`DCACHE_TAG: 1] == waddr_n`DCACHE_TAG_BUS);
     end
 endgenerate
@@ -297,7 +297,7 @@ endgenerate
 
 generate
     for(genvar j=0; j<`DCACHE_WAY; j++)begin
-        assign ptw_way_hit[j] = way_io[j].tagv[0][0] & (way_io[j].tagv[0][`DCACHE_TAG: 1] == ptw_tag);
+        assign ptw_way_hit[j] = way_io[j].tagv[0] & (way_io[j].tagv[`DCACHE_TAG: 1] == ptw_tag);
     end
 endgenerate
     Encoder #(`DCACHE_WAY) encoder_ptw_hit (ptw_way_hit, ptw_hit_way);
@@ -308,6 +308,7 @@ endgenerate
         ptw_io.rdata <= miss_io.ptw_refill ? miss_io.ptw_refill_data : rdata[ptw_hit_way];
     end
 
+`ifdef DIFFTEST
 
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) dbg_wmask, dbg_wdatan;
     MaskExpand #(`DCACHE_BANK * `DCACHE_BYTE) mask_expand_dbg_wmask (wmask_n, dbg_wmask);
@@ -318,4 +319,5 @@ endgenerate
         $sformatf("dcache refill. [%8h %d %b] %s", miss_io.refillAddr, miss_io.refillWay, miss_io.refill_dirty, dbg_refillData))
     `Log(DLog::Debug, T_DCACHE, wreq_n & whit,
         $sformatf("dcache write. [%h %d] %s", waddr_n, w_wayIdx, dbg_wdata))
+`endif
 endmodule

@@ -29,7 +29,7 @@ module UBTB(
     logic `N(`SLOT_NUM) cond_history;
     logic older;
 
-    ReplaceIO #(.DEPTH(1),.WAY_NUM(`UBTB_SIZE)) replace_io();
+    ReplaceD1IO #(.WAY_NUM(`UBTB_SIZE)) replace_io();
 
     Encoder #(`UBTB_SIZE) encoder_lookup(lookup_hits, lookup_index);
     Encoder #(`UBTB_SIZE) encoder_update(updateHits, updateIdx);
@@ -122,7 +122,7 @@ endgenerate
         ubtb_io.meta.ctr = lookup_ctr;
     end
 
-    RandomReplace #(
+    RandomReplaceD1 #(
         .DEPTH(1),
         .WAY_NUM(`UBTB_SIZE)
     ) replace (

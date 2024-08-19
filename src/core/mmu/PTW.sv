@@ -40,7 +40,6 @@ module PTW(
 
     logic pn1_exception, pn0_exception;
     logic pn1_leaf;
-    PTEEntry pn0_entry;
     logic `N(`PADDR_SIZE) wb_addr;
 
     localparam PN0_TAG_SIZE = `TLB_VPN * `TLB_PN - $clog2(`TLB_P0_BANK);
@@ -68,6 +67,7 @@ module PTW(
         .DEPTH(`TLB_PTB1_SIZE)
     ) pn1_buffer (.*, .io(pn1_io));
 
+    assign pn0_io.flush = flush;
     assign pn0_io.en = cache_ptw_io.req & cache_ptw_io.valid[1] |
                        (state == WB_PN1 && (~pn1_leaf & ~pn1_exception & ~pn0_io.full));
     assign pn0_io.tag = cache_ptw_io.req & cache_ptw_io.valid[1] ? cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)+`DCACHE_BANK_WIDTH] :
@@ -76,6 +76,7 @@ module PTW(
                          {req_buf.vaddr[`TLB_OFFSET+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info, wb_addr};
     assign pn0_io.wb_ready = ptw_io.ready;
 
+    assign pn1_io.flush = flush;
     assign pn1_io.en = cache_ptw_io.req & (~cache_ptw_io.valid[1] & ~cache_ptw_io.valid[0]);
     assign pn1_io.tag = cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH];
     assign pn1_io.data = {cache_ptw_io.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info};
@@ -89,7 +90,6 @@ module PTW(
         end
     end
 
-    assign pn0_entry = rdata[pn0_io.wb_data[PN0_BIT_SIZE-PN0_TAG_SIZE-1: PN0_BIT_SIZE-PN0_TAG_SIZE-`DCACHE_BANK_WIDTH]];
     assign pn1_leaf = req_buf.wb_entry.r | req_buf.wb_entry.w | req_buf.wb_entry.x;
     PAddrGen gen_wb_addr (req_buf.wb_entry, req_buf.vaddr, wb_addr);
 
@@ -146,9 +146,12 @@ module PTW(
     end
 
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST || flush)begin
+        if(rst == `RST)begin
             state <= IDLE;
             req_buf <= '{default: 0};
+        end
+        else if(flush)begin
+            state <= IDLE;
         end
         else begin
             case(state)
@@ -278,7 +281,10 @@ module PTBuffer #(
     assign io.data_o = {tag[valid_idx], data[valid_idx]};
 
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST || io.flush)begin
+        if(rst == `RST)begin
+            en <= 0;
+        end
+        else if(io.flush)begin
             en <= 0;
         end
         else begin

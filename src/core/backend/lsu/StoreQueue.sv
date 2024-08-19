@@ -159,17 +159,17 @@ endgenerate
     MaskGen #(`STORE_QUEUE_SIZE) mask_gen_head (head_n, head_n_mask);
 
 
-    RobIdx redirect_robIdxs `N(`STORE_QUEUE_SIZE);
+    logic `N(`STORE_QUEUE_SIZE * $bits(RobIdx)) redirect_robIdxs;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         always_ff @(posedge clk) begin
             if(issue_queue_io.dis_en[i] & ~issue_queue_io.dis_stall)begin
-                redirect_robIdxs[issue_queue_io.dis_sq_idx[i].idx] <= issue_queue_io.dis_rob_idx[i];
+                redirect_robIdxs[issue_queue_io.dis_sq_idx[i].idx * $bits(RobIdx)+: $bits(RobIdx)] <= issue_queue_io.dis_rob_idx[i];
             end
         end
     end
     for(genvar i=0; i<`STORE_QUEUE_SIZE; i++)begin
-        LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i], backendCtrl.redirectIdx, bigger[i]);
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i*$bits(RobIdx)+: $bits(RobIdx)], backendCtrl.redirectIdx, bigger[i]);
         logic `N(`STORE_QUEUE_WIDTH) i_n, i_p;
         assign i_n = i + 1;
         assign i_p = i - 1;

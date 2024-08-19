@@ -341,7 +341,7 @@ endgenerate
         req_next <= io.req;
         req_last <= r_axi_io.sr.valid & r_axi_io.sr.last;
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk)begin
         if(rst == `RST)begin
             req_start <= 1'b0;
             req_cache <= 1'b0;

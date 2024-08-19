@@ -39,6 +39,7 @@ module HistoryControl(
     assign history.ghistIdx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
                        prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
     assign history.tage_history = tage_history;
+    parameter [8: 0] tage_hist_length `N(`TAGE_BANK) = {9'd8, 9'd13, 9'd32, 9'd119};
 generate;
     for(genvar i=0; i<`TAGE_BANK; i++)begin
         logic [`SLOT_NUM-1: 0] reverse_dir;

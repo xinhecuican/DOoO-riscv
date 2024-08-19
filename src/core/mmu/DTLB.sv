@@ -17,12 +17,10 @@ module DTLB(
     logic `N(`STORE_PIPELINE) swb_pipeline;
     Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], swb_pipeline);
 
-    ReplaceIO #(.DEPTH(1), .WAY_NUM(`DTLB_SIZE)) replace_io();
-    RandomReplace #(1, `DTLB_SIZE) replace (.*);
+    ReplaceD1IO #(.WAY_NUM(`DTLB_SIZE)) replace_io();
+    RandomReplaceD1 #(1, `DTLB_SIZE) replace (.*);
     assign replace_io.hit_en = 0;
     assign replace_io.hit_way = 0;
-    assign replace_io.hit_index = 0;
-    assign replace_io.miss_index = 0;
 
     always_ff @(posedge clk)begin
         flush0 <= tlb_lsu_io.flush;

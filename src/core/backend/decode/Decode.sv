@@ -23,8 +23,13 @@ endgenerate
 
     // TODO: Fusion Decoder，在rob中添加一个funsion位表示为两条指令
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST || backendCtrl.redirect || commitWalk.walk)begin
+        if(rst == `RST)begin
             dec_rename_io.op <= 0;
+        end
+        else if(backendCtrl.redirect || commitWalk.walk)begin
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                dec_rename_io.op[i].en <= 1'b0;
+            end
         end
         else if(~(backendCtrl.rename_full | backendCtrl.dis_full))begin
             for(int i=0; i<`FETCH_WIDTH; i++)begin

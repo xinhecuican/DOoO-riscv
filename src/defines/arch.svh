@@ -5,7 +5,7 @@
 `define DIFFTEST
 
 `define EXT_M
-
+`include "predefine.svh"
 // `ifdef ZICSR
 // parameter HAS_ZICSR=1;
 // `else

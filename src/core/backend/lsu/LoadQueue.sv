@@ -58,7 +58,7 @@ module LoadQueue(
     } MaskData;
     logic `N(`LOAD_QUEUE_SIZE) valid, miss, addrValid, dataValid, writeback;
     logic `N(`DCACHE_BITS) data `N(`LOAD_QUEUE_SIZE);
-    MaskData mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`LOAD_QUEUE_SIZE * $bits(MaskData)) mask;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -76,7 +76,7 @@ generate
 endgenerate
 
 // redirect
-    RobIdx redirect_robIdxs `N(`LOAD_QUEUE_SIZE);
+    logic `N(`LOAD_QUEUE_SIZE * $bits(RobIdx)) redirect_robIdxs;
     logic `N(`LOAD_QUEUE_SIZE) bigger, walk_en, validStart, validEnd;
     logic `N(`LOAD_QUEUE_WIDTH) validSelect1, validSelect2, walk_tail, valid_select, valid_select_n;
     logic walk_valid, walk_dir, walk_full;
@@ -86,12 +86,12 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         always_ff @(posedge clk) begin
             if(load_io.dis_en[i] & ~load_io.dis_stall)begin
-                redirect_robIdxs[load_io.dis_lq_idx[i].idx] <= load_io.dis_rob_idx[i];
+                redirect_robIdxs[load_io.dis_lq_idx[i].idx * $bits(RobIdx)+: $bits(RobIdx)] <= load_io.dis_rob_idx[i];
             end
         end
     end
     for(genvar i=0; i<`LOAD_QUEUE_SIZE; i++)begin
-        LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i], backendCtrl.redirectIdx, bigger[i]);
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i*$bits(RobIdx)+: $bits(RobIdx)], backendCtrl.redirectIdx, bigger[i]);
         logic `N(`LOAD_QUEUE_WIDTH) i_n, i_p;
         assign i_n = i + 1;
         assign i_p = i - 1;
@@ -148,7 +148,7 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_REFILL_SIZE; i++)begin : data_gen
         MaskData mask_data;
-        assign mask_data = mask[rio.lqIdx_o[i]];
+        assign mask_data = mask[rio.lqIdx_o[i]*$bits(MaskData)+: $bits(MaskData)];
         assign refillData[i] = data[rio.lqIdx_o[i]];
         assign refillMask[i] = mask_data.mask;
         logic `N(`DCACHE_BITS) expand_mask;
@@ -206,7 +206,7 @@ endgenerate
                     dataValid[eqIdx[i]] <= ~io.miss[i];
                     writeback[eqIdx[i]] <= ~io.miss[i];
                     data[eqIdx[i]] <= io.rdata[i];
-                    mask[eqIdx[i]] <= {io.data[i].uext, io.data[i].size, io.paddr[i][`DCACHE_BYTE_WIDTH-1: 0], io.rmask[i]};
+                    mask[eqIdx[i]*$bits(MaskData)+: $bits(MaskData)] <= {io.data[i].uext, io.data[i].size, io.paddr[i][`DCACHE_BYTE_WIDTH-1: 0], io.rmask[i]};
                 end
                 if(io.wbData[i].en & io.wb_valid[i])begin
                     writeback[wbIdx[i]] <= 1'b1;

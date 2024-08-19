@@ -53,7 +53,7 @@ module BranchPredictor(
     assign redirect.flush = bpu_fsq_io.squash;
     assign redirect.stall = bpu_fsq_io.stall | ~tage_io.ready;
     assign redirect_result = s2_result_out;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk)begin
         if(rst == `RST)begin
             pc <= `RESET_PC;
         end

@@ -62,8 +62,6 @@
 `define TAGE_BASE_WIDTH $clog2(`TAGE_BASE_SIZE)
 `define TAGE_BASE_CTR 2
 `define TAGE_ALT_CTR 7
-parameter [8: 0] tage_hist_length `N(`TAGE_BANK) = {9'd8, 9'd13, 9'd32, 9'd119};
-parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd2048, 13'd2048, 13'd2048, 13'd2048};
 `define TAGE_SET_WIDTH 12
 typedef enum logic [1: 0] {
     DIRECT,
@@ -186,7 +184,6 @@ typedef enum logic [1: 0] {
 `define DCACHE_WAY 8
 `define DCACHE_LINE 64
 `define DCACHE_BYTE 4 // bank byte
-`define DCACHE_BYTE_WIDTH $clog2(`DCACHE_BYTE)
 `define DCACHE_BITS (`DCACHE_BYTE * 8)
 `define DCACHE_BANK (`DCACHE_LINE / `DCACHE_BYTE)
 `define DCACHE_BANK_WIDTH $clog2(`DCACHE_BANK)
@@ -273,8 +270,8 @@ parameter [4: 0] TLB_P_BANK `N(`TLB_PN) = {`DCACHE_BANK, `DCACHE_BANK};
 `define TLB_P1_BANK (`DCACHE_BANK)
 `define TLB_P1_SET_WIDTH $clog2(`TLB_P1_SET)
 `define TLB_P1_TAG `TLB_TAG - $clog2(`TLB_P1_BANK) - `TLB_P1_SET_WIDTH - `TLB_VPN
-`define TLB_VPN_IBUS(i) [`TLB_VPN * i + `TLB_OFFSET + $clog2(TLB_P_BANK[``i]) + $clog2(TLB_P_SET[``i]) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(TLB_P_BANK[``i])]
-`define TLB_VPN_TBUS(i) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(TLB_P_SET[``i]) + $clog2(TLB_P_BANK[``i])]
+`define TLB_VPN_IBUS(i, SET, BANK) [`TLB_VPN * i + `TLB_OFFSET + $clog2(BANK) + $clog2(SET) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(BANK)]
+`define TLB_VPN_TBUS(i, SET, BANK) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(SET) + $clog2(BANK)]
 
 `define TLB_PTB0_SIZE 8
 `define TLB_PTB1_SIZE 4

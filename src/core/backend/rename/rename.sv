@@ -93,12 +93,18 @@ endgenerate
     ParallelAdder #(1, `FETCH_WIDTH) adder_valid (en, validNum);
     assign rob_rename_io.validNum = validNum;
     always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST || backendCtrl.redirect)begin
+        if(rst == `RST)begin
             rename_dis_io.op <= 0;
             rename_dis_io.prs1 <= 0;
             rename_dis_io.prd <= 0;
             rename_dis_io.robIdx <= 0;
             rename_dis_io.wen <= 0;
+        end
+        else if(backendCtrl.redirect)begin
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                rename_dis_io.op[i].en <= 0;
+                rename_dis_io.wen[i] <= 0;
+            end
         end
         else if(~stall)begin
             if(backendCtrl.rename_full)begin

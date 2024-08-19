@@ -143,21 +143,21 @@ generate
 endgenerate
 endmodule
 
-module Matcher #(
-	parameter WIDTH = 4
-)(
-	input logic [WIDTH-1: 0] in1,
-	input logic [WIDTH-1: 0] in2,
-	output logic equal
-);
-	logic [WIDTH-1: 0] compare;
-	generate;
-		for(genvar i=0; i<WIDTH; i++)begin
-			assign compare[i] = ~(in1[i] ^ in2[i]);
-		end
-	endgenerate
-	assign equal = &compare;
-endmodule
+// module Matcher #(
+// 	parameter WIDTH = 4
+// )(
+// 	input logic [WIDTH-1: 0] in1,
+// 	input logic [WIDTH-1: 0] in2,
+// 	output logic equal
+// );
+// 	logic [WIDTH-1: 0] compare;
+// 	generate;
+// 		for(genvar i=0; i<WIDTH; i++)begin
+// 			assign compare[i] = ~(in1[i] ^ in2[i]);
+// 		end
+// 	endgenerate
+// 	assign equal = &compare;
+// endmodule
 
 // priority mux
 module PMux2 #(
@@ -388,8 +388,8 @@ module Arbiter #(
 );
 generate
 	case(WIDTH)
-	2: Arbiter2 #(WIDTH, DATA_WIDTH) arbiter (valid, data, ready, valid_o, data_o);
-	3: Arbiter3 #(WIDTH, DATA_WIDTH) arbiter (valid, data, ready, valid_o, data_o);
+	2: Arbiter2 #(DATA_WIDTH) arbiter (valid, data, ready, valid_o, data_o);
+	3: Arbiter3 #(DATA_WIDTH) arbiter (valid, data, ready, valid_o, data_o);
 	default: begin
 		always_comb begin
 			$display("unimpl Arbiter");

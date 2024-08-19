@@ -158,8 +158,8 @@ interface ReplaceIO #(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
     parameter READ_PORT = 1,
-    parameter WAY_WIDTH = WAY_NUM <= 1 ? 1 : $clog2(WAY_NUM),
-    parameter ADDR_WIDTH = DEPTH <= 1 ? 1 : $clog2(DEPTH)
+    parameter WAY_WIDTH = $clog2(WAY_NUM),
+    parameter ADDR_WIDTH = $clog2(DEPTH)
 );
     logic `N(READ_PORT) hit_en;
     logic `ARRAY(READ_PORT, WAY_WIDTH) hit_way;
@@ -168,6 +168,18 @@ interface ReplaceIO #(
     logic `ARRAY(READ_PORT, ADDR_WIDTH) hit_index;
 
     modport replace(input hit_en, hit_way, hit_index, miss_index, output miss_way);
+endinterface
+
+interface ReplaceD1IO #(
+    parameter WAY_NUM = 4,
+    parameter READ_PORT = 1,
+    parameter WAY_WIDTH = $clog2(WAY_NUM)
+);
+    logic `N(READ_PORT) hit_en;
+    logic `ARRAY(READ_PORT, WAY_WIDTH) hit_way;
+    logic `N(WAY_WIDTH) miss_way;
+
+    modport replace(input hit_en, hit_way, output miss_way);
 endinterface
 
 interface PreDecodeRedirect;

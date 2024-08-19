@@ -237,14 +237,11 @@ generate
         );
     end
 endgenerate
-`endif
-
-
     `Log(DLog::Debug, T_SCB, data_we_combine[0],
         $sformatf("store commit[0]. %h %h %b", waddr[0] << `DCACHE_BYTE_WIDTH, wdata[0], wmask[0]))
     `Log(DLog::Debug, T_SCB, data_we_combine[1],
         $sformatf("store commit[1]. %h %h %b", waddr[1] << `DCACHE_BYTE_WIDTH, wdata[1], wmask[1]))
-
+`endif
 endmodule
 
 interface SCDataIO;

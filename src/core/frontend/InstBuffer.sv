@@ -86,7 +86,7 @@ module InstBuffer (
     assign full = inst_num + pd_ibuffer_io.num > `IBUF_SIZE;
 
     always_ff @(posedge clk or posedge rst) begin
-        if(rst == `RST || frontendCtrl.redirect)begin
+        if(rst == `RST)begin
             for(int i=0; i<`IBUF_BANK_NUM; i++)begin
                 ibuf[i].rindex <= 0;
                 ibuf[i].windex <= 0;
@@ -94,7 +94,16 @@ module InstBuffer (
             inst_num <= 0;
             head <= 0;
             tail <= 0;
-        end 
+        end
+        else if(frontendCtrl.redirect)begin
+            for(int i=0; i<`IBUF_BANK_NUM; i++)begin
+                ibuf[i].rindex <= 0;
+                ibuf[i].windex <= 0;
+            end
+            inst_num <= 0;
+            head <= 0;
+            tail <= 0;
+        end
         else begin
             // enqueue
             inst_num <= inst_num + ({$clog2(`BLOCK_INST_SIZE)+1{~full & pd_ibuffer_io.en[0]}} & pd_ibuffer_io.num) - ({$clog2(`FETCH_WIDTH)+1{~stall}} & outNum);

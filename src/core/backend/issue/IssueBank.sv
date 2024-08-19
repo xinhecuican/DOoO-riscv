@@ -76,17 +76,16 @@ generate
             end
         end
         assign io.rs2 = rs2[selectIdx];
-        always_ff @(posedge clk or posedge rst)begin
-            if(rst == `RST)begin
-                rs2v <= 0;
-            end
-            else begin
-                if(io.en)begin
-                    rs2v[freeIdx] <= io.status.rs2v;
-                    rs2[freeIdx] <= io.status.rs2;
+        for(genvar i=0; i<DEPTH; i++)begin
+            always_ff @(posedge clk or posedge rst)begin
+                if(rst == `RST)begin
+                    rs2v[i] <= 0;
                 end
-                for(int i=0; i<DEPTH; i++)begin
-                    if(io.en && free_en[i])begin
+                else begin
+                    if(io.en & free_en[i])begin
+                        rs2[i] <= io.status.rs2;
+                    end
+                    if(io.en & free_en[i])begin
                         rs2v[i] <= io.status.rs2v;
                     end
                     else begin
@@ -171,7 +170,6 @@ endgenerate
             end
             
             if(io.en)begin
-                rs1v[freeIdx] <= io.status.rs1v;
                 rs1[freeIdx] <= io.status.rs1;
                 robIdx[freeIdx] <= io.status.robIdx;
                 we[freeIdx] <= io.status.we;

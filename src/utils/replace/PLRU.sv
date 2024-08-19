@@ -17,34 +17,31 @@ generate
         assign replace_io.miss_way = 0;
     end
     else begin 
-        logic `N(WAY_NUM-1) plru `N(DEPTH);
+        logic `N(DEPTH * (WAY_NUM - 1)) plru;
         logic `N(WAY_NUM-1) rdata `N(READ_PORT);
         logic `N(WAY_NUM-1) updateData `N(READ_PORT);
 
 
         for(genvar i=0; i<READ_PORT; i++)begin
-            assign rdata[i] = plru[replace_io.hit_index[i]];
+            assign rdata[i] = plru[replace_io.hit_index[i]*(WAY_NUM-1)+: (WAY_NUM-1)];
             PLRUUpdate #(WAY_NUM) update (rdata[i], replace_io.hit_way[i], updateData[i]);
         end
 
 
-        logic `N(WAY_NUM-1) replaceData;
         logic `N(WAY_WIDTH) replaceOut;
-        assign replaceData = plru[replace_io.miss_index];
-        PLRUReplace #(WAY_NUM) replace (replaceData, replaceOut);
+        PLRUReplace #(WAY_NUM) replace (plru[replace_io.miss_index*(WAY_NUM-1)+: (WAY_NUM-1)], replaceOut);
         always_ff @(posedge clk)begin
             replace_io.miss_way <= replaceOut;
         end
 
-
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
-                plru <= '{default: 0};
+                plru <= 0;
             end
             else begin
                 for(int i=0; i<READ_PORT; i++)begin
                     if(replace_io.hit_en[i])begin
-                        plru[replace_io.hit_index[i]] <= updateData[i];
+                        plru[replace_io.hit_index[i]*(WAY_NUM-1)+: WAY_NUM-1] <= updateData[i];
                     end
                 end
             end

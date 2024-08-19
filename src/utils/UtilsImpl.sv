@@ -423,12 +423,11 @@ module CalValidNum4 #(
 endmodule
 
 module Arbiter2 #(
-	parameter WIDTH=2,
 	parameter DATA_WIDTH=4
 )(
-	input logic [WIDTH-1: 0] valid,
-	input logic [WIDTH-1: 0][DATA_WIDTH-1: 0] data,
-	output logic [WIDTH-1: 0] ready,
+	input logic [1: 0] valid,
+	input logic [1: 0][DATA_WIDTH-1: 0] data,
+	output logic [1: 0] ready,
 	output logic valid_o,
 	output logic [DATA_WIDTH-1: 0] data_o
 );
@@ -439,12 +438,11 @@ module Arbiter2 #(
 endmodule
 
 module Arbiter3 #(
-	parameter WIDTH=2,
 	parameter DATA_WIDTH=4
 )(
-	input logic [WIDTH-1: 0] valid,
-	input logic [WIDTH-1: 0][DATA_WIDTH-1: 0] data,
-	output logic [WIDTH-1: 0] ready,
+	input logic [2: 0] valid,
+	input logic [2: 0][DATA_WIDTH-1: 0] data,
+	output logic [2: 0] ready,
 	output logic valid_o,
 	output logic [DATA_WIDTH-1: 0] data_o
 );

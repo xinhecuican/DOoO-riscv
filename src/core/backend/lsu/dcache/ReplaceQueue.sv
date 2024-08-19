@@ -153,7 +153,9 @@ endgenerate
 
     assign w_axi_io.mb.ready = 1'b1;
 
+`ifdef DIFFTEST
     `LOG_ARRAY(T_DCACHE, dbg_data, newEntry.data, TRANSFER_BANK)
     `Log(DLog::Debug, T_DCACHE, io.refill_en & io.refill_dirty,
         $sformatf("dcache replace. [%h] %s", newEntry.addr << `DCACHE_LINE_WIDTH, dbg_data))
+`endif
 endmodule

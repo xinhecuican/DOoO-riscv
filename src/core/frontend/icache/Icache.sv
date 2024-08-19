@@ -116,7 +116,7 @@ module ICache(
             //                       expand_en[`ICACHE_BANK-1: 0]);
             assign way_io[i].en = {`ICACHE_BANK{~fsq_cache_io.stall}};
             for(genvar j=0; j<`ICACHE_BANK; j++)begin
-                assign way_io[i].index[j] = expand_en[j] ? index : indexp1;
+                assign way_io[i].index[j*`ICACHE_SET_WIDTH+: `ICACHE_SET_WIDTH] = expand_en[j] ? index : indexp1;
                 assign way_io[i].windex[j] = miss_buffer.windex;
             end
             for(genvar j=0; j<`ICACHE_BANK-1; j++)begin
@@ -125,8 +125,8 @@ module ICache(
             assign way_io[i].wdata[`ICACHE_BANK-1] = axi_io.sr.data;
             assign way_io[i].we = {`ICACHE_BANK{replace_way[i] & refill_en}};
 
-            assign hit[0][i] = way_io[i].tagv[0][`ICACHE_TAG] && (way_io[i].tagv[0][`ICACHE_TAG-1: 0] == ptag1);
-            assign hit[1][i] = way_io[i].tagv[1][`ICACHE_TAG] && (way_io[i].tagv[1][`ICACHE_TAG-1: 0] == ptag2);
+            assign hit[0][i] = way_io[i].tagv[`ICACHE_TAG] && (way_io[i].tagv[(`ICACHE_TAG-1)-: `ICACHE_TAG] == ptag1);
+            assign hit[1][i] = way_io[i].tagv[`ICACHE_TAG * 2 + 1] && (way_io[i].tagv[(`ICACHE_TAG*2)-: `ICACHE_TAG] == ptag2);
 
             assign rdata[i] = way_io[i].data;
         end
