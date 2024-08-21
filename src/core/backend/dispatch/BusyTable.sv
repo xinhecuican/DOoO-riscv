@@ -47,7 +47,7 @@ generate
     ParallelOR #(`PREG_SIZE, `FETCH_WIDTH) or_dis_valid (dis_valids, dis_valid);
 endgenerate
 
-    logic `ARRAY(`WB_SIZE, `PREG_SIZE) walk_valids;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_SIZE) walk_valids;
     logic `N(`PREG_SIZE) walk_valid;
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin

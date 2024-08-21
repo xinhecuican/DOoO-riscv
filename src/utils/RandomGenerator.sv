@@ -1,11 +1,11 @@
 `include "../defines/defines.svh"
 
 module LFSRRandom #(
-    parameter WIDTH = 32
+    parameter WIDTH = 32,
+    parameter SEED = 0
 )(
     input logic clk,
     input logic rst,
-    input logic [WIDTH-1: 0] seed,
     output logic [WIDTH-1: 0] random
 );
     logic lfsr_fb;
@@ -184,7 +184,7 @@ endgenerate
 
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
-            random <= seed;
+            random <= SEED;
         end
         else begin
             random <= {random[WIDTH-2: 0], lfsr_fb};

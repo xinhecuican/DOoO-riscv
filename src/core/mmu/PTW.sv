@@ -315,7 +315,7 @@ generate
             assign tag_cmp[i] = en[i] & (tag[i] == io.ctag);
         end
         assign io.wb_valid = |data_valid;
-        PEncoder #(DEPTH) encoder_wb_idx (io.wb_valid, wb_idx);
+        PEncoder #(DEPTH) encoder_wb_idx (data_valid, wb_idx);
         assign io.wb_data = {tag[wb_idx], data[wb_idx]};
         always_ff @(posedge clk)begin
             if(io.flush)begin

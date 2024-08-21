@@ -11,7 +11,7 @@ module RandomReplace #(
     ReplaceIO.replace replace_io
 );
     logic `N(WAY_NUM) random;
-    LFSRRandom #(WAY_NUM) ranGen(clk, rst, 64'hc043bdaefc2ab09d, random);
+    LFSRRandom #(WAY_NUM, 64'hc043bdaefc2ab09d) ranGen(clk, rst, random);
     assign replace_io.miss_way = random[WAY_WIDTH-1: 0];
 endmodule
 
@@ -26,6 +26,6 @@ module RandomReplaceD1 #(
     ReplaceD1IO.replace replace_io
 );
     logic `N(WAY_NUM) random;
-    LFSRRandom #(WAY_NUM) ranGen(clk, rst, 64'hc043bdaefc2ab09d, random);
+    LFSRRandom #(WAY_NUM, 64'hc043bdaefc2ab09d) ranGen(clk, rst, random);
     assign replace_io.miss_way = random[WAY_WIDTH-1: 0];
 endmodule

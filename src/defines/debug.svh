@@ -21,6 +21,7 @@
     DifftestLogEvent #(`"name`") log_event_``name (clk, 0, perf_counter_``name); \
 `endif \
 
+`ifdef DIFFTEST
 package DLog;
     typedef enum logic [1: 0] { Debug, Info, Warning, Error} LogLevel;
     logic logValid = 1'b0;
@@ -28,6 +29,8 @@ package DLog;
     parameter [7: 0] logLevel = Debug;
 
 endpackage
+
+`endif
 
 `define Log(level, tag=T_LOG_ALL, cond, msg) \
 `ifdef ENABLE_LOG \

@@ -4,19 +4,22 @@
 
 // axi
 
+`define AXI_ID_W 4
+`define AXI_USER_W 1
+
 typedef struct packed {
-    logic [3: 0] id;
+    logic [`AXI_ID_W-1: 0] id;
     logic `PADDR_BUS addr;
     logic [7: 0] len;
     logic [2: 0] size;
     logic [1: 0] burst;
-    logic [1: 0] lock;
+    logic lock;
     logic [3: 0] cache;
     logic [2: 0] prot;
     logic valid;
     logic [3: 0] qos; // axi4
     logic [3: 0] region; // axi4
-    logic user; // axi4
+    logic `N(`AXI_USER_W) user; // axi4
 } AxiMAR;
 
 typedef struct packed {
@@ -24,12 +27,12 @@ typedef struct packed {
 } AxiSAR;
 
 typedef struct packed {
-    logic [3 :0] id;
+    logic [`AXI_ID_W-1: 0] id;
     logic `N(`XLEN) data;
     logic [1 :0] resp;
     logic last;
     logic valid;
-    logic user; // axi4
+    logic `N(`AXI_USER_W) user; // axi4
 } AxiSR;
 
 task AxiSRCopy (
@@ -50,18 +53,18 @@ typedef struct packed {
 } AxiMR;
 
 typedef struct packed {
-    logic [3 :0] id;
+    logic [`AXI_ID_W-1 :0] id;
     logic `PADDR_BUS addr;
     logic [7 :0] len;
     logic [2 :0] size;
     logic [1 :0] burst;
-    logic [1 :0] lock;
+    logic lock;
     logic [3 :0] cache;
     logic [2 :0] prot;
     logic valid;
     logic [3: 0] qos; // axi4
     logic [3: 0] region; // axi4
-    logic user; // axi4
+    logic `N(`AXI_USER_W) user; // axi4
 } AxiMAW;
 
 typedef struct packed {
@@ -71,10 +74,10 @@ typedef struct packed {
 typedef struct packed {
     // logic [3 :0] id; // remove in axi4
     logic `N(`XLEN) data;
-    logic [7 :0] wstrb;
+    logic [`XLEN/8-1 :0] wstrb;
     logic last;
     logic valid;
-    logic user; // axi4
+    logic `N(`AXI_USER_W) user; // axi4
 } AxiMW;
 
 typedef struct packed {
@@ -86,10 +89,10 @@ typedef struct packed {
 } AxiMB;
 
 typedef struct packed {
-    logic [3 :0] id;
+    logic [`AXI_ID_W - 1 :0] id;
     logic [1 :0] resp;
     logic valid;
-    logic user; // axi4
+    logic `N(`AXI_USER_W) user; // axi4
 } AxiSB;
 
 interface AxiIO;

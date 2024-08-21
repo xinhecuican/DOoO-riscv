@@ -260,8 +260,6 @@ typedef enum logic [1: 0] {
 `define ITLB_SIZE 32
 
 // tlb cache
-parameter [6: 0] TLB_P_SET `N(`TLB_PN) = {32, 64};
-parameter [4: 0] TLB_P_BANK `N(`TLB_PN) = {`DCACHE_BANK, `DCACHE_BANK};
 `define TLB_P0_SET 64
 `define TLB_P0_BANK `DCACHE_BANK
 `define TLB_P0_SET_WIDTH $clog2(`TLB_P0_SET)

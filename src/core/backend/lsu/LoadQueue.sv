@@ -76,7 +76,7 @@ generate
 endgenerate
 
 // redirect
-    logic `N(`LOAD_QUEUE_SIZE * $bits(RobIdx)) redirect_robIdxs;
+    RobIdx redirect_robIdxs `N(`LOAD_QUEUE_SIZE);
     logic `N(`LOAD_QUEUE_SIZE) bigger, walk_en, validStart, validEnd;
     logic `N(`LOAD_QUEUE_WIDTH) validSelect1, validSelect2, walk_tail, valid_select, valid_select_n;
     logic walk_valid, walk_dir, walk_full;
@@ -86,12 +86,12 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         always_ff @(posedge clk) begin
             if(load_io.dis_en[i] & ~load_io.dis_stall)begin
-                redirect_robIdxs[load_io.dis_lq_idx[i].idx * $bits(RobIdx)+: $bits(RobIdx)] <= load_io.dis_rob_idx[i];
+                redirect_robIdxs[load_io.dis_lq_idx[i].idx] <= load_io.dis_rob_idx[i];
             end
         end
     end
     for(genvar i=0; i<`LOAD_QUEUE_SIZE; i++)begin
-        LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i*$bits(RobIdx)+: $bits(RobIdx)], backendCtrl.redirectIdx, bigger[i]);
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i], backendCtrl.redirectIdx, bigger[i]);
         logic `N(`LOAD_QUEUE_WIDTH) i_n, i_p;
         assign i_n = i + 1;
         assign i_p = i - 1;

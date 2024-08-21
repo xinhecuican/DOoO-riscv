@@ -280,7 +280,7 @@ endgenerate
 
 // idx maintain
     logic search_bigger, search_eq, search_abandon;
-    LoopCompare #(`ROB_WIDTH) cmp_redirect_search({bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir}, {search_head, shdir}, search_bigger);
+    LoopCompare #(`FSQ_WIDTH) cmp_redirect_search({bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir}, {search_head, shdir}, search_bigger);
     assign search_eq = {bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir} == {search_head, shdir};
     assign search_abandon = search_bigger | search_eq;
     always_ff @(posedge clk)begin
@@ -620,7 +620,7 @@ endgenerate
         else begin
             for(int i=0; i<`SLOT_NUM-1; i++)begin
                 updateEntry.slots[i].en = we[i] | oldEntry.slots[i].en;
-                updateEntry.slots[i].carry = (updateEntry.slots[i].carry | free_p[i]) & ~equal[i];
+                updateEntry.slots[i].carry = (oldEntry.slots[i].carry | free_p[i]) & ~equal[i];
                 updateEntry.slots[i].offset = we[i] ? fsqInfo.offset : 
                                               oldEntry.slots[i].en ? oldEntry.slots[i].offset :
                                               `BLOCK_INST_SIZE - 1;
@@ -628,7 +628,7 @@ endgenerate
                 updateEntry.slots[i].tar_state = we[i] ? tarState : oldEntry.slots[i].tar_state;
             end
             updateEntry.tailSlot.en = we[`SLOT_NUM-1] ? 1'b1 : oldEntry.tailSlot.en;
-            updateEntry.tailSlot.carry = (updateEntry.tailSlot.carry | free_p[`SLOT_NUM-1]) & ~equal[`SLOT_NUM-1];
+            updateEntry.tailSlot.carry = (oldEntry.tailSlot.carry | free_p[`SLOT_NUM-1]) & ~equal[`SLOT_NUM-1];
             updateEntry.tailSlot.br_type = we[`SLOT_NUM-1] ? br_type : oldEntry.tailSlot.br_type;
             updateEntry.tailSlot.ras_type = we[`SLOT_NUM-1] ? ras_type : oldEntry.tailSlot.ras_type;
             updateEntry.tailSlot.offset = we[`SLOT_NUM-1] ? fsqInfo.offset : 

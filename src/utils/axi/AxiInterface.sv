@@ -1,4 +1,4 @@
-`include "../defines/defines.svh"
+`include "../../defines/defines.svh"
 
 module AxiInterface(
     input logic clk,
@@ -9,11 +9,8 @@ module AxiInterface(
 );
 
     typedef enum { ICACHE, DCACHE, UNCACHE, IUNCACHE } device_t;
-`ifdef DIFFTEST
+
     typedef struct packed {
-`else
-    typedef struct {
-`endif
         logic en;
         device_t device;
         AxiMAR mar;

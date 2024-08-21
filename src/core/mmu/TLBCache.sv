@@ -11,7 +11,7 @@ interface TLBCacheIO;
     logic exception;
     TLBInfo info_o;
     PTEEntry hit_entry;
-    logic `N(`PADDR_SIZE) hit_addr;
+    logic `N(`VADDR_SIZE) hit_addr;
     logic `N(2) wpn;
 
     modport cache (input req, info, req_addr, flush,

@@ -7,6 +7,7 @@ WB=0
 WE=0
 I ?= utils/NEMU/ready-to-run/microbench.bin
 CONFIG ?= ""
+CLK_FREQ = 500
 
 SRC = $(shell find src/utils -name "*.v" -or -name "*.sv" -or -name "*.svh")
 SRC += $(shell find src/core -name "*.v" -or -name "*.sv" -or -name "*.svh")
@@ -25,10 +26,11 @@ convert:
 	mkdir -p build/v
 	sv2v --write=build/v -I=src/defines -I=build --top=Soc -v ${SRC}
 
-yosys: VSRC := $(shell find build/v -name "*.v" -or -name "*.sv" -or -name "*.svh")
-
-yosys: convert
-	yosys -p "read_verilog ${VSRC}; hierarchy -top Soc; proc; fsm; opt; memory; opt; techmap; opt; write_verilog build/synth.v"
+VSRC := $(shell find build/v -name "*.v" -or -name "*.sv" -or -name "*.svh")
+# VSRC_PREFIX = $(patsubst %,../../%,$(VSRC))
+yosys:
+	# make -C utils/yosys-sta sta RTL_FILES="${VSRC_PREFIX}" DESIGN=Soc
+	nohup env VSRC="${VSRC}" CLK_FREQ=${CLK_FREQ} yosys -c scripts/gen_netlist.tcl > log/yosys_build.log &
 
 clean:
 	make -C utils/difftest clean

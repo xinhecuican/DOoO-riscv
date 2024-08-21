@@ -148,7 +148,7 @@ endgenerate
     logic valid_s``stagen, selh_s``stagen; \
     ExStatusBundle status_s``stagen; \
     logic bigger``stage; \
-    LoopCompare #(`ROB_WIDTH) cmp_bigger``stage (status_s``stage, backendCtrl.redirectIdx, bigger``stage); \
+    LoopCompare #(`ROB_WIDTH) cmp_bigger``stage (status_s``stage.robIdx, backendCtrl.redirectIdx, bigger``stage); \
     always_ff @(posedge clk)begin \
         valid_s``stagen <= valid_s``stage & (~backendCtrl.redirect | bigger``stage); \
         selh_s``stagen <= selh_s``stage``; \

@@ -12,7 +12,7 @@ module StoreCommitBuffer(
     logic `N(`DCACHE_BLOCK_SIZE) addrs `N(`STORE_COMMIT_SIZE);
     // write back counter info
     logic `N(`STORE_COUNTER_WIDTH) counter `N(`STORE_COMMIT_SIZE);
-    logic `N(`STORE_COMMIT_WIDTH) addr_num;
+    logic `N(`STORE_COMMIT_WIDTH+1) addr_num;
     SCDataIO data_io();
     SCDataModule data_module (.*, .io(data_io));
 
