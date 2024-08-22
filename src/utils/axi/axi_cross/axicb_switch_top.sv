@@ -1,8 +1,6 @@
 // distributed under the mit license
 // https://opensource.org/licenses/mit-license.php
 
-`timescale 1 ns / 1 ps
-`default_nettype none
 
 module axicb_switch_top
 
@@ -331,12 +329,12 @@ module axicb_switch_top
     for (i=0;i<SLV_NB;i=i+1) begin: REORDERING_TO_MST
         // Parse all master agents, thus input slave interfaces
         for (j=0;j<MST_NB;j=j+1) begin: SLV_IF_PARSING
-            assign mst_awvalid[i*SLV_NB+j] = slv_awvalid[j*MST_NB+i];
-            assign mst_wvalid[i*SLV_NB+j] = slv_wvalid[j*MST_NB+i];
-            assign mst_wlast[i*SLV_NB+j] = slv_wlast[j*MST_NB+i];
-            assign mst_bready[i*SLV_NB+j] = slv_bready[j*MST_NB+i];
-            assign mst_arvalid[i*SLV_NB+j] = slv_arvalid[j*MST_NB+i];
-            assign mst_rready[i*SLV_NB+j] = slv_rready[j*MST_NB+i];
+            assign mst_awvalid[i*MST_NB+j] = slv_awvalid[j*SLV_NB+i];
+            assign mst_wvalid[i*MST_NB+j] = slv_wvalid[j*SLV_NB+i];
+            assign mst_wlast[i*MST_NB+j] = slv_wlast[j*SLV_NB+i];
+            assign mst_bready[i*MST_NB+j] = slv_bready[j*SLV_NB+i];
+            assign mst_arvalid[i*MST_NB+j] = slv_arvalid[j*SLV_NB+i];
+            assign mst_rready[i*MST_NB+j] = slv_rready[j*SLV_NB+i];
         end
     end
 
@@ -344,12 +342,12 @@ module axicb_switch_top
     for (i=0;i<MST_NB;i=i+1) begin: REORDERING_TO_SLV
         // Parse all slave agents, thus output master interfaces
         for (j=0;j<SLV_NB;j=j+1) begin: MST_IF_PARSING
-            assign slv_awready[i*MST_NB+j] = mst_awready[j*SLV_NB+i];
-            assign slv_wready[i*MST_NB+j] = mst_wready[j*SLV_NB+i];
-            assign slv_bvalid[i*MST_NB+j] = mst_bvalid[j*SLV_NB+i];
-            assign slv_arready[i*MST_NB+j] = mst_arready[j*SLV_NB+i];
-            assign slv_rvalid[i*MST_NB+j] = mst_rvalid[j*SLV_NB+i];
-            assign slv_rlast[i*MST_NB+j] = mst_rlast[j*SLV_NB+i];
+            assign slv_awready[i*SLV_NB+j] = mst_awready[j*MST_NB+i];
+            assign slv_wready[i*SLV_NB+j] = mst_wready[j*MST_NB+i];
+            assign slv_bvalid[i*SLV_NB+j] = mst_bvalid[j*MST_NB+i];
+            assign slv_arready[i*SLV_NB+j] = mst_arready[j*MST_NB+i];
+            assign slv_rvalid[i*SLV_NB+j] = mst_rvalid[j*MST_NB+i];
+            assign slv_rlast[i*SLV_NB+j] = mst_rlast[j*MST_NB+i];
         end
     end
 

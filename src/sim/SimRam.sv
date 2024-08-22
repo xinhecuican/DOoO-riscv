@@ -17,10 +17,13 @@ module SimRam(
     logic [3: 0] wsize;
     logic [7: 0] wshift;
 
-    assign wmask = {{8{axi.mw.wstrb[7]}},
+    assign wmask =  {
+`ifdef SV64
+                    {8{axi.mw.wstrb[7]}},
                     {8{axi.mw.wstrb[6]}},
                     {8{axi.mw.wstrb[5]}},
                     {8{axi.mw.wstrb[4]}},
+`endif
                     {8{axi.mw.wstrb[3]}},
                     {8{axi.mw.wstrb[2]}},
                     {8{axi.mw.wstrb[1]}},

@@ -1,7 +1,7 @@
 `include "../defines/defines.svh"
 
 module Soc(
-    input logic clk,
+    input logic core_clk,
     input logic rst,
 
     input logic uart_clk,
@@ -10,20 +10,45 @@ module Soc(
 );
     AxiIO core_axi();
     AxiIO uart_axi();
-    CPUCore core(.*, .axi(core_axi.master));
-    UartWrapper uart(.*, .clk(uart_clk), .axi(uart_axi.slave));
+
+    logic sync_rst_uart, sync_rst_core, uart_rst, core_rst;
+    logic uart_rst_s1, core_rst_s1;
+    SyncRst rst_core (clk, rst, sync_rst_core);
+    SyncRst rst_uart (uart_clk, rst, sync_rst_uart);
+    always_ff @(posedge clk)begin
+        core_rst_s1 <= sync_rst_core;
+        core_rst <= core_rst_s1;
+    end
+    always_ff @(posedge uart_clk)begin
+        uart_rst_s1 <= sync_rst_uart;
+        uart_rst <= uart_rst_s1;
+    end
+
+    CPUCore core(
+        .clk(core_clk),
+        .rst(core_rst),
+        .axi(core_axi.master)
+    );
+    UartWrapper uart(
+        .clk(uart_clk), 
+        .rst(uart_rst),
+        .axi(uart_axi.slave),
+        .rxd(rxd),
+        .txd(txd)
+    );
 
     AxiCrossbar #(
         .SLAVE(1),
         .MASTER(1),
-        .SLV_START()
+        .SLV_START(`PADDR_SIZE'h20000000),
+        .SLV_END(`PADDR_SIZE'h200000004)
     ) crossbar (
-        .clk(clk),
-        .rst(rst),
+        .clk(core_clk),
+        .rst(core_rst),
         .mclk(uart_clk),
-        .mrst(rst),
-        .sclk(clk),
-        .srst(rst),
+        .mrst(uart_rst),
+        .sclk(core_clk),
+        .srst(core_rst),
         .m_mar(uart_axi.mar),
         .m_maw(uart_axi.maw),
         .m_mr (uart_axi.mr ),

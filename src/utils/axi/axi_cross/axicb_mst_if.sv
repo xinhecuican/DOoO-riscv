@@ -1,8 +1,7 @@
 // distributed under the mit license
 // https://opensource.org/licenses/mit-license.php
 
-`timescale 1 ns / 1 ps
-`default_nettype none
+
 
 module axicb_mst_if
 
@@ -22,7 +21,7 @@ module axicb_mst_if
         // Keep aboslute address in crossbar memory map
         parameter KEEP_BASE_ADDR = 0,
         // Base address
-        parameter BASE_ADDR = 0,
+        parameter [AXI_ADDR_W-1: 0] BASE_ADDR = 0,
 
         // Implement CDC output stage
         parameter SLV_CDC = 0,
@@ -34,10 +33,10 @@ module axicb_mst_if
         // USER fields transport enabling (0 deactivate, 1 activate)
         parameter USER_SUPPORT = 0,
         // USER fields width in bits
-        parameter AXI_AUSER_W = 0,
-        parameter AXI_WUSER_W = 0,
-        parameter AXI_BUSER_W = 0,
-        parameter AXI_RUSER_W = 0,
+        parameter AXI_AUSER_W = 1,
+        parameter AXI_WUSER_W = 1,
+        parameter AXI_BUSER_W = 1,
+        parameter AXI_RUSER_W = 1,
 
         // Input channels' width (concatenated)
         parameter AWCH_W = 8,

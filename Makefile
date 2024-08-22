@@ -26,7 +26,7 @@ convert:
 	mkdir -p build/v
 	sv2v --write=build/v -I=src/defines -I=build --top=Soc -v ${SRC}
 
-VSRC := $(shell find build/v -name "*.v" -or -name "*.sv" -or -name "*.svh")
+VSRC := $(shell test -d build/v && find build/v -name "*.v" -or -name "*.sv" -or -name "*.svh")
 # VSRC_PREFIX = $(patsubst %,../../%,$(VSRC))
 yosys:
 	# make -C utils/yosys-sta sta RTL_FILES="${VSRC_PREFIX}" DESIGN=Soc

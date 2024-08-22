@@ -398,3 +398,24 @@ generate
 	endcase
 endgenerate
 endmodule
+
+module SyncRst(
+	input logic clk,
+	input logic rst_i,
+	output logic rst_o
+);
+
+	logic rst1, rst2;
+	always_ff @(posedge clk or posedge rst_i)begin
+		if(rst_i)begin
+			rst1 <= 1'b1;
+			rst2 <= 1'b1;
+		end
+		else begin
+			rst1 <= 1'b0;
+			rst2 <= rst1;
+		end
+	end
+	assign rst_o = rst2;
+
+endmodule

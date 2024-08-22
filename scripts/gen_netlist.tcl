@@ -23,4 +23,3 @@ opt_clean -purge
 tee -o log/synth_check.txt check
 tee -o log/synth_stat.txt stat -liberty $lib_file
 write_verilog build/synth.v
-show -format dot -viewer none -prefix log/netlist

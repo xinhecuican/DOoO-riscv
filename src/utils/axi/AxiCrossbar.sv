@@ -15,26 +15,26 @@ module AxiCrossbar #(
     input logic `N(SLAVE) srst,
     input logic `N(MASTER) mclk,
     input logic `N(MASTER) mrst,
-    output AxiMAR `N(MASTER) m_mar,
-    output AxiMAW `N(MASTER) m_maw,
-    output AxiMR  `N(MASTER) m_mr,
-    output AxiMW  `N(MASTER) m_mw,
-    output AxiMB  `N(MASTER) m_mb,
-    input AxiSAR `N(MASTER) m_sar,
-    input AxiSAW `N(MASTER) m_saw,
-    input AxiSR  `N(MASTER) m_sr,
-    input AxiSW  `N(MASTER) m_sw,
-    input AxiSB  `N(MASTER) m_sb,
-    input AxiMAR `N(SLAVE) s_mar,
-    input AxiMAW `N(SLAVE) s_maw,
-    input AxiMR  `N(SLAVE) s_mr,
-    input AxiMW  `N(SLAVE) s_mw,
-    input AxiMB  `N(SLAVE) s_mb,
-    output AxiSAR `N(SLAVE) s_sar,
-    output AxiSAW `N(SLAVE) s_saw,
-    output AxiSR  `N(SLAVE) s_sr,
-    output AxiSW  `N(SLAVE) s_sw,
-    output AxiSB  `N(SLAVE) s_sb,
+    input AxiMAR `N(MASTER) m_mar,
+    input AxiMAW `N(MASTER) m_maw,
+    input AxiMR  `N(MASTER) m_mr,
+    input AxiMW  `N(MASTER) m_mw,
+    input AxiMB  `N(MASTER) m_mb,
+    output AxiSAR `N(MASTER) m_sar,
+    output AxiSAW `N(MASTER) m_saw,
+    output AxiSR  `N(MASTER) m_sr,
+    output AxiSW  `N(MASTER) m_sw,
+    output AxiSB  `N(MASTER) m_sb,
+    output AxiMAR `N(SLAVE)  s_mar,
+    output AxiMAW `N(SLAVE)  s_maw,
+    output AxiMR  `N(SLAVE)  s_mr,
+    output AxiMW  `N(SLAVE)  s_mw,
+    output AxiMB  `N(SLAVE)  s_mb,
+    input AxiSAR `N(SLAVE)  s_sar,
+    input AxiSAW `N(SLAVE)  s_saw,
+    input AxiSR  `N(SLAVE)  s_sr,
+    input AxiSW  `N(SLAVE)  s_sw,
+    input AxiSB  `N(SLAVE)  s_sb
 );
     localparam AWCH_W =  ADDR_WIDTH + ID_WIDTH + 29;
     localparam WCH_W = DATA_WIDTH + DATA_WIDTH/8;
@@ -42,40 +42,40 @@ module AxiCrossbar #(
     localparam ARCH_W = AWCH_W;
     localparam RCH_W = DATA_WIDTH + ID_WIDTH + 2;
 
-    logic `N(SLAVE) s_awvalid, s_awready;
-    logic `ARRAY(SLAVE, AWCH_W) s_awch;
-    logic `N(SLAVE) s_wvalid, s_wready, s_wlast;
-    logic `ARRAY(SLAVE, WCH_W) s_wch;
-    logic `N(SLAVE) s_bvalid, s_bready;
-    logic `ARRAY(SLAVE, BCH_W) s_bch;
-    logic `N(SLAVE) s_arvalid, s_arready;
-    logic `ARRAY(SLAVE, ARCH_W) s_arch;
-    logic `N(SLAVE) s_rvalid, s_rready, s_rlast;
-    logic `ARRAY(SLAVE, RCH_W) s_rch;
+    logic `N(MASTER) s_awvalid, s_awready;
+    logic `ARRAY(MASTER, AWCH_W) s_awch;
+    logic `N(MASTER) s_wvalid, s_wready, s_wlast;
+    logic `ARRAY(MASTER, WCH_W) s_wch;
+    logic `N(MASTER) s_bvalid, s_bready;
+    logic `ARRAY(MASTER, BCH_W) s_bch;
+    logic `N(MASTER) s_arvalid, s_arready;
+    logic `ARRAY(MASTER, ARCH_W) s_arch;
+    logic `N(MASTER) s_rvalid, s_rready, s_rlast;
+    logic `ARRAY(MASTER, RCH_W) s_rch;
 
-    logic `N(MASTER) m_awvalid, m_awready;
-    logic `ARRAY(MASTER, AWCH_W) m_awch;
-    logic `N(MASTER) m_wvalid, m_wready, m_wlast;
-    logic `ARRAY(MASTER, WCH_W) m_wch;
-    logic `N(MASTER) m_bvalid, m_bready;
-    logic `ARRAY(MASTER, BCH_W) m_bch;
-    logic `N(MASTER) m_arvalid, m_arready;
-    logic `ARRAY(MASTER, ARCH_W) m_arch;
-    logic `N(MASTER) m_rvalid, m_rready, m_rlast;
-    logic `ARRAY(MASTER, RCH_W) m_rch;
+    logic `N(SLAVE) m_awvalid, m_awready;
+    logic `ARRAY(SLAVE, AWCH_W) m_awch;
+    logic `N(SLAVE) m_wvalid, m_wready, m_wlast;
+    logic `ARRAY(SLAVE, WCH_W) m_wch;
+    logic `N(SLAVE) m_bvalid, m_bready;
+    logic `ARRAY(SLAVE, BCH_W) m_bch;
+    logic `N(SLAVE) m_arvalid, m_arready;
+    logic `ARRAY(SLAVE, ARCH_W) m_arch;
+    logic `N(SLAVE) m_rvalid, m_rready, m_rlast;
+    logic `ARRAY(SLAVE, RCH_W) m_rch;
 generate
-    for(genvar i=0; i<SLAVE; i++)begin
+    for(genvar i=0; i<MASTER; i++)begin
         AxiIO axi();
-        assign axi.mar = s_mar[i];
-        assign axi.maw = s_maw[i];
-        assign axi.mr  = s_mr[i];
-        assign axi.mw  = s_mw[i];
-        assign axi.mb  = s_mb[i];
-        assign s_sar[i] = axi.sar;
-        assign s_saw[i] = axi.saw;
-        assign s_sr[i]  = axi.sr;
-        assign s_sw[i]  = axi.sw;
-        assign s_sb[i]  = axi.sb;
+        assign axi.mar = m_mar[i];
+        assign axi.maw = m_maw[i];
+        assign axi.mr  = m_mr[i];
+        assign axi.mw  = m_mw[i];
+        assign axi.mb  = m_mb[i];
+        assign m_sar[i] = axi.sar;
+        assign m_saw[i] = axi.saw;
+        assign m_sr[i]  = axi.sr;
+        assign m_sw[i]  = axi.sw;
+        assign m_sb[i]  = axi.sb;
         AxiSlaveWrapper #(
             .ADDR_WIDTH(ADDR_WIDTH),
             .ID_WIDTH(ID_WIDTH),
@@ -86,8 +86,8 @@ generate
             .ARCH(ARCH_W),
             .RCH(RCH_W)
         ) slave_wrapper(
-            .clk(sclk[i]),
-            .rst(srst[i]),
+            .clk(mclk[i]),
+            .rst(mrst[i]),
             .slave(axi.slave),
             .aclk(clk),
             .aresetn(~rst),
@@ -171,18 +171,18 @@ endgenerate
     );
 
 generate
-    for(genvar i=0; i<MASTER; i++)begin
+    for(genvar i=0; i<SLAVE; i++)begin
             AxiIO axi();
-            assign m_mar[i] = axi.mar; 
-            assign m_maw[i] = axi.maw; 
-            assign m_mr[i] = axi.mr  ;
-            assign m_mw[i] = axi.mw  ;
-            assign m_mb[i] = axi.mb  ;
-            assign axi.sar = m_sar[i];
-            assign axi.saw = m_saw[i];
-            assign axi.sr =  m_sr[i] ;
-            assign axi.sw =  m_sw[i] ;
-            assign axi.sb =  m_sb[i] ;
+            assign s_mar[i] = axi.mar; 
+            assign s_maw[i] = axi.maw; 
+            assign s_mr[i] = axi.mr  ;
+            assign s_mw[i] = axi.mw  ;
+            assign s_mb[i] = axi.mb  ;
+            assign axi.sar = s_sar[i];
+            assign axi.saw = s_saw[i];
+            assign axi.sr =  s_sr[i] ;
+            assign axi.sw =  s_sw[i] ;
+            assign axi.sb =  s_sb[i] ;
         AxiMasterWrapper #(
             .ADDR_WIDTH(ADDR_WIDTH),
             .ID_WIDTH(ID_WIDTH),
@@ -196,9 +196,9 @@ generate
             .clk(clk),
             .rst(rst),
             .master(axi.master),
-            .aclk(mclk[i]),
-            .aresetn(~mrst[i]),
-            .srst(mrst[i]),
+            .aclk(sclk[i]),
+            .aresetn(~srst[i]),
+            .srst(srst[i]),
             .awvalid(m_awvalid[i]),
             .awready(m_awready[i]),
             .awch(m_awch[i]),
@@ -275,6 +275,7 @@ module AxiSlaveWrapper #(
         .i_awaddr(slave.maw.addr),
         .i_awlen(slave.maw.len),
         .i_awsize(slave.maw.size),
+        .i_awburst(slave.maw.burst),
         .i_awlock(slave.maw.lock),
         .i_awcache(slave.maw.cache),
         .i_awprot(slave.maw.prot),
@@ -285,6 +286,7 @@ module AxiSlaveWrapper #(
         .i_wvalid(slave.mw.valid),
         .i_wready(slave.sw.ready),
         .i_wlast(slave.mw.last),
+        .i_wdata(slave.mw.data),
         .i_wstrb(slave.mw.wstrb),
         .i_wuser(slave.mw.user),
         .i_bvalid(slave.sb.valid),
@@ -294,6 +296,7 @@ module AxiSlaveWrapper #(
         .i_buser(slave.sb.user),
         .i_arvalid(slave.mar.valid),
         .i_arready(slave.sar.ready),
+        .i_araddr(slave.mar.addr),
         .i_arlen(slave.mar.len),
         .i_arsize(slave.mar.size),
         .i_arburst(slave.mar.burst),
@@ -387,6 +390,7 @@ module AxiMasterWrapper #(
         .o_awaddr(master.maw.addr),
         .o_awlen(master.maw.len),
         .o_awsize(master.maw.size),
+        .o_awburst(master.maw.burst),
         .o_awlock(master.maw.lock),
         .o_awcache(master.maw.cache),
         .o_awprot(master.maw.prot),
@@ -397,6 +401,7 @@ module AxiMasterWrapper #(
         .o_wvalid(master.mw.valid),
         .o_wready(master.sw.ready),
         .o_wlast(master.mw.last),
+        .o_wdata(master.mw.data),
         .o_wstrb(master.mw.wstrb),
         .o_wuser(master.mw.user),
         .o_bvalid(master.sb.valid),
@@ -406,6 +411,7 @@ module AxiMasterWrapper #(
         .o_buser(master.sb.user),
         .o_arvalid(master.mar.valid),
         .o_arready(master.sar.ready),
+        .o_araddr(master.mar.addr),
         .o_arlen(master.mar.len),
         .o_arsize(master.mar.size),
         .o_arburst(master.mar.burst),

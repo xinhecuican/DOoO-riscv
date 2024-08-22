@@ -1,8 +1,7 @@
 // distributed under the mit license
 // https://opensource.org/licenses/mit-license.php
 
-`timescale 1 ns / 1 ps
-`default_nettype none
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -84,7 +83,52 @@ module axicb_round_robin_core
     ///////////////////////////////////////////////////////////////////////////
 
     generate
-    if (REQ_NB==4) begin : GRANT_4
+    if (REQ_NB==1) begin : GRANT_1
+        always @ (*) begin
+            masked = mask & req;
+            if(|masked)begin
+                if(masked[0]) grant = 1'b1;
+                else grant = 1'b0;
+            end
+            else begin
+                if      (req[0]) grant = 1'b1;
+                else             grant = 0;
+            end
+        end
+    end
+    else if(REQ_NB == 2)begin : GRANT_2
+        always @ (*) begin
+            masked = mask & req;
+            if(|masked)begin
+                if(masked[0]) grant = 2'b01;
+                else if(masked[1]) grant = 2'b10;
+                else grant = 2'b0;
+            end
+            else begin
+                if(req[0]) grant = 2'b01;
+                else if(req[1]) grant = 2'b10;
+                else grant = 2'b0;
+            end
+        end
+    end
+    else if(REQ_NB == 3)begin : GRANT_3
+        always @ (*) begin
+            masked = mask & req;
+            if(|masked)begin
+                if(masked[0]) grant = 3'b001;
+                else if(masked[1]) grant = 3'b010;
+                else if(masked[2]) grant = 3'b100;
+                else grant = 3'b0;
+            end
+            else begin
+                if(req[0]) grant = 3'b001;
+                else if(req[1]) grant = 3'b010;
+                else if(req[2]) grant = 3'b100;
+                else grant = 3'b0;
+            end
+        end
+    end
+    else if (REQ_NB==4) begin : GRANT_4
 
     always @ (*) begin
 
@@ -155,7 +199,48 @@ module axicb_round_robin_core
     ///////////////////////////////////////////////////////////////////////////
 
     generate
-    if (REQ_NB==4) begin : REQ_4
+    if(REQ_NB == 1)begin : REQ_1
+        always @ (posedge aclk or negedge aresetn) begin
+
+            if (~aresetn) begin
+                mask <= {REQ_NB{1'b1}};
+            end else if (srst) begin
+                mask <= {REQ_NB{1'b1}};
+            end
+        end
+    end
+    else if(REQ_NB == 2)begin : REQ_2
+        always @ (posedge aclk or negedge aresetn) begin
+
+            if (~aresetn) begin
+                mask <= {REQ_NB{1'b1}};
+            end else if (srst) begin
+                mask <= {REQ_NB{1'b1}};
+            end else begin
+                if (en && |grant) begin
+                    if      (grant[0]) mask <= 2'b10;
+                    else if (grant[1]) mask <= 2'b11;
+                end
+            end
+        end
+    end
+    else if(REQ_NB == 3)begin : REQ_3
+        always @ (posedge aclk or negedge aresetn) begin
+
+            if (~aresetn) begin
+                mask <= {REQ_NB{1'b1}};
+            end else if (srst) begin
+                mask <= {REQ_NB{1'b1}};
+            end else begin
+                if (en && |grant) begin
+                    if      (grant[0]) mask <= 3'b110;
+                    else if (grant[1]) mask <= 3'b100;
+                    else if (grant[2]) mask <= 3'b111;
+                end
+            end
+        end
+    end
+    else if (REQ_NB==4) begin : REQ_4
 
     always @ (posedge aclk or negedge aresetn) begin
 

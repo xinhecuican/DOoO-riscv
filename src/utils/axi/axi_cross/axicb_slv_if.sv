@@ -1,8 +1,7 @@
 // distributed under the mit license
 // https://opensource.org/licenses/mit-license.php
 
-`timescale 1 ns / 1 ps
-`default_nettype none
+
 
 module axicb_slv_if
 
@@ -32,10 +31,10 @@ module axicb_slv_if
         // USER fields transport enabling (0 deactivate, 1 activate)
         parameter USER_SUPPORT = 0,
         // USER fields width in bits
-        parameter AXI_AUSER_W = 0,
-        parameter AXI_WUSER_W = 0,
-        parameter AXI_BUSER_W = 0,
-        parameter AXI_RUSER_W = 0,
+        parameter AXI_AUSER_W = 1,
+        parameter AXI_WUSER_W = 1,
+        parameter AXI_BUSER_W = 1,
+        parameter AXI_RUSER_W = 1,
 
         // Output channels' width (concatenated)
         parameter AWCH_W = 8,

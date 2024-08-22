@@ -15,8 +15,7 @@
 // limitations under the License.
 //-----------------------------------------------------------------------------
 
-`timescale 1 ns / 1 ps
-`default_nettype none
+
 
 module async_bidir_fifo
 

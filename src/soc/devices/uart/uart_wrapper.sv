@@ -5,7 +5,7 @@ module UartWrapper(
     input logic rst,
     AxiIO.slave axi,
     input logic rxd,
-    output logic txd,
+    output logic txd
 );
 
     logic tx_busy, rx_busy, overrun, frame_error;

@@ -1,8 +1,7 @@
 // distributed under the mit license
 // https://opensource.org/licenses/mit-license.php
 
-`timescale 1 ns / 1 ps
-`default_nettype none
+
 
 module axicb_mst_switch
 
@@ -132,21 +131,9 @@ module axicb_mst_switch
         .grant   (awch_grant)
     );
 
-    assign o_awvalid = (awch_grant[0]) ? i_awvalid[0] :
-                       (awch_grant[1]) ? i_awvalid[1] :
-                       (awch_grant[2]) ? i_awvalid[2] :
-                       (awch_grant[3]) ? i_awvalid[3] :
-                                         1'b0;
-
     assign i_awready = awch_grant & {MST_NB{o_awready & !wch_full}};
 
     assign awch_en = o_awvalid & o_awready;
-
-    assign o_awch = (awch_grant[0]) ? i_awch[0*AWCH_W+:AWCH_W] :
-                    (awch_grant[1]) ? i_awch[1*AWCH_W+:AWCH_W] :
-                    (awch_grant[2]) ? i_awch[2*AWCH_W+:AWCH_W] :
-                    (awch_grant[3]) ? i_awch[3*AWCH_W+:AWCH_W] :
-                                      {AWCH_W{1'b0}};
 
 
     ///////////////////////////////////////////////////////////////////////////
@@ -173,26 +160,10 @@ module axicb_mst_switch
     .empty    (wch_empty)
     );
 
-    assign o_wvalid = (~wch_empty & wch_grant[0]) ? i_wvalid[0] :
-                      (~wch_empty & wch_grant[1]) ? i_wvalid[1] :
-                      (~wch_empty & wch_grant[2]) ? i_wvalid[2] :
-                      (~wch_empty & wch_grant[3]) ? i_wvalid[3] :
-                                                    1'b0;
 
-    assign o_wlast = (~wch_empty & wch_grant[0]) ? i_wlast[0] :
-                     (~wch_empty & wch_grant[1]) ? i_wlast[1] :
-                     (~wch_empty & wch_grant[2]) ? i_wlast[2] :
-                     (~wch_empty & wch_grant[3]) ? i_wlast[3] :
-                                                   1'b0;
 
     assign i_wready = (wch_empty) ? {MST_NB{1'b0}} :
                                      wch_grant & {MST_NB{o_wready}};
-
-    assign o_wch = (~wch_empty & wch_grant[0]) ? i_wch[0*WCH_W+:WCH_W] :
-                   (~wch_empty & wch_grant[1]) ? i_wch[1*WCH_W+:WCH_W] :
-                   (~wch_empty & wch_grant[2]) ? i_wch[2*WCH_W+:WCH_W] :
-                   (~wch_empty & wch_grant[3]) ? i_wch[3*WCH_W+:WCH_W] :
-                                                 {WCH_W{1'b0}};
 
 
     ///////////////////////////////////////////////////////////////////////////
@@ -200,22 +171,6 @@ module axicb_mst_switch
     ///////////////////////////////////////////////////////////////////////////
 
     // BCH = {RESP, ID}
-
-    assign mst0_bch_targeted = ((MST0_ID_MASK & o_bch[0+:AXI_ID_W]) == MST0_ID_MASK);
-    assign mst1_bch_targeted = ((MST1_ID_MASK & o_bch[0+:AXI_ID_W]) == MST1_ID_MASK);
-    assign mst2_bch_targeted = ((MST2_ID_MASK & o_bch[0+:AXI_ID_W]) == MST2_ID_MASK);
-    assign mst3_bch_targeted = ((MST3_ID_MASK & o_bch[0+:AXI_ID_W]) == MST3_ID_MASK);
-
-    assign i_bvalid[0] = (mst0_bch_targeted) ? o_bvalid : 1'b0;
-    assign i_bvalid[1] = (mst1_bch_targeted) ? o_bvalid : 1'b0;
-    assign i_bvalid[2] = (mst2_bch_targeted) ? o_bvalid : 1'b0;
-    assign i_bvalid[3] = (mst3_bch_targeted) ? o_bvalid : 1'b0;
-
-    assign o_bready = (mst0_bch_targeted) ? i_bready[0] :
-                      (mst1_bch_targeted) ? i_bready[1] :
-                      (mst2_bch_targeted) ? i_bready[2] :
-                      (mst3_bch_targeted) ? i_bready[3] :
-                                            1'b0;
 
     assign i_bch = o_bch;
 
@@ -244,21 +199,11 @@ module axicb_mst_switch
         .grant   (arch_grant)
     );
 
-    assign o_arvalid = (arch_grant[0]) ? i_arvalid[0] :
-                       (arch_grant[1]) ? i_arvalid[1] :
-                       (arch_grant[2]) ? i_arvalid[2] :
-                       (arch_grant[3]) ? i_arvalid[3] :
-                                         1'b0;
+
 
     assign i_arready = arch_grant & {MST_NB{o_arready}};
 
     assign arch_en = o_arvalid & o_arready;
-
-    assign o_arch = (arch_grant[0]) ? i_arch[0*ARCH_W+:ARCH_W] :
-                    (arch_grant[1]) ? i_arch[1*ARCH_W+:ARCH_W] :
-                    (arch_grant[2]) ? i_arch[2*ARCH_W+:ARCH_W] :
-                    (arch_grant[3]) ? i_arch[3*ARCH_W+:ARCH_W] :
-                                      {ARCH_W{1'b0}};
 
     ///////////////////////////////////////////////////////////////////////////
     // Read Response Channel
@@ -266,26 +211,156 @@ module axicb_mst_switch
 
     // RCH = {RESP, ID, DATA}
 
-    assign mst0_rch_targeted = ((MST0_ID_MASK & o_rch[0+:AXI_ID_W]) == MST0_ID_MASK);
-    assign mst1_rch_targeted = ((MST1_ID_MASK & o_rch[0+:AXI_ID_W]) == MST1_ID_MASK);
-    assign mst2_rch_targeted = ((MST2_ID_MASK & o_rch[0+:AXI_ID_W]) == MST2_ID_MASK);
-    assign mst3_rch_targeted = ((MST3_ID_MASK & o_rch[0+:AXI_ID_W]) == MST3_ID_MASK);
+generate
+    if(MST_NB > 0)begin
+        assign mst0_rch_targeted = ((MST0_ID_MASK & o_rch[0+:AXI_ID_W]) == MST0_ID_MASK);
+        assign i_rvalid[0] = (mst0_rch_targeted) ? o_rvalid : 1'b0;
+        assign i_rlast[0] = (mst0_rch_targeted) ? o_rlast : 1'b0;
+        assign mst0_bch_targeted = ((MST0_ID_MASK & o_bch[0+:AXI_ID_W]) == MST0_ID_MASK);
+        assign i_bvalid[0] = (mst0_bch_targeted) ? o_bvalid : 1'b0;
+    end
+    if(MST_NB > 1)begin
+        assign mst1_rch_targeted = ((MST1_ID_MASK & o_rch[0+:AXI_ID_W]) == MST1_ID_MASK);
+        assign i_rvalid[1] = (mst1_rch_targeted) ? o_rvalid : 1'b0;
+        assign i_rlast[1] = (mst1_rch_targeted) ? o_rlast : 1'b0;
+        assign mst1_bch_targeted = ((MST1_ID_MASK & o_bch[0+:AXI_ID_W]) == MST1_ID_MASK);
+        assign i_bvalid[1] = (mst1_bch_targeted) ? o_bvalid : 1'b0;
+    end
+    if(MST_NB > 2)begin
+        assign mst2_rch_targeted = ((MST2_ID_MASK & o_rch[0+:AXI_ID_W]) == MST2_ID_MASK);
+        assign i_rvalid[2] = (mst2_rch_targeted) ? o_rvalid : 1'b0;
+        assign i_rlast[2] = (mst2_rch_targeted) ? o_rlast : 1'b0;
+        assign mst2_bch_targeted = ((MST2_ID_MASK & o_bch[0+:AXI_ID_W]) == MST2_ID_MASK);
+        assign i_bvalid[2] = (mst2_bch_targeted) ? o_bvalid : 1'b0;
+    end
+    if(MST_NB > 3)begin
+        assign mst3_rch_targeted = ((MST3_ID_MASK & o_rch[0+:AXI_ID_W]) == MST3_ID_MASK);
+        assign i_rvalid[3] = (mst3_rch_targeted) ? o_rvalid : 1'b0;
+        assign i_rlast[3] = (mst3_rch_targeted) ? o_rlast : 1'b0;
+        assign mst3_bch_targeted = ((MST3_ID_MASK & o_bch[0+:AXI_ID_W]) == MST3_ID_MASK);
+        assign i_bvalid[3] = (mst3_bch_targeted) ? o_bvalid : 1'b0;
+    end
 
-    assign i_rvalid[0] = (mst0_rch_targeted) ? o_rvalid : 1'b0;
-    assign i_rvalid[1] = (mst1_rch_targeted) ? o_rvalid : 1'b0;
-    assign i_rvalid[2] = (mst2_rch_targeted) ? o_rvalid : 1'b0;
-    assign i_rvalid[3] = (mst3_rch_targeted) ? o_rvalid : 1'b0;
-
-    assign i_rlast[0] = (mst0_rch_targeted) ? o_rlast : 1'b0;
-    assign i_rlast[1] = (mst1_rch_targeted) ? o_rlast : 1'b0;
-    assign i_rlast[2] = (mst2_rch_targeted) ? o_rlast : 1'b0;
-    assign i_rlast[3] = (mst3_rch_targeted) ? o_rlast : 1'b0;
-
-    assign o_rready = (mst0_rch_targeted) ? i_rready[0] :
-                      (mst1_rch_targeted) ? i_rready[1] :
-                      (mst2_rch_targeted) ? i_rready[2] :
-                      (mst3_rch_targeted) ? i_rready[3] :
+    if(MST_NB > 3)begin
+        assign o_rready = (mst0_rch_targeted) ? i_rready[0] :
+                        (mst1_rch_targeted) ? i_rready[1] :
+                        (mst2_rch_targeted) ? i_rready[2] :
+                        (mst3_rch_targeted) ? i_rready[3] :
+                                                1'b0;
+        assign o_arvalid = (arch_grant[0]) ? i_arvalid[0] :
+                        (arch_grant[1]) ? i_arvalid[1] :
+                        (arch_grant[2]) ? i_arvalid[2] :
+                        (arch_grant[3]) ? i_arvalid[3] :
                                             1'b0;
+        assign o_arch = (arch_grant[0]) ? i_arch[0*ARCH_W+:ARCH_W] :
+                        (arch_grant[1]) ? i_arch[1*ARCH_W+:ARCH_W] :
+                        (arch_grant[2]) ? i_arch[2*ARCH_W+:ARCH_W] :
+                        (arch_grant[3]) ? i_arch[3*ARCH_W+:ARCH_W] :
+                                        {ARCH_W{1'b0}};
+        assign o_wvalid = (~wch_empty & wch_grant[0]) ? i_wvalid[0] :
+                        (~wch_empty & wch_grant[1]) ? i_wvalid[1] :
+                        (~wch_empty & wch_grant[2]) ? i_wvalid[2] :
+                        (~wch_empty & wch_grant[3]) ? i_wvalid[3] :
+                                                        1'b0;
+        assign o_wlast = (~wch_empty & wch_grant[0]) ? i_wlast[0] :
+                        (~wch_empty & wch_grant[1]) ? i_wlast[1] :
+                        (~wch_empty & wch_grant[2]) ? i_wlast[2] :
+                        (~wch_empty & wch_grant[3]) ? i_wlast[3] :
+                                                    1'b0;
+        assign o_wch = (~wch_empty & wch_grant[0]) ? i_wch[0*WCH_W+:WCH_W] :
+                    (~wch_empty & wch_grant[1]) ? i_wch[1*WCH_W+:WCH_W] :
+                    (~wch_empty & wch_grant[2]) ? i_wch[2*WCH_W+:WCH_W] :
+                    (~wch_empty & wch_grant[3]) ? i_wch[3*WCH_W+:WCH_W] :
+                                                    {WCH_W{1'b0}};
+        assign o_bready = (mst0_bch_targeted) ? i_bready[0] :
+                        (mst1_bch_targeted) ? i_bready[1] :
+                        (mst2_bch_targeted) ? i_bready[2] :
+                        (mst3_bch_targeted) ? i_bready[3] :
+                                                1'b0;
+        assign o_awvalid = (awch_grant[0]) ? i_awvalid[0] :
+                        (awch_grant[1]) ? i_awvalid[1] :
+                        (awch_grant[2]) ? i_awvalid[2] :
+                        (awch_grant[3]) ? i_awvalid[3] :
+                                            1'b0;
+        assign o_awch = (awch_grant[0]) ? i_awch[0*AWCH_W+:AWCH_W] :
+                        (awch_grant[1]) ? i_awch[1*AWCH_W+:AWCH_W] :
+                        (awch_grant[2]) ? i_awch[2*AWCH_W+:AWCH_W] :
+                        (awch_grant[3]) ? i_awch[3*AWCH_W+:AWCH_W] :
+                                        {AWCH_W{1'b0}};
+    end
+    else if(MST_NB > 2)begin
+        assign o_rready = (mst0_rch_targeted) ? i_rready[0] :
+                        (mst1_rch_targeted) ? i_rready[1] :
+                        (mst2_rch_targeted) ? i_rready[2] :
+                                                1'b0;
+        assign o_arvalid = (arch_grant[0]) ? i_arvalid[0] :
+                        (arch_grant[1]) ? i_arvalid[1] :
+                        (arch_grant[2]) ? i_arvalid[2] :
+                                            1'b0;
+        assign o_arch = (arch_grant[0]) ? i_arch[0*ARCH_W+:ARCH_W] :
+                        (arch_grant[1]) ? i_arch[1*ARCH_W+:ARCH_W] :
+                        (arch_grant[2]) ? i_arch[2*ARCH_W+:ARCH_W] :
+                                        {ARCH_W{1'b0}};
+        assign o_wvalid = (~wch_empty & wch_grant[0]) ? i_wvalid[0] :
+                        (~wch_empty & wch_grant[1]) ? i_wvalid[1] :
+                        (~wch_empty & wch_grant[2]) ? i_wvalid[2] :
+                                                        1'b0;
+        assign o_wlast = (~wch_empty & wch_grant[0]) ? i_wlast[0] :
+                        (~wch_empty & wch_grant[1]) ? i_wlast[1] :
+                        (~wch_empty & wch_grant[2]) ? i_wlast[2] :
+                                                    1'b0;
+        assign o_wch = (~wch_empty & wch_grant[0]) ? i_wch[0*WCH_W+:WCH_W] :
+                    (~wch_empty & wch_grant[1]) ? i_wch[1*WCH_W+:WCH_W] :
+                    (~wch_empty & wch_grant[2]) ? i_wch[2*WCH_W+:WCH_W] :
+                                                    {WCH_W{1'b0}};
+        assign o_bready = (mst0_bch_targeted) ? i_bready[0] :
+                        (mst1_bch_targeted) ? i_bready[1] :
+                        (mst2_bch_targeted) ? i_bready[2] :
+                                                1'b0;
+        assign o_awvalid = (awch_grant[0]) ? i_awvalid[0] :
+                        (awch_grant[1]) ? i_awvalid[1] :
+                        (awch_grant[2]) ? i_awvalid[2] :
+                                            1'b0;
+        assign o_awch = (awch_grant[0]) ? i_awch[0*AWCH_W+:AWCH_W] :
+                        (awch_grant[1]) ? i_awch[1*AWCH_W+:AWCH_W] :
+                        (awch_grant[2]) ? i_awch[2*AWCH_W+:AWCH_W] :
+                                        {AWCH_W{1'b0}};
+    end
+    else if(MST_NB > 1)begin
+        assign o_rready = (mst0_rch_targeted) ? i_rready[0] :
+                        (mst1_rch_targeted) ? i_rready[1] : 1'b0;
+        assign o_arvalid = (arch_grant[0]) ? i_arvalid[0] :
+                        (arch_grant[1]) ? i_arvalid[1] : 1'b0;
+        assign o_arch = (arch_grant[0]) ? i_arch[0*ARCH_W+:ARCH_W] :
+                        (arch_grant[1]) ? i_arch[1*ARCH_W+:ARCH_W] :
+                                        {ARCH_W{1'b0}};
+        assign o_wvalid = (~wch_empty & wch_grant[0]) ? i_wvalid[0] :
+                        (~wch_empty & wch_grant[1]) ? i_wvalid[1] : 1'b0;
+        assign o_wlast = (~wch_empty & wch_grant[0]) ? i_wlast[0] :
+                        (~wch_empty & wch_grant[1]) ? i_wlast[1] : 1'b0;
+        assign o_wch = (~wch_empty & wch_grant[0]) ? i_wch[0*WCH_W+:WCH_W] :
+                    (~wch_empty & wch_grant[1]) ? i_wch[1*WCH_W+:WCH_W] :
+                                                    {WCH_W{1'b0}};
+        assign o_bready = (mst0_bch_targeted) ? i_bready[0] :
+                        (mst1_bch_targeted) ? i_bready[1] : 1'b0;
+        assign o_awvalid = (awch_grant[0]) ? i_awvalid[0] :
+                        (awch_grant[1]) ? i_awvalid[1] : 1'b0;
+        assign o_awch = (awch_grant[0]) ? i_awch[0*AWCH_W+:AWCH_W] :
+                        (awch_grant[1]) ? i_awch[1*AWCH_W+:AWCH_W] :
+                                        {AWCH_W{1'b0}};
+    end
+    else if(MST_NB > 0)begin
+        assign o_rready = (mst0_rch_targeted) ? i_rready[0] : 1'b0;
+        assign o_arvalid = (arch_grant[0]) ? i_arvalid[0] : 1'b0;
+        assign o_arch = (arch_grant[0]) ? i_arch[0*ARCH_W+:ARCH_W] : {ARCH_W{1'b0}};
+        assign o_wvalid = (~wch_empty & wch_grant[0]) ? i_wvalid[0] : 1'b0;
+        assign o_wlast = (~wch_empty & wch_grant[0]) ? i_wlast[0] : 1'b0;
+        assign o_wch = (~wch_empty & wch_grant[0]) ? i_wch[0*WCH_W+:WCH_W] : {WCH_W{1'b0}};
+        assign o_bready = (mst0_bch_targeted) ? i_bready[0] : 1'b0;
+        assign o_awvalid = (awch_grant[0]) ? i_awvalid[0] : 1'b0;
+        assign o_awch = (awch_grant[0]) ? i_awch[0*AWCH_W+:AWCH_W] : {AWCH_W{1'b0}};
+    end
+endgenerate
 
     assign i_rch = o_rch;
 

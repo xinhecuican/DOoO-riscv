@@ -1,8 +1,7 @@
 // distributed under the mit license
 // https://opensource.org/licenses/mit-license.php
 
-`timescale 1 ns / 1 ps
-`default_nettype none
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -49,25 +48,36 @@ module axicb_round_robin
     logic p2 = REQ2_PRIORITY;
     logic p3 = REQ3_PRIORITY;
 
-    assign req_p0[0] = (REQ0_PRIORITY==0) ? req[0] : 1'b0;
-    assign req_p0[1] = (REQ1_PRIORITY==0) ? req[1] : 1'b0;
-    assign req_p0[2] = (REQ2_PRIORITY==0) ? req[2] : 1'b0;
-    assign req_p0[3] = (REQ3_PRIORITY==0) ? req[3] : 1'b0;
+generate
+    if(REQ_NB > 0)begin
+        assign req_p0[0] = (REQ0_PRIORITY==0) ? req[0] : 1'b0;
+        assign req_p1[0] = (REQ0_PRIORITY==1) ? req[0] : 1'b0;
+        assign req_p2[0] = (REQ0_PRIORITY==2) ? req[0] : 1'b0;
+        assign req_p3[0] = (REQ0_PRIORITY==3) ? req[0] : 1'b0;
+    end
+    if(REQ_NB > 1)begin
+        assign req_p0[1] = (REQ1_PRIORITY==0) ? req[1] : 1'b0;
+        assign req_p1[1] = (REQ1_PRIORITY==1) ? req[1] : 1'b0;
+        assign req_p2[1] = (REQ1_PRIORITY==2) ? req[1] : 1'b0;
+        assign req_p3[1] = (REQ1_PRIORITY==3) ? req[1] : 1'b0;
+    end
+    if(REQ_NB > 2)begin
+        assign req_p0[2] = (REQ2_PRIORITY==0) ? req[2] : 1'b0;
+        assign req_p1[2] = (REQ2_PRIORITY==1) ? req[2] : 1'b0;
+        assign req_p2[2] = (REQ2_PRIORITY==2) ? req[2] : 1'b0;
+        assign req_p3[2] = (REQ2_PRIORITY==3) ? req[2] : 1'b0;
+    end
+    if(REQ_NB > 3)begin
+        assign req_p0[3] = (REQ3_PRIORITY==0) ? req[3] : 1'b0;
+        assign req_p1[3] = (REQ3_PRIORITY==1) ? req[3] : 1'b0;
+        assign req_p2[3] = (REQ3_PRIORITY==2) ? req[3] : 1'b0;
+        assign req_p3[3] = (REQ3_PRIORITY==3) ? req[3] : 1'b0;
+    end
+endgenerate
+    
+    
+    
 
-    assign req_p1[0] = (REQ0_PRIORITY==1) ? req[0] : 1'b0;
-    assign req_p1[1] = (REQ1_PRIORITY==1) ? req[1] : 1'b0;
-    assign req_p1[2] = (REQ2_PRIORITY==1) ? req[2] : 1'b0;
-    assign req_p1[3] = (REQ3_PRIORITY==1) ? req[3] : 1'b0;
-
-    assign req_p2[0] = (REQ0_PRIORITY==2) ? req[0] : 1'b0;
-    assign req_p2[1] = (REQ1_PRIORITY==2) ? req[1] : 1'b0;
-    assign req_p2[2] = (REQ2_PRIORITY==2) ? req[2] : 1'b0;
-    assign req_p2[3] = (REQ3_PRIORITY==2) ? req[3] : 1'b0;
-
-    assign req_p3[0] = (REQ0_PRIORITY==3) ? req[0] : 1'b0;
-    assign req_p3[1] = (REQ1_PRIORITY==3) ? req[1] : 1'b0;
-    assign req_p3[2] = (REQ2_PRIORITY==3) ? req[2] : 1'b0;
-    assign req_p3[3] = (REQ3_PRIORITY==3) ? req[3] : 1'b0;
 
     assign p3_active = |req_p3;
     assign p2_active = |req_p2 & ~p3_active;
