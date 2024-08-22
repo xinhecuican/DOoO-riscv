@@ -8,3 +8,6 @@
 [submodule "utils/riscv-tests"]
 	path = utils/riscv-tests
 	url = https://github.com/xinhecuican/riscv-tests.git
+[submodule "utils/iEDA"]
+	path = utils/iEDA
+	url = https://github.com/xinhecuican/iEDA.git
