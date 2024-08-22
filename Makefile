@@ -13,8 +13,16 @@ SRC = $(shell find src/utils -name "*.v" -or -name "*.sv" -or -name "*.svh")
 SRC += $(shell find src/core -name "*.v" -or -name "*.sv" -or -name "*.svh")
 SRC += $(shell find src/soc -name "*.v" -or -name "*.sv" -or -name "*.svh")
 
+WITH_DRAMSIM3 := 1
+
+
+ifeq ($(WITH_DRAMSIM3),1)
+	export WITH_DRAMSIM3=1
+	DEFINES += DRAMSIM3=ON;
+endif
+
 emu:
-	python scripts/parseDef.py -b build/ -p ${CONFIG}
+	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "${DEFINES}"
 	make -C utils/difftest emu -j `nproc`
 
 emu-run: emu

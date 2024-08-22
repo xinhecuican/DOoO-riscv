@@ -27,7 +27,7 @@ module SimTop(
 
     input           io_memAXI_0_w_ready,
     output          io_memAXI_0_w_valid,
-    output [63: 0]  io_memAXI_0_w_bits_data,
+    output [64*4-1: 0]  io_memAXI_0_w_bits_data,
     output [7: 0]   io_memAXI_0_w_bits_strb,
     output          io_memAXI_0_w_bits_last,
 
@@ -51,7 +51,7 @@ module SimTop(
     output          io_memAXI_0_r_ready,
     input           io_memAXI_0_r_valid,
     input [1: 0]    io_memAXI_0_r_bits_resp,
-    input [63: 0]   io_memAXI_0_r_bits_data,
+    input [64*4-1: 0]   io_memAXI_0_r_bits_data,
     input           io_memAXI_0_r_bits_last,
     input [7: 0]    io_memAXI_0_r_bits_id
 );
@@ -122,23 +122,23 @@ module SimTop(
     );
 
 `ifdef DRAMSIM3
-    assign io_memAXI_0_aw_ready = mem_axi.saw.ready;
-    assign mem_axi.maw.valid = io_memAXI_0_aw_valid;
-    assign mem_axi.maw.addr = io_memAXI_0_aw_bits_addr;
-    assign mem_axi.maw.prot = io_memAXI_0_aw_bits_prot;
-    assign mem_axi.maw.id = io_memAXI_0_aw_bits_id;
-    assign mem_axi.maw.len = io_memAXI_0_aw_bits_len;
-    assign mem_axi.maw.burst = io_memAXI_0_aw_bits_burst;
-    assign mem_axi.maw.size = io_memAXI_0_aw_bits_size;
-    assign mem_axi.maw.lock = io_memAXI_0_aw_bits_lock;
-    assign mem_axi.maw.cache = io_memAXI_0_aw_bits_cache;
-    assign mem_axi.maw.qos = io_memAXI_0_aw_bits_qos;
+    assign mem_axi.saw.ready = io_memAXI_0_aw_ready;
+    assign io_memAXI_0_aw_valid = mem_axi.maw.valid;
+    assign io_memAXI_0_aw_bits_addr = mem_axi.maw.addr;
+    assign io_memAXI_0_aw_bits_prot = mem_axi.maw.prot;
+    assign io_memAXI_0_aw_bits_id = mem_axi.maw.id;
+    assign io_memAXI_0_aw_bits_len = mem_axi.maw.len;
+    assign io_memAXI_0_aw_bits_burst = mem_axi.maw.burst;
+    assign io_memAXI_0_aw_bits_size = mem_axi.maw.size;
+    assign io_memAXI_0_aw_bits_lock = mem_axi.maw.lock;
+    assign io_memAXI_0_aw_bits_cache = mem_axi.maw.cache;
+    assign io_memAXI_0_aw_bits_qos = mem_axi.maw.qos;
 
-    assign io_memAXI_0_w_ready = mem_axi.sw.ready;
-    assign mem_axi.mw.valid = io_memAXI_0_w_valid;
-    assign mem_axi.mw.data = io_memAXI_0_w_bits_data;
-    assign mem_axi.mw.strb = io_memAXI_0_w_bits_strb;
-    assign mem_axi.mw.last = io_memAXI_0_w_bits_last;
+    assign mem_axi.sw.ready = io_memAXI_0_w_ready;
+    assign io_memAXI_0_w_valid = mem_axi.mw.valid;
+    assign io_memAXI_0_w_bits_data = mem_axi.mw.data;
+    assign io_memAXI_0_w_bits_strb = mem_axi.mw.wstrb;
+    assign io_memAXI_0_w_bits_last = mem_axi.mw.last;
 
     assign io_memAXI_0_b_ready = mem_axi.mb.ready;
     assign mem_axi.sb.valid = io_memAXI_0_b_valid;

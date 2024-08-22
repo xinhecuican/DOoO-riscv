@@ -36,8 +36,9 @@ def main(args):
     if args.extra != "":
         extra_defines = args.extra.split(";")
         for extra_define in extra_defines:
-            define = extra_define.split("=")
-            defines.append([define[0], define[1]])
+            if "=" in extra_define:
+                define = extra_define.split("=")
+                defines.append([define[0], define[1]])
     if not os.path.exists(args.build):
         os.mkdir(args.build)
     with open(os.path.join(args.build, "predefine.svh"), "w", encoding="utf-8") as pre, \
