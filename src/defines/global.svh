@@ -1,7 +1,7 @@
 `ifndef GLOBAL_SVH
 `define GLOBAL_SVH
 `include "arch.svh"
-
+`include "registers.svh"
 `define N(n) [(n)-1: 0]
 `define ARRAY(height, width) [(height-1): 0][(width-1): 0]
 `define TENSOR(x1, x2, x3) [x1-1: 0][x2-1: 0][x3-1: 0]

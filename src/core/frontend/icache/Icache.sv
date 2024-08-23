@@ -83,7 +83,7 @@ module ICache(
                               request_buffer.expand_en[1] & {`ICACHE_BANK{itlb_cache_io.exception[1]}};
     assign index = fsq_cache_io.stream.start_addr`ICACHE_SET_BUS;
     assign indexp1 = index + 1;
-    assign refill_en = main_state == REFILL && axi_io.sr.valid && next_stream_index == 0;
+    assign refill_en = main_state == REFILL && axi_io.r_valid && next_stream_index == 0;
     assign abandon_lookup = fsq_cache_io.abandon &&
                             request_buffer.fsqIdx == fsq_cache_io.abandonIdx;
     assign abandon_idle = fsq_cache_io.abandon &&
@@ -195,10 +195,11 @@ module ICache(
     assign axi_io.mar.lock = 0;
     assign axi_io.mar.cache = 0;
     assign axi_io.mar.prot = 0;
-    assign axi_io.mar.valid = main_state == MISS;
+    assign axi_io.ar_valid = main_state == MISS;
     assign axi_io.mar.qos = 0;
     assign axi_io.mar.region = 0;
     assign axi_io.mar.user = 0;
+    assign axi_io.r_ready = 1'b1;
 
 `define REQ_DEF \
     request_buffer.span <= span; \
@@ -277,12 +278,12 @@ module ICache(
                 end
             end
             MISS:begin
-                if(axi_io.sar.ready)begin
+                if(axi_io.ar_ready)begin
                     main_state <= REFILL;
                 end
             end
             REFILL:begin
-                if(axi_io.sr.valid)begin
+                if(axi_io.r_valid)begin
                     miss_buffer.stream_index <= next_stream_index;
                     miss_buffer.replace_data[miss_buffer.stream_index] <= axi_io.sr.data;
                     if(request_buffer.expand_en[miss_buffer.line][miss_buffer.stream_index])begin
@@ -294,7 +295,7 @@ module ICache(
                         miss_buffer.windex <= request_buffer.index2;
                     end
                 end
-                if(axi_io.sr.valid && axi_io.sr.last)begin
+                if(axi_io.r_valid && axi_io.sr.last)begin
                     if(!miss_buffer.addition_request)begin
                         main_state <= IDLE;
                     end
@@ -307,7 +308,7 @@ module ICache(
                 end
             end
             endcase
-            if(axi_io.sr.valid & axi_io.sr.last)begin
+            if(axi_io.r_valid & axi_io.sr.last)begin
                 miss_buffer.flush <= 1'b0;
             end
             else if(fsq_cache_io.flush && (main_state == MISS || main_state == REFILL))begin
@@ -316,7 +317,7 @@ module ICache(
             stall_wait <= miss_data_en || fsq_cache_io.flush ? 1'b0 :
                           fsq_cache_io.stall & main_state == REFILL ? 1'b1 : stall_wait;
             miss_data_en <= ((main_state == REFILL) & 
-                            axi_io.sr.valid & 
+                            axi_io.r_valid & 
                             axi_io.sr.last &
                             (~miss_buffer.addition_request) |
                             stall_wait) &

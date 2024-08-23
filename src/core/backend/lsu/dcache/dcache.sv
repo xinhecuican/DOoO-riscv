@@ -58,15 +58,20 @@ module DCache(
     ) plru(.*);
     ReplaceQueue replace_queue(.*, .io(replace_queue_io), .w_axi_io(dcache_axi_io.replace));
     assign axi_io.mar = dcache_axi_io.mar;
-    assign axi_io.mr = dcache_axi_io.mr;
     assign axi_io.maw = dcache_axi_io.maw;
     assign axi_io.mw = dcache_axi_io.mw;
-    assign axi_io.mb = dcache_axi_io.mb;
-    assign dcache_axi_io.sar = axi_io.sar;
+    assign axi_io.ar_valid = dcache_axi_io.ar_valid;
+    assign axi_io.aw_valid = dcache_axi_io.aw_valid;
+    assign axi_io.w_valid = dcache_axi_io.w_valid;
+    assign axi_io.r_ready = dcache_axi_io.r_ready;
+    assign axi_io.b_ready = dcache_axi_io.b_ready;
     assign dcache_axi_io.sr = axi_io.sr;
-    assign dcache_axi_io.saw = axi_io.saw;
-    assign dcache_axi_io.sw = axi_io.sw;
     assign dcache_axi_io.sb = axi_io.sb;
+    assign dcache_axi_io.ar_ready = axi_io.ar_ready;
+    assign dcache_axi_io.aw_ready = axi_io.aw_ready;
+    assign dcache_axi_io.w_ready = axi_io.w_ready;
+    assign dcache_axi_io.r_valid = axi_io.r_valid;
+    assign dcache_axi_io.b_valid = axi_io.b_valid;
 
 // read
     logic `N(`LOAD_PIPELINE) r_req, r_req_s3;

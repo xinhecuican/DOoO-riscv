@@ -67,7 +67,7 @@ module ReplaceQueue(
                 entrys[io.replace_idx] <= newEntry;
             end
 
-            if(w_axi_io.sb.valid | dataValid[bhead] & ~dirty[bhead])begin
+            if(w_axi_io.b_valid | dataValid[bhead] & ~dirty[bhead])begin
                 bhead <= bhead_n;
                 bhdir <= bhead[`DCACHE_REPLACE_WIDTH-1] & ~bhead_n[`DCACHE_REPLACE_WIDTH-1] ? ~bhdir : bhdir;
                 dataValid[bhead] <= 1'b0;
@@ -111,16 +111,16 @@ endgenerate
                 processEntry <= entrys[bhead];
             end
 
-            if(w_axi_io.maw.valid & w_axi_io.saw.ready)begin
+            if(w_axi_io.aw_valid & w_axi_io.aw_ready)begin
                 aw_valid <= 1'b0;
                 wvalid <= 1'b1;
             end
 
-            if(w_axi_io.sb.valid)begin
+            if(w_axi_io.b_valid)begin
                 processValid <= 1'b0;
             end
 
-            if(w_axi_io.mw.valid & w_axi_io.sw.ready)begin
+            if(w_axi_io.w_valid & w_axi_io.w_ready)begin
                 widx <= widx + 1;
                 if(wlast)begin
                     wvalid <= 1'b0;
@@ -135,7 +135,7 @@ endgenerate
         end
     end
 
-    assign w_axi_io.maw.valid = aw_valid;
+    assign w_axi_io.aw_valid = aw_valid;
     assign w_axi_io.maw.id = `DCACHE_ID;
     assign w_axi_io.maw.addr = {processEntry.addr, {`DCACHE_LINE_WIDTH{1'b0}}};
     assign w_axi_io.maw.len = `DCACHE_LINE / `DATA_BYTE - 1;
@@ -146,12 +146,12 @@ endgenerate
     assign w_axi_io.maw.prot = 0;
 
     assign w_axi_io.mw.data = processEntry.data[widx];
-    assign w_axi_io.mw.wstrb = {`DATA_BYTE{1'b1}};
+    assign w_axi_io.mw.strb = {`DATA_BYTE{1'b1}};
     assign w_axi_io.mw.last = wlast;
-    assign w_axi_io.mw.valid = wvalid;
+    assign w_axi_io.w_valid = wvalid;
     assign w_axi_io.mw.user = 0;
 
-    assign w_axi_io.mb.ready = 1'b1;
+    assign w_axi_io.b_ready = 1'b1;
 
 `ifdef DIFFTEST
     `LOG_ARRAY(T_DCACHE, dbg_data, newEntry.data, TRANSFER_BANK)

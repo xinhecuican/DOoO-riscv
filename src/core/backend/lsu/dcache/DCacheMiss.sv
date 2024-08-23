@@ -327,7 +327,7 @@ endgenerate
 
     assign io.req = en[head] & ~req_start;
     assign io.req_addr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
-    assign rlast = r_axi_io.sr.valid & r_axi_io.sr.last;
+    assign rlast = r_axi_io.r_valid & r_axi_io.sr.last;
 
 generate
     for(genvar i=0; i<`DCACHE_LINE / `DATA_BYTE; i++)begin
@@ -339,7 +339,7 @@ endgenerate
 
     always_ff @(posedge clk)begin
         req_next <= io.req;
-        req_last <= r_axi_io.sr.valid & r_axi_io.sr.last;
+        req_last <= r_axi_io.r_valid & r_axi_io.sr.last;
     end
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
@@ -373,15 +373,15 @@ endgenerate
                 req_ptw <= 1'b0;
             end
 
-            if(r_axi_io.mar.valid & r_axi_io.sar.ready)begin
+            if(r_axi_io.ar_valid & r_axi_io.ar_ready)begin
                 req_cache <= 1'b0;
             end
 
-            if(r_axi_io.sr.valid)begin
+            if(r_axi_io.r_valid)begin
                 cacheIdx <= cacheIdx + 1;
             end
         end
-        if(r_axi_io.sr.valid)begin
+        if(r_axi_io.r_valid)begin
             cacheData[cacheIdx] <= r_axi_io.sr.data;
         end
         if(rlast)begin
@@ -390,7 +390,7 @@ endgenerate
         end
     end
 
-    assign r_axi_io.mar.valid = req_cache;
+    assign r_axi_io.ar_valid = req_cache;
     assign r_axi_io.mar.id = `DCACHE_ID;
     assign r_axi_io.mar.addr = cache_addr;
     assign r_axi_io.mar.len = `DCACHE_LINE / `DATA_BYTE - 1;
@@ -403,6 +403,6 @@ endgenerate
     assign r_axi_io.mar.region = 0;
     assign r_axi_io.mar.user = 0;
 
-    assign r_axi_io.mr.ready = 1'b1;
+    assign r_axi_io.r_ready = 1'b1;
 
 endmodule

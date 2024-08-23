@@ -22,8 +22,8 @@ def parseDef(define):
     else:
         return f'''`ifdef {define[0]}
 `undef {define[0]}
-`define {define[0]} {define[1]}
 `endif
+`define {define[0]} {define[1]}
 '''
 
 def main(args):

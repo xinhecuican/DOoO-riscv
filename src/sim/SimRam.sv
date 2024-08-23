@@ -19,15 +19,15 @@ module SimRam(
 
     assign wmask =  {
 `ifdef SV64
-                    {8{axi.mw.wstrb[7]}},
-                    {8{axi.mw.wstrb[6]}},
-                    {8{axi.mw.wstrb[5]}},
-                    {8{axi.mw.wstrb[4]}},
+                    {8{axi.mw.strb[7]}},
+                    {8{axi.mw.strb[6]}},
+                    {8{axi.mw.strb[5]}},
+                    {8{axi.mw.strb[4]}},
 `endif
-                    {8{axi.mw.wstrb[3]}},
-                    {8{axi.mw.wstrb[2]}},
-                    {8{axi.mw.wstrb[1]}},
-                    {8{axi.mw.wstrb[0]}}};
+                    {8{axi.mw.strb[3]}},
+                    {8{axi.mw.strb[2]}},
+                    {8{axi.mw.strb[1]}},
+                    {8{axi.mw.strb[0]}}};
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             axi.sar.ready <= 1'b1;

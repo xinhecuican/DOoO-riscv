@@ -8,6 +8,7 @@ WE=0
 I ?= utils/NEMU/ready-to-run/microbench.bin
 CONFIG ?= ""
 CLK_FREQ = 500
+CLK_PERIOD = $(shell expr 1000 / ${CLK_FREQ})
 
 SRC = $(shell find src/utils -name "*.v" -or -name "*.sv" -or -name "*.svh")
 SRC += $(shell find src/core -name "*.v" -or -name "*.sv" -or -name "*.svh")
@@ -20,6 +21,7 @@ ifeq ($(WITH_DRAMSIM3),1)
 	export WITH_DRAMSIM3=1
 	DEFINES += DRAMSIM3=ON;
 endif
+DEFINES += CLK_FREQ=${CLK_FREQ};CLK_PERIOD=${CLK_PERIOD};
 
 emu:
 	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "${DEFINES}"
@@ -30,7 +32,7 @@ emu-run: emu
 	build/emu -i "${I}" --diff=utils/NEMU/build/riscv64-nemu-interpreter-so -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) --dump-wave --log-path=${LOG_PATH}
 
 convert:
-	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF"
+	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
 	mkdir -p build/v
 	sv2v --write=build/v -I=src/defines -I=build --top=Soc -v ${SRC}
 
