@@ -2,6 +2,7 @@
 `define BUNDLES_SVH
 `include "global.svh"
 `include "opcode.svh"
+`include "csr_defines.svh"
 
 typedef struct packed {
     logic en;

@@ -609,9 +609,11 @@ interface CsrTlbIO;
     logic sum;
     logic `N(2) mode;
     logic `N(`TLB_MODE) satp_mode;
+    logic `ARRAY(`PMPCFG_SIZE, `MXL) pmpcfg;
+    logic `ARRAY(`PMP_SIZE, `MXL) pmpaddr;
 
-    modport csr (output asid, sum, mode, satp_mode);
-    modport tlb (input asid, sum, mode, satp_mode);
+    modport csr (output asid, sum, mode, satp_mode, pmpcfg, pmpaddr);
+    modport tlb (input asid, sum, mode, satp_mode, pmpcfg, pmpaddr);
 endinterface
 
 interface TlbL2IO;

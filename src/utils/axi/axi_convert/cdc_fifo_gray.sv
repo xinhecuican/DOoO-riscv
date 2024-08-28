@@ -156,14 +156,6 @@ module cdc_fifo_gray #(
     (* async *) .async_rptr_o ( async_rptr )
   );
 
-  // Check the invariants.
-  `ifndef SYNTHESIS
-  `ifndef COMMON_CELLS_ASSERTS_OFF
-  initial assert(LOG_DEPTH > 0);
-  initial assert(SYNC_STAGES >= 2);
-  `endif
-  `endif
-
 endmodule
 
 

@@ -45,6 +45,9 @@ module CSR(
 `endif
     logic `N(`MXL) mconfigptr;
 
+    logic `ARRAY(`PMPCFG_SIZE, `MXL) pmpcfg;
+    logic `ARRAY(`PMP_SIZE, `MXL) pmpaddr;
+
     // superviser
     TVEC stvec;
     logic `N(`MXL) stval;
@@ -54,10 +57,12 @@ module CSR(
 
 // csr write
     logic `N(`CSR_NUM) wen;
-    logic `N(`XLEN) wdata, origin_data, rdata;
+    logic `N(`XLEN) wdata, origin_data, rdata, cmp_rdata;
     logic `N(`CSROP_WIDTH) csrop;
     logic csrrw, csrrs, csrrc, ecall, ebreak;
     logic `N(`EXC_WIDTH) exccode;
+    logic pmp_cmp;
+    logic `N(`XLEN) pmp_rdata;
 
     assign csrop = issue_csr_io.bundle.csrop;
     assign origin_data = csrop[2] ? issue_csr_io.bundle.imm : issue_csr_io.rdata;
@@ -66,6 +71,7 @@ module CSR(
     assign csrrc = csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
     assign ecall = csrop[2] & ~csrop[1] & ~csrop[0];
     assign ebreak = ~csrop[2] & ~csrop[1] & ~csrop[0];
+    assign rdata = pmp_cmp ? pmp_rdata : cmp_rdata;
     assign wdata = csrrw ? origin_data :
                    csrrs ? rdata | origin_data : rdata & ~origin_data;
 // csr read
@@ -77,7 +83,7 @@ module CSR(
     logic redirect_older;
     LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.status.robIdx, redirect_older);
     assign mode_valid = mode >= issue_csr_io.bundle.csrid[11: 10];
-    assign wen = cmp_eq  & 
+    assign wen = ((|cmp_eq) | pmp_cmp)  & 
        {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
                  ~(backendCtrl.redirect & redirect_older) & 
                  issue_csr_io.en & mode_valid &
@@ -140,7 +146,7 @@ endgenerate                                                   \
         .cmp(cmp_csrid),
         .data_i(cmp_csr_data),
         .eq(cmp_eq),
-        .data_o(rdata)
+        .data_o(cmp_rdata)
     );
 
 `define CSR_WRITE_DEF(name, init_value, WRITE_ENABLE, MASK_VALID, mask) \
@@ -309,7 +315,7 @@ endgenerate                                                             \
     assign csr_wb_io.datas[0].robIdx = issue_csr_io.status.robIdx;
     assign csr_wb_io.datas[0].rd = issue_csr_io.status.rd;
     assign csr_wb_io.datas[0].res = rdata;
-    assign csr_wb_io.datas[0].exccode = ((csrrw | csrrs | csrrc) & (~mode_valid | (~(|cmp_eq)))) |
+    assign csr_wb_io.datas[0].exccode = ((csrrw | csrrs | csrrc) & (~mode_valid | (~((|cmp_eq) | pmp_cmp)))) |
                                         (wen[satp_id] & mstatus.tvm) ? `EXC_II :
                                         issue_csr_io.bundle.exc_valid ? issue_csr_io.bundle.exccode : `EXC_NONE;
 
@@ -332,6 +338,35 @@ endgenerate                                                             \
         end
     end
 
+// pmp
+    localparam [11: 0] pmpcfg_base = 12'h3a0;
+    localparam [11: 0] pmpaddr_base = 12'h3b0;
+    logic `N($clog2(`PMPCFG_SIZE)) pmp_id;
+    logic `N($clog2(`PMP_SIZE)) pmpaddr_id;
+    logic pmpcfg_cmp_en, pmpaddr_cmp_en;
+    assign pmp_id = issue_csr_io.bundle.csrid[$clog2(`PMPCFG_SIZE)-1: 0];
+    assign pmpaddr_id = issue_csr_io.bundle.csrid[$clog2(`PMP_SIZE)-1: 0];
+    assign pmpcfg_cmp_en = issue_csr_io.bundle.csrid[11: $clog2(`PMPCFG_SIZE)] == pmpcfg_base[11: $clog2(`PMPCFG_SIZE)];
+    assign pmpaddr_cmp_en = issue_csr_io.bundle.csrid[11: $clog2(`PMP_SIZE)] == pmpaddr_base[11: $clog2(`PMP_SIZE)];
+    assign pmp_cmp = pmpcfg_cmp_en | pmpaddr_cmp_en;
+    assign pmp_rdata = issue_csr_io.bundle.csrid[11: 4] == 8'h3a ? pmpcfg[pmp_id] : pmpaddr[pmpaddr_id];
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            pmpcfg <= 0;
+            pmpaddr <= 0;
+        end
+        else begin
+            if(wen & pmpcfg_cmp_en)begin
+                pmpcfg[pmp_id] <= wdata;
+            end
+            if(wen & pmpaddr_cmp_en)begin
+                pmpaddr[pmpaddr_id] <= wdata;
+            end
+        end
+    end
+
+
 // tlb
 `define TLB_ASSIGN(name) \
     always_ff @(posedge clk)begin \
@@ -341,6 +376,20 @@ endgenerate                                                             \
         name.sum <= mstatus.sum; \
         name.asid <= satp.asid; \
         name.satp_mode <= satp.mode; \
+    end \
+    always_ff @(posedge clk, posedge rst)begin \
+        if(rst == `RST)begin \
+            name.pmpcfg <= 0; \
+            name.pmpaddr <= 0; \
+        end \
+        else begin \
+            if(wen & pmpcfg_cmp_en)begin \
+                name.pmpcfg[pmp_id] <= wdata; \
+            end \
+            if(wen & pmpaddr_cmp_en)begin \
+                name.pmpaddr[pmpaddr_id] <= wdata; \
+            end \
+        end \
     end \
 
     `TLB_ASSIGN(csr_itlb_io)

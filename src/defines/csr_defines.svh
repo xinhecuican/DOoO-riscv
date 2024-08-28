@@ -6,7 +6,12 @@
 `define S_MODE 2'b01
 `define M_MODE 2'b11
 
+`define PMA_SIZE 4
+`define PMACFG_SIZE (`PMA_SIZE / 4)
+
 `ifdef SV32
+`define PMP_SIZE 8
+`define PMPCFG_SIZE (`PMP_SIZE / 4)
 `define CSR_NUM 31
 `endif
 `define CSRID_mstatus   12'h300
@@ -31,6 +36,10 @@
 `define CSRID_mimpid    12'hf13
 `define CSRID_mhartid   12'hf14
 `define CSRID_mconfigptr 12'hf15
+`define CSRID_pmpcfg    12'h3a0
+`define CSRID_pmpaddr   12'h3b0
+`define CSRID_pmacfg    12'h3d0
+`define CSRID_pmaaddr   12'h3e0
 
 `define CSRID_sstatus   12'h100
 `define CSRID_stvec     12'h105
@@ -150,4 +159,38 @@ typedef struct packed {
     logic `N(`TLB_ASID) asid;
     logic `N(`TLB_PPN) ppn;
 } SATP;
+
+`define PMP_OFF     2'b00
+`define PMP_TOR     2'b01
+`define PMP_NA4     2'b10
+`define PMP_NAPOT   2'b11
+
+typedef struct packed {
+    logic l;
+    logic [1: 0] unuse1;
+    logic [1: 0] a;
+    logic x;
+    logic w;
+    logic r;
+} PMPCfg;
+
+typedef struct packed {
+    logic [1: 0] unuse1;
+    logic uc; // uncache
+    logic [1: 0] a;
+    logic [2: 0] unuse2;
+} PMACfg;
+
+`define PMA_ASSIGN \
+    logic `ARRAY(`PMACFG_SIZE, `MXL) pmacfg; \
+    logic `ARRAY(`PMA_SIZE, `MXL) pmaaddr; \
+`ifdef SV32 \
+    assign pmacfg[0] = 32'h00002808; \
+    assign pmaaddr[0] = 32'h04000000; \
+    assign pmaaddr[1] = 32'h20000000; \
+    assign pmaaddr[2] = 0; \
+    assign pmaaddr[3] = 0; \
+`endif
+
+
 `endif
