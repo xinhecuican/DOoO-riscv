@@ -170,11 +170,11 @@ endgenerate
     always_ff @(posedge clk)begin
         `UNPARAM
         replace_io.hit_en[0] <= r_req_s3[0] & rio.hit[0] | wreq_n;
-        replace_io.hit_en[1] <= r_req_s3[1] & rio.hit[1];
+        replace_io.hit_en[1] <= r_req_s3[1] & rio.hit[1] | refill_en_n;
         replace_io.hit_way[0] <= wreq_n ? w_wayIdx : hitWay_encode[0];
-        replace_io.hit_way[1] <= hitWay_encode[1];
+        replace_io.hit_way[1] <= refill_en_n ? refill_way_n : hitWay_encode[1];
         replace_io.hit_index[0] <= wreq_n ? waddr_n`DCACHE_SET_BUS : miss_io.raddr[0]`DCACHE_SET_BUS;
-        replace_io.hit_index[1] <= miss_io.raddr[1]`DCACHE_SET_BUS;
+        replace_io.hit_index[1] <= refill_en_n ? refill_addr_n`DCACHE_SET_BUS : miss_io.raddr[1]`DCACHE_SET_BUS;
     end
 
     assign rio.lq_en = miss_io.lq_en;

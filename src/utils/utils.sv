@@ -343,6 +343,16 @@ module LoopAdder #(
 	assign data_o[0] = data[WIDTH] & ~res[WIDTH-1] ? ~data[0] : data[0];
 endmodule
 
+module LoopFull #(
+	parameter WIDTH=4
+)(
+	input logic [WIDTH: 0] cmp1,
+	input logic [WIDTH: 0] cmp2,
+	output logic full
+);
+	assign full = (cmp1[0] ^ cmp2[0]) & (cmp1[WIDTH: 1] == cmp2[WIDTH: 1]);
+endmodule
+
 module MaskExpand #(
 	parameter WIDTH=4
 )(

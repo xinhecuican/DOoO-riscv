@@ -303,7 +303,7 @@ generate
 endgenerate
 
 // forward
-    logic `N(`STORE_QUEUE_SIZE) head_mask;
+    logic `N(`STORE_QUEUE_SIZE) head_mask, tail_mask, mask_vec;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_QUEUE_SIZE) valid_vec, offset_vec, fwd_offset_vec;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_QUEUE_SIZE) ptag_vec, forward_vec;
     logic [`LOAD_PIPELINE-1: 0][`STORE_QUEUE_SIZE-1: 0][`DCACHE_BYTE-1: 0] forward_mask;
@@ -312,6 +312,8 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `TLB_OFFSET-`DCACHE_BYTE_WIDTH) load_voffset;
 
     MaskGen #(`STORE_QUEUE_SIZE) maskgen_head (head, head_mask);
+    MaskGen #(`STORE_QUEUE_SIZE) maskgen_tail (tail, tail_mask);
+    assign mask_vec = {`STORE_QUEUE_SIZE{hdir ^ tdir}} ^ (head_mask ^ tail_mask);
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_QUEUE_SIZE; j++)begin
@@ -322,9 +324,10 @@ generate
         end
         logic `N(`STORE_QUEUE_SIZE) store_mask;
         MaskGen #(`STORE_QUEUE_SIZE) maskgen_store (loadFwd.fwdData[i].sqIdx.idx, store_mask);
-        logic span;
+        logic span, overflow;
         assign span = hdir ^ loadFwd.fwdData[i].sqIdx.dir;
-        assign valid_vec[i] = {`STORE_QUEUE_SIZE{span}} ^ (head_mask ^ store_mask);
+        LoopCompare #(`STORE_QUEUE_WIDTH) cmp_overflow({tail, tdir}, loadFwd.fwdData[i].sqIdx, overflow);
+        assign valid_vec[i] = overflow ? mask_vec : {`STORE_QUEUE_SIZE{span}} ^ (head_mask ^ store_mask);
         always_ff @(posedge clk)begin
             load_voffset[i] <= loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_BYTE_WIDTH];
         end

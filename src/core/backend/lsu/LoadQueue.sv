@@ -359,10 +359,13 @@ endgenerate
     logic `N(`LOAD_QUEUE_WIDTH) vio_enc_next, vio_mask_next;
     logic `N(`STORE_PIPELINE) span;
     logic span_combine, span_next, span_en;
+    logic `N(`LOAD_QUEUE_SIZE) tail_mask, mask_vec;
     // r 0 0000 0 0111 1 0011
     // w 0 0001 1 0000 0 0001
     // ^   0001   1000   1101
     MaskGen #(`LOAD_QUEUE_SIZE) maskgen_head (head, head_mask);
+    MaskGen #(`LOAD_QUEUE_SIZE) maskgen_tail (tail, tail_mask);
+    assign mask_vec = {`LOAD_QUEUE_SIZE{hdir ^ tdir}} ^ (head_mask ^ tail_mask);
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_QUEUE_SIZE; j++)begin
@@ -371,9 +374,11 @@ generate
                                    (|(io.write_violation[i].mask & addr_mask[j][`DCACHE_BYTE-1: 0]));
         end
         logic `N(`LOAD_QUEUE_SIZE) store_mask;
-        assign span[i] = hdir ^ io.write_violation[i].lqIdx.dir;
+        logic overflow;
+        LoopCompare #(`LOAD_QUEUE_WIDTH) cmp_overflow({tail, tdir}, io.write_violation[i].lqIdx, overflow);
+        assign span[i] = overflow ? 0 : hdir ^ io.write_violation[i].lqIdx.dir;
         MaskGen #(`LOAD_QUEUE_SIZE) maskgen_store (io.write_violation[i].lqIdx.idx, store_mask);
-        assign valid_vec[i] = span[i] ? (head_mask ^ store_mask) : ~(head_mask ^ store_mask);
+        assign valid_vec[i] = overflow ? 0 : ~({`LOAD_QUEUE_SIZE{span[i]}} ^ (head_mask ^ store_mask));
         assign wb_vec[i] = valid & addrValid;
     end
     assign violation_vec = wb_vec & valid_vec & cmp_vec;

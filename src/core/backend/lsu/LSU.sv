@@ -90,7 +90,7 @@ module LSU(
         .io(store_commit_io),
         .loadFwd(commit_queue_fwd)
     );
-    ViolationDetect violation_detect(.*, .io(violation_io));
+    ViolationDetect violation_detect(.*, .tail(load_queue_io.lqIdx), .io(violation_io));
     DTLB dtlb(.*, .tlb_l2_io(dtlb_io));
 
     assign lqIdx = load_queue_io.lqIdx;
@@ -496,6 +496,7 @@ endinterface
 module ViolationDetect(
     input logic clk,
     input logic rst,
+    input LoadIdx tail,
     ViolationIO.violation io,
     BackendRedirectIO.mem redirect_io,
     BackendCtrl backendCtrl
@@ -509,8 +510,8 @@ module ViolationDetect(
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
-            ViolationCompare cmp_s1(io.wdata[i], io.s1_data[j], s1_cmp[i][j]);
-            ViolationCompare cmp_s2(io.wdata[i], io.s2_data[j], s2_cmp[i][j]);
+            ViolationCompare cmp_s1(tail, io.wdata[i], io.s1_data[j], s1_cmp[i][j]);
+            ViolationCompare cmp_s2(tail, io.wdata[i], io.s2_data[j], s2_cmp[i][j]);
         end
         /* UNPARAM */
         ViolationOlderCompare cmp_s1_result (s1_cmp[i][0], s1_cmp[i][1], s1_result[i]);
@@ -560,12 +561,14 @@ endgenerate
 endmodule
 
 module ViolationCompare(
+    input StoreIdx tail,
     input ViolationData cmp1,
     input ViolationData cmp2,
     output ViolationData out
 );
-    logic older, equal, conflict;
+    logic older, equal, conflict, overflow;
     LoopCompare #(`LOAD_QUEUE_WIDTH) compare_lq (cmp1.lqIdx, cmp2.lqIdx, older);
+    LoopCompare #(`LOAD_QUEUE_WIDTH) compare_ov (tail, cmp1.lqIdx, overflow);
     assign equal = cmp1.lqIdx == cmp2.lqIdx;
     assign conflict = (cmp1.addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] == cmp2.addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH]) &&
                       (|(cmp1.mask & cmp2.mask));
@@ -575,7 +578,7 @@ module ViolationCompare(
     assign out.robIdx = cmp2.robIdx;
     assign out.fsqInfo = cmp2.fsqInfo;
     // BUG: consider load queue full
-    assign out.en = cmp1.en & cmp2.en & (older | equal) & conflict;
+    assign out.en = cmp1.en & cmp2.en & (older | equal) & conflict & ~overflow;
 endmodule
 
 module ViolationOlderCompare(
