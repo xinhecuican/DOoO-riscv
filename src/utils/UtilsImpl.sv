@@ -184,28 +184,21 @@ module PEncoder4 (
 	input logic [3: 0] in,
 	output logic [1: 0] out
 );
-	always_comb begin
-		if(in[3]) out = 2'b11;
-		else if(in[2]) out = 2'b10;
-		else if(in[1]) out = 2'b01;
-		else out = 2'b00;
-	end
+	assign out[1] = in[3] | in[2];
+	assign out[0] = in[3] | ((~in[2]) & in[1]);
 endmodule
 
 module PEncoder8 (
 	input logic [7: 0] in,
 	output logic [2: 0] out
 );
-	always_comb begin
-		if(in[7]) out = 3'b111;
-		else if(in[6]) out = 3'b110;
-		else if(in[5]) out = 3'b101;
-		else if(in[4]) out = 3'b100;
-		else if(in[3]) out = 3'b011;
-		else if(in[2]) out = 3'b010;
-		else if(in[1]) out = 3'b001;
-		else out = 3'b000;
-	end
+	logic [1: 0] out1, out2;
+	logic is_high;
+	PEncoder4 high(in[7: 4], out1);
+	PEncoder4 low(in[3: 0], out2);
+	assign is_high = |in[7: 4];
+	assign out[2] = is_high;
+	assign out[1: 0] = is_high ? out1 : out2;
 endmodule
 
 module PEncoder16(
@@ -376,6 +369,26 @@ module MaskGen16(
 	MaskGen8 gen_low (in[2: 0], low);
 	assign out[15: 8] = low & {8{in[3]}};
 	assign out[7: 0] = low | {8{in[3]}};
+endmodule
+
+module MaskGen20(
+	input logic [4: 0] in,
+	output logic [19: 0] out
+);
+	logic [15: 0] low;
+	MaskGen16 gen_low (in[3: 0], low);
+	assign out[19: 16] = low[3: 0] & {4{in[4]}};
+	assign out[15: 0] = low | {16{in[4]}};
+endmodule
+
+module MaskGen22(
+	input logic [4: 0] in,
+	output logic [21: 0] out
+);
+	logic [15: 0] low;
+	MaskGen16 gen_low (in[3: 0], low);
+	assign out[21: 16] = low[3: 0] & {6{in[4]}};
+	assign out[15: 0] = low | {16{in[4]}};
 endmodule
 
 module MaskGen32(

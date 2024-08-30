@@ -462,7 +462,7 @@ module MemDispatchQueue #(
     BackendCtrl backendCtrl,
     output logic need_redirect,
     output logic redirect_free,
-    output `N(IDX_WIDTH) redirect_idx
+    output logic `N(IDX_WIDTH) redirect_idx
 );
     logic `N(IDX_WIDTH) idxs `N(DEPTH);
     always_ff @(posedge clk)begin

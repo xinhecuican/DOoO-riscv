@@ -406,7 +406,7 @@ interface CommitBus;
     , robIdx
 );
     modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
-    modport mem(input loadNum, storeNum);
+    modport mem(input loadNum, storeNum, robIdx);
     modport csr(input robIdx);
 endinterface
 
@@ -575,6 +575,7 @@ interface DTLBLsuIO;
     logic `N(`LOAD_PIPELINE) lmiss;
     logic `N(`LOAD_PIPELINE) lexception;
     logic `N(`LOAD_PIPELINE) lcancel;
+    logic `N(`LOAD_PIPELINE) luncache;
     logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) lpaddr;
 
     logic `N(`LOAD_PIPELINE) lwb;
@@ -590,6 +591,7 @@ interface DTLBLsuIO;
     logic `N(`STORE_PIPELINE) smiss;
     logic `N(`STORE_PIPELINE) sexception;
     logic `N(`STORE_PIPELINE) scancel;
+    logic `N(`STORE_PIPELINE) suncache;
     logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE) spaddr;
 
     logic `N(`STORE_PIPELINE) swb;

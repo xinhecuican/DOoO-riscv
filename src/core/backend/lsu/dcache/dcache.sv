@@ -110,7 +110,9 @@ generate
 
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`DCACHE_WAY; j++)begin
-            assign wayHit[i][j] = way_io[j].tagv[i * (`DCACHE_TAG+1)] & (way_io[j].tagv[((i + 1) * (`DCACHE_TAG+1) - 2)-: `DCACHE_TAG] == rio.ptag[i]);
+            logic `N(`DCACHE_TAG+1) tagv;
+            assign tagv = way_io[j].tagv[i * (`DCACHE_TAG+1)+: (`DCACHE_TAG+1)];
+            assign wayHit[i][j] = tagv[0] & (tagv[`DCACHE_TAG: 1] == rio.ptag[i]);
         end
         Encoder #(`DCACHE_WAY) encoder_hit_way (wayHit[i], hitWay_encode[i]);
         always_ff @(posedge clk)begin
@@ -187,7 +189,7 @@ endgenerate
     assign wmask = wio.mask;
     assign widx = waddr`DCACHE_SET_BUS;
     
-    assign replace_io.miss_index = widx;
+    assign replace_io.miss_index = miss_io.req_addr`DCACHE_SET_BUS;
     assign wio.valid = 1'b1;
 
 generate

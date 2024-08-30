@@ -305,11 +305,13 @@ generate
 	5: MaskGen8 mask_gen(in, out);
 	8: MaskGen8 mask_gen(in, out);
 	16: MaskGen16 mask_gen(in, out);
+	20: MaskGen20 mask_gen(in, out);
+	22: MaskGen22 mask_gen(in, out);
 	32: MaskGen32 mask_gen(in, out);
 	default: begin
 		MaskGen2 mask_gen(in, out);
 		always_comb begin
-			$display("unimpl MaskGen");
+			$display("unimpl MaskGen %d", RADIX);
 		end
 	end
 	endcase

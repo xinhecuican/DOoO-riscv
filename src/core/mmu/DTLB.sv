@@ -30,7 +30,7 @@ module DTLB(
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        TLB #(`DTLB_SIZE) ltlb(
+        TLB #(`DTLB_SIZE, 2'b01) ltlb(
             .*,
             .io(ltlb_io[i]),
             .csr_tlb_io(csr_ltlb_io)
@@ -51,7 +51,7 @@ generate
         assign tlb_lsu_io.lpaddr[i] = ltlb_io[i].paddr;
     end
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        TLB #(`DTLB_SIZE) stlb(
+        TLB #(`DTLB_SIZE, 2'b10) stlb(
             .*,
             .io(stlb_io[i]),
             .csr_tlb_io(csr_stlb_io)

@@ -94,6 +94,7 @@ module axi_demux_simple #(
     logic                     atop_inject;
 
     // W select counter: stores the decision to which master W beats should go
+    /* verilator lint_off UNOPTFLAT */
     select_t                  w_select,           w_select_q;
     logic                     w_select_valid;
     id_cnt_t                  w_open;

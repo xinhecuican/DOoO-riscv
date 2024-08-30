@@ -56,6 +56,7 @@ module CSR(
     SATP satp;
 
 // csr write
+    logic we;
     logic `N(`CSR_NUM) wen;
     logic `N(`XLEN) wdata, origin_data, rdata, cmp_rdata;
     logic `N(`CSROP_WIDTH) csrop;
@@ -83,11 +84,11 @@ module CSR(
     logic redirect_older;
     LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.status.robIdx, redirect_older);
     assign mode_valid = mode >= issue_csr_io.bundle.csrid[11: 10];
-    assign wen = ((|cmp_eq) | pmp_cmp)  & 
-       {`CSR_NUM{~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
+    assign we = ~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
                  ~(backendCtrl.redirect & redirect_older) & 
                  issue_csr_io.en & mode_valid &
-                 (csrrw | csrrs | csrrc)}};
+                 (csrrw | csrrs | csrrc);
+    assign wen = cmp_eq  & {`CSR_NUM{we}};
     assign s_map = issue_csr_io.bundle.csrid[11: 10] == 2'b01;
 
 `define CSR_CMP_DEF(name, map, i, WARL, mask)                 \
@@ -357,10 +358,10 @@ endgenerate                                                             \
             pmpaddr <= 0;
         end
         else begin
-            if(wen & pmpcfg_cmp_en)begin
+            if(we & pmpcfg_cmp_en)begin
                 pmpcfg[pmp_id] <= wdata;
             end
-            if(wen & pmpaddr_cmp_en)begin
+            if(we & pmpaddr_cmp_en)begin
                 pmpaddr[pmpaddr_id] <= wdata;
             end
         end
@@ -383,10 +384,10 @@ endgenerate                                                             \
             name.pmpaddr <= 0; \
         end \
         else begin \
-            if(wen & pmpcfg_cmp_en)begin \
+            if(we & pmpcfg_cmp_en)begin \
                 name.pmpcfg[pmp_id] <= wdata; \
             end \
-            if(wen & pmpaddr_cmp_en)begin \
+            if(we & pmpaddr_cmp_en)begin \
                 name.pmpaddr[pmpaddr_id] <= wdata; \
             end \
         end \

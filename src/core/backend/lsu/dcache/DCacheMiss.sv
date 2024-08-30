@@ -21,7 +21,6 @@ interface DCacheMissIO;
     logic req;
     logic `N(`PADDR_SIZE) req_addr;
     logic req_success;
-    logic write_ready;
     logic `N(`DCACHE_WAY_WIDTH) replaceWay;
 
     logic refill_en;
@@ -36,7 +35,7 @@ interface DCacheMissIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
-    modport miss (input ren, raddr, lqIdx, robIdx, req_success, write_ready, replaceWay, refill_valid,
+    modport miss (input ren, raddr, lqIdx, robIdx, req_success, replaceWay, refill_valid,
                         wen, waddr, scIdx, wdata, wmask, ptw_req,
                   output rfull, req, req_addr, wfull, 
                         refill_en, refill_dirty, refillWay, refillAddr, refillData, refill_scIdx,
@@ -338,7 +337,7 @@ generate
 endgenerate
 
     always_ff @(posedge clk)begin
-        req_next <= io.req;
+        req_next <= io.req & io.req_success;
         req_last <= r_axi_io.r_valid & r_axi_io.sr.last;
     end
     always_ff @(posedge clk)begin
@@ -366,6 +365,9 @@ endgenerate
             if(io.req & io.req_success)begin
                 req_cache <= 1'b1;
                 req_ptw <= ptw_en[head];
+            end
+
+            if(req_next)begin
                 way[head] <= io.replaceWay;
             end
 

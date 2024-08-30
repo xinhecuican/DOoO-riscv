@@ -26,6 +26,10 @@
 `define AXI_ATOP_ATOMICLOAD 2'b10
 `define AXI_ATOP_RRESP 6'd5
 
+`define AXI_ID_ICACHE 4'd0
+`define AXI_ID_DCACHE 4'd1
+`define AXI_ID_DUCACHE 4'd2
+
 typedef struct packed {
     logic [`AXI_ID_W-1: 0] id;
     logic `PADDR_BUS addr;
@@ -126,6 +130,16 @@ interface AxiIO;
     modport slave(
         input mar, maw, mw, ar_valid, aw_valid, w_valid, r_ready, b_ready,
         output sr, sb, ar_ready, aw_ready, w_ready, r_valid, b_valid
+    );
+
+    modport masterr(
+      output mar, ar_valid, r_ready,
+      input sr, ar_ready, r_valid
+    );
+
+    modport masterw(
+      output maw, mw, aw_valid, w_valid, b_ready,
+      input sb, aw_ready, w_ready, b_valid
     );
 endinterface
 
@@ -241,6 +255,25 @@ typedef struct packed {
     /// If a transaction can not be routed the xbar will answer with an `axi_pkg::RESP_DECERR`.
     int unsigned   NoAddrRules;
   } xbar_cfg_t;
+
+`define AXI_R_ASSIGN(intf_r, intf) \
+    assign intf.mar = intf_r.mar; \
+    assign intf.ar_valid = intf_r.ar_valid; \
+    assign intf.r_ready = intf_r.r_ready; \
+    assign intf_r.ar_ready = intf.ar_ready; \
+    assign intf_r.r_valid = intf.r_valid; \
+    assign intf_r.sr = intf.sr;
+
+`define AXI_W_ASSIGN(intf_w, intf) \
+    assign intf.maw = intf_w.maw; \
+    assign intf.mw = intf_w.mw; \
+    assign intf.aw_valid = intf_w.aw_valid; \
+    assign intf.w_valid = intf_w.w_valid; \
+    assign intf.b_ready = intf_w.b_ready; \
+    assign intf_w.aw_ready = intf.aw_ready; \
+    assign intf_w.w_ready = intf.w_ready; \
+    assign intf_w.b_valid = intf.b_valid; \
+    assign intf_w.sb = intf.sb;
 
 `define AXI_REQ_ASSIGN(name, intf) \
     assign name.ar = intf.mar; \

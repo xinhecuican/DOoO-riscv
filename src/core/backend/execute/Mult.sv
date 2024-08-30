@@ -29,7 +29,8 @@ module MultUnit(
     ExStatusBundle status_s0;
 
     assign sext1 = multop == `MULT_MUL ||
-                   multop == `MULT_MULH;
+                   multop == `MULT_MULH ||
+                   multop == `MULT_MULHSU;
     assign sext2 = multop == `MULT_MUL ||
                    multop == `MULT_MULH;
     

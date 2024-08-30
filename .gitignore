@@ -2,3 +2,6 @@ nscscc-group/
 build/
 log/
 slpp_all/
+tags
+dramsim3.json
+dramsim3.txt

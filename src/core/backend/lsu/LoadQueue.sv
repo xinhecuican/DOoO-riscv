@@ -3,6 +3,7 @@
 interface LoadQueueIO;
     logic `N(`LOAD_PIPELINE) en;
     logic `N(`LOAD_PIPELINE) miss;
+    logic `N(`LOAD_PIPELINE) uncache;
     LoadIssueData `N(`LOAD_PIPELINE) data;
     logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) paddr;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) mask;
@@ -16,7 +17,7 @@ interface LoadQueueIO;
     logic `N(`LOAD_PIPELINE) wb_valid;
 
 
-    modport queue(input en, miss, data, paddr, rdata, rmask, mask, write_violation, wb_valid,
+    modport queue(input en, miss, uncache, data, paddr, rdata, rmask, mask, write_violation, wb_valid,
                   output lqIdx, lq_violation, wbData);
 endinterface
 
@@ -27,7 +28,8 @@ module LoadQueue(
     LoadUnitIO.queue load_io,
     CommitBus.mem commitBus,
     BackendCtrl backendCtrl,
-    DCacheLoadIO.queue rio
+    DCacheLoadIO.queue rio,
+    AxiIO.masterr laxi_io
 );
     typedef struct packed {
         logic dir;
@@ -56,9 +58,17 @@ module LoadQueue(
         logic `N(`DCACHE_BYTE_WIDTH) offset;
         logic `N(`DCACHE_BYTE) mask;
     } MaskData;
-    logic `N(`LOAD_QUEUE_SIZE) valid, miss, addrValid, dataValid, writeback;
+    logic `N(`LOAD_QUEUE_SIZE) valid, miss, addrValid, dataValid, writeback, uncache;
     logic `N(`DCACHE_BITS) data `N(`LOAD_QUEUE_SIZE);
     logic `N(`LOAD_QUEUE_SIZE * $bits(MaskData)) mask;
+
+    typedef enum { IDLE, LOOKUP, WRITEBACK, RETIRE } UncacheState;
+    UncacheState uncacheState;
+    logic `N(`PADDR_SIZE) uncache_addr;
+    logic `N(`DCACHE_BITS) uncache_data, uncache_wb_data;
+    MaskData mask_data;
+    logic `N(`LOAD_QUEUE_WIDTH) uncache_head;
+    logic uncache_req;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -160,14 +170,16 @@ endgenerate
 
     logic `N(`LOAD_QUEUE_SIZE) waiting_wb;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) wbIdx;
+    logic `N(`LOAD_QUEUE_WIDTH) wbIdx1;
     LoadQueueData `N(`LOAD_PIPELINE) wb_queue_data;
 
     assign waiting_wb = valid & miss & dataValid & ~writeback;
     /* UNPRARM */
     PEncoder #(`LOAD_QUEUE_SIZE) pencoder_wb_idx (waiting_wb, wbIdx[0]);
-    PREncoder #(`LOAD_QUEUE_SIZE) prencoder_wb_idx (waiting_wb, wbIdx[1]);
+    PREncoder #(`LOAD_QUEUE_SIZE) prencoder_wb_idx (waiting_wb, wbIdx1);
+    assign wbIdx[1] = uncacheState == WRITEBACK ? uncache_head : wbIdx1;
     assign io.wbData[0].en = (|waiting_wb) & ~backendCtrl.redirect & ~redirect_next;
-    assign io.wbData[1].en = (|waiting_wb) && (wbIdx[0] != wbIdx[1]) && !backendCtrl.redirect && !redirect_next;
+    assign io.wbData[1].en = (((|waiting_wb) && (wbIdx[0] != wbIdx1)) | (uncacheState == WRITEBACK)) && !backendCtrl.redirect && !redirect_next;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign io.wbData[i].we = wb_queue_data[i].we;
@@ -177,7 +189,12 @@ generate
         always_ff @(posedge clk)begin
             wbData <= data[wbIdx[i]];
         end
-        assign io.wbData[i].res = wbData;
+        if(i == `LOAD_PIPELINE-1)begin
+            assign io.wbData[i].res = uncacheState == WRITEBACK ? uncache_data : wbData;
+        end
+        else begin
+            assign io.wbData[i].res = wbData;
+        end
     end
 endgenerate
 
@@ -190,6 +207,7 @@ endgenerate
             addrValid <= 0;
             dataValid <= 0;
             writeback <= 0;
+            uncache <= 0;
         end
         else begin
             for(int i=0; i<`LOAD_DIS_PORT; i++)begin
@@ -197,16 +215,18 @@ endgenerate
                     valid[load_io.dis_lq_idx[i].idx] <= 1'b1;
                     dataValid[load_io.dis_lq_idx[i].idx] <= 1'b0;
                     addrValid[load_io.dis_lq_idx[i].idx] <= 1'b0;
+                    uncache[load_io.dis_lq_idx[i].idx] <= 1'b0;
                 end
             end
             for(int i=0; i<`LOAD_PIPELINE; i++)begin
                 if(io.en[i])begin
                     addrValid[eqIdx[i]] <= 1'b1;
                     miss[eqIdx[i]] <= io.miss[i];
-                    dataValid[eqIdx[i]] <= ~io.miss[i];
-                    writeback[eqIdx[i]] <= ~io.miss[i];
+                    dataValid[eqIdx[i]] <= ~io.miss[i] & ~io.uncache[i];
+                    writeback[eqIdx[i]] <= ~io.miss[i] & ~io.uncache[i];
                     data[eqIdx[i]] <= io.rdata[i];
                     mask[eqIdx[i]*$bits(MaskData)+: $bits(MaskData)] <= {io.data[i].uext, io.data[i].size, io.paddr[i][`DCACHE_BYTE_WIDTH-1: 0], io.rmask[i]};
+                    uncache[eqIdx[i]] <= io.uncache[i];
                 end
                 if(io.wbData[i].en & io.wb_valid[i])begin
                     writeback[wbIdx[i]] <= 1'b1;
@@ -273,6 +293,62 @@ endgenerate
                     addr_mask[eqIdx[i]] <= {io.paddr[i][`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH], io.mask[i]};
                 end
             end
+        end
+    end
+
+// uncache
+    assign mask_data = mask[head*$bits(MaskData)+: $bits(MaskData)];
+    RDataGen uncache_data_gen (mask_data.uext, mask_data.size, mask_data.offset, laxi_io.sr.data, uncache_data);
+    assign laxi_io.mar.id = `AXI_ID_DUCACHE;
+    assign laxi_io.mar.addr = uncache_addr;
+    assign laxi_io.mar.len = 0;
+    assign laxi_io.mar.size = $clog2(`DATA_BYTE);
+    assign laxi_io.mar.burst = 0;
+    assign laxi_io.mar.lock = 0;
+    assign laxi_io.mar.cache = 0;
+    assign laxi_io.mar.prot = 0;
+    assign laxi_io.mar.qos = 0;
+    assign laxi_io.mar.region = 0;
+    assign laxi_io.mar.user = 0;
+
+    assign laxi_io.ar_valid = uncache_req;
+    assign laxi_io.r_ready = 1'b1;
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            uncacheState <= IDLE;
+            uncache_req <= 0;
+        end
+        else begin
+            case(uncacheState)
+            IDLE:begin
+                if(valid[head] & uncache[head] &
+                (commitBus.robIdx == redirect_robIdxs[head]))begin
+                    uncacheState <= LOOKUP;
+                    uncache_addr <= {addr_mask[head][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE], {`DCACHE_BYTE_WIDTH{1'b0}}};
+                    uncache_head <= head;
+                    uncache_req <= 1'b1;
+                end
+            end
+            LOOKUP:begin
+                if(laxi_io.ar_valid & laxi_io.ar_ready)begin
+                    uncache_req <= 1'b0;
+                end
+                if(laxi_io.r_valid)begin
+                    uncacheState <= WRITEBACK;
+                    uncache_wb_data <= uncache_data;
+                end
+            end
+            WRITEBACK:begin
+                if(io.wbData[`LOAD_PIPELINE-1].en & io.wb_valid[`LOAD_PIPELINE-1])begin
+                    uncacheState <= RETIRE;
+                end
+            end
+            RETIRE:begin
+                if(uncache_head != head)begin
+                    uncacheState <= IDLE;
+                end
+            end
+            endcase
         end
     end
 

@@ -31,6 +31,7 @@ module axi_err_slv #(
   input  logic      test_i,  // Testmode enable
   // slave port
   input  axi_req_t  slv_req_i,
+  /* verilator lint_off UNOPTFLAT */
   output axi_resp_t slv_resp_o
 );
   typedef logic [AxiIdWidth-1:0] id_t;

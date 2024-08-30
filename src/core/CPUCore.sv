@@ -10,6 +10,7 @@ module CPUCore (
 
     ICacheAxi icache_io();
     DCacheAxi dcache_io();
+    AxiIO   ducache_io();
     IfuBackendIO ifu_backend_io();
     FsqBackendIO fsq_back_io();
     CommitBus commitBus();

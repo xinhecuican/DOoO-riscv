@@ -9,6 +9,7 @@ interface TLBIO #(
     logic flush;
 
     logic miss;
+    logic uncache;
     logic exception;
     logic `PADDR_BUS paddr;
 
@@ -19,11 +20,12 @@ interface TLBIO #(
     logic `N(2) wpn;
     logic `N(`VADDR_SIZE) waddr;
 
-    modport tlb(input req, flush, vaddr, we, wbInfo, wentry, wpn, widx, waddr, output miss, exception, paddr);
+    modport tlb(input req, flush, vaddr, we, wbInfo, wentry, wpn, widx, waddr, output miss, uncache, exception, paddr);
 endinterface
 
 module TLB #(
     parameter DEPTH=16,
+    parameter [1: 0] MODE=2'b00, //2'b00: x, 2'b01: r, 2'b10: w
     parameter ADDR_WIDTH=$clog2(DEPTH)
 )(
     input logic clk,
@@ -32,7 +34,11 @@ module TLB #(
     CsrTlbIO.tlb csr_tlb_io
 );
     L1TLBEntry entrys `N(DEPTH);
+    L1TLBEntry hit_entry;
     logic `N(DEPTH) en;
+    logic pmp_v, pmp_r, pmp_w, pmp_x, pma_uc;
+    logic pmp_exc;
+
 // lookup
     logic `N(DEPTH) hit;
     logic `N(DEPTH) asid_hit;
@@ -68,9 +74,10 @@ generate
 endgenerate
     assign hit = asid_hit & pn_hit;
     Encoder #(DEPTH) encoder_hit (hit, hit_idx);
+    assign hit_entry = entrys[hit_idx];
 
 
-`define L1_PPN_ASSIGN(i) assign lookup_paddr.ppn``i = pn_mask[hit_idx][i] ? entrys[hit_idx].ppn.ppn``i : lookup_addr.vpn[``i];
+`define L1_PPN_ASSIGN(i) assign lookup_paddr.ppn``i = pn_mask[hit_idx][i] ? hit_entry.ppn.ppn``i : lookup_addr.vpn[``i];
 
     `L1_PPN_ASSIGN(0)
     `L1_PPN_ASSIGN(1)
@@ -80,9 +87,37 @@ endgenerate
         if(io.req)begin
             io.paddr <= mmode ? io.vaddr : {lookup_paddr, io.vaddr[`TLB_OFFSET-1: 0]};
             io.miss <= ~mmode & ~(|hit) & io.req & ~io.flush;
-            io.exception <= ~mmode & io.req & ~io.flush & (|hit) & mode_exc[hit_idx];
+            io.exception <= ~mmode & io.req & ~io.flush & (|hit) & (mode_exc[hit_idx] | pmp_exc);
+            io.uncache <= pma_uc;
         end
     end
+
+// pmp
+    `PMA_ASSIGN
+    PMPCheck pmp_check(
+        .paddr(lookup_paddr),
+        .pmpcfg(csr_tlb_io.pmpcfg),
+        .pmpaddr(csr_tlb_io.pmpaddr),
+        .pmacfg(pmacfg),
+        .pmaaddr(pmaaddr),
+        .pmp_v,
+        .pmp_r,
+        .pmp_w,
+        .pmp_x,
+        .pma_uc
+    );
+generate
+    if(MODE == 2'b00)begin
+        assign pmp_exc = pmp_v & ~pmp_x;
+    end
+    else if(MODE == 2'b01)begin
+        assign pmp_exc = pmp_v & ~pmp_r;
+    end
+    else if(MODE == 2'b10)begin
+        assign pmp_exc = pmp_v & ~pmp_w;
+    end
+endgenerate
+
 
 // update
     L1TLBEntry wentry;

@@ -2,12 +2,16 @@
 
 interface StoreQueueIO;
     logic `N(`STORE_PIPELINE) en;
+    logic `N(`STORE_PIPELINE) uncache;
     StoreIssueData `N(`STORE_PIPELINE) data;
     logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE) paddr;
     logic `ARRAY(`STORE_PIPELINE, 4) mask;
     StoreIdx sqIdx;
+    RobIdx wb_robIdx;
+    logic wb_req;
+    logic wb_valid;
 
-    modport queue(input en, data, paddr, mask, output sqIdx);
+    modport queue(input en, uncache, data, paddr, mask, output sqIdx, wb_req, wb_valid, wb_robIdx);
 endinterface
 
 module StoreQueue(
@@ -20,6 +24,7 @@ module StoreQueue(
     LoadForwardIO.queue loadFwd,
     CommitBus.mem commitBus,
     BackendCtrl backendCtrl,
+    AxiIO.masterw saxi_io,
     output logic `N(`LOAD_PIPELINE) fwd_data_invalid
 );
     logic `N(`STORE_QUEUE_WIDTH) head, tail, head_n, tail_n, commitHead, storeHead, storeHead_n;
@@ -43,6 +48,16 @@ module StoreQueue(
     logic `ARRAY(`STORE_PIPELINE, `XLEN) storeData;
     logic `N(`STORE_PIPELINE) full;
     logic `N(`STORE_PIPELINE) store_commit_en_n;
+
+    typedef enum { IDLE, LOOKUP, WRITEBACK, RETIRE } UncacheState;
+    UncacheState uncacheState;
+    logic `N(`PADDR_SIZE) uncache_addr;
+    logic `N(`DCACHE_BITS) uncache_data, uncache_wb_data;
+    logic `N(`STORE_QUEUE_WIDTH) uncache_head;
+    logic `N(`DCACHE_BYTE) uncache_strb;
+    logic uncache_req, uncache_wreq;
+    RobIdx uncache_robIdx;
+
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign addr_eqIdx[i] = io.data[i].sqIdx.idx;
@@ -94,11 +109,11 @@ endgenerate
         end
     end
 
-    logic `N(`STORE_QUEUE_SIZE) valid, addrValid, dataValid, commited;
+    logic `N(`STORE_QUEUE_SIZE) valid, addrValid, dataValid, commited, uncache;
 
-    logic `N(`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH) addr_mask `N(`LOAD_QUEUE_SIZE);
+    logic `N(`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH) addr_mask `N(`STORE_QUEUE_SIZE);
     logic `N(`STORE_QUEUE_SIZE) data_dir;
-    logic `ARRAY(`LOAD_QUEUE_SIZE, `DCACHE_BITS) data;
+    logic `ARRAY(`STORE_QUEUE_SIZE, `DCACHE_BITS) data;
     logic `N(`COMMIT_WIDTH) commitMask;
     MaskGen #(`COMMIT_WIDTH+1) mask_gen_commit (commitBus.storeNum, commitMask);
 
@@ -112,6 +127,7 @@ endgenerate
             addrValid <= 0;
             dataValid <= 0;
             commited <= 0;
+            uncache <= 0;
         end
         else begin
             for(int i=0; i<`STORE_DIS_PORT; i++)begin
@@ -120,6 +136,7 @@ endgenerate
                     dataValid[disWIdx[i]] <= 1'b0;
                     commited[disWIdx[i]] <= 1'b0;
                     valid[disWIdx[i]] <= 1'b1;
+                    uncache <= 0;
                 end
             end
             for(int i=0; i<`STORE_PIPELINE; i++)begin
@@ -127,6 +144,7 @@ endgenerate
                     addr_mask[addr_eqIdx[i]] <= {io.paddr[i][`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH], io.mask[i]};
                     addrValid[addr_eqIdx[i]] <= 1'b1;
                     data_dir[addr_eqIdx[i]] <= io.data[i].sqIdx.dir;
+                    uncache[addr_eqIdx[i]] <= io.uncache[i];
                 end
                 if(issue_queue_io.data_en[i])begin
                     dataValid[data_eqIdx[i]] <= 1'b1;
@@ -189,6 +207,76 @@ endgenerate
         walk_dir <= walk_full || (valid_select_n <= tail) ? tdir : ~tdir;
     end
 
+// uncache
+    assign saxi_io.maw.id = `AXI_ID_DUCACHE;
+    assign saxi_io.maw.addr = uncache_addr;
+    assign saxi_io.maw.len = 0;
+    assign saxi_io.maw.size = $clog2(`DATA_BYTE);
+    assign saxi_io.maw.burst = 0;
+    assign saxi_io.maw.lock = 0;
+    assign saxi_io.maw.cache = 0;
+    assign saxi_io.maw.prot = 0;
+    assign saxi_io.maw.qos = 0;
+    assign saxi_io.maw.region = 0;
+    assign saxi_io.maw.user = 0;
+    assign saxi_io.mw.data = uncache_data;
+    assign saxi_io.mw.strb = uncache_strb;
+    assign saxi_io.mw.last = 1'b1;
+    assign saxi_io.mw.user = 0;
+
+    assign saxi_io.aw_valid = uncache_req;
+    assign saxi_io.w_valid = uncache_wreq;
+    assign saxi_io.b_ready = 1'b1;
+
+    assign io.wb_req = uncacheState == WRITEBACK;
+    assign io.wb_robIdx = uncache_robIdx;
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            uncacheState <= IDLE;
+            uncache_req <= 0;
+            uncache_wreq <= 0;
+        end
+        else begin
+            case(uncacheState)
+            IDLE:begin
+                if(valid[commitHead] & uncache[commitHead] &
+                (commitBus.robIdx == redirect_robIdxs[commitHead]))begin
+                    uncacheState <= LOOKUP;
+                    uncache_addr <= {addr_mask[commitHead][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE], {`DCACHE_BYTE_WIDTH{1'b0}}};
+                    uncache_head <= data[commitHead];
+                    uncache_req <= 1'b1;
+                    uncache_data <= data[commitHead];
+                    uncache_strb <= addr_mask[commitHead][`DCACHE_BYTE-1: 0];
+                    uncache_robIdx <= commitBus.robIdx;
+                end
+            end
+            LOOKUP:begin
+                if(saxi_io.aw_valid & saxi_io.aw_ready)begin
+                    uncache_req <= 1'b0;
+                    uncache_wreq <= 1'b1;
+                end
+                if(saxi_io.w_valid & saxi_io.w_ready)begin
+                    uncache_wreq <= 1'b0;
+                end
+                if(saxi_io.b_valid & saxi_io.b_ready)begin
+                    uncacheState <= WRITEBACK;
+                end
+            end
+            WRITEBACK:begin
+                if(io.wb_valid)begin
+                    uncacheState <= RETIRE;
+                end
+            end
+            RETIRE:begin
+                if(commitHead != uncache_head)begin
+                    uncacheState <= IDLE;
+                end
+            end
+            endcase
+        end
+    end
+
 // write to commit
     logic `N(`STORE_PIPELINE) queue_commit_en_pre, queue_commit_en;
 generate
@@ -236,7 +324,7 @@ generate
         MaskGen #(`STORE_QUEUE_SIZE) maskgen_store (loadFwd.fwdData[i].sqIdx.idx, store_mask);
         logic span;
         assign span = hdir ^ loadFwd.fwdData[i].sqIdx.dir;
-        assign valid_vec[i] = span ? ~(head_mask ^ store_mask) : head_mask ^ store_mask;
+        assign valid_vec[i] = {`STORE_QUEUE_SIZE{span}} ^ (head_mask ^ store_mask);
         always_ff @(posedge clk)begin
             load_voffset[i] <= loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_BYTE_WIDTH];
         end

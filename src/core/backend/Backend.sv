@@ -7,6 +7,7 @@ module Backend(
     FsqBackendIO.backend fsq_back_io,
     CommitBus.rob commitBus_out,
     DCacheAxi.cache axi_io,
+    AxiIO.master ducache_io,
     CsrTlbIO.csr csr_itlb_io,
     CsrL2IO.csr csr_l2_io,
     TlbL2IO.tlb dtlb_io,
