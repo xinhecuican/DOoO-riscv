@@ -47,6 +47,7 @@ generate
         assign ltlb_io[i].waddr = tlb_l2_io0.waddr;
 
         assign tlb_lsu_io.lmiss[i] = ltlb_io[i].miss;
+        assign tlb_lsu_io.luncache[i] = ltlb_io[i].uncache;
         assign tlb_lsu_io.lexception[i] = ltlb_io[i].exception;
         assign tlb_lsu_io.lpaddr[i] = ltlb_io[i].paddr;
     end
@@ -68,6 +69,7 @@ generate
         assign stlb_io[i].waddr = tlb_l2_io0.waddr;
 
         assign tlb_lsu_io.smiss[i] = stlb_io[i].miss;
+        assign tlb_lsu_io.suncache[i] = stlb_io[i].uncache;
         assign tlb_lsu_io.sexception[i] = stlb_io[i].exception;
         assign tlb_lsu_io.spaddr[i] = stlb_io[i].paddr;
     end

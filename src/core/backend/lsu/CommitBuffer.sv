@@ -30,7 +30,7 @@ module StoreCommitBuffer(
 
     always_ff @(posedge clk)begin
         if(!io.conflict)begin
-            wen <= io.en;
+            wen <= io.en & ~io.uncache;
             waddr <= io.addr;
             wmask <= io.mask;
             wdata <= io.data;

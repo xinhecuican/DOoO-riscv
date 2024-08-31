@@ -95,7 +95,7 @@ endgenerate
 // pmp
     `PMA_ASSIGN
     PMPCheck pmp_check(
-        .paddr(lookup_paddr),
+        .paddr((mmode ? io.vaddr[`VADDR_SIZE-1: `TLB_OFFSET] : lookup_paddr)),
         .pmpcfg(csr_tlb_io.pmpcfg),
         .pmpaddr(csr_tlb_io.pmpaddr),
         .pmacfg(pmacfg),

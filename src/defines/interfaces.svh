@@ -512,14 +512,15 @@ endinterface
 
 interface StoreCommitIO;
     logic `N(`STORE_PIPELINE) en;
+    logic `N(`STORE_PIPELINE) uncache;
     logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE-`DCACHE_BYTE_WIDTH) addr;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) mask;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BITS) data;
 
     logic  conflict;
 
-    modport queue (output en, addr, mask, data, input conflict);
-    modport buffer (input en, addr, mask, data, output conflict);
+    modport queue (output en, addr, mask, data, uncache, input conflict);
+    modport buffer (input en, addr, mask, data, uncache, output conflict);
 endinterface
 
 interface DCacheAxi;
@@ -600,7 +601,7 @@ interface DTLBLsuIO;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) swb_idx;
 
     modport tlb(input flush, lreq, lidx, laddr, sreq, sidx, saddr,  lreq_cancel, sreq_cancel,
-                output lmiss, lexception, lcancel, lpaddr, smiss, sexception, scancel, spaddr,
+                output lmiss, luncache, lexception, lcancel, lpaddr, smiss, suncache, sexception, scancel, spaddr,
                 lwb, lwb_exception, lwb_error, lwb_idx, swb, swb_exception, swb_error, swb_idx);
     modport lq (input lwb, lwb_exception, lwb_error, lwb_idx);
     modport sq (input swb, swb_exception, swb_error, swb_idx);

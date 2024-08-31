@@ -136,7 +136,7 @@ endgenerate
                     dataValid[disWIdx[i]] <= 1'b0;
                     commited[disWIdx[i]] <= 1'b0;
                     valid[disWIdx[i]] <= 1'b1;
-                    uncache <= 0;
+                    uncache[disWIdx[i]] <= 0;
                 end
             end
             for(int i=0; i<`STORE_PIPELINE; i++)begin
@@ -244,7 +244,7 @@ endgenerate
                 (commitBus.robIdx == redirect_robIdxs[commitHead]))begin
                     uncacheState <= LOOKUP;
                     uncache_addr <= {addr_mask[commitHead][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE], {`DCACHE_BYTE_WIDTH{1'b0}}};
-                    uncache_head <= data[commitHead];
+                    uncache_head <= commitHead;
                     uncache_req <= 1'b1;
                     uncache_data <= data[commitHead];
                     uncache_strb <= addr_mask[commitHead][`DCACHE_BYTE-1: 0];
@@ -286,6 +286,7 @@ generate
         logic `N(`STORE_QUEUE_WIDTH) queue_idx;
         assign queue_idx = storeHead + i;
         assign queue_commit_io.en[i] = queue_commit_en[i];
+        assign queue_commit_io.uncache[i] = uncache[queue_idx];
         assign queue_commit_io.addr[i] = addr_mask[queue_idx][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE];
         assign queue_commit_io.mask[i] = addr_mask[queue_idx][`DCACHE_BYTE-1: 0];
         assign queue_commit_io.data[i] = data[queue_idx];
