@@ -6,9 +6,9 @@
 // `define T_FSQ
 // `define T_TAGE
 // `define T_BR_HIST
-// `define T_DCACHE
-// `define T_SCB
-`define T_ICACHE
+`define T_DCACHE
+`define T_SCB
+// `define T_ICACHE
 
 `define PERF(name, cond) \
 `ifdef DIFFTEST \

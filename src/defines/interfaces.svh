@@ -482,7 +482,7 @@ interface DCacheLoadIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
-    modport dcache (input req, vaddr, lqIdx, ptag, req_cancel, req_cancel_s2, req_cancel_s3, robIdx, output hit, rdata, conflict, full, lq_en, lqData, lqIdx_o);
+    modport dcache (input req, oldest, vaddr, lqIdx, ptag, req_cancel, req_cancel_s2, req_cancel_s3, robIdx, output hit, rdata, conflict, full, lq_en, lqData, lqIdx_o);
     modport queue (input lq_en, lqData, lqIdx_o);
 endinterface
 

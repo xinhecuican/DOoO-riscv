@@ -76,6 +76,7 @@ module DCache(
 // read
     logic `N(`LOAD_PIPELINE) r_req, r_req_s3;
     logic req_bank_conflict;
+    logic `N(`LOAD_PIPELINE) req_cancel;
 generate
     /* UNPARAM */
     assign req_bank_conflict = (rio.req[0] & rio.req[1] & (rio.vaddr[0]`DCACHE_BANK_BUS == rio.vaddr[1]`DCACHE_BANK_BUS));
@@ -102,8 +103,8 @@ generate
         for(genvar j=0; j<`DCACHE_BANK; j++)begin
             /* UNPARAM */
             assign way_io[i].index[j] = ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
-                                        {`DCACHE_SET_WIDTH{loadBankDecode[0][j] & rio.req[0]}} & loadIdx[0] |
-                                        {`DCACHE_SET_WIDTH{loadBankDecode[1][j] & rio.req[1] & ~req_bank_conflict}} & loadIdx[1];
+                                        {`DCACHE_SET_WIDTH{loadBankDecode[0][j] & rio.req[0] & ~req_cancel[0]}} & loadIdx[0] |
+                                        {`DCACHE_SET_WIDTH{loadBankDecode[1][j] & rio.req[1] & ~req_cancel[1]}} & loadIdx[1];
         end
         assign rdata[i] = way_io[i].data;
     end
@@ -119,12 +120,9 @@ generate
             s2_loadBank[i] <= loadOffset[i];
             rvaddr[i] <= rio.vaddr[i];
             rio.rdata[i] <= rdata[hitWay_encode[i]][s2_loadBank[i]];
+            r_req[i] <= rio.req[i] & ~write_valid[i] & ~rio.req_cancel[i] & ~req_cancel[i];
         end
         assign rio.hit[i] = |wayHit[i];
-    end
-    always_ff @(posedge clk)begin
-        r_req[0] <= rio.req[0] & ~write_valid[0] & ~rio.req_cancel[0];
-        r_req[1] <= rio.req[1] & ~write_valid[1] & ~rio.req_cancel[1] & ~req_bank_conflict;
     end
 endgenerate
     // load conflict detect
@@ -142,10 +140,15 @@ endgenerate
     logic `N(`LOAD_PIPELINE) rhit;
     logic `N(`LOAD_PIPELINE) load_refill_conflict;
     logic `N(`LOAD_PIPELINE) load_refill_reply;
-    /* UNPARAM */
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign req_cancel[i] = req_bank_conflict & ~rio.oldest[i];
+        always_ff @(posedge clk)begin
+            rio.conflict[i] <= write_valid[i] | req_cancel[i];
+        end
+    end
+endgenerate
     always_ff @(posedge clk)begin
-        rio.conflict[0] <= write_valid[0];
-        rio.conflict[1] <= write_valid[1] | req_bank_conflict;
         r_req_s3 <= r_req & ~rio.req_cancel_s2;
         lqIdx <= rio.lqIdx;
         robIdx <= rio.robIdx;
