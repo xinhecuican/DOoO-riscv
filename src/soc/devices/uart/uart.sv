@@ -51,19 +51,19 @@ assign irq_out    = (txwm_ip   && txwm_ie  ) ||
                     (rxwm_ip   && rxwm_ie  ) ||
                     (perror_ip && perror_ie);
 
-assign apb_wr     = ~s_apb_intf.req.penable && s_apb_intf.req.psel &&  s_apb_intf.req.pwrite;
-assign apb_rd     = ~s_apb_intf.req.penable && s_apb_intf.req.psel && ~s_apb_intf.req.pwrite;
+assign apb_wr     = ~s_apb_intf.penable && s_apb_intf.psel &&  s_apb_intf.pwrite;
+assign apb_rd     = ~s_apb_intf.penable && s_apb_intf.psel && ~s_apb_intf.pwrite;
 
 `ifndef FAKE_UART
-assign tx_fifo_wr    = apb_wr && s_apb_intf.req.paddr[11:0] == `UART_TXFIFO && ~tx_fifo_full && ~s_apb_intf.req.pwdata[31];
-assign tx_fifo_wdata = s_apb_intf.req.pwdata[`UART_DATA_WIDTH-1:0];
+assign tx_fifo_wr    = apb_wr && s_apb_intf.paddr[11:0] == `UART_TXFIFO && ~tx_fifo_full && ~s_apb_intf.pwdata[31];
+assign tx_fifo_wdata = s_apb_intf.pwdata[`UART_DATA_WIDTH-1:0];
 `else
 assign tx_fifo_wr    = 1'b0;
-assign tx_fifo_wdata = s_apb_intf.req.pwdata[`UART_DATA_WIDTH-1:0];
+assign tx_fifo_wdata = s_apb_intf.pwdata[`UART_DATA_WIDTH-1:0];
 always @(posedge clk or negedge rstn) begin: fake_uart_tx
     if (~rstn) begin
     end
-    else if (apb_wr && s_apb_intf.req.paddr[11:0] == `UART_TXFIFO && ~s_apb_intf.req.pwdata[31]) begin
+    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_TXFIFO && ~s_apb_intf.pwdata[31]) begin
         $write("%c", tx_fifo_wdata[7:0]);
     end
 end
@@ -103,14 +103,14 @@ always_ff @(posedge clk or negedge rstn) begin
         nstop <= 1'b0;
         txcnt <= 3'b0;
     end
-    else if (apb_wr && s_apb_intf.req.paddr[11:0] == `UART_TXCTRL) begin
-        txen  <= s_apb_intf.req.pwdata[0];
-        nstop <= s_apb_intf.req.pwdata[1];
-        txcnt <= s_apb_intf.req.pwdata[18:16];
+    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_TXCTRL) begin
+        txen  <= s_apb_intf.pwdata[0];
+        nstop <= s_apb_intf.pwdata[1];
+        txcnt <= s_apb_intf.pwdata[18:16];
     end
 end
 
-assign rx_fifo_rd = apb_rd && s_apb_intf.req.paddr[11:0] == `UART_RXFIFO;
+assign rx_fifo_rd = apb_rd && s_apb_intf.paddr[11:0] == `UART_RXFIFO;
 
 uart_fifo u_rx_fifo(
     .clk          ( clk              ),
@@ -144,9 +144,9 @@ always_ff @(posedge clk or negedge rstn) begin
         rxen  <= 1'b0;
         rxcnt <= 3'b0;
     end
-    else if (apb_wr && s_apb_intf.req.paddr[11:0] == `UART_RXCTRL) begin
-        rxen  <= s_apb_intf.req.pwdata[0];
-        rxcnt <= s_apb_intf.req.pwdata[18:16];
+    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_RXCTRL) begin
+        rxen  <= s_apb_intf.pwdata[0];
+        rxcnt <= s_apb_intf.pwdata[18:16];
     end
 end
 
@@ -156,10 +156,10 @@ always_ff @(posedge clk or negedge rstn) begin
         rxwm_ie   <= 1'b0;
         perror_ie <= 1'b0;
     end
-    else if (apb_wr && s_apb_intf.req.paddr[11:0] == `UART_IE) begin
-        txwm_ie   <= s_apb_intf.req.pwdata[0];
-        rxwm_ie   <= s_apb_intf.req.pwdata[1];
-        perror_ie <= s_apb_intf.req.pwdata[2];
+    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_IE) begin
+        txwm_ie   <= s_apb_intf.pwdata[0];
+        rxwm_ie   <= s_apb_intf.pwdata[1];
+        perror_ie <= s_apb_intf.pwdata[2];
     end
 end
 
@@ -169,10 +169,10 @@ always_ff @(posedge clk or negedge rstn) begin
         rxwm_ip   <= 1'b0;
         perror_ip <= 1'b0;
     end
-    else if (apb_wr && s_apb_intf.req.paddr[11:0] == `UART_IC) begin
-        txwm_ip   <= txwm_ip   && ~s_apb_intf.req.pwdata[0];
-        rxwm_ip   <= rxwm_ip   && ~s_apb_intf.req.pwdata[1];
-        perror_ip <= perror_ip && ~s_apb_intf.req.pwdata[2];
+    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_IC) begin
+        txwm_ip   <= txwm_ip   && ~s_apb_intf.pwdata[0];
+        rxwm_ip   <= rxwm_ip   && ~s_apb_intf.pwdata[1];
+        perror_ip <= perror_ip && ~s_apb_intf.pwdata[2];
     end
     else begin
         txwm_ip   <= txwm_ip_tmp;
@@ -188,8 +188,8 @@ always_ff @(posedge clk or negedge rstn) begin
     if (~rstn) begin
         div <= 1000000000/`CLK_PERIOD/115200; // baurd rate = 115200
     end
-    else if (apb_wr && s_apb_intf.req.paddr[11:0] == `UART_DIV) begin
-        div <= s_apb_intf.req.pwdata[15:0];
+    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_DIV) begin
+        div <= s_apb_intf.pwdata[15:0];
     end
 end
 
@@ -197,14 +197,14 @@ always_ff @(posedge clk or negedge rstn) begin
     if (~rstn) begin
         lcr <= 3'b0;
     end
-    else if (apb_wr && s_apb_intf.req.paddr[11:0] == `UART_LCR) begin
-        lcr <= s_apb_intf.req.pwdata[5:3];
+    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_LCR) begin
+        lcr <= s_apb_intf.pwdata[5:3];
     end
 end
 
 always_comb begin
     prdata_t = 32'b0;
-    case (s_apb_intf.req.paddr[11:0])
+    case (s_apb_intf.paddr[11:0])
         `UART_TXFIFO: prdata_t = {tx_fifo_full,  31'b0};
         `UART_RXFIFO: prdata_t = {rx_fifo_empty, 23'b0, rx_fifo_rdata & {8{~rx_fifo_empty}}};
         `UART_TXCTRL: prdata_t = {13'b0, txcnt, 14'b0, nstop, txen};
@@ -219,15 +219,15 @@ end
 
 always_ff @(posedge clk or negedge rstn) begin
     if (~rstn) begin
-        s_apb_intf.resp.prdata <= 32'b0;
+        s_apb_intf.prdata <= 32'b0;
     end
     else begin
-        s_apb_intf.resp.prdata <= prdata_t;
+        s_apb_intf.prdata <= prdata_t;
     end
 end
 
-assign s_apb_intf.resp.pslverr = 1'b0;
-assign s_apb_intf.resp.pready  = 1'b1;
+assign s_apb_intf.pslverr = 1'b0;
+assign s_apb_intf.pready  = 1'b1;
 
 endmodule
 

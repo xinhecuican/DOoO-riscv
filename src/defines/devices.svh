@@ -2,14 +2,20 @@
 `define __DEVICES_SVH__
 `include "global.svh"
 
+
+`define IRQ_START           `PADDR_SIZE'h08000000
+`define IRQ_END             `PADDR_SIZE'h10000000
+`define CLINT_START         `PADDR_SIZE'h08000000
+`define CLINT_END           `PADDR_SIZE'h08001000
+
 `define PERIPHERAL_SIZE 1
 `define PERIPHERAL_START    `PADDR_SIZE'h10000000
 `define PERIPHERAL_END      `PADDR_SIZE'h10010000
 `define UART_START          `PADDR_SIZE'h10000000
 `define UART_END            `PADDR_SIZE'h10001000
+
 `define MEM_START           `PADDR_SIZE'h80000000
 `define MEM_END             `PADDR_SIZE'ha0000000
-
 
 typedef struct packed {
     logic [$clog2(`PERIPHERAL_SIZE): 0] idx;

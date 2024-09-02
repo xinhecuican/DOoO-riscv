@@ -299,9 +299,17 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
+    logic irq;
+    logic irq_deleg;
     logic `N(`EXC_WIDTH) exccode;
     logic `N(`VADDR_SIZE) exc_pc;
 } CSRRedirectInfo;
+
+typedef struct packed {
+    logic irq;
+    logic deleg;
+    logic `N(`EXC_WIDTH) exccode;
+} CSRIrqInfo;
 
 typedef struct packed {
     logic direction;

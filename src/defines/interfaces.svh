@@ -187,13 +187,14 @@ endinterface
 
 interface PreDecodeRedirect;
     logic en;
+    logic exc_en;
     logic direct;
     RasType ras_type;
     FsqIdx fsqIdx;
     FetchStream stream;
 
-    modport predecode(output en, direct, ras_type, fsqIdx, stream);
-    modport redirect(input en, direct, ras_type, fsqIdx, stream);
+    modport predecode(output en, exc_en, direct, ras_type, fsqIdx, stream);
+    modport redirect(input en, exc_en, direct, ras_type, fsqIdx, stream);
 endinterface
 
 interface PreDecodeIBufferIO;
@@ -463,6 +464,7 @@ endinterface
 
 interface DCacheLoadIO;
     logic `N(`LOAD_PIPELINE) req;
+    logic `N(`LOAD_PIPELINE) oldest;
     logic `N(`LOAD_PIPELINE) req_cancel;
     logic `N(`LOAD_PIPELINE) req_cancel_s2;
     logic `N(`LOAD_PIPELINE) req_cancel_s3;

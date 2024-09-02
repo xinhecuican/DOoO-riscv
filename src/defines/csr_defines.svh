@@ -160,6 +160,25 @@ typedef struct packed {
     logic `N(`TLB_PPN) ppn;
 } SATP;
 
+typedef struct packed {
+    logic `N(`MXL-16) unuse1;
+    logic `N(2) unuse2;
+    logic lcofip;
+    logic unuse3;
+    logic meip;
+    logic unuse4;
+    logic seip;
+    logic unuse5;
+    logic mtip;
+    logic unuse6;
+    logic stip;
+    logic unuse7;
+    logic msip;
+    logic unuse8;
+    logic ssip;
+    logic unuse9;
+} IP;
+
 `define PMP_OFF     2'b00
 `define PMP_TOR     2'b01
 `define PMP_NA4     2'b10
@@ -191,6 +210,5 @@ typedef struct packed {
     assign pmaaddr[2] = 0; \
     assign pmaaddr[3] = 0; \
 `endif
-
 
 `endif
