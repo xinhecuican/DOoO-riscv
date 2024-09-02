@@ -5,7 +5,8 @@ module CPUCore (
     input logic clk,
     input logic rst,
 
-    AxiIO.master axi
+    AxiIO.master axi,
+    ClintIO.cpu clint_io
 );
 
     ICacheAxi icache_io();

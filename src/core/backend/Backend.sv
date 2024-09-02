@@ -11,7 +11,8 @@ module Backend(
     CsrTlbIO.csr csr_itlb_io,
     CsrL2IO.csr csr_l2_io,
     TlbL2IO.tlb dtlb_io,
-    PTWRequest.cache ptw_request
+    PTWRequest.cache ptw_request,
+    ClintIO.cpu clint_io
 );
     DecodeRenameIO dec_rename_io();
     RenameDisIO rename_dis_io();
@@ -63,6 +64,7 @@ module Backend(
     logic `N(`VADDR_SIZE) exc_pc;
     LoadIdx lqIdx;
     StoreIdx sqIdx;
+    CSRIrqInfo irqInfo;
 
 `ifdef DIFFTEST
     DiffRAT diff_rat();
@@ -90,6 +92,7 @@ module Backend(
     ROB rob(.*,
             .dis_io(rename_dis_io),
             .full(rob_full),
+            .exc_pc(fsq_back_io.exc_pc),
             .backendRedirect(backendRedirect.out));
     Dispatch dispatch(.*,
                       .full(backendCtrl.dis_full));

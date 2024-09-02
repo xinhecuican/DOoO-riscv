@@ -132,7 +132,7 @@ endgenerate
     );
 
     UBTBMeta meta;
-    logic `N(`SLOT_NUM) update_carry;
+    logic `N(`SLOT_NUM) update_carry, update_alloc;
     logic `ARRAY(`SLOT_NUM, 2) u_ctr;
     assign meta = ubtb_io.updateInfo.meta.ubtb;
 generate
@@ -141,8 +141,10 @@ generate
     end
     for(genvar i=0; i<`SLOT_NUM-1; i++)begin
         assign update_carry[i] = ubtb_io.updateInfo.btbEntry.slots[i].carry;
+        assign update_alloc[i] = ubtb_io.updateInfo.allocSlot[i];
     end
     assign update_carry[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.carry;
+    assign update_alloc[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.br_type == CONDITION && ubtb_io.updateInfo.allocSlot[`SLOT_NUM-1];
 endgenerate
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -153,8 +155,10 @@ endgenerate
             if(ubtb_io.update & ubtb_io.updateInfo.btbEntry.en)begin
                 entrys[updateSelectIdx] <= {update_tag, ubtb_io.updateInfo.btbEntry};
                 for(int i=0; i<`SLOT_NUM; i++)begin
-                    if(!update_carry)begin
-                        ctrs[updateSelectIdx] <= u_ctr;
+                    if(update_alloc[i])begin
+                        if(~update_carry[i])begin
+                            ctrs[updateSelectIdx][i] <= u_ctr[i];
+                        end
                     end
                 end
             end

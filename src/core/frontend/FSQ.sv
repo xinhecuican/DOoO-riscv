@@ -19,6 +19,7 @@ module FSQ (
     logic `N(`FSQ_WIDTH) squashIdx;
     logic full;
     logic queue_we;
+    logic last_stage_we;
     logic last_search;
     logic cache_req;
     logic cache_req_ok;
@@ -34,6 +35,7 @@ module FSQ (
     assign search_head_n1 = search_head + 1;
     assign write_tail = bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
     assign queue_we = bpu_fsq_io.en & ~full;
+    assign last_stage_we = bpu_fsq_io.lastStage & ~full;
     assign write_index = pd_redirect.en ? pd_redirect.fsqIdx.idx :
                          bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
     assign searchIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : search_head;
@@ -459,6 +461,7 @@ endgenerate
         .oldEntry(oldEntry),
         .pc(commitStream.start_addr),
         .fsqInfo(commitFsqInfo),
+        .normalOffset(commitStream.size),
         .br_type(commitWBInfo.br_type),
         .ras_type(commitWBInfo.ras_type),
         .pred_error(pred_error),
@@ -490,20 +493,58 @@ endgenerate
         update_taken <= commitWBInfo.taken;
         update_start_addr <= commitStream.start_addr;
         update_target_pc <= commitWBInfo.target;
-        update_btb_entry <= pred_error & commitWBInfo.taken ? commitUpdateEntry : oldEntry;
+        update_btb_entry <= pred_error ? commitUpdateEntry : oldEntry;
         update_real_taken <= realTaken;
         update_alloc_slot <= allocSlot;
     end
 
     // TODO: fix excpetion pc time
-    logic `N(`VADDR_SIZE) exception_pcs `N(`FSQ_SIZE);
+    logic `N(`FSQ_WIDTH) exception_head, exception_head_n;
+    logic exc_wen;
+    logic `N(`FSQ_WIDTH) exc_widx;
+    logic `N(`VADDR_SIZE) exc_waddr;
+    assign exception_head_n = exception_head + commitValid;
     always_ff @(posedge clk)begin
-        if(queue_we)begin
-            exception_pcs[write_tail] <= bpu_fsq_io.prediction.stream.start_addr;
-        end
-
+        exc_wen <= pd_redirect.exc_en;
+        exc_widx <= pd_redirect.fsqIdx.idx;
+        exc_waddr <= pd_redirect.stream.start_addr;
     end
-    assign fsq_back_io.exc_pc = exception_pcs[fsq_back_io.redirect.fsqInfo.idx] + {fsq_back_io.redirect.fsqInfo.offset, 2'b00};
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            exception_head <= 0;
+        end
+        else begin
+            exception_head <= exception_head_n;
+        end
+    end
+
+    logic `ARRAY(`COMMIT_WIDTH, `FSQ_WIDTH) exception_idxs;
+    logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) exception_addrs;
+generate
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign exception_idxs[i] = exception_head + i;
+    end
+endgenerate
+    MPRAM #(
+        .WIDTH(`VADDR_SIZE),
+        .DEPTH(`FSQ_SIZE),
+        .READ_PORT(`COMMIT_WIDTH),
+        .WRITE_PORT(1)
+    ) exception_ram (
+        .clk(clk),
+        .rst(rst),
+        .en({`COMMIT_WIDTH{1'b1}}),
+        .raddr(exception_idxs),
+        .rdata(exception_addrs),
+        .we(exc_wen),
+        .waddr(exc_widx),
+        .wdata(exc_waddr),
+        .ready()
+    );
+
+    logic `N($clog2(`COMMIT_WIDTH)) exc_ridx;
+    assign exc_ridx = fsq_back_io.redirect.fsqInfo.idx - commit_head;
+    assign fsq_back_io.exc_pc = exception_addrs[exc_ridx] + {fsq_back_io.redirect.fsqInfo.offset, 2'b00};
 
 `ifdef DIFFTEST
     logic `N(`VADDR_SIZE) diff_pcs `N(`FSQ_SIZE);
@@ -525,11 +566,16 @@ endgenerate
     end
     FetchStream logStream;
     logic logError;
+    logic redirect_n;
+    logic `N(`FSQ_WIDTH) redirect_idx;
     always_ff @(posedge clk)begin
         logStream <= commitStream;
         logError <= pred_error;
+        redirect_n <= fsq_back_io.redirect.en;
+        redirect_idx <= fsq_back_io.redirect.fsqInfo.idx;
     end
     `Log(DLog::Debug, T_FSQ, bpu_fsq_io.update, $sformatf("update BP%4d. [%8h %4d]->%8h %8h %b", commit_head, logStream.start_addr, logStream.size, logStream.target, update_target_pc, logError))
+    `Log(DLog::Debug, T_FSQ, bpu_fsq_io.squash, $sformatf("squash BP [%d %d].", redirect_idx, redirect_n))
 `endif
 
 endmodule
@@ -538,6 +584,7 @@ module BTBEntryGen(
     input BTBUpdateInfo oldEntry,
     input logic `VADDR_BUS pc,
     input FsqIdxInfo fsqInfo,
+    input logic `N(`PREDICTION_WIDTH) normalOffset,
     input BranchType br_type,
     input RasType ras_type,
     input logic pred_error,
@@ -643,7 +690,7 @@ endgenerate
     end
 
     always_comb begin
-        if((~pred_error) | exception | (~taken))begin
+        if((~pred_error) | exception)begin
             realTaken = predTaken;
         end
         else if(|equal)begin
@@ -657,22 +704,38 @@ endgenerate
         end
     end
 
-    logic `N(`SLOT_NUM) predAlloc, predOldAlloc;
+    logic `N(`SLOT_NUM) predAlloc, predOldAlloc, slotAlloc;
+    logic `ARRAY(`SLOT_NUM, `SLOT_NUM) slotOldAlloc;
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
-        assign predAlloc[i] = ~free[i];
-        assign predOldAlloc[i] = predAlloc[i] & (fsqInfo.offset > offsets[i]);
+        assign predAlloc[i] = ~free[i] & (normalOffset > offsets[i]);
+        assign predOldAlloc[i] = ~free[i] & (fsqInfo.offset > offsets[i]);
+        for(genvar j=0; j<`SLOT_NUM; j++)begin
+            if(i == j)begin
+                assign slotOldAlloc[i][j] = equal[i];
+            end
+            else begin
+                assign slotOldAlloc[i][j] = ~free[j] & equal[i] & (offsets[i] > offsets[j]);
+            end
+        end
     end
 endgenerate
+    ParallelAdder #(1, `SLOT_NUM) adder_slotOldAlloc (slotOldAlloc, slotAlloc);
     always_comb begin
-        if((~pred_error) | (~taken))begin
+        if((~pred_error))begin
             allocSlot = predAlloc;
         end
         else if(exception)begin
             allocSlot = predOldAlloc;
         end
+        else if(|equal)begin
+            allocSlot = slotAlloc;
+        end
+        else if(|free)begin
+            allocSlot = predOldAlloc | free_p;
+        end
         else begin
-            allocSlot = predAlloc | ({`SLOT_NUM{~(|equal)}} & free_p);
+            allocSlot = {`SLOT_NUM{1'b1}};
         end
     end
 

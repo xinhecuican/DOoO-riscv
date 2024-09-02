@@ -35,9 +35,9 @@ module ITLB(
     assign replace_io.hit_way = 0;
 generate
     for(genvar i=0; i<2; i++)begin
-        assign itlb_io[i].req = itlb_cache_io.req;
+        assign itlb_io[i].req = itlb_cache_io.req[i];
         // assign itlb_io.asid = itlb_cache_io.asid;
-        assign itlb_io[i].vaddr = itlb_cache_io.vaddr;
+        assign itlb_io[i].vaddr = itlb_cache_io.vaddr[i];
         assign itlb_io[i].flush = itlb_cache_io.flush;
 
         assign itlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception & (tlb_l2_io0.info_o.source == 2'b00);

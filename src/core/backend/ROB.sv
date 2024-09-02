@@ -4,6 +4,7 @@ module ROB(
     input logic clk,
     input logic rst,
     input BackendRedirectInfo backendRedirect,
+    input CSRIrqInfo irqInfo,
     input logic `N(`VADDR_SIZE) exc_pc,
     input StoreWBData `N(`STORE_PIPELINE) storeWBData,
     RenameDisIO.rob dis_io,
@@ -127,7 +128,7 @@ generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commit_en_unexc[i] = &commit_en_pre[i: 0];
     end
-    assign exc_en = commit_en_unexc & excValid;
+    assign exc_en = commit_en_unexc & (excValid | {`COMMIT_WIDTH{irqInfo.irq}});
     assign exc_exist = |exc_en;
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign exc_mask[i] = (|exc_en[`COMMIT_WIDTH-1: i]) | (~exc_exist);
@@ -186,8 +187,11 @@ endgenerate
     logic `N(`ROB_WIDTH) exc_robIdx;
     logic exc_dir;
     logic `N(`EXC_WIDTH) redirect_exccode;
+    logic irq_n, irq_deleg_n;
     always_ff @(posedge clk)begin
         exc_exist_n <= exc_exist && !walk_state && initReady;
+        irq_n <= irqInfo.irq;
+        irq_deleg_n <= irqInfo.deleg;
         excIdx_n <= excIdx;
         exc_robIdx <= dataRIdx[excIdx];
         exc_dir <= head[`ROB_WIDTH-1] & ~dataRIdx[excIdx][`ROB_WIDTH-1] ? ~hdir : hdir;
@@ -198,6 +202,8 @@ endgenerate
     assign rob_redirect_io.csrRedirect.robIdx.idx = exc_robIdx;
     assign rob_redirect_io.csrRedirect.robIdx.dir = exc_dir;
     assign rob_redirect_io.csrInfo.en = exc_exist_n;
+    assign rob_redirect_io.csrInfo.irq = irq_n;
+    assign rob_redirect_io.csrInfo.irq_deleg = irq_deleg_n;
     assign rob_redirect_io.csrInfo.exccode = redirect_exccode;
     assign rob_redirect_io.csrInfo.exc_pc = exc_pc;
 

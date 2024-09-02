@@ -72,13 +72,17 @@ module SimTop(
     AxiIO mem_axi();
     AxiIO core_axi();
     AxiIO peri_axi();
+    AxiIO irq_axi();
+
+    ClintIO clint_io();
 
     CPUCore core(
         .clk(clock),
         .rst(core_rst),
-        .axi(core_axi.master)
+        .axi(core_axi.master),
+        .clint_io(clint_io.cpu)
     );
-    localparam [2: 0] AXI_SLAVE_NUM = 2;
+    localparam [2: 0] AXI_SLAVE_NUM = 3;
     localparam xbar_cfg_t crossbar_cfg = '{
         NoSlvPorts: 1,
         NoMstPorts: AXI_SLAVE_NUM,
@@ -107,6 +111,8 @@ module SimTop(
     `AXI_RESP_RECEIVE(mst_resp_i[0], peri_axi)
     `AXI_REQ_RECEIVE(mst_req_o[1], mem_axi)
     `AXI_RESP_RECEIVE(mst_resp_i[1], mem_axi)
+    `AXI_REQ_RECEIVE(mst_req_o[2], irq_axi)
+    `AXI_RESP_RECEIVE(mst_resp_i[2], irq_axi)
 
     assign addr_map[0] = '{
         idx: 0,
@@ -117,6 +123,11 @@ module SimTop(
         idx: 1,
         start_addr: `MEM_START,
         end_addr: `MEM_END
+    };
+    assign addr_map[2] = '{
+        idx: 2,
+        start_addr: `IRQ_START,
+        end_addr: `IRQ_END
     };
 
     axi_xbar #(
@@ -148,11 +159,63 @@ module SimTop(
         .default_mst_port_i(0)
     );
 
+// interrupt
+    AxiReq irq_req;
+    AxiResp irq_resp;
+    ApbReq clint_req;
+    ApbResp clint_resp;
+    addr_rule_t `N(2) irq_map_rules;
+    assign irq_map_rules[0] = '{
+        idx: 0,
+        start_addr: `CLINT_START,
+        end_addr: `CLINT_END
+    };
+
+    `AXI_REQ_ASSIGN(irq_req, irq_axi)
+    `AXI_RESP_ASSIGN(irq_resp, irq_axi)
+    axi_to_apb #(
+        .NoApbSlaves(`PERIPHERAL_SIZE),
+        .NoRules(`PERIPHERAL_SIZE),
+        .AxiAddrWidth(`PADDR_SIZE),
+        .AxiDataWidth(`XLEN),
+        .AxiIdWidth(`AXI_ID_W),
+        .AxiUserWidth(1),
+        .AxiMaxWriteTxns(32'd16),
+        .AxiMaxReadTxns(32'd16),
+        .full_req_t(AxiReq),
+        .full_resp_t(AxiResp),
+        .lite_req_t(AxiLReq),
+        .lite_resp_t(AxiLResp),
+        .apb_req_t(ApbReq),
+        .apb_resp_t(ApbResp),
+        .rule_t(addr_rule_t)
+    ) irq_axi_to_apb (
+        .clk_i(clock),
+        .rst_ni(~peri_rst),
+        .test_i(1'b0),
+        .axi_req_i(irq_req),
+        .axi_resp_o(irq_resp),
+        .apb_req_o(clint_req),
+        .apb_resp_i(clint_resp),
+        .addr_map_i(map_rules)
+    );
+
+    ApbIO clint_apb_io();
+    `APB_REQ_ASSIGN(clint_req, clint_apb_io)
+    `APB_RESP_ASSIGN(clint_resp, clint_apb_io)
+
+    apb4_clint clint(
+        .clk(clock),
+        .rtc_clk(clock),
+        .rst(peri_rst),
+        .apb4(clint_apb_io.slave),
+        .clint(clint_io.clint)
+    );
+
+
     /* verilator lint_off UNOPTFLAT */
     AxiReq peri_req;
     AxiResp peri_resp;
-    AxiLReq peri_lreq;
-    AxiLResp peri_lresp;
     ApbReq uart_req;
     ApbResp uart_resp;
     addr_rule_t `N(`PERIPHERAL_SIZE) map_rules;
@@ -166,7 +229,9 @@ module SimTop(
     `AXI_REQ_ASSIGN(peri_req, peri_axi)
     `AXI_RESP_ASSIGN(peri_resp, peri_axi)
 
-    axi_to_axi_lite #(
+    axi_to_apb #(
+        .NoApbSlaves(`PERIPHERAL_SIZE),
+        .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
         .AxiIdWidth(`AXI_ID_W),
@@ -176,39 +241,26 @@ module SimTop(
         .full_req_t(AxiReq),
         .full_resp_t(AxiResp),
         .lite_req_t(AxiLReq),
-        .lite_resp_t(AxiLResp)
-    ) axi_to_lite_inst(
-        .clk_i(clock),
-        .rst_ni(~peri_rst),
-        .test_i(1'b0),
-        .slv_req_i(peri_req),
-        .slv_resp_o(peri_resp),
-        .mst_req_o(peri_lreq),
-        .mst_resp_i(peri_lresp)
-    );
-
-    axi_lite_to_apb #(
-        .NoApbSlaves(`PERIPHERAL_SIZE),
-        .NoRules(`PERIPHERAL_SIZE),
-        .AddrWidth(`PADDR_SIZE),
-        .DataWidth(`XLEN),
-        .axi_lite_req_t(AxiLReq),
-        .axi_lite_resp_t(AxiLResp),
+        .lite_resp_t(AxiLResp),
         .apb_req_t(ApbReq),
         .apb_resp_t(ApbResp),
         .rule_t(addr_rule_t)
-    )axi_to_apb_inst (
+    ) uart_axi_to_apb (
         .clk_i(clock),
         .rst_ni(~peri_rst),
-        .axi_lite_req_i(peri_lreq),
-        .axi_lite_resp_o(peri_lresp),
+        .test_i(1'b0),
+        .axi_req_i(peri_req),
+        .axi_resp_o(peri_resp),
         .apb_req_o(uart_req),
         .apb_resp_i(uart_resp),
         .addr_map_i(map_rules)
     );
+
+// uart
+
     ApbIO uart_io();
-    assign uart_io.req = uart_req;
-    assign uart_resp = uart_io.resp;
+    `APB_REQ_ASSIGN(uart_req, uart_io)
+    `APB_RESP_ASSIGN(uart_resp, uart_io)
     SimUart uart(
         .clk(clock),
         .rst(peri_rst),

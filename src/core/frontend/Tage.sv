@@ -160,9 +160,9 @@ generate
 	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: 2] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * 2 + 1 : `TAGE_BASE_WIDTH + 2];
 
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
-		assign u_slot_en[i] = tage_io.updateInfo.allocSlot[i] & ~btbEntry.slots[i].carry;
+		assign u_slot_en[i] = tage_io.update & tage_io.updateInfo.allocSlot[i] & ~btbEntry.slots[i].carry;
 	end
-	assign u_slot_en[`SLOT_NUM-1] = tage_io.updateInfo.allocSlot[`SLOT_NUM-1] & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
+	assign u_slot_en[`SLOT_NUM-1] = tage_io.update & tage_io.updateInfo.allocSlot[`SLOT_NUM-1] & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
 		logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
 		assign bank_u = update_u_origin[i];
@@ -184,7 +184,7 @@ generate
 
 
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
-		assign bank_ctrl[i].update_en = {`SLOT_NUM{tage_io.update}} & update_en;
+		assign bank_ctrl[i].update_en = update_en;
 		assign bank_ctrl[i].provider = {u_provider[1][i], u_provider[0][i]};
 		assign bank_ctrl[i].alloc = {alloc[1][i], alloc[0][i]};
 		assign bank_ctrl[i].predError = predError;
@@ -220,8 +220,8 @@ generate
 	end
 endgenerate
 
-	`Log(DLog::Debug, T_TAGE, ~tage_io.redirect.stall, $sformatf("tage lookup. %8h %10h %8h", tage_io.pc, bank_ctrl[0].lookup_idx, bank_ctrl[0].lookup_tag))
-	`Log(DLog::Debug, T_TAGE, tage_io.update, $sformatf("tage update. %2b %8h %10h %8h", update_en, tage_io.updateInfo.start_addr, bank_ctrl[0].update_idx, bank_ctrl[0].update_tag))
+	`Log(DLog::Debug, T_TAGE, ~tage_io.redirect.stall, $sformatf("tage lookup. %2b %8h %h %h", tage_prediction, tage_io.pc, bank_ctrl[0].lookup_idx, bank_ctrl[0].lookup_tag))
+	`Log(DLog::Debug, T_TAGE, tage_io.update, $sformatf("tage update. %2b %8h %h %h", update_en, tage_io.updateInfo.start_addr, bank_ctrl[0].update_idx, bank_ctrl[0].update_tag))
 endmodule
 
 module TageTable #(

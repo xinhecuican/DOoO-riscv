@@ -57,11 +57,16 @@ module BranchPredictor(
         if(rst == `RST)begin
             pc <= `RESET_PC;
         end
-        else begin
-            pc <= redirect.flush ? squashInfo.target_pc :
-                  redirect.stall ? pc :
-                  redirect.s2_redirect ? s2_result_out.stream.target :
-                    s1_result.stream.target;
+        else if(redirect.flush)begin
+            pc <= squashInfo.target_pc;
+        end
+        else if(!redirect.stall)begin
+            if(redirect.s2_redirect)begin
+                pc <= s2_result_out.stream.target;
+            end
+            else begin
+                pc <= s1_result.stream.target;
+            end
         end
 
         if(rst == `RST || redirect.s2_redirect || redirect.flush)begin

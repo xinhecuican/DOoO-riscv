@@ -7,7 +7,7 @@ interface ICacheWayIO;
     logic span; //request span one line
     logic `N(`ICACHE_SET_WIDTH) tagv_index;
     logic `N(`ICACHE_SET_WIDTH) tagv_windex;
-    logic `N(2 * (`ICACHE_TAG+1)) tagv;
+    logic `ARRAY(2,(`ICACHE_TAG+1)) tagv;
     logic `N(`ICACHE_TAG+1) tagv_wdata;
     logic `N(`ICACHE_BANK * `ICACHE_SET_WIDTH) index;
     logic `N(`ICACHE_BANK) we;
@@ -32,9 +32,9 @@ module ICacheWay(
         end
         else begin
             if(io.tagv_en)begin
-                io.tagv[`ICACHE_TAG: 0] <= tagv[io.tagv_index];
+                io.tagv[0] <= tagv[io.tagv_index];
                 // if(io.span)begin
-                    io.tagv[2 * `ICACHE_TAG + 1 : `ICACHE_TAG+1] <= tagv[tagv_index_p1];
+                    io.tagv[1] <= tagv[tagv_index_p1];
                 // end
             end
 

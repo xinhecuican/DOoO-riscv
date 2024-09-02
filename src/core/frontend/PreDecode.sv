@@ -73,6 +73,7 @@ module PreDecode(
                             (bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target))))) |
                          (en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch);
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
+    assign pd_redirect.exc_en = |en_next;
     assign pd_redirect.direct = ~(stream_next.taken & ~bundles_next[tailIdx].branch) & (|jump_en);
     assign pd_redirect.fsqIdx = fsqIdx;
     assign pd_redirect.stream.taken = ~(stream_next.taken & ~bundles_next[tailIdx].branch);

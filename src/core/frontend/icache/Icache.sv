@@ -125,8 +125,8 @@ module ICache(
             assign way_io[i].wdata[`ICACHE_BANK-1] = axi_io.sr.data;
             assign way_io[i].we = {`ICACHE_BANK{replace_way[i] & refill_en}};
 
-            assign hit[0][i] = way_io[i].tagv[`ICACHE_TAG] && (way_io[i].tagv[(`ICACHE_TAG-1)-: `ICACHE_TAG] == ptag1);
-            assign hit[1][i] = way_io[i].tagv[`ICACHE_TAG * 2 + 1] && (way_io[i].tagv[(`ICACHE_TAG*2)-: `ICACHE_TAG] == ptag2);
+            assign hit[0][i] = way_io[i].tagv[0][`ICACHE_TAG] && (way_io[i].tagv[0][(`ICACHE_TAG-1): 0] == ptag1);
+            assign hit[1][i] = way_io[i].tagv[1][`ICACHE_TAG] && (way_io[i].tagv[1][`ICACHE_TAG-1: 0] == ptag2);
 
             assign rdata[i] = way_io[i].data;
         end
@@ -326,4 +326,7 @@ module ICache(
                             ~fsq_cache_io.stall;
         end
     end
+
+    `Log(DLog::Debug, T_ICACHE, axi_io.ar_valid & axi_io.ar_ready, $sformatf("icache req. %h %d", axi_io.mar.addr, axi_io.mar.len))
+    `Log(DLog::Debug, T_ICACHE, refill_en, $sformatf("icache refill. %h %d %d", {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}}, replace_io.miss_way, miss_buffer.windex))
 endmodule

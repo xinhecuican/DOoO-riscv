@@ -33,7 +33,11 @@ module HistoryControl(
                         prediction_redirect ? result.redirect_info.ghistIdx : pos;
     assign we_idx[1] = redirect.flush ? squashInfo.redirectInfo.ghistIdx + 1 : 
                         prediction_redirect ? result.redirect_info.ghistIdx + 1 : pos + 1;
-    assign cond_result = taken << (condNum - 1);
+generate
+    for(genvar i=0; i<`SLOT_NUM; i++)begin
+        assign cond_result[i] = (condNum == (i+1)) & taken;
+    end
+endgenerate
     assign tage_input_history = redirect.flush ? squashInfo.redirectInfo.tage_history :
                            prediction_redirect ? result.redirect_info.tage_history : tage_history;
     assign history.ghistIdx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
@@ -101,6 +105,22 @@ endgenerate
             end
         end
     end
+
+`ifdef DIFFTEST
+    logic [31: 0] diff_hist;
+    logic squash_next;
+    always_ff @(posedge clk)begin
+        squash_next <= squash;
+    end
+generate
+    for(genvar i=0; i<32; i++)begin
+        logic `N(`GHIST_WIDTH) diff_pos;
+        assign diff_pos = pos -1 - i;
+        assign diff_hist[i] = ghist[diff_pos];
+    end
+endgenerate
+    `Log(DLog::Debug, T_BR_HIST, squash_next, $sformatf("branch hist [%h]. %32b", pos, diff_hist))
+`endif
 endmodule
 
 module CompressHistory #(

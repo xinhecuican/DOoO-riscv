@@ -13,9 +13,12 @@ module CSR(
     CsrTlbIO.csr csr_ltlb_io,
     CsrTlbIO.csr csr_stlb_io,
     CsrL2IO.csr  csr_l2_io,
+    ClintIO.cpu clint_io,
+    output CSRIrqInfo irqInfo,
     output logic `N(`VADDR_SIZE) target_pc
 );
     logic `N(2) mode;
+    logic mode_m, mode_s, mode_u;
     logic exc_ecall;
 
     // machine mode regs
@@ -28,7 +31,7 @@ module CSR(
     TVEC mtvec;
     logic `N(`MXL) medeleg;
     logic `N(`MXL) mideleg;
-    logic `N(`MXL) mip;
+    IP mip;
     logic `N(`MXL) mie;
     logic `N(`MXL) mscratch;
     logic `N(`MXL) mepc;
@@ -54,6 +57,10 @@ module CSR(
     logic `N(`MXL) sepc;
     CAUSE scause;
     SATP satp;
+
+    assign mode_m = mode == `M_MODE;
+    assign mode_s = mode == `S_MODE;
+    assign mode_u = mode == `U_MODE;
 
 // csr write
     logic we;
@@ -224,11 +231,10 @@ endgenerate                                                             \
                      (ret & ret_priv_error) ? `EXC_II : redirect.exccode;
     Decoder #(`MXL) deocder_exccode (exccode, exccode_decode);
     assign edelege = medeleg & exccode_decode;
-    assign edelege_valid = (|edelege) & (mode != 2'b11);
+    assign edelege_valid = (|edelege) & (mode != 2'b11) | (redirect.irq & redirect.irq_deleg);
 
     logic `N(64) mcycle_n;
     assign mcycle_n = {mcycleh, mcycle} + 1;
-
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
@@ -238,7 +244,6 @@ endgenerate                                                             \
             mtval <= 0;
             sepc <= 0;
             stval <= 0;
-            mip <= 0;
             mie <= 0;
             mcycle <= 0;
             mcycleh <= 0;
@@ -266,9 +271,6 @@ endgenerate                                                             \
             if(wen[mie_id] | wen[sie_id])begin
                 mie <= wdata;
             end
-            if(wen[mip_id] | wen[sip_id])begin
-                mip <= wdata;
-            end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
                     mstatus.spp <= mode;
@@ -293,10 +295,10 @@ endgenerate                                                             \
             end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
-                    scause[`EXC_WIDTH-1: 0] <= exccode;
+                    scause[`EXC_WIDTH-1: 0] <= {redirect.irq, {`MXL-1-`EXC_WIDTH{1'b1}}, exccode};
                 end
                 if(~edelege_valid)begin
-                    mcause[`EXC_WIDTH-1: 0] <= exccode;
+                    mcause[`EXC_WIDTH-1: 0] <= {redirect.irq, {`MXL-1-`EXC_WIDTH{1'b1}}, exccode};
                 end
             end
             if(redirect.en & ~ret_valid)begin
@@ -335,6 +337,52 @@ endgenerate                                                             \
             end
             if(redirect.en && redirect.exccode == `EXC_MRET && !ret_priv_error)begin
                 mode <= mstatus.mpp;
+            end
+        end
+    end
+
+// interrupt
+    logic msip, ssip, mtip, stip;
+    logic msip_s1, mtip_s1;
+    logic `N(`MXL) irq_valid;
+    logic `N(`MXL) mirq_valid, sirq_valid, irq_valid_all;
+
+    assign mip = '{
+        msip: msip,
+        ssip: ssip,
+        mtip: mtip,
+        stip: stip,
+        default: 0
+    };
+    assign irq_valid = mip & mie;
+    assign mirq_valid = irq_valid & ~mideleg;
+    assign sirq_valid = irq_valid & mideleg;
+    assign irqInfo.irq = (mode_m & mstatus.mie & (|irq_valid) | 
+                    ~mode_m & (|mirq_valid)) |
+                    (mode_s & mstatus.sie | mode_u) & (|sirq_valid);
+    assign irqInfo.deleg = (mode_s & mstatus.sie | mode_u) & (|sirq_valid);
+    assign irqInfo.exccode = irq_valid[`EXCI_MEXT] ? `EXCI_MEXT :
+                         irq_valid[`EXCI_SEXT] ? `EXCI_SEXT :
+                         irq_valid[`EXCI_MTIMER] ? `EXCI_MTIMER :
+                         irq_valid[`EXCI_STIMER] ? `EXCI_STIMER :
+                         irq_valid[`EXCI_MSI] ? `EXCI_MSI :
+                         irq_valid[`EXCI_SSI] ? `EXCI_SSI : `EXC_NONE;
+
+    always_ff @(posedge clk, posedge rst)begin
+        msip <= msip_s1;
+        mtip <= mtip_s1;
+        if(rst == `RST)begin
+            msip_s1 <= 0;
+            mtip_s1 <= 0;
+            ssip <= 0;
+            stip <= 0;
+        end
+        else begin
+            msip_s1 <= clint_io.soft_irq;
+            mtip_s1 <= clint_io.timer_irq;
+            if(wen[mip_id])begin
+                ssip <= wdata[1];
+                stip <= wdata[5];
             end
         end
     end
