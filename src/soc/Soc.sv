@@ -14,6 +14,8 @@ module Soc(
     AxiIO irq_axi();
 
     ClintIO clint_io();
+    logic `N(`IRQ_NUM) irq_source;
+    logic `N(`NUM_CORE) irq;
 
     logic sync_rst_peri, sync_rst_core, core_rst, peri_rst;
     logic peri_rst_s1, core_rst_s1;
@@ -31,6 +33,7 @@ module Soc(
     CPUCore core(
         .clk(core_clk),
         .rst(core_rst),
+        .ext_irq(irq[0]),
         .axi(core_axi.master),
         .clint_io(clint_io.cpu)
     );
@@ -117,6 +120,11 @@ module Soc(
         start_addr: `CLINT_START,
         end_addr: `CLINT_END
     };
+    assign irq_map_rules[1] = '{
+        idx: 1,
+        start_addr: `PLIC_START,
+        end_addr: `PLIC_END
+    };
 
     `AXI_REQ_ASSIGN(irq_req, irq_axi)
     `AXI_RESP_ASSIGN(irq_resp, irq_axi)
@@ -159,6 +167,23 @@ module Soc(
         .clint(clint_io.clint)
     );
 
+    ApbIO plic_apb_io();
+    `APB_REQ_ASSIGN(plic_req, plic_apb_io)
+    `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
+    apb4_plic_top #(
+        .PADDR_SIZE(`PADDR_SIZE),
+        .PDATA_SIZE(`XLEN),
+        .SOURCES(`IRQ_NUM),
+        .TARGETS(`NUM_CORE)
+    ) plic (
+        .PRESETn(~peri_rst),
+        .PCLK(clock),
+        .apb(plic_apb_io),
+        .src(irq_source),
+        .irq(irq)
+    );
+
+// peri
     AxiReq peri_req, peri_req_cdc;
     AxiResp peri_resp, peri_resp_cdc;
     ApbReq uart_req;

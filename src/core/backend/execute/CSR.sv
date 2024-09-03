@@ -4,7 +4,10 @@
 module CSR(
     input logic clk,
     input logic rst,
+    input logic ext_irq,
     input logic `N(`VADDR_SIZE) exc_pc,
+    input logic `N(32) trapInst,
+    input logic `N(`VADDR_SIZE) exc_vaddr,
     input CSRRedirectInfo redirect,
     IssueCSRIO.csr issue_csr_io,
     WriteBackIO.fu csr_wb_io,
@@ -309,6 +312,15 @@ endgenerate                                                             \
                     mepc <= exc_pc;
                 end
             end
+            if(redirect.en & ~ret_valid & ~redirect.irq)begin
+                case(exccode)
+                `EXC_II: mtval <= trapInst;
+                `EXC_IAM, `EXC_IAF, `EXC_IPF: mtval <= exc_pc;
+                `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
+                `EXC_LPF, `EXC_SPF: mtval <= exc_vaddr;
+                default: mtval <= 0;
+                endcase
+            end
         end
     end
 
@@ -342,12 +354,14 @@ endgenerate                                                             \
     end
 
 // interrupt
-    logic msip, ssip, mtip, stip;
-    logic msip_s1, mtip_s1;
+    logic msip, ssip, mtip, stip, meip, seip;
+    logic msip_s1, mtip_s1, meip_s1;
     logic `N(`MXL) irq_valid;
     logic `N(`MXL) mirq_valid, sirq_valid, irq_valid_all;
 
     assign mip = '{
+        meip: meip,
+        seip: seip,
         msip: msip,
         ssip: ssip,
         mtip: mtip,
@@ -371,18 +385,22 @@ endgenerate                                                             \
     always_ff @(posedge clk, posedge rst)begin
         msip <= msip_s1;
         mtip <= mtip_s1;
+        meip <= meip_s1;
         if(rst == `RST)begin
             msip_s1 <= 0;
             mtip_s1 <= 0;
+            meip_s1 <= 0;
             ssip <= 0;
             stip <= 0;
         end
         else begin
             msip_s1 <= clint_io.soft_irq;
             mtip_s1 <= clint_io.timer_irq;
+            meip_s1 <= ext_irq;
             if(wen[mip_id])begin
                 ssip <= wdata[1];
                 stip <= wdata[5];
+                seip <= wdata[9];
             end
         end
     end

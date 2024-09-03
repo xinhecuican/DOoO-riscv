@@ -211,6 +211,7 @@ generate
         assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
         assign data.exc_valid = di.exccode != `EXC_NONE;
         assign data.exccode = di.exccode;
+        assign data.inst = rename_dis_io.op[i].inst;
         assign di = rename_dis_io.op[i].di;
         assign csr_io.en[i] = rename_dis_io.op[i].en & di.csrv & (~(backendCtrl.redirect));
         assign csr_io.data[i] = data;

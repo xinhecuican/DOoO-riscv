@@ -8,7 +8,7 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PSL v2 for more details.
 
-`include "../../../defines/clint_define.sv"
+`include "../../../../defines/clint_define.sv"
 
 module apb4_clint (
     input logic clk,

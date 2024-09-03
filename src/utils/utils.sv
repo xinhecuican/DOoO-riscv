@@ -243,6 +243,73 @@ generate
 endgenerate
 endmodule
 
+module LoopOldestSelect #(
+	parameter RADIX = 2,
+	parameter WIDTH = 4,
+	parameter DATA_WIDTH = 4
+)(
+	input logic [RADIX-1: 0] en,
+	input logic [RADIX-1: 0][WIDTH: 0] cmp,
+	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
+	output logic en_o,
+	output logic [WIDTH: 0] cmp_o,
+	output logic [DATA_WIDTH-1: 0] data_o
+);
+generate
+	if(RADIX == 1)begin
+		assign data_o = data_i;
+	end
+	else if(RADIX == 2)begin
+		logic older;
+		LoopCompare #(WIDTH) cmp_older (cmp[0], cmp[1], older);
+		assign en_o = en[0] | en[1];
+		assign cmp_o = en[0] & older | en[0] & ~en[1] ? cmp[0] : cmp[1];
+		assign data_o = en[0] & older | en[0] & ~en[1] ? data_i[0] : data_i[1];
+	end
+	else begin
+		logic [1: 0] en_t;
+		logic [1: 0][DATA_WIDTH-1: 0] data_t;
+		logic [1: 0][WIDTH: 0] cmp_t;
+		LoopOldestSelect #(
+			.RADIX(RADIX/2),
+			.WIDTH(WIDTH),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select1 (
+			.en(en[RADIX/2-1: 0]),
+			.cmp(cmp[RADIX/2-1: 0]),
+			.data_i(data_i[RADIX/2-1: 0]),
+			.en_o(en_t[0]),
+			.cmp_o(cmp_t[0]),
+			.data_o(data_t[0])
+		);
+		LoopOldestSelect #(
+			.RADIX(RADIX-RADIX/2),
+			.WIDTH(WIDTH),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select2 (
+			.en(en[RADIX-1: RADIX/2]),
+			.cmp(cmp[RADIX-1: RADIX/2]),
+			.data_i(data_i[RADIX-1: RADIX/2]),
+			.en_o(en_t[1]),
+			.cmp_o(cmp_t[1]),
+			.data_o(data_t[1])
+		);
+		LoopOldestSelect #(
+			.RADIX(2),
+			.WIDTH(WIDTH),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select_o(
+			.en(en_t),
+			.cmp(cmp_t),
+			.data_i(data_t),
+			.en_o(en_o),
+			.cmp_o(cmp_o),
+			.data_o(data_o)
+		);
+	end
+endgenerate
+endmodule
+
 module UpdateCounter #(
 	parameter WIDTH=2
 ) (

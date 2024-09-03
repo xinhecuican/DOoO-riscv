@@ -207,9 +207,7 @@ typedef struct packed {
     logic en;
     FsqIdxInfo fsqInfo;
     DecodeInfo di;
-`ifdef DIFFTEST
     logic `N(32) inst;
-`endif
 } OPBundle;
 
 typedef struct packed {
@@ -268,6 +266,7 @@ typedef struct packed {
     logic `N(`CSROP_WIDTH) csrop;
     logic `N(5) imm;
     logic `N(12) csrid;
+    logic `N(32) inst; // illigal inst
     logic exc_valid;
     logic `N(`EXC_WIDTH) exccode;
     FsqIdxInfo fsqInfo;

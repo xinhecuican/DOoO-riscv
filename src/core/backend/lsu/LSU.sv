@@ -50,7 +50,8 @@ module LSU(
     TlbL2IO.tlb dtlb_io,
     output StoreWBData `N(`STORE_PIPELINE) storeWBData,
     output LoadIdx lqIdx,
-    output StoreIdx sqIdx
+    output StoreIdx sqIdx,
+    output logic `N(`VADDR_SIZE) exc_vaddr
 );
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr, storeVAddr;
     LoadIssueData `N(`LOAD_PIPELINE) load_issue_data;
@@ -208,6 +209,7 @@ endgenerate
     // load enqueue
     LoadIssueData `N(`LOAD_PIPELINE) leq_data;
     logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) lpaddrNext;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lvaddr_s3;
     logic `N(`LOAD_PIPELINE) leq_en, leq_valid;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_next;
 
@@ -240,6 +242,7 @@ endgenerate
         tlb_exception_s3 <= tlb_exception_s2;
         luncache_s3 <= luncache_s2 & ~lmisalign_s2 & ~tlb_exception_s2;
         rhit <= rio.hit;
+        lvaddr_s3 <= loadAddrNext;
     end
     assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3;
     assign load_queue_io.en = leq_valid;
@@ -286,6 +289,7 @@ endgenerate
     
     // wb
     logic `N(`LOAD_PIPELINE) from_issue;
+    logic `N(`LOAD_PIPELINE) wb_pipeline_en;
     RobIdx `N(`LOAD_PIPELINE) lrobIdx_n;
     logic `N(`LOAD_PIPELINE) lwe_n;
     logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) lrd_n;
@@ -293,14 +297,14 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `EXC_WIDTH) lexccode;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
-        logic wb_data_en, wb_pipeline_en;
+        logic wb_data_en;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
-        assign wb_pipeline_en = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3[i] | 
+        assign wb_pipeline_en[i] = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3[i] | 
                                 ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i] & ~luncache_s3[i])) &
                                 ~redirect_clear_s3[i];
         always_ff @(posedge clk)begin
-            wb_data_en <= wb_pipeline_en | load_queue_io.wbData[i].en;
-            from_issue[i] <= wb_pipeline_en;
+            wb_data_en <= wb_pipeline_en[i] | load_queue_io.wbData[i].en;
+            from_issue[i] <= wb_pipeline_en[i];
             lrobIdx_n[i] <= leq_data[i].robIdx;
             lrd_n[i] <= leq_data[i].rd;
             lwe_n[i] <= leq_data[i].we;
@@ -403,6 +407,7 @@ endgenerate
     logic `N(`STORE_PIPELINE) store_redirect_s3;
     logic `N(`STORE_PIPELINE) stlb_miss_s3;
     logic `N(`STORE_PIPELINE) suncache_s3;
+    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr_s3;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s3;
     logic `N(`STORE_PIPELINE) store_en_s4;
     RobIdx `N(`STORE_PIPELINE) store_robIdx_s4;
@@ -410,6 +415,7 @@ endgenerate
     logic `N(`STORE_PIPELINE) store_redirect_s4;
     logic `N(`STORE_PIPELINE) stlb_miss_s4;
     logic `N(`STORE_PIPELINE) suncache_s4;
+    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr_s4;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s4;
 
 generate
@@ -429,12 +435,14 @@ generate
             store_exc_s3[i] <= stlb_exception_s2[i] | smisalign_s2[i];
             suncache_s3[i] <= suncache_s2[i];
             stlb_miss_s3[i] <= stlb_miss[i];
+            svaddr_s3[i] <= storeAddrNext[i];
             sissue_idx_s3[i] <= sissue_idx_s2[i];
             store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i] & ~stlb_miss_s3[i];
             store_robIdx_s4[i] <= store_robIdx_s3[i];
             exccode_s4[i] <= exccode_s3[i];
             stlb_miss_s4[i] <= stlb_miss_s3[i];
             suncache_s4[i] <= ((~store_exc_s3[i]) & suncache_s3[i]);
+            svaddr_s4[i] <= svaddr_s3[i];
             sissue_idx_s4[i] <= sissue_idx_s3[i];
 
             if(i == `STORE_PIPELINE - 1)begin
@@ -501,6 +509,94 @@ generate
 endgenerate
     assign store_queue_fwd.fwdData = fwdData;
     assign commit_queue_fwd.fwdData = fwdData;
+
+// exception
+    RobIdx exc_idx;
+    logic exc_valid;
+    logic `N(`LOAD_PIPELINE) lexc_valid;
+    logic `N(`STORE_PIPELINE) sexc_valid;
+    RobIdx `N(`LOAD_PIPELINE) lexc_robIdx;
+    RobIdx `N(`STORE_PIPELINE) sexc_robIdx;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lexc_vaddr;
+    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) sexc_vaddr;
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        always_ff @(posedge clk)begin
+            lexc_valid[i] <= wb_pipeline_en[i] & (tlb_exception_s3[i] | lmisalign_s3[i]);
+            lexc_robIdx[i] <= leq_data[i].robIdx;
+            lexc_vaddr[i] <= lvaddr_s3[i];
+        end
+    end
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        always_ff @(posedge clk)begin
+            sexc_valid[i] <= store_en_s4[i] & ~store_redirect_s4[i] & (exccode_s4[i] != `EXC_NONE);
+            sexc_robIdx[i] <= store_robIdx_s4[i];
+            sexc_vaddr[i] <= svaddr_s4[i];
+        end
+    end
+endgenerate
+
+    logic lexc_valid_o;
+    RobIdx lexc_robIdx_o;
+    logic `N(`VADDR_SIZE) lexc_vaddr_o;
+    LoopOldestSelect #(
+        .RADIX(`LOAD_PIPELINE),
+        .WIDTH(`ROB_WIDTH),
+        .DATA_WIDTH(`VADDR_SIZE)
+    ) select_lexc_oldest(
+        .en(lexc_valid),
+        .cmp(lexc_robIdx),
+        .data_i(lexc_vaddr),
+        .en_o(lexc_valid_o),
+        .cmp_o(lexc_robIdx_o),
+        .data_o(lexc_vaddr_o)
+    );
+    logic sexc_valid_o;
+    RobIdx sexc_robIdx_o;
+    logic `N(`VADDR_SIZE) sexc_vaddr_o;
+    LoopOldestSelect #(
+        .RADIX(`STORE_PIPELINE),
+        .WIDTH(`ROB_WIDTH),
+        .DATA_WIDTH(`VADDR_SIZE)
+    ) select_sexc_oldest(
+        .en(sexc_valid),
+        .cmp(sexc_robIdx),
+        .data_i(sexc_vaddr),
+        .en_o(sexc_valid_o),
+        .cmp_o(sexc_robIdx_o),
+        .data_o(sexc_vaddr_o)
+    );
+    logic exc_valid_o;
+    RobIdx exc_robIdx_o;
+    logic `N(`VADDR_SIZE) exc_vaddr_o;
+
+    logic ls_exc_older;
+    LoopCompare #(`ROB_WIDTH) cmp_ls_exc_older (lexc_robIdx_o, sexc_robIdx_o, ls_exc_older);
+    assign exc_valid_o = lexc_valid_o | sexc_valid_o;
+    assign exc_robIdx_o = lexc_valid_o & ls_exc_older | lexc_valid_o & ~sexc_valid_o ? lexc_robIdx_o : sexc_robIdx_o;
+    assign exc_vaddr_o = lexc_valid_o & ls_exc_older | lexc_valid_o & ~sexc_valid_o ? lexc_vaddr_o : sexc_vaddr_o;
+
+    logic exc_redirect_older, exc_pipline_older;
+    LoopCompare #(`ROB_WIDTH) cmp_exc_older (backendCtrl.redirectIdx, exc_idx, exc_redirect_older);
+    LoopCompare #(`ROB_WIDTH) cmp_exc_pipe_older (exc_robIdx_o, exc_idx, exc_pipline_older);
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            exc_valid <= 0;
+            exc_idx <= 0;
+            exc_vaddr <= 0;
+        end
+        else if(backendCtrl.redirect & exc_redirect_older)begin
+            exc_valid <= 1'b0;
+        end
+        else if(exc_valid_o)begin
+            if(~exc_valid | exc_pipline_older)begin
+                exc_valid <= 1'b1;
+                exc_idx <= exc_robIdx_o;
+                exc_vaddr <= exc_vaddr_o;
+            end
+        end
+    end
 
 endmodule
 

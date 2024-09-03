@@ -75,10 +75,13 @@ module SimTop(
     AxiIO irq_axi();
 
     ClintIO clint_io();
+    logic `N(`IRQ_NUM) irq_source;
+    logic `N(`NUM_CORE) irq;
 
     CPUCore core(
         .clk(clock),
         .rst(core_rst),
+        .ext_irq(irq[0]),
         .axi(core_axi.master),
         .clint_io(clint_io.cpu)
     );
@@ -162,13 +165,18 @@ module SimTop(
 // interrupt
     AxiReq irq_req;
     AxiResp irq_resp;
-    ApbReq clint_req;
-    ApbResp clint_resp;
+    ApbReq clint_req, plic_req;
+    ApbResp clint_resp, plic_resp;
     addr_rule_t `N(2) irq_map_rules;
     assign irq_map_rules[0] = '{
         idx: 0,
         start_addr: `CLINT_START,
         end_addr: `CLINT_END
+    };
+    assign irq_map_rules[1] = '{
+        idx: 1,
+        start_addr: `PLIC_START,
+        end_addr: `PLIC_END
     };
 
     `AXI_REQ_ASSIGN(irq_req, irq_axi)
@@ -195,8 +203,8 @@ module SimTop(
         .test_i(1'b0),
         .axi_req_i(irq_req),
         .axi_resp_o(irq_resp),
-        .apb_req_o(clint_req),
-        .apb_resp_i(clint_resp),
+        .apb_req_o({plic_req, clint_req}),
+        .apb_resp_i({plic_resp, clint_resp}),
         .addr_map_i(map_rules)
     );
 
@@ -212,7 +220,23 @@ module SimTop(
         .clint(clint_io.clint)
     );
 
+    ApbIO plic_apb_io();
+    `APB_REQ_ASSIGN(plic_req, plic_apb_io)
+    `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
+    apb4_plic_top #(
+        .PADDR_SIZE(`PADDR_SIZE),
+        .PDATA_SIZE(`XLEN),
+        .SOURCES(`IRQ_NUM),
+        .TARGETS(`NUM_CORE)
+    ) plic (
+        .PRESETn(~peri_rst),
+        .PCLK(clock),
+        .apb(plic_apb_io),
+        .src(irq_source),
+        .irq(irq)
+    );
 
+// peri
     /* verilator lint_off UNOPTFLAT */
     AxiReq peri_req;
     AxiResp peri_resp;

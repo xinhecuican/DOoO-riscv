@@ -3,6 +3,7 @@
 module Backend(
     input logic clk,
     input logic rst,
+    input logic ext_irq,
     IfuBackendIO.backend ifu_backend_io,
     FsqBackendIO.backend fsq_back_io,
     CommitBus.rob commitBus_out,
@@ -65,6 +66,8 @@ module Backend(
     LoadIdx lqIdx;
     StoreIdx sqIdx;
     CSRIrqInfo irqInfo;
+    logic `N(32) trapInst;
+    logic `N(`VADDR_SIZE) exc_vaddr;
 
 `ifdef DIFFTEST
     DiffRAT diff_rat();

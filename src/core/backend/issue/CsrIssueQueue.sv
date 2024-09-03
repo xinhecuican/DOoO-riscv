@@ -8,7 +8,8 @@ module CsrIssueQueue(
     IssueWakeupIO.issue csr_wakeup_io,
     IssueCSRIO.issue issue_csr_io,
     CommitBus.csr commitBus,
-    BackendCtrl backendCtrl
+    BackendCtrl backendCtrl,
+    output logic `N(32) trapInst
 );
 
     typedef struct {
@@ -18,7 +19,10 @@ module CsrIssueQueue(
         RobIdx robIdx;
     } StatusEntry;
 
+    typedef enum  { IDLE, WRITING } State;
+
     StatusEntry status_ram `N(`CSR_ISSUE_SIZE);
+    State state;
     logic select_en, wakeup_en;
     logic wakeup_older;
     logic `N(`CSR_ISSUE_WIDTH) head, tail, head_n, tail_n;
@@ -30,6 +34,7 @@ module CsrIssueQueue(
     CsrIssueBundle bundle;
     IssueStatusBundle status;
     StatusEntry statush, status_n;
+    RobIdx writeRobIdx;
 
     assign full = head == tail && (hdir ^ tdir);
     assign dis_csr_io.full = full;
@@ -46,7 +51,7 @@ module CsrIssueQueue(
         wakeup_en <= select_en & csr_wakeup_io.ready & csr_reg_io.ready;
         status_n <= statush;
     end
-    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (status_n.robIdx, backendCtrl.redirectIdx,  wakeup_older);
+    LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (writeRobIdx, backendCtrl.redirectIdx,  wakeup_older);
 
     assign csr_reg_io.en = select_en;
     assign csr_reg_io.preg = statush.rs1;
@@ -111,11 +116,40 @@ endgenerate
             status_ram[tail].rd <= status.rd;
         end
     end
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            state <= IDLE;
+            writeRobIdx <= 0;
+            head <= 0;
+            hdir <= 0;
+            trapInst <= 0;
+        end
+        else begin
+            if(wakeup_en)begin
+                trapInst <= rdata.inst;
+            end
+            case(state)
+            IDLE:begin
+                if(select_en & csr_wakeup_io.ready & csr_reg_io.ready)begin
+                    state <= WRITING;
+                    writeRobIdx <= statush.robIdx;
+                end
+            end
+            WRITING:begin
+                if(writeRobIdx != commitBus.robIdx)begin
+                    state <= IDLE;
+                    head <= head_n;
+                    hdir <= head[`CSR_ISSUE_WIDTH-1] & ~head_n[`CSR_ISSUE_WIDTH-1] ? ~hdir : hdir;
+                end
+            end
+            endcase
+        end
+    end
+
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
-            head <= 0;
             tail <= 0;
-            hdir <= 0;
             tdir <= 0;
             dirTable <= 0;
         end
@@ -129,11 +163,6 @@ endgenerate
                 tail <= tail_n;
                 tdir <= tail[`CSR_ISSUE_WIDTH-1] & ~tail_n[`CSR_ISSUE_WIDTH-1] ? ~tdir : tdir;
                 dirTable[tail] <= tdir;
-            end
-
-            if(select_en & csr_wakeup_io.ready)begin
-                head <= head_n;
-                hdir <= head[`CSR_ISSUE_WIDTH-1] & ~head_n[`CSR_ISSUE_WIDTH-1] ? ~hdir : hdir;
             end
         end
     end

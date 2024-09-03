@@ -2,11 +2,15 @@
 `define __DEVICES_SVH__
 `include "global.svh"
 
+`define IRQ_NUM 1
+`define NUM_CORE 1
 
 `define IRQ_START           `PADDR_SIZE'h08000000
 `define IRQ_END             `PADDR_SIZE'h10000000
 `define CLINT_START         `PADDR_SIZE'h08000000
 `define CLINT_END           `PADDR_SIZE'h08001000
+`define PLIC_START          `PADDR_SIZE'h0c000000
+`define PLIC_END            `PADDR_SIZE'h0c001000
 
 `define PERIPHERAL_SIZE 1
 `define PERIPHERAL_START    `PADDR_SIZE'h10000000
