@@ -44,7 +44,8 @@ endinterface
     assign intf.penable = name.penable; \
     assign intf.pwrite = name.pwrite; \
     assign intf.pwdata = name.pwdata; \
-    assign intf.pstrb = name.pstrb;
+    assign intf.pstrb = name.pstrb; \
+    assign intf.psel = name.psel;
 
 `define APB_RESP_ASSIGN(name, intf) \
     assign name.pready = intf.pready; \

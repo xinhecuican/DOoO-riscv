@@ -15,7 +15,7 @@ rv32m=(
 rv32m_prefix="utils/riscv-tests/isa/rv32um-p-"
 
 benchmarks=(
-    "median" "memcpy" "multiply" "qsort" "rsort" "dhrystone"
+    "median" "memcpy" "multiply" "qsort" "rsort" "uart" "towers"
 )
 benchmarks_prefix="utils/riscv-tests/benchmarks/"
 

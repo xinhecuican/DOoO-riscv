@@ -69,13 +69,22 @@ module BranchPredictor(
             end
         end
 
-        if(rst == `RST || redirect.s2_redirect || redirect.flush)begin
+        if(rst == `RST)begin
             s2_result_in <= 0;
             s2_meta_in <= 0;
         end
+        else if(redirect.flush)begin
+            s2_result_in.en <= 1'b0;
+        end
         else if(!redirect.stall)begin
-            s2_result_in <= s1_result;
-            s2_meta_in <= s1_meta;
+            if(redirect.s2_redirect)begin
+                s2_result_in.en <= 1'b0;
+            end
+            else begin
+                s2_result_in <= s1_result;
+                s2_meta_in <= s1_meta;
+            end
+
         end
 
         // if(rst == `RST || redirect.flush)begin
