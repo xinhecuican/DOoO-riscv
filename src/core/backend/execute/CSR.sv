@@ -40,7 +40,6 @@ module CSR(
     logic `N(`MXL) mepc;
     CAUSE mcause;
     logic `N(`MXL) mtval;
-    logic `N(`MXL) sscratch;
     logic `N(`MXL) mcycle;
     logic `N(`MXL) minstret;
 `ifdef RV32I
@@ -58,6 +57,7 @@ module CSR(
     TVEC stvec;
     logic `N(`MXL) stval;
     logic `N(`MXL) sepc;
+    logic `N(`MXL) sscratch;
     CAUSE scause;
     SATP satp;
 
@@ -66,9 +66,10 @@ module CSR(
     assign mode_u = mode == `U_MODE;
 
 // csr write
-    logic we;
-    logic `N(`CSR_NUM) wen;
+    logic we, we_s1, we_s2, we_o;
+    logic `N(`CSR_NUM) wen, wen_s1, wen_s2, wen_o; // exe wb retire
     logic `N(`XLEN) wdata, origin_data, rdata, cmp_rdata;
+    logic `N(`XLEN) wdata_s1, wdata_s2;
     logic `N(`CSROP_WIDTH) csrop;
     logic csrrw, csrrs, csrrc, ecall, ebreak;
     logic `N(`EXC_WIDTH) exccode;
@@ -90,16 +91,34 @@ module CSR(
     logic `ARRAY(`CSR_NUM, `MXL) cmp_csr_data;
     logic `N(`CSR_NUM) cmp_eq;
     logic mode_valid;
-    logic s_map;
-    logic redirect_older;
-    LoopCompare #(`ROB_WIDTH) cmp_redirect_older (backendCtrl.redirectIdx, issue_csr_io.status.robIdx, redirect_older);
+    logic s_map, s_map_s1, s_map_s2;
+    RobIdx robIdx_s1, robIdx_s2;
+    logic redirect_older, redirect_s1_older, redirect_s2_older;
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_older (issue_csr_io.status.robIdx, backendCtrl.redirectIdx, redirect_older);
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_s1_older (robIdx_s1, backendCtrl.redirectIdx, redirect_s1_older);
+    LoopCompare #(`ROB_WIDTH) cmp_redirect_s2_older (robIdx_s2, backendCtrl.redirectIdx, redirect_s2_older);
     assign mode_valid = mode >= issue_csr_io.bundle.csrid[11: 10];
     assign we = ~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
-                 ~(backendCtrl.redirect & redirect_older) & 
+                 (~backendCtrl.redirect | redirect_older) & 
                  issue_csr_io.en & mode_valid &
                  (csrrw | csrrs | csrrc);
     assign wen = cmp_eq  & {`CSR_NUM{we}};
     assign s_map = issue_csr_io.bundle.csrid[11: 10] == 2'b01;
+    assign we_o = we_s2 & (~backendCtrl.redirect | redirect_s2_older);
+    assign wen_o = wen_s2 & {`CSR_NUM{(~backendCtrl.redirect) | redirect_s2_older}};
+    always_ff @(posedge clk)begin
+        robIdx_s1 <= issue_csr_io.status.robIdx;
+        robIdx_s2 <= robIdx_s1;
+        wdata_s1 <= wdata;
+        wdata_s2 <= wdata_s1;
+        s_map_s1 <= s_map;
+        s_map_s2 <= s_map_s1;
+        we_s1 <= we;
+        we_s2 <= we_s1 & (~backendCtrl.redirect | redirect_s1_older);
+        wen_s1 <= wen;
+        wen_s2 <= wen_s1 & {`CSR_NUM{(~backendCtrl.redirect | redirect_s1_older)}};
+
+    end
 
 `define CSR_CMP_DEF(name, map, i, WARL, mask)                 \
     localparam [7: 0] ``name``_id = i;                        \
@@ -169,8 +188,8 @@ generate                                                                \
                     name <= init_value;                                 \
                 end                                                     \
                 else begin                                              \
-                    if(wen[``name``_id])begin                           \
-                        name <= wdata & mask;                           \
+                    if(wen_o[``name``_id])begin                         \
+                        name <= wdata_s2 & mask;                        \
                     end                                                 \
                 end                                                     \
             end                                                         \
@@ -181,8 +200,8 @@ generate                                                                \
                     name <= init_value;                                 \
                 end                                                     \
                 else begin                                              \
-                    if(wen[``name``_id])begin                           \
-                        name <= wdata;                                  \
+                    if(wen_o[``name``_id])begin                         \
+                        name <= wdata_s2;                               \
                     end                                                 \
                 end                                                     \
             end                                                         \
@@ -207,6 +226,7 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(mideleg,     0,              1, 0, 0)
     `CSR_WRITE_DEF(mscratch,    0,              1, 0, 0)
     `CSR_WRITE_DEF(satp,        0,              1, 0, 0)
+    `CSR_WRITE_DEF(stvec,       0,              1, 0, 0)
     `CSR_WRITE_DEF(mconfigptr,  0,              0, 0, 0)
     `CSR_WRITE_DEF(sscratch,    0,              1, 0, 0)
 `ifdef RV32I
@@ -214,16 +234,23 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0)
 `endif
 
-    logic `N(`VADDR_SIZE-2) vec_pc;
+    logic `N(`VADDR_SIZE-2) mvec_pc, svec_pc;
+    logic `N(`VADDR_SIZE) mtarget_pc, starget_pc;
     logic `N(`EXC_WIDTH) ecall_exccode;
     logic `N(`MXL) exccode_decode;
     logic `N(`MXL) edelege;
     logic edelege_valid;
     /* verilator lint_off UNOPTFLAT */
     logic ret, ret_priv_error, ret_valid;
-    assign vec_pc = mtvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
-    assign target_pc = ret_valid ? mepc : 
-                                   {{`VADDR_SIZE-`MXL{1'b0}}, mtvec[`MXL-1: 2], 2'b00};
+    assign mvec_pc = mtvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
+    assign svec_pc = stvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
+    assign mtarget_pc = redirect.irq & (mtvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
+                        {{`VADDR_SIZE-`MXL{1'b0}}, mtvec[`MXL-1: 2], 2'b00};
+    assign starget_pc = redirect.irq & (stvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
+                        {{`VADDR_SIZE-`MXL{1'b0}}, stvec[`MXL-1: 2], 2'b00};
+    assign target_pc = (redirect.exccode == `EXC_MRET) & ~ret_priv_error ? mepc :
+                       (redirect.exccode == `EXC_SRET) & ~ret_priv_error ? sepc :
+                       edelege_valid ? mtarget_pc : starget_pc;
 
     assign ecall_exccode = {{`EXC_WIDTH-4{1'b0}}, 2'b10, mode};
     assign ret = redirect.exccode == `EXC_MRET | redirect.exccode == `EXC_SRET;
@@ -257,22 +284,22 @@ endgenerate                                                             \
 `ifndef DIFFTEST
             {mcycleh, mcycle} <= mcycle_n;
 `endif
-            if(wen[mstatus_id])begin
+            if(wen_o[mstatus_id])begin
                 if(s_map)begin
-                    mstatus <= wdata & `SSTATUS_MASK;
+                    mstatus <= wdata_s2 & `SSTATUS_MASK;
                 end
                 else begin
-                    mstatus <= wdata & `STATUS_MASK;
+                    mstatus <= wdata_s2 & `STATUS_MASK;
                 end
             end
-            if(wen[mepc_id])begin
-                mepc <= wdata;
+            if(wen_o[mepc_id])begin
+                mepc <= wdata_s2;
             end
-            if(wen[sepc_id])begin
-                sepc <= wdata;
+            if(wen_o[sepc_id])begin
+                sepc <= wdata_s2;
             end
-            if(wen[mie_id] | wen[sie_id])begin
-                mie <= wdata;
+            if(wen_o[mie_id] | wen_o[sie_id])begin
+                mie <= wdata_s2;
             end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
@@ -290,11 +317,15 @@ endgenerate                                                             \
                 mstatus.mie <= mstatus.mpie;
                 mstatus.mpp <= 0;
                 mstatus.mpie <= 1;
+                if(mstatus.mpp != `M_MODE)begin
+                    mstatus.mprv <= 0;
+                end
             end
             if(redirect.en && exccode == `EXC_SRET && ret_valid)begin
                 mstatus.sie <= mstatus.spie;
                 mstatus.spp <= 0;
                 mstatus.spie <= 1;
+                mstatus.mprv <= 0;
             end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
@@ -313,13 +344,24 @@ endgenerate                                                             \
                 end
             end
             if(redirect.en & ~ret_valid & ~redirect.irq)begin
-                case(exccode)
-                `EXC_II: mtval <= trapInst;
-                `EXC_IAM, `EXC_IAF, `EXC_IPF: mtval <= exc_pc;
-                `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
-                `EXC_LPF, `EXC_SPF: mtval <= exc_vaddr;
-                default: mtval <= 0;
-                endcase
+                if(edelege_valid)begin
+                    case(exccode)
+                    `EXC_II: stval <= trapInst;
+                    `EXC_IAM, `EXC_IAF, `EXC_IPF: stval <= exc_pc;
+                    `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
+                    `EXC_LPF, `EXC_SPF: stval <= exc_vaddr;
+                    default: stval <= 0;
+                    endcase
+                end
+                else begin
+                    case(exccode)
+                    `EXC_II: mtval <= trapInst;
+                    `EXC_IAM, `EXC_IAF, `EXC_IPF: mtval <= exc_pc;
+                    `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
+                    `EXC_LPF, `EXC_SPF: mtval <= exc_vaddr;
+                    default: mtval <= 0;
+                    endcase
+                end
             end
         end
     end
@@ -347,8 +389,13 @@ endgenerate                                                             \
                     mode <= 2'b11;
                 end
             end
-            if(redirect.en && redirect.exccode == `EXC_MRET && !ret_priv_error)begin
-                mode <= mstatus.mpp;
+            if(redirect.en && !ret_priv_error)begin
+                if(redirect.exccode == `EXC_MRET)begin
+                    mode <= mstatus.mpp;
+                end
+                if(redirect.exccode == `EXC_SRET)begin
+                    mode <= mstatus.spp;
+                end
             end
         end
     end
@@ -397,10 +444,10 @@ endgenerate                                                             \
             msip_s1 <= clint_io.soft_irq;
             mtip_s1 <= clint_io.timer_irq;
             meip_s1 <= ext_irq;
-            if(wen[mip_id])begin
-                ssip <= wdata[1];
-                stip <= wdata[5];
-                seip <= wdata[9];
+            if(wen_o[mip_id])begin
+                ssip <= wdata_s2[1];
+                stip <= wdata_s2[5];
+                seip <= wdata_s2[9];
             end
         end
     end
@@ -411,6 +458,7 @@ endgenerate                                                             \
     logic `N($clog2(`PMPCFG_SIZE)) pmp_id;
     logic `N($clog2(`PMP_SIZE)) pmpaddr_id;
     logic pmpcfg_cmp_en, pmpaddr_cmp_en;
+    logic pmpcfg_s1, pmpcfg_s2, pmpaddr_s1, pmpaddr_s2;
     assign pmp_id = issue_csr_io.bundle.csrid[$clog2(`PMPCFG_SIZE)-1: 0];
     assign pmpaddr_id = issue_csr_io.bundle.csrid[$clog2(`PMP_SIZE)-1: 0];
     assign pmpcfg_cmp_en = issue_csr_io.bundle.csrid[11: $clog2(`PMPCFG_SIZE)] == pmpcfg_base[11: $clog2(`PMPCFG_SIZE)];
@@ -418,17 +466,24 @@ endgenerate                                                             \
     assign pmp_cmp = pmpcfg_cmp_en | pmpaddr_cmp_en;
     assign pmp_rdata = issue_csr_io.bundle.csrid[11: 4] == 8'h3a ? pmpcfg[pmp_id] : pmpaddr[pmpaddr_id];
 
+    always_ff @(posedge clk)begin
+        pmpcfg_s1 <= pmpcfg_cmp_en;
+        pmpcfg_s2 <= pmpcfg_s1;
+        pmpaddr_s1 <= pmpaddr_cmp_en;
+        pmpaddr_s2 <= pmpaddr_s1;
+    end
+
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             pmpcfg <= 0;
             pmpaddr <= 0;
         end
         else begin
-            if(we & pmpcfg_cmp_en)begin
-                pmpcfg[pmp_id] <= wdata;
+            if(we_o & pmpcfg_s2)begin
+                pmpcfg[pmp_id] <= wdata_s2;
             end
-            if(we & pmpaddr_cmp_en)begin
-                pmpaddr[pmpaddr_id] <= wdata;
+            if(we_o & pmpcfg_s2)begin
+                pmpaddr[pmpaddr_id] <= wdata_s2;
             end
         end
     end
@@ -436,10 +491,17 @@ endgenerate                                                             \
 
 // tlb
 `define TLB_ASSIGN(name) \
+    logic ``name``_we, ``name``_pmpcfg_en, ``name``_pmpaddr_en, ``name``_we_o; \
+    logic `N(`XLEN) ``name``_wdata; \
+    assign ``name``_we_o = ``name``_we & (~backendCtrl.redirect | redirect_s2_older); \
     always_ff @(posedge clk)begin \
         if((mode == 2'b11) & mstatus.mprv)begin \
             name.mode <= mstatus.mpp; \
         end \
+        ``name``_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older); \
+        ``name``_pmpcfg_en <= pmpcfg_s1; \
+        ``name``_pmpaddr_en <= pmpaddr_s1; \
+        ``name``_wdata <= wdata_s1; \
         name.sum <= mstatus.sum; \
         name.asid <= satp.asid; \
         name.satp_mode <= satp.mode; \
@@ -450,11 +512,11 @@ endgenerate                                                             \
             name.pmpaddr <= 0; \
         end \
         else begin \
-            if(we & pmpcfg_cmp_en)begin \
-                name.pmpcfg[pmp_id] <= wdata; \
+            if(``name``_we_o & ``name``_pmpcfg_en)begin \
+                name.pmpcfg[pmp_id] <= ``name``_wdata; \
             end \
-            if(we & pmpaddr_cmp_en)begin \
-                name.pmpaddr[pmpaddr_id] <= wdata; \
+            if(``name``_we_o & ``name``_pmpaddr_en)begin \
+                name.pmpaddr[pmpaddr_id] <= ``name``_wdata; \
             end \
         end \
     end \
@@ -490,7 +552,7 @@ endgenerate                                                             \
         .mip(mip),
         .mie(mie),
         .mscratch(mscratch),
-        .sscratch(),
+        .sscratch(sscratch),
         .mideleg(mideleg),
         .medeleg(medeleg)
     );

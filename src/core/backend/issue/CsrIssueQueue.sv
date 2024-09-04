@@ -45,6 +45,7 @@ module CsrIssueQueue(
     assign status = dis_csr_io.status;
     assign statush = status_ram[head];
     assign select_en = (head != tail || (hdir ^ tdir)) &&
+                        state == IDLE &&
                         statush.robIdx == commitBus.robIdx &&
                         !backendCtrl.redirect;
     always_ff @(posedge clk)begin
@@ -124,6 +125,9 @@ endgenerate
             head <= 0;
             hdir <= 0;
             trapInst <= 0;
+        end
+        else if(backendCtrl.redirect & ~(|valid))begin
+            state <= IDLE;
         end
         else begin
             if(wakeup_en)begin

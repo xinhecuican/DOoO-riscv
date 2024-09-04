@@ -62,6 +62,7 @@ module Backend(
     CsrTlbIO csr_stlb_io();
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
     logic rename_full, rob_full;
+    /* verilator lint_off UNOPTFLAT */
     logic `N(`VADDR_SIZE) exc_pc;
     LoadIdx lqIdx;
     StoreIdx sqIdx;
@@ -95,7 +96,6 @@ module Backend(
     ROB rob(.*,
             .dis_io(rename_dis_io),
             .full(rob_full),
-            .exc_pc(fsq_back_io.exc_pc),
             .backendRedirect(backendRedirect.out));
     Dispatch dispatch(.*,
                       .full(backendCtrl.dis_full));

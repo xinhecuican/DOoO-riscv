@@ -560,7 +560,7 @@ module plic_dynamic_registers #(
   // Module Body
   //
   //synopsys translate_off
-  initial display_configuration();
+  // initial display_configuration();
   //synopsys translate_on
 
 
