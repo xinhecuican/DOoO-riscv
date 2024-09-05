@@ -410,6 +410,20 @@ module LoopAdder #(
 	assign data_o[0] = data[WIDTH] & ~res[WIDTH-1] ? ~data[0] : data[0];
 endmodule
 
+module LoopSub #(
+	parameter WIDTH=4,
+	parameter ADD_WIDTH=2
+)(
+	input logic [ADD_WIDTH-1: 0] sub,
+	input logic [WIDTH: 0] data,
+	output logic [WIDTH: 0] data_o
+);
+	logic [WIDTH-1: 0] res;
+	assign res = data[WIDTH: 1] - sub;
+	assign data_o[WIDTH: 1] = res;
+	assign data_o[0] = ~data[WIDTH] & res[WIDTH-1] ? ~data[0] : data[0];
+endmodule
+
 module LoopFull #(
 	parameter WIDTH=4
 )(

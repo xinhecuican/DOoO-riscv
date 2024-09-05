@@ -25,13 +25,15 @@ endinterface
 
 module TLB #(
     parameter DEPTH=16,
+    parameter SOURCE=0,
     parameter [1: 0] MODE=2'b00, //2'b00: x, 2'b01: r, 2'b10: w
     parameter ADDR_WIDTH=$clog2(DEPTH)
 )(
     input logic clk,
     input logic rst,
     TLBIO.tlb   io,
-    CsrTlbIO.tlb csr_tlb_io
+    CsrTlbIO.tlb csr_tlb_io,
+    FenceBus.mmu fenceBus
 );
     L1TLBEntry entrys `N(DEPTH);
     L1TLBEntry hit_entry;
@@ -39,8 +41,14 @@ module TLB #(
     logic pmp_v, pmp_r, pmp_w, pmp_x, pma_uc;
     logic pmp_exc;
 
+    typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
+    FenceState fenceState;
+    logic fenceReq, fenceWe;
+    logic `N(ADDR_WIDTH) fenceIdx;
+    logic `N(`VADDR_SIZE-`TLB_OFFSET) fenceVaddr;
+
 // lookup
-    logic `N(DEPTH) hit;
+    logic `N(DEPTH) hit, hit_n;
     logic `N(DEPTH) asid_hit;
     logic `N(DEPTH) mode_exc;
     logic `ARRAY(DEPTH, `TLB_PN) pn_hits, pn_mask;
@@ -50,7 +58,7 @@ module TLB #(
     PPNAddr lookup_paddr;
     logic mmode;
 
-    assign lookup_addr = io.vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
+    assign lookup_addr = fenceReq ? fenceVaddr : io.vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign mmode = (csr_tlb_io.mode == 2'b11) | (csr_tlb_io.satp_mode == 0);
 generate
     for(genvar i=0; i<DEPTH; i++)begin
@@ -134,10 +142,62 @@ endgenerate
             entrys <= '{default: 0};
         end
         else begin
-            if(io.we)begin
+            if(fenceWe)begin
+                en[fenceIdx] <= 1'b0;
+            end
+            else if(io.we)begin
                 entrys[io.widx] <= wentry;
                 en[io.widx] <= 1'b1;
             end
+        end
+    end
+
+// fence
+    always_ff @(posedge clk)begin
+        hit_n <= hit;
+    end
+    logic `N(ADDR_WIDTH) hit_n_idx;
+    Encoder #(DEPTH) encoder_fence_idx (hit_n, hit_n_idx);
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            fenceState <= IDLE;
+            fenceReq <= 0;
+            fenceWe <= 0;
+            fenceIdx <= 0;
+        end
+        else begin
+            case(fenceState)
+            IDLE: begin
+                if(fenceBus.mmu_flush[SOURCE])begin
+                    if(fenceBus.mmu_flush_all[SOURCE])begin
+                        fenceIdx <= 0;
+                        fenceWe <= 1'b1;
+                        fenceState <= FENCE_ALL;
+                    end
+                    else begin
+                        fenceReq <= 1'b1;
+                        fenceState <= FENCE;
+                    end
+                    fenceVaddr <= fenceBus.vma_vaddr[SOURCE][`VADDR_SIZE-1: `TLB_OFFSET];
+                end
+            end
+            FENCE: begin
+                fenceWe <= |hit_n;
+                fenceIdx <= hit_n_idx;
+                fenceState <= FENCE_END;
+            end
+            FENCE_ALL: begin
+                fenceIdx <= fenceIdx + 1;
+                if(fenceIdx == {{ADDR_WIDTH-1{1'b1}}, 1'b0})begin
+                    fenceState <= FENCE_END;
+                end
+            end
+            FENCE_END:begin
+                fenceWe <= 0;
+                fenceReq <= 0;
+                fenceState <= IDLE;
+            end
+            endcase
         end
     end
 endmodule

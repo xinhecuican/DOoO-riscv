@@ -48,6 +48,7 @@ module LSU(
     CsrTlbIO.tlb csr_stlb_io,
     PTWRequest.cache ptw_request,
     TlbL2IO.tlb dtlb_io,
+    FenceBus.lsu fenceBus,
     output StoreWBData `N(`STORE_PIPELINE) storeWBData,
     output LoadIdx lqIdx,
     output StoreIdx sqIdx,
@@ -56,6 +57,8 @@ module LSU(
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr, storeVAddr;
     LoadIssueData `N(`LOAD_PIPELINE) load_issue_data;
     logic `N(`LOAD_PIPELINE) load_en, fwd_data_invalid; // fwd_data_invalid from StoreQueue
+    logic sc_buffer_empty;
+    logic sc_queue_empty;
     LoadUnitIO load_io();
     DCacheLoadIO rio();
     DCacheStoreIO wio();
@@ -69,6 +72,7 @@ module LSU(
     LoadForwardIO store_queue_fwd();
     LoadForwardIO commit_queue_fwd();
     DTLBLsuIO tlb_lsu_io();
+    FenceBus fenceBus_tlb();
 
     LoadIssueQueue load_issue_queue(
         .*
@@ -84,20 +88,30 @@ module LSU(
         .issue_queue_io(store_io),
         .queue_commit_io(store_commit_io),
         .loadFwd(store_queue_fwd),
-        .store_data(store_reg_io.data[`STORE_PIPELINE*2-1: `STORE_PIPELINE])
+        .store_data(store_reg_io.data[`STORE_PIPELINE*2-1: `STORE_PIPELINE]),
+        .commit_empty(sc_queue_empty)
     );
     StoreCommitBuffer store_commit_buffer (
         .*,
+        .flush(fenceBus.store_flush),
         .io(store_commit_io),
-        .loadFwd(commit_queue_fwd)
+        .loadFwd(commit_queue_fwd),
+        .empty(sc_buffer_empty)
     );
     ViolationDetect violation_detect(.*, .tail(load_queue_io.lqIdx), .io(violation_io));
-    DTLB dtlb(.*, .tlb_l2_io(dtlb_io));
+    DTLB dtlb(.*, .tlb_l2_io(dtlb_io), .fenceBus(fenceBus_tlb.mmu));
 
     assign lqIdx = load_queue_io.lqIdx;
     assign sqIdx = store_queue_io.sqIdx;
     `AXI_R_ASSIGN(laxi_io, ducache_io)
     `AXI_W_ASSIGN(saxi_io, ducache_io)
+    always_ff @(posedge clk)begin
+        fenceBus.store_flush_end <= sc_buffer_empty & sc_queue_empty;
+    end
+    assign fenceBus_tlb.mmu_flush = fenceBus.mmu_flush;
+    assign fenceBus_tlb.mmu_flush_all = fenceBus.mmu_flush_all;
+    assign fenceBus_tlb.vma_vaddr = fenceBus.vma_vaddr;
+    assign fenceBus_tlb.vma_asid = fenceBus.vma_asid;
 // load
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) lmask_pre;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_PIPELINE) dis_ls_older;
@@ -615,7 +629,8 @@ module ViolationDetect(
     input LoadIdx tail,
     ViolationIO.violation io,
     BackendRedirectIO.mem redirect_io,
-    BackendCtrl backendCtrl
+    BackendCtrl backendCtrl,
+    FenceBus.lsu fenceBus
 );
     ViolationData `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) s1_cmp;
     ViolationData `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) s2_cmp;
@@ -669,11 +684,11 @@ endgenerate
     LoopCompare #(`ROB_WIDTH) cmp_redirect_out (out.robIdx, redirectIdx_s3, out_older);
     logic `N(`ROB_WIDTH) robIdx_p;
     assign robIdx_p = out.robIdx.idx - 1;
-    assign redirect_io.memRedirect.en = out.en & (~redirect_s3 | out_older);
-    assign redirect_io.memRedirect.robIdx.idx = robIdx_p;
-    assign redirect_io.memRedirect.robIdx.dir = robIdx_p[`ROB_WIDTH-1] & ~out.robIdx.idx[`ROB_WIDTH-1] ? ~out.robIdx.dir : out.robIdx.dir;
-    assign redirect_io.memRedirect.fsqInfo = out.fsqInfo;
-    assign redirect_io.memRedirectIdx = out.robIdx;
+    assign redirect_io.memRedirect.en = out.en & (~redirect_s3 | out_older) | fenceBus.fence_end;
+    assign redirect_io.memRedirect.robIdx.idx = fenceBus.fence_end ? fenceBus.preRobIdx.idx : robIdx_p;
+    assign redirect_io.memRedirect.robIdx.dir = fenceBus.fence_end ? fenceBus.preRobIdx.dir : robIdx_p[`ROB_WIDTH-1] & ~out.robIdx.idx[`ROB_WIDTH-1] ? ~out.robIdx.dir : out.robIdx.dir;
+    assign redirect_io.memRedirect.fsqInfo = fenceBus.fence_end ? fenceBus.fsqInfo : out.fsqInfo;
+    assign redirect_io.memRedirectIdx = fenceBus.fence_end ? fenceBus.robIdx : out.robIdx;
 endmodule
 
 module ViolationCompare(

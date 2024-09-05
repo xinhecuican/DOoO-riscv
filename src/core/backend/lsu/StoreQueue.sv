@@ -25,10 +25,11 @@ module StoreQueue(
     CommitBus.mem commitBus,
     BackendCtrl backendCtrl,
     AxiIO.masterw saxi_io,
+    output logic commit_empty,
     output logic `N(`LOAD_PIPELINE) fwd_data_invalid
 );
-    logic `N(`STORE_QUEUE_WIDTH) head, tail, head_n, tail_n, commitHead, storeHead, storeHead_n;
-    logic hdir, tdir, hdir_n;
+    logic `N(`STORE_QUEUE_WIDTH) head, tail, head_n, tail_n, commitHead, storeHead, storeHead_n, commitHead_n;
+    logic hdir, tdir, hdir_n, chdir;
     logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_WIDTH) addr_eqIdx, data_eqIdx;
     logic `N($clog2(`STORE_DIS_PORT)+1) disNum;
     logic `N($clog2(`STORE_PIPELINE)+1) commitNum, commitNum_n;
@@ -81,8 +82,10 @@ endgenerate
     assign issue_queue_io.full = (|full) | redirect_next;
     assign head_n = queue_commit_io.conflict ? head : head + commitNum_n;
     assign storeHead_n = queue_commit_io.conflict ? storeHead : storeHead + commitNum;
+    assign commitHead_n = commitHead + commitBus.storeNum;
     assign tail_n = tail + disNum;
     assign hdir_n = head[`STORE_QUEUE_WIDTH-1] & ~head_n[`STORE_QUEUE_WIDTH-1] ? ~hdir : hdir;
+    assign commit_empty = {hdir, head} == {chdir, commitHead};
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             head <= 0;
@@ -91,6 +94,7 @@ endgenerate
             commitHead <= 0;
             hdir <= 0;
             tdir <= 0;
+            chdir <= 0;
         end
         else begin
             head <= head_n;
@@ -106,6 +110,7 @@ endgenerate
             end
 
             commitHead <= commitHead + commitBus.storeNum;
+            chdir <= commitHead[`STORE_QUEUE_WIDTH-1] & ~commitHead_n[`STORE_QUEUE_WIDTH-1] ? ~chdir : chdir;
         end
     end
 

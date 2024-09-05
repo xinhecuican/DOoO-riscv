@@ -16,6 +16,23 @@ module DecodeUnit(
     assign funct3 = inst[14: 12];
     assign funct7 = inst[31: 25];
 
+    logic funct7_0, funct7_5, funct7_1, rs2_0, rs2_1, rs2_2;
+    logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
+    assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_1 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
+    assign funct7_5 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct3_0 = ~funct3[2] & ~funct3[1] & ~funct3[0];
+    assign funct3_1 = ~funct3[2] & ~funct3[1] & funct3[0];
+    assign funct3_2 = ~funct3[2] & funct3[1] & ~funct3[0];
+    assign funct3_3 = ~funct3[2] & funct3[1] & funct3[0];
+    assign funct3_4 = funct3[2] & ~funct3[1] & ~funct3[0];
+    assign funct3_5 = funct3[2] & ~funct3[1] & funct3[0];
+    assign funct3_6 = funct3[2] & funct3[1] & ~funct3[0];
+    assign funct3_7 = funct3[2] & funct3[1] & funct3[0];
+    assign rs2_0 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & ~inst[20];
+    assign rs2_1 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & inst[20];
+    assign rs2_2 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & ~inst[20];
+
     logic lui, auipc, jal, jalr, branch, load, store, miscmem, opimm, opreg, opsystem, unknown;
     assign lui = ~op[4] & op[3] & op[2] & ~op[1] & op[0];
     assign auipc = ~op[4] & ~op[3] & op[2] & ~op[1] & op[0];
@@ -30,39 +47,26 @@ module DecodeUnit(
     assign opsystem = op[4] & op[3] & op[2] & ~op[0] & ~op[0];
 
     logic beq, bne, blt, bge, bltu, bgeu;
-    assign beq = branch & ~funct3[2] & ~funct3[1] & ~funct3[0];
-    assign bne = branch & ~funct3[2] & ~funct3[1] & funct3[0];
-    assign blt = branch & funct3[2] & ~funct3[1] & ~funct3[0];
-    assign bge = branch & funct3[2] & ~funct3[1] & funct3[0];
-    assign bltu = branch & funct3[2] & funct3[1] & ~funct3[0];
-    assign bgeu = branch & (&funct3);
+    assign beq = branch & funct3_0;
+    assign bne = branch & funct3_1;
+    assign blt = branch & funct3_4;
+    assign bge = branch & funct3_5;
+    assign bltu = branch & funct3_6;
+    assign bgeu = branch & funct3_7;
 
     assign info.branchop[2] = jal | jalr;
     assign info.branchop[1] = blt | bge | bgeu | bltu;
     assign info.branchop[0] = jalr | bne | bge | bgeu;
 
-    logic funct7_0, funct7_5, funct7_1, rs2_0, rs2_1, rs2_2, funct3_0;
-    assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
-    assign funct7_1 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
-    assign funct7_5 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
-    assign funct3_0 = ~funct3[2] & ~funct3[1] & ~funct3[0];
-    assign rs2_0 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & ~inst[20];
-    assign rs2_1 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & inst[20];
-    assign rs2_2 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & ~inst[20];
-
-    // TODO: implement fence, current pass to int, no effect
-    logic fence;
-    assign fence = miscmem & ~funct3[2] & ~funct3[1] & ~funct3[0];
-
     logic lb, lh, lw, lbu, lhu, sb, sh, sw;
-    assign lb = load & ~funct3[2] & ~funct3[1] & ~funct3[0];
-    assign lh = load & ~funct3[2] & ~funct3[1] & funct3[0];
-    assign lw = load & ~funct3[2] & funct3[1] & ~funct3[0];
-    assign lbu = load & funct3[2] & ~funct3[1] & ~funct3[0];
-    assign lhu = load & funct3[2] & ~funct3[1] & funct3[0];
-    assign sb = store & ~funct3[2] & ~funct3[1] & ~funct3[0];
-    assign sh = store & ~funct3[2] & ~funct3[1] & funct3[0];
-    assign sw = store & ~funct3[2] & funct3[1] & ~funct3[0];
+    assign lb = load & funct3_0;
+    assign lh = load & funct3_1;
+    assign lw = load & funct3_2;
+    assign lbu = load & funct3_4;
+    assign lhu = load & funct3_5;
+    assign sb = store & funct3_0;
+    assign sh = store & funct3_1;
+    assign sw = store & funct3_2;
 
     assign info.memop[3] = store;
     assign info.memop[2] = sh;
@@ -70,27 +74,27 @@ module DecodeUnit(
     assign info.memop[0] = lh | lhu;
 
     logic addi, slti, sltiu, xori, ori, andi, slli, srli, srai;
-    assign addi = opimm & ~funct3[2] & ~funct3[1] & ~funct3[0];
-    assign slti = opimm & ~funct3[2] & funct3[1] & ~funct3[0];
-    assign sltiu = opimm & ~funct3[2] & funct3[1] & funct3[0];
-    assign xori = opimm & funct3[2] & ~funct3[1] & ~funct3[0];
-    assign ori = opimm & funct3[2] & funct3[1] & ~funct3[0];
-    assign andi = opimm & (&funct3);
-    assign slli = opimm & ~funct3[2] & ~funct3[1] & funct3[0] & funct7_0;
-    assign srli = opimm & funct3[2] & ~funct3[1] & funct3[0] & funct7_0;
-    assign srai = opimm & funct3[2] & ~funct3[1] & funct3[0] & funct7_5;
+    assign addi = opimm & funct3_0;
+    assign slti = opimm & funct3_2;
+    assign sltiu = opimm & funct3_3;
+    assign xori = opimm & funct3_4;
+    assign ori = opimm & funct3_6;
+    assign andi = opimm & funct3_7;
+    assign slli = opimm & funct3_1 & funct7_0;
+    assign srli = opimm & funct3_5 & funct7_0;
+    assign srai = opimm & funct3_5 & funct7_5;
 
     logic add, sub, sll, slt, sltu, _xor, srl, sra, _or, _and;
-    assign add = opreg & ~funct3[2] & ~funct3[1] & ~funct3[0] & funct7_0;
-    assign sub = opreg & ~funct3[2] & ~funct3[1] & ~funct3[0] & funct7_5;
-    assign sll = opreg & ~funct3[2] & ~funct3[1] & funct3[0] & funct7_0;
-    assign slt = opreg & ~funct3[2] & funct3[1] & ~funct3[0] & funct7_0;
-    assign sltu = opreg & ~funct3[2] & funct3[1] & funct3[0] & funct7_0;
-    assign _xor = opreg & funct3[2] & ~funct3[1] & ~funct3[0] & funct7_0;
-    assign srl = opreg & funct3[2] & ~funct3[1] & funct3[0] & funct7_0;
-    assign sra = opreg & funct3[2] & ~funct3[1] & funct3[0] & funct7_5;
-    assign _or = opreg & funct3[2] & funct3[1] & ~funct3[0] & funct7_0;
-    assign _and = opreg & (&funct3) & funct7_0;
+    assign add = opreg & funct3_0 & funct7_0;
+    assign sub = opreg & funct3_0 & funct7_5;
+    assign sll = opreg & funct3_1 & funct7_0;
+    assign slt = opreg & funct3_2 & funct7_0;
+    assign sltu = opreg & funct3_3 & funct7_0;
+    assign _xor = opreg & funct3_4 & funct7_0;
+    assign srl = opreg & funct3_5 & funct7_0;
+    assign sra = opreg & funct3_5 & funct7_5;
+    assign _or = opreg & funct3_6 & funct7_0;
+    assign _and = opreg & funct3_7 & funct7_0;
 
 `ifdef DIFFTEST
     logic custom0;
@@ -106,6 +110,11 @@ module DecodeUnit(
     assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | fence;
     assign info.intop[0] = lui | andi | _and | srl | srli | fence | sub | sra | srai;
 
+    // TODO: implement fence, current pass to int, no effect
+    logic fence, sfence_vma;
+    assign fence = miscmem & funct3_0;
+    assign sfence_vma = opsystem & ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
+
     logic ecall, ebreak, mret, sret;
     assign ecall = opsystem & funct3_0 & funct7_0 & rs2_0;
     assign ebreak = opsystem & funct3_0 & funct7_0 & rs2_1;
@@ -114,12 +123,13 @@ module DecodeUnit(
 
     logic csrrw, csrrs, csrrc, csrrwi, csrrsi, csrrci, csr;
     assign csr = csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci;
-    assign csrrw = opsystem & ~funct3[2] & ~funct3[1] & funct3[0];
-    assign csrrs = opsystem & ~funct3[2] & funct3[1] & ~funct3[0];
-    assign csrrc = opsystem & ~funct3[2] & funct3[1] & funct3[0];
-    assign csrrwi = opsystem & funct3[2] & ~funct3[1] & funct3[0];
-    assign csrrsi = opsystem & funct3[2] & funct3[1] & ~funct3[0];
-    assign csrrci = opsystem & funct3[2] & funct3[1] & funct3[0];
+    assign csrrw = opsystem & funct3_1;
+    assign csrrs = opsystem & funct3_2;
+    assign csrrc = opsystem & funct3_3;
+    assign csrrwi = opsystem & funct3_5;
+    assign csrrsi = opsystem & funct3_6;
+    assign csrrci = opsystem & funct3_7;
+    assign info.csrop[3] = sfence_vma;
     assign info.csrop[2] = csrrwi | csrrsi | csrrci;
     assign info.csrop[1] = csrrs | csrrc | csrrsi | csrrci;
     assign info.csrop[0] = csrrw | csrrc | csrrwi | csrrci;
@@ -128,14 +138,14 @@ module DecodeUnit(
 `ifdef EXT_M
     logic mult, mul, mulh, mulhsu, mulhu, div, divu, rem ,remu;
     assign mult = opreg & funct7_1;
-    assign mul = mult & ~funct3[2] & ~funct3[1] & ~funct3[0];
-    assign mulh = mult & ~funct3[2] & ~funct3[1] & funct3[0];
-    assign mulhsu = mult & ~funct3[2] & funct3[1] & ~funct3[0];
-    assign mulhu = mult & ~funct3[2] & funct3[1] & funct3[0];
-    assign div = mult & funct3[2] & ~funct3[1] & ~funct3[0];
-    assign divu = mult & funct3[2] & ~funct3[1] & funct3[0];
-    assign rem = mult & funct3[2] & funct3[1] & ~funct3[0];
-    assign remu = mult & funct3[2] & funct3[1] & funct3[0];
+    assign mul = mult & funct3_0;
+    assign mulh = mult & funct3_1;
+    assign mulhsu = mult & funct3_2;
+    assign mulhu = mult & funct3_3;
+    assign div = mult & funct3_4;
+    assign divu = mult & funct3_5;
+    assign rem = mult & funct3_6;
+    assign remu = mult & funct3_7;
     assign info.multop = funct3;
 `endif
 
@@ -144,7 +154,7 @@ module DecodeUnit(
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
                      ~add & ~sub & ~sll & ~slt & ~sltu & ~_xor & ~srl & ~sra & ~_or & ~_and &
                      ~csrrw & ~csrrs & ~csrrc & ~csrrwi & ~csrrsi & ~csrrci & ~ecall & ~ebreak &
-                     ~fence & ~mret & ~sret &
+                     ~fence & ~mret & ~sret & ~sfence_vma &
                      ~(inst[0] & inst[1])
 `ifdef DIFFTEST
                      & ~sim_trap
@@ -185,12 +195,12 @@ module DecodeUnit(
     ;
     assign info.branchv = branch | jal | jalr;
     assign info.memv = load | store;
-    assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam;
+    assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam | sfence_vma;
 `ifdef EXT_M
     assign info.multv = mult;
 `endif
-    assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw}} & inst[19: 15];
-    assign info.rs2 = {5{branch | store | opreg}} & inst[24: 20];
+    assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw | sfence_vma}} & inst[19: 15];
+    assign info.rs2 = {5{branch | store | opreg | sfence_vma}} & inst[24: 20];
     assign rd = {5{lui | auipc | jalr | jal | load | opimm | opreg | csr}} & inst[11: 7];
     assign info.rd = rd;
     assign info.we = rd != 0;

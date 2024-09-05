@@ -4,7 +4,7 @@
 `define INTOP_WIDTH 5
 `define MEMOP_WIDTH 4
 `define BRANCHOP_WIDTH 3
-`define CSROP_WIDTH 3
+`define CSROP_WIDTH 4
 `define MULTOP_WIDTH 4
 
 // intop
@@ -39,12 +39,13 @@
 `define BRANCH_BGE  `BRANCHOP_WIDTH'b011
 
 // csrop
-`define CSR_RW      `CSROP_WIDTH'b001
-`define CSR_RS      `CSROP_WIDTH'b010
-`define CSR_RC      `CSROP_WIDTH'b011
-`define CSR_RWI     `CSROP_WIDTH'b101
-`define CSR_RSI     `CSROP_WIDTH'b110
-`define CSR_RCI     `CSROP_WIDTH'b111
+`define CSR_RW      `CSROP_WIDTH'b0001
+`define CSR_RS      `CSROP_WIDTH'b0010
+`define CSR_RC      `CSROP_WIDTH'b0011
+`define CSR_RWI     `CSROP_WIDTH'b0101
+`define CSR_RSI     `CSROP_WIDTH'b0110
+`define CSR_RCI     `CSROP_WIDTH'b0111
+`define CSR_SFENCE  `CSROP_WIDTH'b1000
 
 // multop
 `define MULT_MUL       `MULTOP_WIDTH'b000
@@ -135,6 +136,7 @@
 `define FUNCT7_SRL  7'b0000000
 `define FUNCT7_SRA  7'b0100000
 `define FUNCT7_MULT 7'b0000001
+`define FUNCT7_SFENCE_VMA 7'b0001001
 
 // funct12
 `define FUNCT12_ECALL   12'b0000_0000_0000

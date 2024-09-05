@@ -296,7 +296,7 @@ endgenerate
     assign csr_status.rs1v = 1'b0;
     assign csr_status.rs2v = 1'b0;
     assign csr_status.rs1 = csr_io.rs1_o;
-    assign csr_status.rs2 = 0;
+    assign csr_status.rs2 = csr_io.rs2_o;
     assign csr_status.rd = csr_io.status_o[0].rd;
     assign csr_status.robIdx = csr_io.status_o[0].robIdx;
     assign csr_status.we = csr_io.status_o[0].we;

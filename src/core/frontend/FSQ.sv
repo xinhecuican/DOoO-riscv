@@ -162,7 +162,7 @@ endgenerate
                        ~pd_redirect.en  & ~fsq_back_io.redirect.en;
     always_ff @(posedge clk)begin
         if(cache_req_ok | fsq_back_io.redirect.en | pd_redirect.en)begin
-            fsq_cache_io.en <= cache_req & ~fsq_back_io.redirect.en & ~pd_redirect.en;
+            fsq_cache_io.en <= cache_req;
             fsq_cache_io.fsqIdx.idx <= search_head;
             fsq_cache_io.fsqIdx.dir <= directionTable[search_head];
         end

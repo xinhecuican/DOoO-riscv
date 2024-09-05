@@ -8,7 +8,8 @@ module IFU (
     FsqBackendIO.fsq fsq_back_io,
     CommitBus.in commitBus,
     TlbL2IO.tlb itlb_io,
-    CsrTlbIO.tlb csr_itlb_io
+    CsrTlbIO.tlb csr_itlb_io,
+    FenceBus.mmu fenceBus
 );
     BpuFsqIO bpu_fsq_io();
     FsqCacheIO fsq_cache_io();

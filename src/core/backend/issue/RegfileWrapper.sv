@@ -24,7 +24,8 @@ module RegfileWrapper(
     assign int_reg_io.data = rdata[`ALU_SIZE * 2 - 1 : 0];
 
     assign csr_reg_io.ready = 1'b1;
-    assign csr_reg_io.data = rdata[0];
+    assign csr_reg_io.data[0] = rdata[0];
+    assign csr_reg_io.data[1] = rdata[`ALU_SIZE];
 
     assign mult_reg_io.ready = 1'b1;
     assign mult_reg_io.data[0] = rdata[1];
@@ -35,8 +36,8 @@ generate
             assign int_reg_io.ready[i] = ~csr_reg_io.en;
             always_ff @(posedge clk)begin
                 int_en[i] <= int_reg_io.en[i] | csr_reg_io.en;
-                int_preg[i] <= csr_reg_io.en ? csr_reg_io.preg : int_reg_io.preg[i];
-                int_preg[`ALU_SIZE+i] <= int_reg_io.preg[`ALU_SIZE+i];
+                int_preg[i] <= csr_reg_io.en ? csr_reg_io.preg[0] : int_reg_io.preg[i];
+                int_preg[`ALU_SIZE+i] <= csr_reg_io.en ? csr_reg_io.preg[1] : int_reg_io.preg[`ALU_SIZE+i];
             end
         end
 `ifdef EXT_M

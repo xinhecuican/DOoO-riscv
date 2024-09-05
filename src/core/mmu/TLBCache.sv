@@ -23,7 +23,9 @@ module TLBCache(
     input logic rst,
     TLBCacheIO.cache io,
     CsrL2IO.tlb csr_io,
-    CachePTWIO.cache cache_ptw_io
+    CachePTWIO.cache cache_ptw_io,
+    FenceBus.mmu fenceBus,
+    output logic fence_end
 );
 
     typedef struct packed {
@@ -34,6 +36,7 @@ module TLBCache(
     RequestBuffer req_buf;
 
     TLBPageIO #(`TLB_P0_BANK, `TLB_P0_BANK) pn0_io();
+    logic pn0_fence_end;
     TLBPage #(
         .PN(0),
         .WAY_NUM(1),
@@ -41,7 +44,7 @@ module TLBCache(
         .META_WIDTH(`TLB_P0_BANK),
         .DEPTH(`TLB_P0_SET),
         .BANK(`TLB_P0_BANK)
-    ) page_pn0 (.*, .page_io(pn0_io), .cache_io(io));
+    ) page_pn0 (.*, .page_io(pn0_io), .cache_io(io), .fence_finish(pn0_fence_end));
 
     TLBPageIO #(`TLB_P1_BANK, `TLB_P1_BANK) pn1_io();
     TLBPage #(
@@ -51,10 +54,11 @@ module TLBCache(
         .META_WIDTH(`TLB_P1_BANK),
         .DEPTH(`TLB_P1_SET),
         .BANK(`TLB_P1_BANK)
-    ) page_pn1 (.*, .page_io(pn1_io), .cache_io(io)); 
+    ) page_pn1 (.*, .page_io(pn1_io), .cache_io(io), .fence_finish()); 
 
+    assign fence_end = pn0_fence_end;
     always_ff @(posedge clk)begin
-        req_buf.req <= io.req;
+        req_buf.req <= io.req & ~io.flush;
         req_buf.vaddr <= io.req_addr;
         req_buf.info <= io.info;
     end
@@ -103,6 +107,7 @@ interface TLBPageIO #(
     parameter BANK=16
 );
     logic hit;
+    // 判断是否为非对齐的超级页
     logic `N(META_WIDTH/BANK) meta;
     logic `N(`PTE_BITS) entry;
 
@@ -128,7 +133,9 @@ module TLBPage #(
     input logic rst,
     TLBCacheIO.cache cache_io,
     TLBPageIO.page page_io,
-    CachePTWIO.cache cache_ptw_io
+    CachePTWIO.cache cache_ptw_io,
+    FenceBus.mmu fenceBus,
+    output logic fence_finish
 );
     TLBWayIO #(
         .TAG_WIDTH(INFO_WIDTH),
@@ -136,14 +143,27 @@ module TLBPage #(
         .BANK(BANK)
     ) way_io `N(WAY_NUM) ();
 
+    typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
+    FenceState fenceState;
+    logic fenceReq, fenceWe;
+    logic `N(ADDR_WIDTH) fenceIdx;
     logic req_n;
     logic `N(`TLB_P0_TAG) tag;
     logic `N(BANK_WIDTH) offset;
     logic `ARRAY(WAY_NUM, BANK * `PTE_BITS) rdata;
+    logic `N(BANK) unaligned;
 generate
     if(WAY_NUM > 1)begin
         always_comb begin
             $display("tlb page replace unimpl");
+        end
+    end
+    for(genvar j=0; j<BANK; j++)begin
+        if(PN == 1)begin
+            assign unaligned[j] = cache_ptw_io.refill_data[j][`TLB_PPN0+10: 10] != 0;
+        end
+        else begin
+            assign unaligned[j] = 0;
         end
     end
     for(genvar i=0; i<WAY_NUM; i++)begin
@@ -156,14 +176,17 @@ generate
             .io(way_io[i])
         );
 
-        assign way_io[i].tag_en = cache_io.req;
-        assign way_io[i].en = cache_io.req;
+        assign way_io[i].tag_en = cache_io.req | fenceReq;
+        assign way_io[i].en = cache_io.req | fenceReq;
 
-        assign way_io[i].idx = cache_io.req ? cache_io.req_addr`TLB_VPN_IBUS(PN, DEPTH, BANK) : 
+        assign way_io[i].idx = fenceReq | fenceWe ? fenceIdx : 
+                               cache_io.req ? cache_io.req_addr`TLB_VPN_IBUS(PN, DEPTH, BANK) : 
                                               cache_ptw_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
         assign rdata[i] = way_io[i].rdata;
         assign way_io[i].we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN] & ~cache_io.req;
+        assign way_io[i].tag_we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN] & ~cache_io.req | fenceWe;
         assign way_io[i].wdata = cache_ptw_io.refill_data;
+        assign way_io[i].wtag = fenceWe ? {INFO_WIDTH{1'b0}} : {1'b1, unaligned, cache_ptw_io.refill_addr`TLB_VPN_TBUS(PN, DEPTH, BANK)};
     end
 endgenerate
 
@@ -198,6 +221,50 @@ generate
     end
 endgenerate
 
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            fenceState <= IDLE;
+            fenceReq <= 0;
+            fenceWe <= 0;
+            fenceIdx <= 0;
+            fence_finish <= 0;
+        end
+        else begin
+            case(fenceState)
+            IDLE: begin
+                if(fenceBus.mmu_flush[2])begin
+                    if(fenceBus.mmu_flush_all[2])begin
+                        fenceIdx <= 0;
+                        fenceWe <= 1'b1;
+                        fenceState <= FENCE_ALL;
+                    end
+                    else begin
+                        fenceIdx <= fenceBus.vma_vaddr[2]`TLB_VPN_IBUS(PN, DEPTH, BANK);
+                        fenceReq <= 1'b1;
+                        fenceState <= FENCE;
+                    end
+                end
+            end
+            FENCE: begin
+                fenceWe <= tag_hits;
+                fenceState <= FENCE_END;
+            end
+            FENCE_ALL: begin
+                fenceIdx <= fenceIdx + 1;
+                if(fenceIdx == {{ADDR_WIDTH-1{1'b1}}, 1'b0})begin
+                    fenceState <= FENCE_END;
+                end
+            end
+            FENCE_END:begin
+                fenceWe <= 0;
+                fenceReq <= 0;
+                fenceState <= IDLE;
+            end
+            endcase
+            fence_finish <= fenceState == FENCE_END;
+        end
+    end
 endmodule
 
 interface TLBWayIO #(

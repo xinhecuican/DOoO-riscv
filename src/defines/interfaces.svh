@@ -393,6 +393,7 @@ endinterface
 interface CommitBus;
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
+    logic sfence_vma;
     FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
     logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
@@ -403,12 +404,12 @@ interface CommitBus;
     logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
     RobIdx robIdx;
 
-    modport rob(output en, we, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum
+    modport rob(output en, we, sfence_vma, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum
     , robIdx
 );
     modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
     modport mem(input loadNum, storeNum, robIdx);
-    modport csr(input robIdx);
+    modport csr(input robIdx, fsqInfo, sfence_vma, en);
 endinterface
 
 interface CommitWalk;
@@ -455,11 +456,12 @@ interface BackendRedirectIO;
 endinterface
 
 interface RobRedirectIO;
+    logic fence;
     BackendRedirectInfo csrRedirect;
     CSRRedirectInfo csrInfo;
 
-    modport rob (output csrRedirect, csrInfo);
-    modport redirect (input csrRedirect, csrInfo);
+    modport rob (output csrRedirect, csrInfo, fence);
+    modport redirect (input csrRedirect, csrInfo, fence);
 endinterface
 
 interface DCacheLoadIO;
@@ -679,6 +681,29 @@ interface PTWRequest;
     modport ptw (output req, paddr, input ready, full, data_valid, rdata);
     modport cache (input req, paddr, output ready, full, data_valid, rdata);
 endinterface
+
+interface FenceBus;
+    logic fence_end;
+    logic store_flush;
+    logic store_flush_end;
+
+    logic `N(3) mmu_flush;
+    logic `N(3) mmu_flush_all;
+    logic mmu_flush_end;
+    logic `ARRAY(3, `VADDR_SIZE) vma_vaddr;
+    logic `ARRAY(3, `TLB_ASID) vma_asid;
+
+    RobIdx robIdx;
+    RobIdx preRobIdx;
+    FsqIdxInfo fsqInfo;
+
+    modport csr (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, fence_end, robIdx, preRobIdx, fsqInfo, input store_flush_end, mmu_flush_end);
+    modport lsu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
+    modport rob (input fence_end);
+    modport mmu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid);
+    modport l2tlb (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, output mmu_flush_end);
+    modport backend (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, input mmu_flush_end);
+endinterface //SFenceBus
 
 `ifdef DIFFTEST
 interface DiffRAT;

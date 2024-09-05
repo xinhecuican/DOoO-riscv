@@ -7,7 +7,8 @@ module ICache(
     CachePreDecodeIO.cache cache_pd_io,
     ICacheAxi.cache axi_io,
     TlbL2IO.tlb itlb_io,
-    CsrTlbIO.tlb csr_itlb_io
+    CsrTlbIO.tlb csr_itlb_io,
+    FenceBus.mmu fenceBus
 );
 `ifdef DIFFTEST
     typedef struct packed {

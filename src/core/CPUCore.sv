@@ -20,11 +20,13 @@ module CPUCore (
     CsrL2IO csr_l2_io();
     PTWRequest ptw_request();
     CsrTlbIO csr_itlb_io();
+    FenceBus fenceBus();
 
     IFU ifu(.*, .axi_io(icache_io));
     Backend backend(.*,
                     .commitBus_out(commitBus),
-                    .axi_io(dcache_io));
+                    .axi_io(dcache_io),
+                    .fenceBus_o(fenceBus));
     AxiInterface axi_interface(.*);
     L2TLB l2_tlb(.*, .csr_io(csr_l2_io), .flush(fsq_back_io.redirect.en));
 endmodule

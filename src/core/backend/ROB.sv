@@ -13,6 +13,7 @@ module ROB(
     WriteBackBus wbBus,
     CommitBus.rob commitBus,
     CommitWalk.rob commitWalk,
+    FenceBus.rob fenceBus,
     output logic full
 
 `ifdef DIFFTEST
@@ -43,9 +44,10 @@ module ROB(
     logic walk_state;
     logic `N(`ROB_SIZE) wb; // set to 0 when commit, set to 1 when write back
     logic `N(`EXC_WIDTH) exccode `N(`ROB_SIZE);
+    logic `N(`ROB_SIZE) sfence_vma;
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
-    logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en_unexc, commit_en;
+    logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en_unexc, commit_en, commit_en_n;
     logic exc_exist;
     logic `N(`COMMIT_WIDTH) excValid, exc_en, exc_mask;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx;
@@ -68,6 +70,13 @@ module ROB(
     logic `N(`ROB_WIDTH + 1) walk_remainCount_n, ext_tail, walk_remain_count;
     logic `N(`FETCH_WIDTH) walk_en;
     logic `N($clog2(`COMMIT_WIDTH)+1) walk_num, walk_normal_num, redirect_num, walk_we_num;
+
+    logic exc_exist_n;
+    logic `N($clog2(`COMMIT_WIDTH)) excIdx_n;
+    logic `N(`ROB_WIDTH) exc_robIdx;
+    logic exc_dir;
+    logic `N(`EXC_WIDTH) redirect_exccode;
+    logic irq_n, irq_deleg_n;
 
     RobData `N(`FETCH_WIDTH) robData, rob_wdata;
 generate
@@ -112,6 +121,51 @@ generate
     ParallelAdder #(1, `FETCH_WIDTH) adder_dis_valid (dis_en, dis_validNum);
 endgenerate
 
+    logic wb_sfence;
+    logic fence, fence_redirect;
+    logic fence_end_n;
+    `SIG_N(fenceBus.fence_end, fence_end_n)
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            sfence_vma <= 0;
+            fence <= 0;
+            fence_redirect <= 0;
+        end
+        else begin
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                if(data_en[i])begin
+                    sfence_vma[dataWIdx[i]] <= dis_io.op[i].di.csrop == `CSR_SFENCE;
+                end
+            end
+            if(wb_sfence & ~irqInfo.irq & ~walk_state & ~exc_exist_n)begin
+                fence <= 1'b1;
+                fence_redirect <= 1'b1;
+            end
+            if(fenceBus.fence_end)begin
+                fence_redirect <= 1'b0;
+            end
+            if(fence_end_n)begin
+                fence <= 1'b0;
+            end
+        end
+    end
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            wb_sfence <= 0;
+        end
+        else begin
+            // en[0] is csr issue queue idx and it's in order
+            if(wbBus.en[0] & sfence_vma[wbBus.robIdx[0].idx] & ~irqInfo.irq)begin
+                wb_sfence <= wbBus.en[0] & sfence_vma[wbBus.robIdx[0].idx];
+            end
+            else if((|commit_en_n) | exc_exist_n)begin
+                wb_sfence <= 1'b0;
+            end
+            commitBus.sfence_vma <= wb_sfence;
+        end
+    end
+
 // commit
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
@@ -126,7 +180,12 @@ generate
     assign commitValid = (1 << commit_en_num) - 1;
     assign commit_en_pre = commitValid & wbValid;
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign commit_en_unexc[i] = &commit_en_pre[i: 0];
+        if(i == 0)begin
+            assign commit_en_unexc[i] = commit_en_pre[0] & ~fence;
+        end
+        else begin
+            assign commit_en_unexc[i] = (&commit_en_pre[i: 0]) & ~wb_sfence & ~fence;
+        end
     end
     assign exc_en = commit_en_unexc & (excValid | {`COMMIT_WIDTH{irqInfo.irq}});
     assign exc_exist = |exc_en;
@@ -162,12 +221,14 @@ generate
                 commitBus.en[i] <= commit_en[i];
             end
             commitBus.num <= commitNum;
+            commit_en_n <= commit_en;
         end
         else begin
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 commitBus.en[i] <= 0;
             end
             commitBus.num <= 0;
+            commit_en_n <= 0;
         end
         if(initReady)begin
             commitBus.loadNum <= commitLoadNum;
@@ -182,12 +243,7 @@ endgenerate
 
 
 // exception
-    logic exc_exist_n;
-    logic `N($clog2(`COMMIT_WIDTH)) excIdx_n;
-    logic `N(`ROB_WIDTH) exc_robIdx;
-    logic exc_dir;
-    logic `N(`EXC_WIDTH) redirect_exccode;
-    logic irq_n, irq_deleg_n;
+
     always_ff @(posedge clk)begin
         exc_exist_n <= exc_exist && !walk_state && initReady;
         irq_n <= irqInfo.irq;
@@ -197,6 +253,7 @@ endgenerate
         exc_dir <= head[`ROB_WIDTH-1] & ~dataRIdx[excIdx][`ROB_WIDTH-1] ? ~hdir : hdir;
         redirect_exccode <= rexccode[excIdx];
     end
+    assign rob_redirect_io.fence = fence_redirect;
     assign rob_redirect_io.csrRedirect.en = exc_exist_n;
     assign rob_redirect_io.csrRedirect.fsqInfo = robData[excIdx_n].fsqInfo;
     assign rob_redirect_io.csrRedirect.robIdx.idx = exc_robIdx;

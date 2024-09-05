@@ -13,7 +13,8 @@ module Backend(
     CsrL2IO.csr csr_l2_io,
     TlbL2IO.tlb dtlb_io,
     PTWRequest.cache ptw_request,
-    ClintIO.cpu clint_io
+    ClintIO.cpu clint_io,
+    FenceBus.backend fenceBus_o
 );
     DecodeRenameIO dec_rename_io();
     RenameDisIO rename_dis_io();
@@ -29,7 +30,7 @@ module Backend(
     IssueRegIO #(`ALU_SIZE, `ALU_SIZE * 2) int_reg_io();
     IssueRegIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_reg_io();
     IssueRegIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_reg_io();
-    IssueRegIO #(1, 1) csr_reg_io();
+    IssueRegIO #(1, 2) csr_reg_io();
 `ifdef EXT_M
     IssueRegIO #(`MULT_SIZE, `MULT_SIZE * 2) mult_reg_io();
 `endif
@@ -60,6 +61,7 @@ module Backend(
 `endif
     CsrTlbIO csr_ltlb_io();
     CsrTlbIO csr_stlb_io();
+    FenceBus fenceBus();
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
     logic rename_full, rob_full;
     /* verilator lint_off UNOPTFLAT */
@@ -88,6 +90,11 @@ module Backend(
     assign fsq_back_io.redirect = backendRedirect.out;
     assign fsq_back_io.redirectBr = backendRedirect.branchOut;
     assign fsq_back_io.redirectCsr = backendRedirect.csrOut;
+    assign fenceBus_o.mmu_flush = fenceBus.mmu_flush;
+    assign fenceBus_o.mmu_flush_all = fenceBus.mmu_flush_all;
+    assign fenceBus_o.vma_vaddr = fenceBus.vma_vaddr;
+    assign fenceBus_o.vma_asid = fenceBus.vma_asid;
+    assign fenceBus.mmu_flush_end = fenceBus_o.mmu_flush_end;
 
     Decode decode(.*,
                   .insts(ifu_backend_io.fetchBundle));

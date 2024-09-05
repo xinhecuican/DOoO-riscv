@@ -71,18 +71,16 @@ module CSR(
     logic `N(`XLEN) wdata, origin_data, rdata, cmp_rdata;
     logic `N(`XLEN) wdata_s1, wdata_s2;
     logic `N(`CSROP_WIDTH) csrop;
-    logic csrrw, csrrs, csrrc, ecall, ebreak;
+    logic csrrw, csrrs, csrrc;
     logic `N(`EXC_WIDTH) exccode;
     logic pmp_cmp;
     logic `N(`XLEN) pmp_rdata;
 
     assign csrop = issue_csr_io.bundle.csrop;
     assign origin_data = csrop[2] ? issue_csr_io.bundle.imm : issue_csr_io.rdata;
-    assign csrrw = ~csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
-    assign csrrs = csrop[1] & ~csrop[0] & ~issue_csr_io.bundle.exc_valid;
-    assign csrrc = csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
-    assign ecall = csrop[2] & ~csrop[1] & ~csrop[0];
-    assign ebreak = ~csrop[2] & ~csrop[1] & ~csrop[0];
+    assign csrrw = ~csrop[3] & ~csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
+    assign csrrs = ~csrop[3] & csrop[1] & ~csrop[0] & ~issue_csr_io.bundle.exc_valid;
+    assign csrrc = ~csrop[3] & csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
     assign rdata = pmp_cmp ? pmp_rdata : cmp_rdata;
     assign wdata = csrrw ? origin_data :
                    csrrs ? rdata | origin_data : rdata & ~origin_data;

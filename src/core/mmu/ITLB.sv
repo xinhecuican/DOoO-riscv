@@ -5,7 +5,8 @@ module ITLB(
     input logic rst,
     ITLBCacheIO.tlb itlb_cache_io,
     CsrTlbIO.tlb csr_itlb_io,
-    TlbL2IO.tlb tlb_l2_io
+    TlbL2IO.tlb tlb_l2_io,
+    FenceBus.mmu fenceBus
 );
     typedef struct packed {
         logic `ARRAY(2, `VADDR_SIZE) vaddr;

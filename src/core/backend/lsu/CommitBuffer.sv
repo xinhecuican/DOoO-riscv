@@ -3,9 +3,11 @@
 module StoreCommitBuffer(
     input logic clk,
     input logic rst,
+    input logic flush,
     StoreCommitIO.buffer io,
     LoadForwardIO.queue loadFwd,
-    DCacheStoreIO.buffer wio
+    DCacheStoreIO.buffer wio,
+    output logic empty
 );
 
     logic `N(`STORE_COMMIT_SIZE) addr_en, writing;
@@ -67,6 +69,7 @@ endgenerate
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_WIDTH) free_idx;
     logic `N(`STORE_PIPELINE) free_valid;
     assign full = &addr_en;
+    assign empty = ~(|addr_en);
     /* UNPARAM */
     PEncoder #(`STORE_COMMIT_SIZE) encoder_free (~addr_en, free_idx[0]);
     PREncoder #(`STORE_COMMIT_SIZE) encoder_free_rev (~addr_en, free_idx[1]);
@@ -106,7 +109,7 @@ generate
     end
     ParallelOR #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) or_widx ( widx_valid, widx_valid_combine);
     for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
-        assign ready[i] = counter[i][0] | thresh_write;
+        assign ready[i] = counter[i][0] | thresh_write | flush;
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter[i] <= 1;

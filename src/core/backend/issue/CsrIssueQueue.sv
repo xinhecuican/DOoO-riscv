@@ -9,12 +9,14 @@ module CsrIssueQueue(
     IssueCSRIO.issue issue_csr_io,
     CommitBus.csr commitBus,
     BackendCtrl backendCtrl,
+    FenceBus.csr fenceBus,
     output logic `N(32) trapInst
 );
 
     typedef struct {
         logic we;
         logic `N(`PREG_WIDTH) rs1;
+        logic `N(`PREG_WIDTH) rs2;
         logic `N(`PREG_WIDTH) rd;
         RobIdx robIdx;
     } StatusEntry;
@@ -35,6 +37,7 @@ module CsrIssueQueue(
     IssueStatusBundle status;
     StatusEntry statush, status_n;
     RobIdx writeRobIdx;
+    logic `ARRAY(2, `XLEN) csr_rdata;
 
     assign full = head == tail && (hdir ^ tdir);
     assign dis_csr_io.full = full;
@@ -55,7 +58,7 @@ module CsrIssueQueue(
     LoopCompare #(`ROB_WIDTH) cmp_wakeup_older (writeRobIdx, backendCtrl.redirectIdx,  wakeup_older);
 
     assign csr_reg_io.en = select_en;
-    assign csr_reg_io.preg = statush.rs1;
+    assign csr_reg_io.preg = {statush.rs2, statush.rs1};
     assign csr_wakeup_io.en = select_en & csr_reg_io.ready;
     assign csr_wakeup_io.we = statush.we;
     assign csr_wakeup_io.rd = statush.rd;
@@ -66,8 +69,11 @@ module CsrIssueQueue(
         issue_csr_io.status.we <=  status_n.we;
         issue_csr_io.status.rd <= status_n.rd;
         issue_csr_io.status.robIdx <= status_n.robIdx;
+        if(issue_csr_io.en)begin
+            csr_rdata <= csr_reg_io.data;
+        end
     end
-    assign issue_csr_io.rdata = csr_reg_io.data;
+    assign issue_csr_io.rdata = csr_reg_io.data[0];
 
     MPREG #(
         .WIDTH($bits(CsrIssueBundle)),
@@ -113,6 +119,7 @@ endgenerate
         if(enqueue)begin
             status_ram[tail].we <= status.we;
             status_ram[tail].rs1 <= status.rs1;
+            status_ram[tail].rs2 <= status.rs2;
             status_ram[tail].robIdx <= status.robIdx;
             status_ram[tail].rd <= status.rd;
         end
@@ -158,7 +165,7 @@ endgenerate
             dirTable <= 0;
         end
         else begin
-            if(backendCtrl.redirect)begin
+            if(backendCtrl.redirect & ~(&valid))begin
                 tail <= |valid ? validSelect_n : head;
                 tdir <= |valid ? (validSelect[`CSR_ISSUE_WIDTH-1] & ~validSelect_n[`CSR_ISSUE_WIDTH-1] ?
                         ~dirTable[validSelect] : dirTable[validSelect]) : hdir;
@@ -170,4 +177,58 @@ endgenerate
             end
         end
     end
+
+// fence
+    logic sfence_vma, vma_clear_all;
+    FsqIdxInfo fence_fsqInfo;
+    logic `N(`PREDICTION_WIDTH+1) fsq_offset_n;
+    RobIdx preRobIdx;
+
+    assign fsq_offset_n = commitBus.fsqInfo[0].offset + 1;
+    assign fence_fsqInfo.idx = commitBus.fsqInfo[0].idx + fsq_offset_n[`PREDICTION_WIDTH];
+    assign fence_fsqInfo.offset = fsq_offset_n[`PREDICTION_WIDTH-1: 0];
+    assign vma_clear_all = csr_rdata[0][`VADDR_SIZE-1: 0] == 0;
+
+    LoopSub #(`ROB_WIDTH, 1) sub_rob_idx (1'b1, commitBus.robIdx, preRobIdx);
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            fenceBus.store_flush <= 1'b0;
+            sfence_vma <= 1'b0;
+            fenceBus.fence_end <= 1'b0;
+            fenceBus.preRobIdx <= 0;
+            fenceBus.robIdx <= 0;
+            fenceBus.fsqInfo <= 0;
+            fenceBus.mmu_flush <= 0;
+        end
+        else begin
+            if(commitBus.en[0] & commitBus.sfence_vma)begin
+                fenceBus.store_flush <= 1'b1;
+                sfence_vma <= 1'b1;
+                fenceBus.preRobIdx <= preRobIdx;
+                fenceBus.robIdx <= commitBus.robIdx;
+                fenceBus.fsqInfo <= fence_fsqInfo;
+            end
+            if(fenceBus.store_flush & fenceBus.store_flush_end)begin
+                fenceBus.store_flush <= 1'b0;
+            end
+            if(sfence_vma & fenceBus.store_flush_end)begin
+                sfence_vma <= 1'b0;
+            end
+            fenceBus.mmu_flush <= {3{sfence_vma & fenceBus.store_flush_end}};
+            fenceBus.fence_end <= fenceBus.mmu_flush_end;
+        end
+    end
+    
+generate
+    for(genvar i=0; i<3; i++)begin
+        always_ff @(posedge clk)begin
+            if(commitBus.en[0] & commitBus.sfence_vma)begin
+                fenceBus.mmu_flush_all[i] <= vma_clear_all;
+                fenceBus.vma_vaddr[i] <= csr_rdata[0][`VADDR_SIZE-1: 0];
+                fenceBus.vma_asid[i] <= csr_rdata[1][`TLB_ASID-1: 0];
+            end
+        end
+    end
+endgenerate
 endmodule
