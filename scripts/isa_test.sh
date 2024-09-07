@@ -14,6 +14,11 @@ rv32m=(
 )
 rv32m_prefix="utils/riscv-tests/isa/rv32um-p-"
 
+rv32s=(
+    "csr" "sbreak" "scall" "ill_csr"
+)
+rv32s_prefix="utils/riscv-tests/isa/rv32si-p-"
+
 benchmarks=(
     "median" "memcpy" "multiply" "qsort" "rsort" "uart" "towers"
 )
@@ -36,6 +41,11 @@ for arg in "$@"; do
         rv32m)
             for test in "${rv32m[@]}"; do
                 selected_tests+=("${rv32m_prefix}${test}.bin")
+            done
+            ;;
+        rv32s)
+            for test in "${rv32s[@]}"; do
+                selected_tests+=("${rv32s_prefix}${test}.bin")
             done
             ;;
         benchmarks)

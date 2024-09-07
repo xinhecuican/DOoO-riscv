@@ -98,6 +98,11 @@ endgenerate
             io.exception <= ~mmode & io.req & ~io.flush & (|hit) & (mode_exc[hit_idx] | pmp_exc);
             io.uncache <= pma_uc;
         end
+        else begin
+            io.miss <= 0;
+            io.exception <= 0;
+            io.uncache <= 0;
+        end
     end
 
 // pmp

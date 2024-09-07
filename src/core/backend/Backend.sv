@@ -71,6 +71,7 @@ module Backend(
     CSRIrqInfo irqInfo;
     logic `N(32) trapInst;
     logic `N(`VADDR_SIZE) exc_vaddr;
+    logic fence_req;
 
 `ifdef DIFFTEST
     DiffRAT diff_rat();

@@ -423,7 +423,7 @@ endgenerate
     logic `N(`STORE_PIPELINE) suncache_s3;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr_s3;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s3;
-    logic `N(`STORE_PIPELINE) store_en_s4;
+    logic `N(`STORE_PIPELINE) store_en_s4, store_en_s4_unexc;
     RobIdx `N(`STORE_PIPELINE) store_robIdx_s4;
     logic `ARRAY(`STORE_PIPELINE, `EXC_WIDTH) exccode_s4;
     logic `N(`STORE_PIPELINE) store_redirect_s4;
@@ -451,7 +451,8 @@ generate
             stlb_miss_s3[i] <= stlb_miss[i];
             svaddr_s3[i] <= storeAddrNext[i];
             sissue_idx_s3[i] <= sissue_idx_s2[i];
-            store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i] & ~stlb_miss_s3[i];
+            store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i];
+            store_en_s4_unexc[i] <= store_en_s3[i] & ~store_redirect_s3[i] & ~stlb_miss_s3[i];
             store_robIdx_s4[i] <= store_robIdx_s3[i];
             exccode_s4[i] <= exccode_s3[i];
             stlb_miss_s4[i] <= stlb_miss_s3[i];
@@ -460,19 +461,19 @@ generate
             sissue_idx_s4[i] <= sissue_idx_s3[i];
 
             if(i == `STORE_PIPELINE - 1)begin
-                storeWBData[i].en <= store_en_s4[i] & ~store_redirect_s4[i] & ~suncache_s4[i] | store_queue_io.wb_req;
-                storeWBData[i].robIdx <= store_en_s4[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? store_robIdx_s4[i] : store_queue_io.wb_robIdx;
-                storeWBData[i].exccode <= store_en_s4[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? exccode_s4[i]  : `EXC_NONE;
+                storeWBData[i].en <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] | store_queue_io.wb_req;
+                storeWBData[i].robIdx <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? store_robIdx_s4[i] : store_queue_io.wb_robIdx;
+                storeWBData[i].exccode <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? exccode_s4[i]  : `EXC_NONE;
             end
             else begin
-                storeWBData[i].en <= store_en_s4[i] & ~store_redirect_s4[i] & ~suncache_s4[i];
+                storeWBData[i].en <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i];
                 storeWBData[i].robIdx <= store_robIdx_s4[i];
                 storeWBData[i].exccode <= exccode_s4[i];
             end
         end
     end
 endgenerate
-    assign store_io.success = store_en_s4 & ~store_redirect_s4 & ~tlb_lsu_io.scancel;
+    assign store_io.success = store_en_s4_unexc & ~store_redirect_s4 & ~tlb_lsu_io.scancel;
     assign store_io.success_idx = sissue_idx_s4;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin

@@ -235,6 +235,7 @@ typedef enum logic [1: 0] {
 `define EXC_SRET        `EXC_WIDTH'd25 // user defined.sret 
 `define EXC_MRET        `EXC_WIDTH'd27 // user defined.mret
 `define EXC_EC          `EXC_WIDTH'd28 // user defined.environment call
+`define EXC_MMU         `EXC_WIDTH'd30 // user defined csr fence
 
 // tlb
 `define TLB_OFFSET 12

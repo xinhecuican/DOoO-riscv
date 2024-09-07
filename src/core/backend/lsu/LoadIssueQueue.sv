@@ -135,7 +135,8 @@ module LoadIssueBank(
     StatusBundle `N(`LOAD_ISSUE_BANK_SIZE) status_ram;
     logic `N(`LOAD_ISSUE_BANK_SIZE) free_en;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) freeIdx;
-    logic `N(`LOAD_ISSUE_BANK_SIZE) ready, issue, exception;
+    // exception: tlb miss exception
+    logic `N(`LOAD_ISSUE_BANK_SIZE) ready, issue, exception, tlbmiss;
     logic `N(`LOAD_ISSUE_BANK_SIZE) select_en;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
     LoadIssueData data_o;
@@ -203,6 +204,12 @@ endgenerate
     logic `N(`LOAD_ISSUE_BANK_SIZE) success_idx_decode;
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
 
+    logic `N(`LOAD_ISSUE_BANK_SIZE) selectIdx_decode, replyfast_decode, replyslow_decode, tlbbank_decode;
+    Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_select_idx (selectIdx, selectIdx_decode);
+    Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_replyfast (io.reply_fast.issue_idx, replyfast_decode);
+    Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_replyslow (io.reply_slow.issue_idx, replyslow_decode);
+    Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_tlbbank (io.tlb_bank_idx, tlbbank_decode);
+
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
         io.issue_idx <= selectIdxNext;
@@ -215,6 +222,7 @@ endgenerate
             io.data_o <= 0;
             issue <= 0;
             exception <= 0;
+            tlbmiss <= 0;
         end
         else begin
             if(backendCtrl.redirect)begin
@@ -230,24 +238,19 @@ endgenerate
                 status_ram[freeIdx].rs1v <= io.status.rs1v;
                 status_ram[freeIdx].rs1 <= io.status.rs1;
                 status_ram[freeIdx].robIdx <= io.status.robIdx;
-                issue[freeIdx] <= 1'b0;
                 exception[freeIdx] <= 1'b0;
             end
 
-            if((|ready) & ~backendCtrl.redirect)begin
-                issue[selectIdx] <= 1'b1;
-            end
-
-            if(io.reply_fast.en && (io.reply_fast.reason != 2'b11))begin
-                issue[io.reply_fast.issue_idx] <= 1'b0;
-            end
-
-            if(io.reply_slow.en)begin
-                issue[io.reply_slow.issue_idx] <= 1'b0;
-            end
-
-            if(io.tlb_en)begin
-                issue[io.tlb_bank_idx] <= 1'b0;
+            for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
+                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & tlbmiss[i])) |
+                            (((|ready) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
+                            ~(io.reply_fast.en & (io.reply_fast.reason != 2'b11) & replyfast_decode[i]) &
+                            ~(io.reply_slow.en & replyslow_decode[i]) &
+                            ~(io.tlb_en & tlbbank_decode[i]) &
+                            ~(io.en & free_en[i]);
+                tlbmiss[i] <= (tlbmiss[i] |
+                              (io.reply_fast.en && (io.reply_fast.reason == 2'b11) & replyfast_decode[i])) &
+                              ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
             end
 
             if(io.tlb_en & io.tlb_exception)begin

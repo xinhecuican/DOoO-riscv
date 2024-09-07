@@ -11,12 +11,14 @@ module DTLB(
 );
     TLBIO #(`DTLB_SIZE) ltlb_io `N(`LOAD_PIPELINE) ();
     TLBIO #(`DTLB_SIZE) stlb_io `N(`LOAD_PIPELINE) ();
+    TlbL2IO tlb_l2_io0();
+    TlbL2IO tlb_l2_io1();
     logic flush0, flush1, flush2;
 
     logic `N(`LOAD_PIPELINE) lwb_pipeline;
-    Decoder #(`LOAD_PIPELINE) decoder_load_pipe (tlb_l2_io.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], lwb_pipeline);
+    Decoder #(`LOAD_PIPELINE) decoder_load_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], lwb_pipeline);
     logic `N(`STORE_PIPELINE) swb_pipeline;
-    Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], swb_pipeline);
+    Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], swb_pipeline);
 
     ReplaceD1IO #(.WAY_NUM(`DTLB_SIZE)) replace_io();
     RandomReplaceD1 #(1, `DTLB_SIZE) replace (.*);
@@ -76,8 +78,6 @@ generate
     end
 endgenerate
 
-    TlbL2IO tlb_l2_io0();
-    TlbL2IO tlb_l2_io1();
     TLBRepeater repeater0(.*, .flush(flush0), .in(tlb_l2_io0), .out(tlb_l2_io1));
     TLBRepeater repeater1(.*, .flush(flush1), .in(tlb_l2_io1), .out(tlb_l2_io));
 
@@ -103,7 +103,7 @@ generate
     always_ff @(posedge clk)begin
         lreq_s2 <= |lreq;
         lreq_addr_s2 <= lvaddr[lreq_idx];
-        lidx_s2 <= {lreq_idx, lvaddr[lreq_idx]};
+        lidx_s2 <= {lreq_idx, lidx[lreq_idx]};
         lreq_all_s2 <= lreq;
     end
 endgenerate
@@ -155,8 +155,10 @@ endgenerate
         tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & ~flush0 & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
         tlb_lsu_io.lwb_exception <= {`LOAD_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.lwb_error <= {`LOAD_PIPELINE{tlb_l2_io0.error}};
+        tlb_lsu_io.lwb_idx <= {`LOAD_PIPELINE{tlb_l2_io0.info_o.idx}};
         tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & ~flush1 & (tlb_l2_io0.info_o.source == 2'b10)}} & swb_pipeline;
         tlb_lsu_io.swb_exception <= {`STORE_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.swb_error <= {`STORE_PIPELINE{tlb_l2_io0.error}};
+        tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx}};
     end
 endmodule

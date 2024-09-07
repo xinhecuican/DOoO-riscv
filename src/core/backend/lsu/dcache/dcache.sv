@@ -300,7 +300,8 @@ endgenerate
     always_ff @(posedge clk)begin
         ptw_tag <= ptw_io.paddr`DCACHE_TAG_BUS;
         ptw_req <= ptw_io.req;
-        ptw_req_n <= ptw_req;
+        ptw_addr <= ptw_io.paddr;
+        ptw_req_n <= ptw_req & ~(|ptw_way_hit);
     end
 
     assign miss_io.ptw_req = ptw_req_n;

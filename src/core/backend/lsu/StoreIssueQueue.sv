@@ -143,7 +143,7 @@ module StoreAddrBank(
         RobIdx robIdx;
     } StatusBundle;
 
-    logic `N(`STORE_ISSUE_BANK_SIZE) en, issue, exception;
+    logic `N(`STORE_ISSUE_BANK_SIZE) en, issue, exception, tlbmiss;
     StatusBundle `N(`STORE_ISSUE_BANK_SIZE) status_ram;
     logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
@@ -211,8 +211,13 @@ generate
     end
 endgenerate
 
-    logic `N(`LOAD_ISSUE_BANK_SIZE) success_idx_decode;
-    Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
+    logic `N(`STORE_ISSUE_BANK_SIZE) success_idx_decode;
+    Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
+
+    logic `N(`STORE_ISSUE_BANK_SIZE) selectIdx_decode, reply_decode, replyslow_decode, tlbbank_decode;
+    Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_select_idx (selectIdx, selectIdx_decode);
+    Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_reply (io.reply.issue_idx, reply_decode);
+    Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_tlbbank (io.tlb_bank_idx, tlbbank_decode);
 
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
@@ -226,23 +231,35 @@ endgenerate
             io.data_o <= 0;
             issue <= 0;
             exception <= 0;
+            tlbmiss <= 0;
         end
         else begin
             if(backendCtrl.redirect)begin
                 en <= walk_en &
-                      ~({`LOAD_ISSUE_BANK_SIZE{io.success}} & success_idx_decode);
+                      ~({`STORE_ISSUE_BANK_SIZE{io.success}} & success_idx_decode);
             end
             else begin
                 en <= (en | ({`STORE_ISSUE_BANK_SIZE{io.en}} & free_en)) &
-                      ~({`LOAD_ISSUE_BANK_SIZE{io.success}} & success_idx_decode);
+                      ~({`STORE_ISSUE_BANK_SIZE{io.success}} & success_idx_decode);
             end
             
             if(io.en)begin
                 status_ram[freeIdx].rs1v <= io.status.rs1v;
                 status_ram[freeIdx].rs1 <= io.status.rs1;
                 status_ram[freeIdx].robIdx <= io.status.robIdx;
-                issue[freeIdx] <= 1'b0;
                 exception[freeIdx] <= 1'b0;
+            end
+
+            for(int i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
+                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & tlbmiss[i])) |
+                            (((|ready) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
+                            ~(io.reply.en & (io.reply.reason != 2'b11) & reply_decode[i]) &
+                            ~(io.tlb_en & tlbbank_decode[i]) &
+                            ~(io.en & free_en[i]);
+                tlbmiss[i] <= (tlbmiss[i] |
+                              (io.reply.en && (io.reply.reason == 2'b11) & reply_decode[i])) &
+                              ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
+                              
             end
 
             if((|ready) & ~backendCtrl.redirect)begin

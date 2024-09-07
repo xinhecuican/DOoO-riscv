@@ -86,7 +86,7 @@ module TLBCache(
     always_ff @(posedge clk)begin
         io.hit <= req_buf.req & ((|(hit_first & (leaf | exception))) | cache_ptw_io.full) & ~io.flush;
         io.exception <= |(hit_first & exception);
-        io.error <= (|(hit_first & ~leaf & ~exception)) & cache_ptw_io.full;
+        io.error <= (~(|(hit_first & (leaf | exception)))) & cache_ptw_io.full;
         io.hit_entry <= valid[0] ? pn0_io.entry : pn1_io.entry;
         io.hit_addr <= req_buf.vaddr;
         io.info_o <= req_buf.info;

@@ -3,6 +3,7 @@
 module ROB(
     input logic clk,
     input logic rst,
+    input logic fence_req,
     input BackendRedirectInfo backendRedirect,
     input CSRIrqInfo irqInfo,
     input logic `N(`VADDR_SIZE) exc_pc,
@@ -49,7 +50,7 @@ module ROB(
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
     logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en_unexc, commit_en, commit_en_n;
     logic exc_exist;
-    logic `N(`COMMIT_WIDTH) excValid, exc_en, exc_mask;
+    logic `N(`COMMIT_WIDTH) excValid, exc_en, exc_mask, exc_en_n;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx;
     logic `ARRAY(`COMMIT_WIDTH, `EXC_WIDTH) rexccode;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataWIdx;
@@ -170,7 +171,8 @@ endgenerate
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign wbValid[i] = wb[dataRIdx[i]];
-        assign commit_we[i] = robData[i].we;
+        // exception inst invalid
+        assign commit_we[i] = robData[i].we & ~exc_en_n[i];
         assign commit_store[i] = robData[i].store;
         assign commit_mem[i] = robData[i].mem;
         assign rexccode[i] = exccode[dataRIdx[i]];
@@ -180,27 +182,28 @@ generate
     assign commitValid = (1 << commit_en_num) - 1;
     assign commit_en_pre = commitValid & wbValid;
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign commit_en_unexc[i] = (&commit_en_pre[i: 0]);
+    end
+    assign exc_en = (excValid | {`COMMIT_WIDTH{irqInfo.irq}});
+    assign exc_exist = |(commit_en_unexc & exc_en);
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         if(i == 0)begin
-            assign commit_en_unexc[i] = commit_en_pre[0] & ~fence;
+            assign exc_mask[i] = 1'b1;
         end
         else begin
-            assign commit_en_unexc[i] = (&commit_en_pre[i: 0]) & ~wb_sfence & ~fence;
+            assign exc_mask[i] = ~(|exc_en[i-1: 0]);
         end
     end
-    assign exc_en = commit_en_unexc & (excValid | {`COMMIT_WIDTH{irqInfo.irq}});
-    assign exc_exist = |exc_en;
-    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign exc_mask[i] = (|exc_en[`COMMIT_WIDTH-1: i]) | (~exc_exist);
-    end
     PREncoder #(`COMMIT_WIDTH) prencoder_exc_idx (excValid, excIdx);
-    assign commit_en = commit_en_unexc & exc_mask;
+    assign commit_en = commit_en_unexc & exc_mask &
+                      {`COMMIT_WIDTH{~fence}} & {{`COMMIT_WIDTH-1{~wb_sfence}}, 1'b1};
 endgenerate
 
     logic `N($clog2(`COMMIT_WIDTH) + 1) commitNum, commitWeNum, commitLoadNum, commitStoreNum;
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_num (commit_en, commitNum);
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_we_num (commitBus.en & commit_we, commitWeNum);
-    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_load (commitBus.en & commit_mem & ~commit_store, commitLoadNum);
-    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_store (commitBus.en & commit_mem & commit_store, commitStoreNum);
+    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_load (commitBus.en & commit_mem & ~commit_store & ~exc_en_n, commitLoadNum);
+    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_store (commitBus.en & commit_mem & commit_store & ~exc_en_n, commitStoreNum);
     assign commitBus.wenum = commitWeNum;
     assign commitBus.we = commit_we;
     assign commitBus.robIdx.idx = head;
@@ -216,6 +219,7 @@ generate
     end
 
     always_ff @(posedge clk)begin
+        exc_en_n <= exc_en;
         if(!walk_state && initReady && !exc_exist_n)begin
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 commitBus.en[i] <= commit_en[i];

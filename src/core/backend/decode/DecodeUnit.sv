@@ -186,18 +186,18 @@ module DecodeUnit(
 `endif
                       }} & imm;
 
-    assign info.intv = lui | opimm |
+    assign info.intv = (lui | opimm |
                        add | sub | sll | slt | sltu | _xor | srl | sra | _or | _and |
                        auipc | fence
 `ifdef DIFFTEST
     | sim_trap
 `endif
-    ;
-    assign info.branchv = branch | jal | jalr;
-    assign info.memv = load | store;
-    assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam | sfence_vma;
+    ) & ~ipf & ~iam;
+    assign info.branchv = (branch | jal | jalr) & ~ipf & ~iam;
+    assign info.memv = (load | store) & ~ipf & ~iam;
+    assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam | sfence_vma | ipf;
 `ifdef EXT_M
-    assign info.multv = mult;
+    assign info.multv = mult & ~ipf & ~iam;
 `endif
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw | sfence_vma}} & inst[19: 15];
     assign info.rs2 = {5{branch | store | opreg | sfence_vma}} & inst[24: 20];
@@ -206,9 +206,9 @@ module DecodeUnit(
     assign info.we = rd != 0;
     // exception from frontend and illegal inst
     // all of these exception are sent to csr issue queue due to it's simple structure
-    assign info.exccode = unknown ? `EXC_II :
-                          ipf ? `EXC_IPF :
+    assign info.exccode = ipf ? `EXC_IPF :
                           iam ? `EXC_IAM :
+                          unknown ? `EXC_II :
                           ecall | ebreak | mret | sret ?
                                {`EXC_WIDTH{ecall}} & `EXC_EC | 
                                {`EXC_WIDTH{ebreak}} & `EXC_BP |

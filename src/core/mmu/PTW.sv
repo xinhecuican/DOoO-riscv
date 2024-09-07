@@ -21,7 +21,7 @@ module PTW(
     PTWRequest.ptw ptw_request,
     PTWL2IO.ptw ptw_io
 );
-    typedef enum  { IDLE, WALK_PN1, WB_PN1, WALK_PN0, WB_PN0} State;
+    typedef enum  { IDLE, WALK_PN1, WB_PN1, WALK_PN0, WB_PN0, WAITING_FLUSH } State;
 `ifdef DIFFTEST
     typedef struct packed {
 `else
@@ -74,12 +74,16 @@ module PTW(
                         req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)+`DCACHE_BANK_WIDTH];
     assign pn0_io.data = cache_ptw_io.req & cache_ptw_io.valid[1] ? {cache_ptw_io.vaddr[`TLB_OFFSET+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info, cache_ptw_io.paddr[1]} :
                          {req_buf.vaddr[`TLB_OFFSET+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info, wb_addr};
+    assign pn0_io.data_valid = ptw_request.data_valid && (state == WALK_PN0);
+    assign pn0_io.ctag = req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)+`DCACHE_BANK_WIDTH];
     assign pn0_io.wb_ready = ptw_io.ready;
 
     assign pn1_io.flush = flush;
     assign pn1_io.en = cache_ptw_io.req & (~cache_ptw_io.valid[1] & ~cache_ptw_io.valid[0]);
     assign pn1_io.tag = cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH];
     assign pn1_io.data = {cache_ptw_io.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info};
+    assign pn1_io.data_valid = ptw_request.data_valid && (state == WALK_PN1);
+    assign pn1_io.ready = state == IDLE;
 
     assign ptw_request.req = req_buf.req;
     assign ptw_request.paddr = req_buf.paddr;
@@ -95,8 +99,8 @@ module PTW(
 
     logic pn1_unalign;
     assign pn1_unalign = pn1_leaf & (|req_buf.wb_entry.ppn[1]);
-    TLBExcDetect exc_detect1 (req_buf.wb_entry, req_buf.info[$bits(TLBInfo)-1: 0], csr_io, pn0_exception);
-    assign pn1_exception = pn0_exception & pn1_unalign;
+    TLBExcDetect exc_detect1 (req_buf.wb_entry, req_buf.info[$bits(TLBInfo)-1: 0], csr_io.tlb, pn0_exception);
+    assign pn1_exception = pn0_exception | pn1_unalign;
 
     always_ff @(posedge clk)begin
         if(state == WB_PN1)begin
@@ -112,6 +116,9 @@ module PTW(
             ptw_io.info <= req_buf.info;
             ptw_io.waddr <= req_buf.vaddr;
             ptw_io.wpn <= 2'b00;
+        end
+        else begin
+            ptw_io.valid <= 1'b0;
         end
     end
 
@@ -136,7 +143,7 @@ module PTW(
             wb_req <= 0;
         end
         else begin
-            if(ptw_request.data_valid)begin
+            if(ptw_request.data_valid && (state != WAITING_FLUSH))begin
                 wb_req <= 1'b1;
             end
             else if(cache_ptw_io.refill_ready)begin
@@ -151,7 +158,13 @@ module PTW(
             req_buf <= '{default: 0};
         end
         else if(flush)begin
-            state <= IDLE;
+            if(state == IDLE || state == WB_PN1 ||
+               state == WB_PN0 || ptw_request.data_valid)begin
+                state <= IDLE;
+               end
+               else begin
+                state <= WAITING_FLUSH;
+            end
         end
         else begin
             case(state)
@@ -229,6 +242,11 @@ module PTW(
                     end
                 end
             end
+            WAITING_FLUSH:begin
+                if(ptw_request.data_valid)begin
+                    state <= IDLE;
+                end
+            end
             endcase
         end
     end
@@ -247,12 +265,13 @@ interface PTBufferIO #(
 
     logic full;
     logic valid;
+    logic ready;
     logic `N(TAG_WIDTH + DATA_WIDTH) data_o;
     logic wb_valid;
     logic wb_ready;
     logic `N(TAG_WIDTH + DATA_WIDTH) wb_data;
 
-    modport buffer (input en, data_valid, tag, ctag, flush, data, wb_ready, output full, valid, data_o, wb_valid, wb_data);
+    modport buffer (input en, ready, data_valid, tag, ctag, flush, data, wb_ready, output full, valid, data_o, wb_valid, wb_data);
 endinterface
 
 module PTBuffer #(
@@ -271,6 +290,7 @@ module PTBuffer #(
     logic `N(DATA_WIDTH) data `N(DEPTH);
     
     logic `N(ADDR_WIDTH) free_idx;
+    logic `N(ADDR_WIDTH) wb_idx;
 
     assign io.full = &en;
     PEncoder #(DEPTH) encoder_free(~en, free_idx);
@@ -279,20 +299,6 @@ module PTBuffer #(
     assign io.valid = |(en);
     PEncoder #(DEPTH) encoder_valid ((en), valid_idx);
     assign io.data_o = {tag[valid_idx], data[valid_idx]};
-
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            en <= 0;
-        end
-        else if(io.flush)begin
-            en <= 0;
-        end
-        else begin
-            if(io.en)begin
-                en[free_idx] <= 1'b1;
-            end
-        end
-    end
 
     always_ff @(posedge clk)begin
         if(io.en)begin
@@ -306,7 +312,6 @@ generate
     if(MULTI)begin
         logic `N(DEPTH) data_valid;
         logic `N(DEPTH) tag_cmp;
-        logic `N(ADDR_WIDTH) wb_idx;
         logic `N(DEPTH) valid_idx_decode;
 
         Decoder #(DEPTH) decoder_valid_idx (valid_idx, valid_idx_decode);
@@ -317,16 +322,48 @@ generate
         assign io.wb_valid = |data_valid;
         PEncoder #(DEPTH) encoder_wb_idx (data_valid, wb_idx);
         assign io.wb_data = {tag[wb_idx], data[wb_idx]};
-        always_ff @(posedge clk)begin
-            if(io.flush)begin
+        always_ff @(posedge clk, posedge rst)begin
+            if(rst == `RST)begin
                 data_valid <= 0;
+                en <= 0;
+            end
+            else if(io.flush)begin
+                data_valid <= 0;
+                en <= 0;
             end
             else begin
-                if(data_valid)begin
+                if(io.en)begin
+                    en[free_idx] <= 1'b1;
+                end
+                if(io.data_valid)begin
                     data_valid <= tag_cmp & ~valid_idx_decode;
                 end
                 if(io.wb_valid & io.wb_ready)begin
                     data_valid[wb_idx] <= 1'b0;
+                    en[wb_idx] <= 1'b0;
+                end
+            end
+        end
+    end
+    else begin
+        always_ff @(posedge clk)begin
+            if(io.valid & io.ready)begin
+                wb_idx <= valid_idx;
+            end
+        end
+        always_ff @(posedge clk or posedge rst)begin
+            if(rst == `RST)begin
+                en <= 0;
+            end
+            else if(io.flush)begin
+                en <= 0;
+            end
+            else begin
+                if(io.en)begin
+                    en[free_idx] <= 1'b1;
+                end
+                if(io.data_valid)begin
+                    en[wb_idx] <= 1'b0;
                 end
             end
         end

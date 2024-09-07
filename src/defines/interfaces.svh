@@ -137,12 +137,13 @@ interface CachePreDecodeIO;
     logic `N(`BLOCK_INST_SIZE) en;
     logic `N(`BLOCK_INST_SIZE) exception;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
+    logic `N(`VADDR_SIZE) start_addr;
     FetchStream stream;
     FsqIdx fsqIdx;
     logic `N(`PREDICTION_WIDTH+1) shiftIdx;
 
-    modport cache (output en, exception, data, stream, fsqIdx, shiftIdx);
-    modport pd (input en, exception, data, stream, fsqIdx, shiftIdx);
+    modport cache (output en, exception, start_addr, data, stream, fsqIdx, shiftIdx);
+    modport pd (input en, exception, start_addr, data, stream, fsqIdx, shiftIdx);
 endinterface
 
 interface ICacheAxi;

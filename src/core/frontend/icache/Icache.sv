@@ -22,6 +22,7 @@ module ICache(
         logic `N(2) span;
         logic multi_tag;
         FetchStream stream;
+        logic `N(`VADDR_SIZE) start_addr;
         FsqIdx fsqIdx;
         logic `N(`PREDICTION_WIDTH+1) shiftIdx;
     } RequestBuffer;
@@ -162,10 +163,11 @@ module ICache(
                                 (main_state == LOOKUP && (!(|cache_miss) &&
                                 !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) &&
                                 (abandon_lookup || abandon_idle || !fsq_cache_io.stall));
-    assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & (~(|cache_miss)) & ~abandon_lookup) | miss_data_en}}
+    assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & ((~(|cache_miss)) | (|itlb_cache_io.exception)) & ~abandon_lookup) | miss_data_en}}
                              & request_buffer.expand_en_shift;
     assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
     assign cache_pd_io.stream.start_addr = request_buffer.stream.start_addr;
+    assign cache_pd_io.start_addr = request_buffer.start_addr;
     assign cache_pd_io.fsqIdx = request_buffer.fsqIdx;
     assign cache_pd_io.stream.taken = request_buffer.stream.taken;
     assign cache_pd_io.stream.branch_type = request_buffer.stream.branch_type;
@@ -212,6 +214,7 @@ module ICache(
     request_buffer.multi_tag <= indexp1[`ICACHE_SET_WIDTH]; \
     request_buffer.fsqIdx <= fsq_cache_io.fsqIdx; \
     request_buffer.stream.start_addr <= fsq_cache_io.stream.start_addr + {fsq_cache_io.shiftIdx, 2'b00}; \
+    request_buffer.start_addr <= fsq_cache_io.stream.start_addr; \
     request_buffer.stream.size <= fsq_cache_io.stream.size - fsq_cache_io.shiftIdx; \
     request_buffer.stream.taken <= fsq_cache_io.stream.taken; \
     request_buffer.stream.branch_type <= fsq_cache_io.stream.branch_type; \

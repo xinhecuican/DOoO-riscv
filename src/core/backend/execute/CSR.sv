@@ -248,7 +248,7 @@ endgenerate                                                             \
                         {{`VADDR_SIZE-`MXL{1'b0}}, stvec[`MXL-1: 2], 2'b00};
     assign target_pc = (redirect.exccode == `EXC_MRET) & ~ret_priv_error ? mepc :
                        (redirect.exccode == `EXC_SRET) & ~ret_priv_error ? sepc :
-                       edelege_valid ? mtarget_pc : starget_pc;
+                       edelege_valid ? starget_pc : mtarget_pc;
 
     assign ecall_exccode = {{`EXC_WIDTH-4{1'b0}}, 2'b10, mode};
     assign ret = redirect.exccode == `EXC_MRET | redirect.exccode == `EXC_SRET;
@@ -345,7 +345,7 @@ endgenerate                                                             \
                 if(edelege_valid)begin
                     case(exccode)
                     `EXC_II: stval <= trapInst;
-                    `EXC_IAM, `EXC_IAF, `EXC_IPF: stval <= exc_pc;
+                    `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: stval <= exc_pc;
                     `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
                     `EXC_LPF, `EXC_SPF: stval <= exc_vaddr;
                     default: stval <= 0;
@@ -354,7 +354,7 @@ endgenerate                                                             \
                 else begin
                     case(exccode)
                     `EXC_II: mtval <= trapInst;
-                    `EXC_IAM, `EXC_IAF, `EXC_IPF: mtval <= exc_pc;
+                    `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: mtval <= exc_pc;
                     `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
                     `EXC_LPF, `EXC_SPF: mtval <= exc_vaddr;
                     default: mtval <= 0;
@@ -488,13 +488,16 @@ endgenerate                                                             \
 
 
 // tlb
-`define TLB_ASSIGN(name) \
+`define TLB_ASSIGN(name, IFETCH) \
     logic ``name``_we, ``name``_pmpcfg_en, ``name``_pmpaddr_en, ``name``_we_o; \
     logic `N(`XLEN) ``name``_wdata; \
     assign ``name``_we_o = ``name``_we & (~backendCtrl.redirect | redirect_s2_older); \
     always_ff @(posedge clk)begin \
-        if((mode == 2'b11) & mstatus.mprv)begin \
+        if(~IFETCH & mstatus.mprv)begin \
             name.mode <= mstatus.mpp; \
+        end \
+        else begin \
+            name.mode <= mode; \
         end \
         ``name``_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older); \
         ``name``_pmpcfg_en <= pmpcfg_s1; \
@@ -519,9 +522,9 @@ endgenerate                                                             \
         end \
     end \
 
-    `TLB_ASSIGN(csr_itlb_io)
-    `TLB_ASSIGN(csr_ltlb_io)
-    `TLB_ASSIGN(csr_stlb_io)
+    `TLB_ASSIGN(csr_itlb_io, 1)
+    `TLB_ASSIGN(csr_ltlb_io, 0)
+    `TLB_ASSIGN(csr_stlb_io, 0)
     always_ff @(posedge clk)begin
         if((mode == 2'b11) & mstatus.mprv)begin
             csr_l2_io.mode <= mstatus.mpp;

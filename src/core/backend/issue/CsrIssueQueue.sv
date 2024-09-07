@@ -10,7 +10,8 @@ module CsrIssueQueue(
     CommitBus.csr commitBus,
     BackendCtrl backendCtrl,
     FenceBus.csr fenceBus,
-    output logic `N(32) trapInst
+    output logic `N(32) trapInst,
+    output logic fence_req
 );
 
     typedef struct {
