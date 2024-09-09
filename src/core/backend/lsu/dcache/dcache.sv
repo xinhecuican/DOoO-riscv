@@ -299,9 +299,9 @@ endgenerate
 
     always_ff @(posedge clk)begin
         ptw_tag <= ptw_io.paddr`DCACHE_TAG_BUS;
-        ptw_req <= ptw_io.req;
+        ptw_req <= ptw_io.req & ~backendCtrl.redirect;
         ptw_addr <= ptw_io.paddr;
-        ptw_req_n <= ptw_req & ~(|ptw_way_hit);
+        ptw_req_n <= ptw_req & ~(|ptw_way_hit) & ~backendCtrl.redirect;
     end
 
     assign miss_io.ptw_req = ptw_req_n;

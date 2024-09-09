@@ -34,17 +34,17 @@ module DecodeUnit(
     assign rs2_2 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & ~inst[20];
 
     logic lui, auipc, jal, jalr, branch, load, store, miscmem, opimm, opreg, opsystem, unknown;
-    assign lui = ~op[4] & op[3] & op[2] & ~op[1] & op[0];
-    assign auipc = ~op[4] & ~op[3] & op[2] & ~op[1] & op[0];
-    assign jal = op[4] & op[3] & ~op[2] & op[1] & op[0];
-    assign jalr = op[4] & op[3] & ~op[2] & ~op[1] & op[0];
-    assign branch = op[4] & op[3] & ~op[2] & ~op[1] & ~op[0];
-    assign load = ~op[4] & ~op[3] & ~op[2] & ~op[1] & ~op[0];
-    assign store = ~op[4] & op[3] & ~op[2] & ~op[1] & ~op[0];
-    assign miscmem = ~op[4] & ~op[3] & ~op[2] & op[1] & op[0];
-    assign opimm = ~op[4] & ~op[3] & op[2] & ~op[1] & ~op[0];
-    assign opreg = ~op[4] & op[3] & op[2] & ~op[1] & ~op[0];
-    assign opsystem = op[4] & op[3] & op[2] & ~op[0] & ~op[0];
+    assign lui = ~op[4] & op[3] & op[2] & ~op[1] & op[0] & inst[1] & inst[0];
+    assign auipc = ~op[4] & ~op[3] & op[2] & ~op[1] & op[0] & inst[1] & inst[0];
+    assign jal = op[4] & op[3] & ~op[2] & op[1] & op[0] & inst[1] & inst[0];
+    assign jalr = op[4] & op[3] & ~op[2] & ~op[1] & op[0] & inst[1] & inst[0];
+    assign branch = op[4] & op[3] & ~op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    assign load = ~op[4] & ~op[3] & ~op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    assign store = ~op[4] & op[3] & ~op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    assign miscmem = ~op[4] & ~op[3] & ~op[2] & op[1] & op[0] & inst[1] & inst[0];
+    assign opimm = ~op[4] & ~op[3] & op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    assign opreg = ~op[4] & op[3] & op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    assign opsystem = op[4] & op[3] & op[2] & ~op[0] & ~op[0] & inst[1] & inst[0];
 
     logic beq, bne, blt, bge, bltu, bgeu;
     assign beq = branch & funct3_0;
@@ -149,13 +149,12 @@ module DecodeUnit(
     assign info.multop = funct3;
 `endif
 
-    assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & 
-                     ~lb & ~lh & ~lw & ~lbu & ~lhu & ~sb & ~sh & ~sw & 
+    assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & ~jal & ~jalr &
+                     ~lb & ~lh & ~lw & ~lbu & ~lhu & ~sb & ~sh & ~sw & ~auipc & ~lui &
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
                      ~add & ~sub & ~sll & ~slt & ~sltu & ~_xor & ~srl & ~sra & ~_or & ~_and &
                      ~csrrw & ~csrrs & ~csrrc & ~csrrwi & ~csrrsi & ~csrrci & ~ecall & ~ebreak &
                      ~fence & ~mret & ~sret & ~sfence_vma &
-                     ~(inst[0] & inst[1])
 `ifdef DIFFTEST
                      & ~sim_trap
 `endif

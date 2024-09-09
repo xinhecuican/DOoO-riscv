@@ -394,7 +394,7 @@ endinterface
 interface CommitBus;
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
-    logic sfence_vma;
+    logic fence_valid;
     FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
     logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
@@ -405,12 +405,12 @@ interface CommitBus;
     logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
     RobIdx robIdx;
 
-    modport rob(output en, we, sfence_vma, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum
+    modport rob(output en, we, fence_valid, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum
     , robIdx
 );
     modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
     modport mem(input loadNum, storeNum, robIdx);
-    modport csr(input robIdx, fsqInfo, sfence_vma, en);
+    modport csr(input robIdx, fsqInfo, fence_valid, en);
 endinterface
 
 interface CommitWalk;
@@ -615,13 +615,14 @@ endinterface
 interface CsrTlbIO;
     logic `N(`TLB_ASID) asid;
     logic sum;
+    logic mxr;
     logic `N(2) mode;
     logic `N(`TLB_MODE) satp_mode;
     logic `ARRAY(`PMPCFG_SIZE, `MXL) pmpcfg;
     logic `ARRAY(`PMP_SIZE, `MXL) pmpaddr;
 
-    modport csr (output asid, sum, mode, satp_mode, pmpcfg, pmpaddr);
-    modport tlb (input asid, sum, mode, satp_mode, pmpcfg, pmpaddr);
+    modport csr (output asid, sum, mxr, mode, satp_mode, pmpcfg, pmpaddr);
+    modport tlb (input asid, sum, mxr, mode, satp_mode, pmpcfg, pmpaddr);
 endinterface
 
 interface TlbL2IO;

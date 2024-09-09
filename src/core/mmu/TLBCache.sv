@@ -30,6 +30,7 @@ module TLBCache(
 
     typedef struct packed {
         logic req;
+        logic error;
         logic `N(`VADDR_SIZE) vaddr;
         TLBInfo info;
     } RequestBuffer;
@@ -40,7 +41,6 @@ module TLBCache(
     TLBPage #(
         .PN(0),
         .WAY_NUM(1),
-        .TAG_WIDTH(`TLB_VPN * `TLB_PN -`TLB_P0_SET_WIDTH),
         .META_WIDTH(`TLB_P0_BANK),
         .DEPTH(`TLB_P0_SET),
         .BANK(`TLB_P0_BANK)
@@ -50,7 +50,6 @@ module TLBCache(
     TLBPage #(
         .PN(1),
         .WAY_NUM(1),
-        .TAG_WIDTH(`TLB_VPN * (`TLB_PN-1) - `TLB_P1_SET_WIDTH),
         .META_WIDTH(`TLB_P1_BANK),
         .DEPTH(`TLB_P1_SET),
         .BANK(`TLB_P1_BANK)
@@ -61,6 +60,7 @@ module TLBCache(
         req_buf.req <= io.req & ~io.flush;
         req_buf.vaddr <= io.req_addr;
         req_buf.info <= io.info;
+        req_buf.error <= cache_ptw_io.refill_req;
     end
 
     logic `N(`TLB_PN) hit, hit_first, leaf, exception, valid;
@@ -75,8 +75,8 @@ module TLBCache(
     PRSelector #(`TLB_PN) select_hit (hit, hit_first);
 
     logic pn1_exception;
-    TLBExcDetect exc_detect0 (pn0_entry, req_buf.info.source, csr_io, exception[0]);
-    TLBExcDetect exc_detect1 (pn1_entry, req_buf.info.source, csr_io, pn1_exception);
+    TLBExcDetect exc_detect0 (pn0_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mode, exception[0]);
+    TLBExcDetect exc_detect1 (pn1_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mode, pn1_exception);
     assign exception[1] = pn1_exception | (leaf[1] & pn1_io.meta);
 
     logic `ARRAY(`TLB_PN, `PADDR_SIZE) paddr;
@@ -84,9 +84,9 @@ module TLBCache(
     PAddrGen gen_paddr1(pn1_entry, req_buf.vaddr, paddr[1]);
 
     always_ff @(posedge clk)begin
-        io.hit <= req_buf.req & ((|(hit_first & (leaf | exception))) | cache_ptw_io.full) & ~io.flush;
+        io.hit <= req_buf.req & ((|(hit_first & (leaf | exception))) | cache_ptw_io.full | req_buf.error) & ~io.flush;
         io.exception <= |(hit_first & exception);
-        io.error <= (~(|(hit_first & (leaf | exception)))) & cache_ptw_io.full;
+        io.error <= (~(|(hit_first & (leaf | exception)))) & cache_ptw_io.full | req_buf.error;
         io.hit_entry <= valid[0] ? pn0_io.entry : pn1_io.entry;
         io.hit_addr <= req_buf.vaddr;
         io.info_o <= req_buf.info;
@@ -98,7 +98,7 @@ module TLBCache(
         cache_ptw_io.valid <= hit_first;
         cache_ptw_io.paddr <= paddr;
     end
-    assign cache_ptw_io.refill_ready = ~io.req;
+    assign cache_ptw_io.refill_ready = 1'b1;
 
 endmodule
 
@@ -122,11 +122,11 @@ module TLBPage #(
     parameter PN=0,
     parameter WAY_NUM=1,
     parameter META_WIDTH=4,
-    parameter TAG_WIDTH=3,
     parameter DEPTH=64,
     parameter BANK=16,
     parameter ADDR_WIDTH=$clog2(DEPTH),
     parameter BANK_WIDTH=$clog2(BANK),
+    parameter TAG_WIDTH=`TLB_VPN * (`TLB_PN - PN) -ADDR_WIDTH - BANK_WIDTH,
     parameter INFO_WIDTH=TAG_WIDTH+1+META_WIDTH
 )(
     input logic clk,
@@ -180,11 +180,11 @@ generate
         assign way_io[i].en = cache_io.req | fenceReq;
 
         assign way_io[i].idx = fenceReq | fenceWe ? fenceIdx : 
-                               cache_io.req ? cache_io.req_addr`TLB_VPN_IBUS(PN, DEPTH, BANK) : 
-                                              cache_ptw_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
+                               cache_ptw_io.refill_req ? cache_ptw_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK) : 
+                                              cache_io.req_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
         assign rdata[i] = way_io[i].rdata;
-        assign way_io[i].we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN] & ~cache_io.req;
-        assign way_io[i].tag_we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN] & ~cache_io.req | fenceWe;
+        assign way_io[i].we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN];
+        assign way_io[i].tag_we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN] | fenceWe;
         assign way_io[i].wdata = cache_ptw_io.refill_data;
         assign way_io[i].wtag = fenceWe ? {INFO_WIDTH{1'b0}} : {1'b1, unaligned, cache_ptw_io.refill_addr`TLB_VPN_TBUS(PN, DEPTH, BANK)};
     end
@@ -370,10 +370,14 @@ generate
 endgenerate
 endmodule
 
-module TLBExcDetect(
+module TLBExcDetect#(
+    parameter IS_LEAF=0
+)(
     input PTEEntry entry,
     input logic `N(2) source,
-    CsrL2IO.tlb csr_io,
+    input logic mxr,
+    input logic sum,
+    input logic [1: 0] mode,
     output logic exception
 );
     logic leaf;
@@ -381,14 +385,21 @@ module TLBExcDetect(
     assign r = source[0] & ~source[1];
     assign w = source[1] & ~source[0];
     assign x = ~source[0] & ~source[1];
-    assign leaf = entry.r | entry.w | entry.x;
+generate
+    if(IS_LEAF)begin
+        assign leaf = 1'b1;
+    end
+    else begin
+        assign leaf = entry.r | entry.w | entry.x;
+    end
+endgenerate
     assign exception = ~entry.v |
                       (~entry.r & entry.w) |
                       (|entry.rsw) |
                       (leaf & ~((entry.r & r) |
-                              (entry.x & (x | (r & csr_io.mxr))) |
+                              (entry.x & (x | (r & mxr))) |
                               (entry.w & w))) |
-                      (leaf & (((csr_io.mode == 2'b01) & ~csr_io.sum & entry.u) |
-                      ((csr_io.mode == 2'b00) & ~entry.u) |
+                      (leaf & (((mode == 2'b01) & ~sum & entry.u) |
+                      ((mode == 2'b00) & ~entry.u) |
                       (~entry.a | (w & ~entry.d))));
 endmodule

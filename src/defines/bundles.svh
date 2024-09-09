@@ -397,6 +397,9 @@ typedef struct packed {
 typedef struct packed {
     logic g;
     logic u;
+    logic r;
+    logic x;
+    logic exc;
     logic `N(2) size;
     // logic `N(`TLB_ASID) asid;
     VPNAddr vpn;
@@ -430,4 +433,9 @@ typedef struct packed {
     logic `N(2) wpn;
     logic `N(`VADDR_SIZE) waddr;
 } L2TLBResponse;
+
+typedef struct packed {
+    logic req;
+    RobIdx robIdx;
+} FenceReq;
 `endif

@@ -3,7 +3,7 @@
 module ROB(
     input logic clk,
     input logic rst,
-    input logic fence_req,
+    input FenceReq fence_req,
     input BackendRedirectInfo backendRedirect,
     input CSRIrqInfo irqInfo,
     input logic `N(`VADDR_SIZE) exc_pc,
@@ -45,7 +45,6 @@ module ROB(
     logic walk_state;
     logic `N(`ROB_SIZE) wb; // set to 0 when commit, set to 1 when write back
     logic `N(`EXC_WIDTH) exccode `N(`ROB_SIZE);
-    logic `N(`ROB_SIZE) sfence_vma;
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
     logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en_unexc, commit_en, commit_en_n;
@@ -128,16 +127,10 @@ endgenerate
     `SIG_N(fenceBus.fence_end, fence_end_n)
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
-            sfence_vma <= 0;
             fence <= 0;
             fence_redirect <= 0;
         end
         else begin
-            for(int i=0; i<`FETCH_WIDTH; i++)begin
-                if(data_en[i])begin
-                    sfence_vma[dataWIdx[i]] <= dis_io.op[i].di.csrop == `CSR_SFENCE;
-                end
-            end
             if(wb_sfence & ~irqInfo.irq & ~walk_state & ~exc_exist_n)begin
                 fence <= 1'b1;
                 fence_redirect <= 1'b1;
@@ -157,13 +150,13 @@ endgenerate
         end
         else begin
             // en[0] is csr issue queue idx and it's in order
-            if(wbBus.en[0] & sfence_vma[wbBus.robIdx[0].idx] & ~irqInfo.irq)begin
-                wb_sfence <= wbBus.en[0] & sfence_vma[wbBus.robIdx[0].idx];
+            if(wbBus.en[0] & fence_req.req & (wbBus.robIdx[0] == fence_req.robIdx) & ~irqInfo.irq)begin
+                wb_sfence <= wbBus.en[0] & fence_req.req & (wbBus.robIdx[0] == fence_req.robIdx);
             end
             else if((|commit_en_n) | exc_exist_n)begin
                 wb_sfence <= 1'b0;
             end
-            commitBus.sfence_vma <= wb_sfence;
+            commitBus.fence_valid <= wb_sfence & (commit_en[0]) & ~walk_state & ~exc_exist_n;
         end
     end
 
@@ -182,7 +175,12 @@ generate
     assign commitValid = (1 << commit_en_num) - 1;
     assign commit_en_pre = commitValid & wbValid;
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign commit_en_unexc[i] = (&commit_en_pre[i: 0]);
+        if(i == 0)begin
+            assign commit_en_unexc[i] = commit_en_pre[0] & ~fence;
+        end
+        else begin
+            assign commit_en_unexc[i] = (&commit_en_pre[i: 0]) & ~fence & ~wb_sfence;
+        end
     end
     assign exc_en = (excValid | {`COMMIT_WIDTH{irqInfo.irq}});
     assign exc_exist = |(commit_en_unexc & exc_en);
@@ -195,8 +193,7 @@ generate
         end
     end
     PREncoder #(`COMMIT_WIDTH) prencoder_exc_idx (excValid, excIdx);
-    assign commit_en = commit_en_unexc & exc_mask &
-                      {`COMMIT_WIDTH{~fence}} & {{`COMMIT_WIDTH-1{~wb_sfence}}, 1'b1};
+    assign commit_en = commit_en_unexc & exc_mask;
 endgenerate
 
     logic `N($clog2(`COMMIT_WIDTH) + 1) commitNum, commitWeNum, commitLoadNum, commitStoreNum;

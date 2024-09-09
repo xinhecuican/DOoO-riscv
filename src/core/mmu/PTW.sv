@@ -21,7 +21,7 @@ module PTW(
     PTWRequest.ptw ptw_request,
     PTWL2IO.ptw ptw_io
 );
-    typedef enum  { IDLE, WALK_PN1, WB_PN1, WALK_PN0, WB_PN0, WAITING_FLUSH } State;
+    typedef enum  { IDLE, WALK_PN1, WB_PN1, WALK_PN0, WB_PN0 } State;
 `ifdef DIFFTEST
     typedef struct packed {
 `else
@@ -76,7 +76,7 @@ module PTW(
                          {req_buf.vaddr[`TLB_OFFSET+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info, wb_addr};
     assign pn0_io.data_valid = ptw_request.data_valid && (state == WALK_PN0);
     assign pn0_io.ctag = req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)+`DCACHE_BANK_WIDTH];
-    assign pn0_io.wb_ready = ptw_io.ready;
+    assign pn0_io.wb_ready = (state == WB_PN0) & ptw_io.valid & ptw_io.ready;
 
     assign pn1_io.flush = flush;
     assign pn1_io.en = cache_ptw_io.req & (~cache_ptw_io.valid[1] & ~cache_ptw_io.valid[0]);
@@ -87,7 +87,6 @@ module PTW(
 
     assign ptw_request.req = req_buf.req;
     assign ptw_request.paddr = req_buf.paddr;
-
     always_ff @(posedge clk)begin
         if(ptw_request.data_valid)begin
             rdata <= ptw_request.rdata;
@@ -98,33 +97,36 @@ module PTW(
     PAddrGen gen_wb_addr (req_buf.wb_entry, req_buf.vaddr, wb_addr);
 
     logic pn1_unalign;
-    assign pn1_unalign = pn1_leaf & (|req_buf.wb_entry.ppn[1]);
-    TLBExcDetect exc_detect1 (req_buf.wb_entry, req_buf.info[$bits(TLBInfo)-1: 0], csr_io.tlb, pn0_exception);
+    assign pn1_unalign = pn1_leaf & (|req_buf.wb_entry.ppn[0]);
+    TLBExcDetect exc_detect1 (req_buf.wb_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mode, pn0_exception);
     assign pn1_exception = pn0_exception | pn1_unalign;
 
-    always_ff @(posedge clk)begin
-        if(state == WB_PN1)begin
-            ptw_io.valid <= (pn1_exception | pn1_leaf);
-            ptw_io.exception <= pn1_exception;
-            ptw_io.info <= req_buf.info;
-            ptw_io.waddr <= req_buf.vaddr;
-            ptw_io.wpn <= 2'b01;
+    assign ptw_io.waddr = req_buf.vaddr;
+    assign ptw_io.info = req_buf.info;
+    assign ptw_io.entry = req_buf.wb_entry;
+    always_comb begin
+        case(state)
+        WB_PN1: begin
+            ptw_io.wpn = 2'b01;
+            ptw_io.exception = pn1_exception;
+            ptw_io.valid = pn1_leaf | pn1_exception;
         end
-        else if(state == WB_PN0)begin
-            ptw_io.valid <= 1'b1;
-            ptw_io.exception <= pn0_exception;
-            ptw_io.info <= req_buf.info;
-            ptw_io.waddr <= req_buf.vaddr;
-            ptw_io.wpn <= 2'b00;
+        WB_PN0: begin
+            ptw_io.wpn = 2'b00;
+            ptw_io.exception = pn0_exception;
+            ptw_io.valid = req_buf.wb_valid;
         end
-        else begin
-            ptw_io.valid <= 1'b0;
+        default: begin
+            ptw_io.wpn = 2'b00;
+            ptw_io.exception = 1'b0;
+            ptw_io.valid = 0;
         end
+        endcase
     end
 
     logic `N(`VADDR_SIZE) refill_vaddr;
     logic `N(`TLB_PN) refill_pn;
-    logic wb_req;
+    logic wb_req, refill_data_valid;
     assign cache_ptw_io.full = pn0_io.full | pn1_io.full;
     assign cache_ptw_io.refill_req = wb_req;
     assign cache_ptw_io.refill_pn = refill_pn;
@@ -143,7 +145,9 @@ module PTW(
             wb_req <= 0;
         end
         else begin
-            if(ptw_request.data_valid && (state != WAITING_FLUSH))begin
+            if(refill_data_valid &&
+              ((state == WB_PN1 && !pn1_exception) ||
+               (state == WB_PN0 && !pn0_exception)))begin
                 wb_req <= 1'b1;
             end
             else if(cache_ptw_io.refill_ready)begin
@@ -158,13 +162,7 @@ module PTW(
             req_buf <= '{default: 0};
         end
         else if(flush)begin
-            if(state == IDLE || state == WB_PN1 ||
-               state == WB_PN0 || ptw_request.data_valid)begin
-                state <= IDLE;
-               end
-               else begin
-                state <= WAITING_FLUSH;
-            end
+            state <= IDLE;
         end
         else begin
             case(state)
@@ -185,6 +183,7 @@ module PTW(
                 if(pn1_io.valid | pn0_io.valid)begin
                     req_buf.req <= 1'b1;
                 end
+                req_buf.wb_valid <= 1'b0;
             end
             WALK_PN1: begin
                 if(ptw_request.full)begin
@@ -196,7 +195,6 @@ module PTW(
                 if(ptw_request.data_valid)begin
                     state <= WB_PN1;
                     req_buf.wb_entry <= ptw_request.rdata[req_buf.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: `TLB_VPN_BASE(1)]];
-                    req_buf.wb_valid <= 1'b1;
                 end
             end
             WB_PN1: begin
@@ -223,27 +221,20 @@ module PTW(
                 if(ptw_request.data_valid)begin
                     state <= WB_PN0;
                     req_buf.wb_entry <= ptw_request.rdata[req_buf.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: `TLB_VPN_BASE(1)]];
-                    req_buf.wb_valid <= 1'b1;
                 end
             end
             WB_PN0: begin
                 if(pn0_io.wb_valid & ptw_io.ready)begin
+                    req_buf.wb_valid <= 1'b1;
                     req_buf.vaddr <= pn0_io.wb_data[PN0_BIT_SIZE-1: PN0_BIT_SIZE - `VADDR_SIZE];
                     req_buf.paddr <= pn0_io.wb_data[`PADDR_SIZE-1: 0];
                     req_buf.info <= pn0_io.wb_data[`PADDR_SIZE+$bits(TLBInfo)-1: `PADDR_SIZE];
                     req_buf.wb_entry <= rdata[pn0_io.wb_data[PN0_BIT_SIZE-PN0_TAG_SIZE-1: PN0_BIT_SIZE-PN0_TAG_SIZE-`DCACHE_BANK_WIDTH]];
                 end
-                else if(ptw_io.ready)begin
-                    if(req_buf.wb_valid)begin
-                        req_buf.wb_valid <= 1'b0;
-                    end
-                    else begin
-                        state <= IDLE;
-                    end
+                if(~pn0_io.wb_valid & req_buf.wb_valid & ptw_io.ready)begin
+                    req_buf.wb_valid <= 1'b0;
                 end
-            end
-            WAITING_FLUSH:begin
-                if(ptw_request.data_valid)begin
+                if(~pn0_io.wb_valid & ~req_buf.wb_valid)begin
                     state <= IDLE;
                 end
             end

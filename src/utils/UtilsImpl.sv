@@ -240,7 +240,7 @@ module PREncoder2(
 	input logic [1: 0] in,
 	output logic [0: 0] out
 );
-	assign out = in[0];
+	assign out = in[1] & ~in[0];
 endmodule
 
 module PREncoder4 (

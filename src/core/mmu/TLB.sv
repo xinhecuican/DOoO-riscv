@@ -64,8 +64,17 @@ generate
     for(genvar i=0; i<DEPTH; i++)begin
         // assign asid_hit[i] = en[i] & (entrys[i].asid == csr_tlb_io.asid || entrys[i].g);
         assign asid_hit[i] = en[i];
-        assign mode_exc[i] = ((csr_tlb_io.mode == 2'b01) & ~csr_tlb_io.sum & entrys[i].u) |
-                             ((csr_tlb_io.mode == 2'b00) & ~entrys[i].u);
+        if(SOURCE == 2'b01)begin
+            assign mode_exc[i] = ((csr_tlb_io.mode == 2'b01) & ~csr_tlb_io.sum & entrys[i].u) |
+                                 ((csr_tlb_io.mode == 2'b00) & ~entrys[i].u) |
+                                 (~entrys[i].r & ~(entrys[i].x & csr_tlb_io.mxr)) |
+                                 entrys[i].exc;
+        end
+        else begin
+            assign mode_exc[i] = ((csr_tlb_io.mode == 2'b01) & ~csr_tlb_io.sum & entrys[i].u) |
+                             ((csr_tlb_io.mode == 2'b00) & ~entrys[i].u) | entrys[i].exc;
+        end
+        
         always_comb begin
             case(entrys[i].size)
             2'b00: pn_mask[i] = {`TLB_PN{1'b1}};
@@ -75,17 +84,17 @@ generate
             endcase
         end
         for(genvar j=0; j<`TLB_PN; j++)begin
-            assign pn_hits[i][j] = entrys[i].vpn[j] == lookup_addr.vpn[j];
+            assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == lookup_addr.vpn[j];
         end
         assign pn_hit[i] = &(pn_hits[i] | pn_mask[i]);
     end
 endgenerate
     assign hit = asid_hit & pn_hit;
-    Encoder #(DEPTH) encoder_hit (hit, hit_idx);
+    PEncoder #(DEPTH) encoder_hit (hit, hit_idx);
     assign hit_entry = entrys[hit_idx];
 
 
-`define L1_PPN_ASSIGN(i) assign lookup_paddr.ppn``i = pn_mask[hit_idx][i] ? hit_entry.ppn.ppn``i : lookup_addr.vpn[``i];
+`define L1_PPN_ASSIGN(i) assign lookup_paddr.ppn``i = pn_mask[hit_idx][`TLB_PN-1-i] ? hit_entry.ppn.ppn``i : lookup_addr.vpn[``i];
 
     `L1_PPN_ASSIGN(0)
     `L1_PPN_ASSIGN(1)
@@ -137,9 +146,27 @@ endgenerate
     
     assign wentry.g = io.wentry.g;
     assign wentry.u = io.wentry.u;
+    assign wentry.r = io.wentry.r;
+    assign wentry.x = io.wentry.x;
     assign wentry.size = io.wpn;
     assign wentry.vpn = io.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign wentry.ppn = io.wentry.ppn;
+    logic r, w, x;
+    assign x = SOURCE == 2'b00;
+    assign r = SOURCE == 2'b01;
+    assign w = SOURCE == 2'b10;
+generate
+    if(SOURCE == 2'b00)begin
+        assign wentry.exc = ~io.wentry.x;
+    end
+    else if(SOURCE == 2'b01)begin
+        assign wentry.exc = 1'b0;
+    end
+    else if(SOURCE == 2'b10)begin
+        assign wentry.exc = (~io.wentry.w) | (~io.wentry.d);
+    end
+endgenerate
+
 
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -162,7 +189,7 @@ endgenerate
         hit_n <= hit;
     end
     logic `N(ADDR_WIDTH) hit_n_idx;
-    Encoder #(DEPTH) encoder_fence_idx (hit_n, hit_n_idx);
+    PEncoder #(DEPTH) encoder_fence_idx (hit_n, hit_n_idx);
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             fenceState <= IDLE;

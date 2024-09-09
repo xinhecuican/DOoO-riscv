@@ -42,7 +42,7 @@ generate
         assign ltlb_io[i].vaddr = tlb_lsu_io.laddr[i];
         assign ltlb_io[i].flush = tlb_lsu_io.flush;
         
-        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception &  (tlb_l2_io0.info_o.source != 2'b00) & ~flush0;
+        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
         assign ltlb_io[i].widx = replace_io.miss_way;
         assign ltlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign ltlb_io[i].wentry = tlb_l2_io0.entry;
@@ -64,7 +64,7 @@ generate
         assign stlb_io[i].vaddr = tlb_lsu_io.saddr[i];
         assign stlb_io[i].flush = tlb_lsu_io.flush;
 
-        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception & (tlb_l2_io0.info_o.source != 2'b00) & ~flush1;
+        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
         assign stlb_io[i].widx = replace_io.miss_way;
         assign stlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign stlb_io[i].wentry = tlb_l2_io0.entry;
@@ -99,7 +99,7 @@ generate
             lidx[i] <= tlb_lsu_io.lidx[i];
         end
     end
-    PEncoder #(`LOAD_PIPELINE) encoder_lreq (lreq, lreq_idx);
+    PREncoder #(`LOAD_PIPELINE) encoder_lreq (lreq, lreq_idx);
     always_ff @(posedge clk)begin
         lreq_s2 <= |lreq;
         lreq_addr_s2 <= lvaddr[lreq_idx];
@@ -125,7 +125,7 @@ generate
             sidx[i] <= tlb_lsu_io.sidx[i];
         end
     end
-    PEncoder #(`STORE_PIPELINE) encoder_sreq (sreq, sreq_idx);
+    PREncoder #(`STORE_PIPELINE) encoder_sreq (sreq, sreq_idx);
     always_ff @(posedge clk)begin
         sreq_s2 <= |sreq;
         sreq_addr_s2 <= svaddr[sreq_idx];

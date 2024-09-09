@@ -283,8 +283,16 @@ endgenerate
                 end
             end
 
-            if(io.ptw_req & (remain_valid[0] & ~rhit_combine[0]))begin
-                ptw_en[freeIdx[0]] <= 1'b1;
+            if(redirect_n)begin
+                ptw_en <= 0;
+            end
+            else begin
+                if(io.ptw_req & (remain_valid[0] & ~rhit_combine[0]))begin
+                    ptw_en[freeIdx[0]] <= 1'b1;
+                end
+                if(req_last)begin
+                    ptw_en[head] <= 1'b0;
+                end
             end
 
             if(io.wen & ~rlast & ~req_last & (write_remain_valid & ~whit_combine))begin

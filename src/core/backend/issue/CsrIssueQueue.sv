@@ -11,7 +11,7 @@ module CsrIssueQueue(
     BackendCtrl backendCtrl,
     FenceBus.csr fenceBus,
     output logic `N(32) trapInst,
-    output logic fence_req
+    output FenceReq fence_req
 );
 
     typedef struct {
@@ -33,8 +33,7 @@ module CsrIssueQueue(
     logic `N(`CSR_ISSUE_SIZE) dirTable;
     logic full;
     logic enqueue;
-    CsrIssueBundle rdata, rdata_n;
-    CsrIssueBundle bundle;
+    CsrIssueBundle rdata;
     IssueStatusBundle status;
     StatusEntry statush, status_n;
     RobIdx writeRobIdx;
@@ -45,7 +44,6 @@ module CsrIssueQueue(
     assign enqueue = dis_csr_io.en & ~full & ~backendCtrl.redirect;
     assign head_n = head + 1;
     assign tail_n = tail + 1;
-    assign bundle = dis_csr_io.data;
     assign status = dis_csr_io.status;
     assign statush = status_ram[head];
     assign select_en = (head != tail || (hdir ^ tdir)) &&
@@ -126,6 +124,15 @@ endgenerate
         end
     end
 
+    function logic detectFence(input CsrIssueBundle bundle);
+                // sfence.vma, fence, fence.i
+        return bundle.csrop[3] |
+                // mstatus, mpp need fence, usually sfence.vma followed with w satp
+               (~bundle.csrop[3] &
+               ((bundle.csrid[7: 0] == 8'h00) |
+                (bundle.csrid[11: 0] >= `CSRID_pmpcfg && bundle.csrid[11: 0] < 12'h3f0)));
+    endfunction
+
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             state <= IDLE;
@@ -133,13 +140,17 @@ endgenerate
             head <= 0;
             hdir <= 0;
             trapInst <= 0;
+            fence_req <= 0;
         end
         else if(backendCtrl.redirect & ~(|valid))begin
             state <= IDLE;
+            fence_req.req <= 1'b0;
         end
         else begin
             if(wakeup_en)begin
                 trapInst <= rdata.inst;
+                fence_req.robIdx <= writeRobIdx;
+                fence_req.req <= detectFence(rdata);
             end
             case(state)
             IDLE:begin
@@ -153,6 +164,7 @@ endgenerate
                     state <= IDLE;
                     head <= head_n;
                     hdir <= head[`CSR_ISSUE_WIDTH-1] & ~head_n[`CSR_ISSUE_WIDTH-1] ? ~hdir : hdir;
+                    fence_req.req <= 1'b0;
                 end
             end
             endcase
@@ -180,10 +192,15 @@ endgenerate
     end
 
 // fence
+    typedef struct packed {
+        logic sfence_vma;
+        logic csr;
+    } FenceType;
     logic sfence_vma, vma_clear_all;
     FsqIdxInfo fence_fsqInfo;
     logic `N(`PREDICTION_WIDTH+1) fsq_offset_n;
     RobIdx preRobIdx;
+    FenceType fence_type;
 
     assign fsq_offset_n = commitBus.fsqInfo[0].offset + 1;
     assign fence_fsqInfo.idx = commitBus.fsqInfo[0].idx + fsq_offset_n[`PREDICTION_WIDTH];
@@ -192,6 +209,13 @@ endgenerate
 
     LoopSub #(`ROB_WIDTH, 1) sub_rob_idx (1'b1, commitBus.robIdx, preRobIdx);
 
+
+    always_ff @(posedge clk)begin
+        if(wakeup_en)begin
+            fence_type.sfence_vma <= rdata.csrop == `CSR_SFENCE;
+            fence_type.csr <= ~rdata.csrop[3];
+        end
+    end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             fenceBus.store_flush <= 1'b0;
@@ -203,12 +227,14 @@ endgenerate
             fenceBus.mmu_flush <= 0;
         end
         else begin
-            if(commitBus.en[0] & commitBus.sfence_vma)begin
-                fenceBus.store_flush <= 1'b1;
-                sfence_vma <= 1'b1;
+            if(commitBus.fence_valid)begin
                 fenceBus.preRobIdx <= preRobIdx;
                 fenceBus.robIdx <= commitBus.robIdx;
                 fenceBus.fsqInfo <= fence_fsqInfo;
+            end
+            if(commitBus.fence_valid & fence_type.sfence_vma)begin
+                fenceBus.store_flush <= 1'b1;
+                sfence_vma <= 1'b1;
             end
             if(fenceBus.store_flush & fenceBus.store_flush_end)begin
                 fenceBus.store_flush <= 1'b0;
@@ -217,14 +243,14 @@ endgenerate
                 sfence_vma <= 1'b0;
             end
             fenceBus.mmu_flush <= {3{sfence_vma & fenceBus.store_flush_end}};
-            fenceBus.fence_end <= fenceBus.mmu_flush_end;
+            fenceBus.fence_end <= fenceBus.mmu_flush_end | (commitBus.fence_valid & fence_type.csr);
         end
     end
     
 generate
     for(genvar i=0; i<3; i++)begin
         always_ff @(posedge clk)begin
-            if(commitBus.en[0] & commitBus.sfence_vma)begin
+            if(commitBus.fence_valid & fence_type.sfence_vma)begin
                 fenceBus.mmu_flush_all[i] <= vma_clear_all;
                 fenceBus.vma_vaddr[i] <= csr_rdata[0][`VADDR_SIZE-1: 0];
                 fenceBus.vma_asid[i] <= csr_rdata[1][`TLB_ASID-1: 0];

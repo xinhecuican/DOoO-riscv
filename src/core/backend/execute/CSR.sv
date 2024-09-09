@@ -504,6 +504,7 @@ endgenerate                                                             \
         ``name``_pmpaddr_en <= pmpaddr_s1; \
         ``name``_wdata <= wdata_s1; \
         name.sum <= mstatus.sum; \
+        name.mxr <= mstatus.mxr; \
         name.asid <= satp.asid; \
         name.satp_mode <= satp.mode; \
     end \

@@ -559,7 +559,7 @@ endgenerate
         .WIDTH(`ROB_WIDTH),
         .DATA_WIDTH(`VADDR_SIZE)
     ) select_lexc_oldest(
-        .en(lexc_valid),
+        .en(lexc_valid & ~redirect_clear_s4),
         .cmp(lexc_robIdx),
         .data_i(lexc_vaddr),
         .en_o(lexc_valid_o),
@@ -574,7 +574,7 @@ endgenerate
         .WIDTH(`ROB_WIDTH),
         .DATA_WIDTH(`VADDR_SIZE)
     ) select_sexc_oldest(
-        .en(sexc_valid),
+        .en(sexc_valid & ~store_redirect_s4),
         .cmp(sexc_robIdx),
         .data_i(sexc_vaddr),
         .en_o(sexc_valid_o),
@@ -591,8 +591,10 @@ endgenerate
     assign exc_robIdx_o = lexc_valid_o & ls_exc_older | lexc_valid_o & ~sexc_valid_o ? lexc_robIdx_o : sexc_robIdx_o;
     assign exc_vaddr_o = lexc_valid_o & ls_exc_older | lexc_valid_o & ~sexc_valid_o ? lexc_vaddr_o : sexc_vaddr_o;
 
-    logic exc_redirect_older, exc_pipline_older;
+    logic exc_redirect_older, exc_pipline_older, exc_redirect_equal, exc_redirect;
     LoopCompare #(`ROB_WIDTH) cmp_exc_older (backendCtrl.redirectIdx, exc_idx, exc_redirect_older);
+    assign exc_redirect_equal = exc_idx == backendCtrl.redirectIdx;
+    assign exc_redirect = exc_redirect_older | exc_redirect_equal;
     LoopCompare #(`ROB_WIDTH) cmp_exc_pipe_older (exc_robIdx_o, exc_idx, exc_pipline_older);
 
     always_ff @(posedge clk, posedge rst)begin
@@ -601,7 +603,7 @@ endgenerate
             exc_idx <= 0;
             exc_vaddr <= 0;
         end
-        else if(backendCtrl.redirect & exc_redirect_older)begin
+        else if(backendCtrl.redirect & exc_redirect)begin
             exc_valid <= 1'b0;
         end
         else if(exc_valid_o)begin
