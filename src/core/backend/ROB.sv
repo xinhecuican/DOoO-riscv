@@ -246,7 +246,7 @@ endgenerate
 // exception
 
     always_ff @(posedge clk)begin
-        exc_exist_n <= exc_exist && !walk_state && initReady;
+        exc_exist_n <= exc_exist && !walk_state && initReady & ~exc_exist_n;
         irq_n <= irqInfo.irq;
         irq_deleg_n <= irqInfo.deleg;
         excIdx_n <= excIdx;
