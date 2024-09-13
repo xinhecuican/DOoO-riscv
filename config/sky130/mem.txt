@@ -1,0 +1,121 @@
+ram block \RAM_11x2048_1R1W_ {
+    abits 11;
+    width 11;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}
+
+ram block \RAM_156x32_1R1W_ {
+    abits 5;
+    width 156;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}
+
+ram block \RAM_32x64_1R1W_ {
+    abits 6;
+    width 32;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}
+
+ram block \RAM_32x64_1R1W_8 {
+    abits 6;
+    width 32;
+    byte 8;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrbe_separate;
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}
+
+ram block \RAM_4x4096_1R1W_ {
+    abits 12;
+    width 4;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}
+
+ram block \RAM_54x32_1R1W_ {
+    abits 5;
+    width 54;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}
+
+ram block \RAM_60x32_1R1W_ {
+    abits 5;
+    width 60;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}
+
+ram block \RAM_68x256_1R1W_ {
+    abits 8;
+    width 68;
+    cost 64;
+    init none;
+    port sw "W" {
+        clock posedge "clk";
+        wrtrans "R" old;
+    }
+    port sr "R" {
+        clock posedge "clk";
+        rden;
+    }
+}

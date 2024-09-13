@@ -164,6 +164,7 @@ module PTW(
         end
         else if(flush)begin
             state <= IDLE;
+            req_buf.req <= 1'b0;
         end
         else begin
             case(state)

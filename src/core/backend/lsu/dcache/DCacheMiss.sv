@@ -118,7 +118,7 @@ generate
                          |rfree_eq[i] ? freeIdx[rfree_idx[i]] : freeIdx[i];
 
         always_ff @(posedge clk)begin
-            io.rfull[i] <= io.ren[i] & ((~(mshr_remain_valid[i] | io.ptw_req)) | ((~remain_valid[i]) & (~rhit_combine[i])));
+            io.rfull[i] <= (io.ren[i]) & ((~(mshr_remain_valid[i] | io.ptw_req)) | ((~remain_valid[i]) & (~rhit_combine[i])));
         end
 
         assign free_en[i] = io.ren[i] & ((mshr_remain_valid[i] | io.ptw_req) & remain_valid[i] & ~rhit_combine[i]);

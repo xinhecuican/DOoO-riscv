@@ -347,7 +347,7 @@ endgenerate
     logic `ARRAY(`STORE_PIPELINE, `TLB_TAG) sptag;
     logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE) spaddr;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) storeAddrNext;
-    logic `ARRAY(`STORE_PIPELINE, 4) smask;
+    logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) smask;
     logic `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) dis_sl_older;
     logic `N(`STORE_PIPELINE) store_en;
     StoreIssueData `N(`STORE_PIPELINE) store_issue_data;

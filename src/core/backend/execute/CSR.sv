@@ -95,13 +95,13 @@ module CSR(
     LoopCompare #(`ROB_WIDTH) cmp_redirect_older (issue_csr_io.status.robIdx, backendCtrl.redirectIdx, redirect_older);
     LoopCompare #(`ROB_WIDTH) cmp_redirect_s1_older (robIdx_s1, backendCtrl.redirectIdx, redirect_s1_older);
     LoopCompare #(`ROB_WIDTH) cmp_redirect_s2_older (robIdx_s2, backendCtrl.redirectIdx, redirect_s2_older);
-    assign mode_valid = mode >= issue_csr_io.bundle.csrid[11: 10];
+    assign mode_valid = mode >= issue_csr_io.bundle.csrid[9: 8];
     assign we = ~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
                  (~backendCtrl.redirect | redirect_older) & 
                  issue_csr_io.en & mode_valid &
                  (csrrw | csrrs | csrrc);
     assign wen = cmp_eq  & {`CSR_NUM{we}};
-    assign s_map = issue_csr_io.bundle.csrid[11: 10] == 2'b01;
+    assign s_map = issue_csr_io.bundle.csrid[9: 8] == 2'b01;
     assign we_o = we_s2 & (~backendCtrl.redirect | redirect_s2_older);
     assign wen_o = wen_s2 & {`CSR_NUM{(~backendCtrl.redirect) | redirect_s2_older}};
     always_ff @(posedge clk)begin

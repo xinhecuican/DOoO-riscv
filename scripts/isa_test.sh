@@ -15,7 +15,7 @@ rv32m=(
 rv32m_prefix="utils/riscv-tests/isa/rv32um-p-"
 
 rv32s=(
-    "csr" "sbreak" "scall" "ill_csr" "dirty" "laf"
+    "csr" "sbreak" "scall" "ill_csr" "dirty" "lam" "wfi"
 )
 rv32s_prefix="utils/riscv-tests/isa/rv32si-p-"
 

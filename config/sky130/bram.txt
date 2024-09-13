@@ -1,0 +1,117 @@
+bram RAM_32x64_1R1W_8
+    init 0
+    abits 6
+    dbits 32
+    groups 2
+    ports 1 1
+    wrmode 1 0
+    enable 4 1
+    transp 0 0
+    clocks 1 1
+    clkpol 1 1
+endbram
+match RAM_32x64_1R1W_8
+    min efficiency 85
+    or_next_if_better
+endmatch
+
+bram RAM_32x64_1R1W
+    init 0
+    abits 6
+    dbits 32
+    groups 2
+    ports 1 1
+    wrmode 1 0
+    enable 1 1
+    transp 0 0
+    clocks 1 1
+    clkpol 1 1
+endbram
+match RAM_32x64_1R1W
+    min efficiency 85
+    or_next_if_better
+endmatch
+
+bram RAM_54x32_1R1W
+    init 0
+    abits 5
+    dbits 54
+    groups 2
+    ports 1 1
+    wrmode 1 0
+    enable 1 1
+    transp 0 0
+    clocks 1 1
+    clkpol 1 1
+endbram
+match RAM_54x32_1R1W
+    min efficiency 80
+    or_next_if_better
+endmatch
+
+bram RAM_60x32_1R1W
+    init 0
+    abits 5
+    dbits 60
+    groups 2
+    ports 1 1
+    wrmode 1 0
+    enable 1 1
+    transp 0 0
+    clocks 1 1
+    clkpol 1 1
+endbram
+match RAM_60x32_1R1W
+    min efficiency 80
+    or_next_if_better
+endmatch
+
+bram RAM_68x256_1R1W
+    init 0
+    abits 8
+    dbits 68
+    groups 2
+    ports 1 1
+    wrmode 1 0
+    enable 1 1
+    transp 0 0
+    clocks 1 1
+    clkpol 1 1
+endbram
+match RAM_68x256_1R1W
+    min efficiency 80
+    or_next_if_better
+endmatch
+
+bram RAM_4x4096_1R1W
+    init 0
+    abits 12
+    dbits 4
+    groups 2
+    ports 1 1
+    wrmode 1 0
+    enable 1 1
+    transp 0 0
+    clocks 1 1
+    clkpol 1 1
+endbram
+match RAM_4x4096_1R1W
+    min efficiency 80
+    or_next_if_better
+endmatch
+
+bram RAM_11x2048_1R1W
+    init 0
+    abits 11
+    dbits 11
+    groups 2
+    ports 1 1
+    wrmode 1 0
+    enable 1 1
+    transp 0 0
+    clocks 1 1
+    clkpol 1 1
+endbram
+match RAM_11x2048_1R1W
+    min efficiency 80
+endmatch
