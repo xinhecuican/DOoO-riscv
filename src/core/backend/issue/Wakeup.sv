@@ -12,7 +12,7 @@ module Wakeup(
     IssueWakeupIO.wakeup int_wakeup_io,
     IssueWakeupIO.wakeup load_wakeup_io,
     IssueWakeupIO.wakeup csr_wakeup_io,
-`ifdef EXT_M
+`ifdef RVM
     IssueWakeupIO.wakeup mult_wakeup_io,
     IssueWakeupIO.wakeup div_wakeup_io,
 `endif
@@ -32,7 +32,7 @@ generate
             assign int_we[i] = csr_wakeup_io.en ? csr_wakeup_io.we : int_wakeup_io.we[i];
             assign int_rd[i] = csr_wakeup_io.en ? csr_wakeup_io.rd : int_wakeup_io.rd[i];
         end
-`ifdef EXT_M
+`ifdef RVM
         else if(i == 2)begin
             assign int_wakeup_io.ready[i] = ~mult_wakeup_io.en;
             assign int_en[i] = int_wakeup_io.en[i] | mult_wakeup_io.en;

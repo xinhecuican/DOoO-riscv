@@ -401,8 +401,8 @@ endgenerate                                                             \
 // interrupt
     logic msip, ssip, mtip, stip, meip, seip;
     logic msip_s1, mtip_s1, meip_s1;
-    logic `N(`MXL) irq_valid;
-    logic `N(`MXL) mirq_valid, sirq_valid, irq_valid_all;
+    logic `N(7) deleg_s, irq_enable, irq_valid;
+    logic `N(3) irqIdx;
 
     assign mip = '{
         meip: meip,
@@ -413,24 +413,31 @@ endgenerate                                                             \
         stip: stip,
         default: 0
     };
-    assign irq_valid = mip & mie;
-    assign mirq_valid = irq_valid & ~mideleg;
-    assign sirq_valid = irq_valid & mideleg;
-    assign irqInfo.irq = (mode_m & mstatus.mie & (|irq_valid) | 
-                    ~mode_m & (|mirq_valid)) |
-                    (mode_s & mstatus.sie | mode_u) & (|sirq_valid);
-    assign irqInfo.deleg = (mode_s & mstatus.sie | mode_u) & (|sirq_valid);
-    assign irqInfo.exccode = irq_valid[`EXCI_MEXT] ? `EXCI_MEXT :
-                         irq_valid[`EXCI_SEXT] ? `EXCI_SEXT :
-                         irq_valid[`EXCI_MTIMER] ? `EXCI_MTIMER :
-                         irq_valid[`EXCI_STIMER] ? `EXCI_STIMER :
-                         irq_valid[`EXCI_MSI] ? `EXCI_MSI :
-                         irq_valid[`EXCI_SSI] ? `EXCI_SSI : `EXC_NONE;
-
-    always_ff @(posedge clk, posedge rst)begin
+generate
+    for(genvar i=0; i<7; i++)begin
+        localparam idx = (i << 1) + 1;
+        assign deleg_s[i] =  mideleg[idx] & mip[idx];
+        assign irq_enable[i] = deleg_s[i] ? (mode == `S_MODE) & mstatus.sie | (mode == `U_MODE) :
+                               (mode == `M_MODE) & mstatus.mie | (mode < `M_MODE);
+        assign irq_valid[i] = mie[idx] & mip[idx] & irq_enable[i];
+    end
+endgenerate
+    PEncoder #(7) encoder_irq (irq_valid, irqIdx);
+    assign irqInfo.irq = |irq_valid;
+    assign irqInfo.deleg = deleg_s[irqIdx];
+    assign irqInfo.exccode = irq_valid[6] ? `EXCI_COUNTEROV :
+                             irq_valid[5] ? `EXCI_MEXT :
+                             irq_valid[4] ? `EXCI_SEXT :
+                             irq_valid[3] ? `EXCI_MTIMER :
+                             irq_valid[2] ? `EXCI_STIMER :
+                             irq_valid[1] ? `EXCI_MSI :
+                             irq_valid[0] ? `EXCI_SSI : `EXC_NONE;
+    always_ff @(posedge clk)begin
         msip <= msip_s1;
         mtip <= mtip_s1;
         meip <= meip_s1;
+    end
+    always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             msip_s1 <= 0;
             mtip_s1 <= 0;
@@ -442,7 +449,7 @@ endgenerate                                                             \
             msip_s1 <= clint_io.soft_irq;
             mtip_s1 <= clint_io.timer_irq;
             meip_s1 <= ext_irq;
-            if(wen_o[mip_id])begin
+            if(wen_o[mip_id] | wen_o[sip_id])begin
                 ssip <= wdata_s2[1];
                 stip <= wdata_s2[5];
                 seip <= wdata_s2[9];

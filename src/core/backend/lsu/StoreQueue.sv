@@ -224,6 +224,7 @@ endgenerate
     assign saxi_io.maw.qos = 0;
     assign saxi_io.maw.region = 0;
     assign saxi_io.maw.user = 0;
+    assign saxi_io.maw.atop = 0;
     assign saxi_io.mw.data = uncache_data;
     assign saxi_io.mw.strb = uncache_strb;
     assign saxi_io.mw.last = 1'b1;

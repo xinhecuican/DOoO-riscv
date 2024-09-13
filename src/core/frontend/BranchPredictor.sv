@@ -110,6 +110,7 @@ module BranchPredictor(
         .result_o(s2_result_out)
     );
     assign s1_meta.ubtb = ubtb_io.meta;
+    assign s1_meta.tage = 0;
     assign s2_meta_out.ubtb = s2_meta_in.ubtb;
     assign s2_meta_out.tage = tage_io.meta;
 

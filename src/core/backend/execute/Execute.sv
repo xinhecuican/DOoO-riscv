@@ -8,7 +8,7 @@ module Execute(
     IssueMultIO.mult mult_exu_io,
     WriteBackIO.fu alu_wb_io,
     WriteBackBus.wb wbBus,
-`ifdef EXT_M
+`ifdef RVM
     WriteBackIO.fu mult_wb_io,
     IssueWakeupIO.issue mult_wakeup_io,
     WriteBackIO.fu div_wb_io,
@@ -60,7 +60,7 @@ endgenerate
         .io(branch_ctrl_io)
     );
 
-`ifdef EXT_M
+`ifdef RVM
 generate
     for(genvar i=0; i<`MULT_SIZE; i++)begin
         MultUnit mult(

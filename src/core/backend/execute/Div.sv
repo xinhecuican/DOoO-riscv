@@ -100,7 +100,7 @@ module DivUnit(
             ready <= 1'b1;
         end
         else begin
-            if(ready & clean)begin
+            if(clean)begin
                 ready <= 1'b1;
             end
             else if(en_i)begin

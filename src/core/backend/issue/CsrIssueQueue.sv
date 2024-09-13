@@ -129,7 +129,7 @@ endgenerate
         return bundle.csrop[3] |
                 // mstatus, mpp need fence, usually sfence.vma followed with w satp
                (~bundle.csrop[3] &
-               ((bundle.csrid[7: 0] == 8'h00) |
+               ((bundle.csrid == `CSRID_mstatus) | (bundle.csrid == `CSRID_sstatus) |
                 (bundle.csrid[11: 0] >= `CSRID_pmpcfg && bundle.csrid[11: 0] < 12'h3f0)));
     endfunction
 
@@ -194,9 +194,13 @@ endgenerate
 // fence
     typedef struct packed {
         logic sfence_vma;
+        logic fence;
         logic csr;
+`ifdef EXT_FENCEI
+        logic fencei;
+`endif
     } FenceType;
-    logic sfence_vma, vma_clear_all;
+    logic sfence_vma, vma_clear_all, fence, fencei;
     FsqIdxInfo fence_fsqInfo;
     logic `N(`PREDICTION_WIDTH+1) fsq_offset_n;
     RobIdx preRobIdx;
@@ -214,12 +218,21 @@ endgenerate
         if(wakeup_en)begin
             fence_type.sfence_vma <= rdata.csrop == `CSR_SFENCE;
             fence_type.csr <= ~rdata.csrop[3];
+            fence_type.fence <= rdata.csrop == `CSR_FENCE;
+`ifdef EXT_FENCEI
+            fence_type.fencei <= rdata.csrop == `CSR_FENCEI;
+`endif
         end
     end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             fenceBus.store_flush <= 1'b0;
+            fenceBus.inst_flush <= 1'b0;
             sfence_vma <= 1'b0;
+            fence <= 1'b0;
+`ifdef EXT_FENCEI
+            fencei <= 1'b0;
+`endif
             fenceBus.fence_end <= 1'b0;
             fenceBus.preRobIdx <= 0;
             fenceBus.robIdx <= 0;
@@ -232,18 +245,42 @@ endgenerate
                 fenceBus.robIdx <= commitBus.robIdx;
                 fenceBus.fsqInfo <= fence_fsqInfo;
             end
-            if(commitBus.fence_valid & fence_type.sfence_vma)begin
+            if(commitBus.fence_valid & (fence_type.sfence_vma | fence_type.fence))begin
                 fenceBus.store_flush <= 1'b1;
+            end
+            if(commitBus.fence_valid & fence_type.sfence_vma)begin
                 sfence_vma <= 1'b1;
             end
+            if(commitBus.fence_valid & fence_type.fence)begin
+                fence <= 1'b1;
+            end
+`ifdef EXT_FENCEI
+            if(commitBus.fence_valid & fence_type.fencei)begin
+                fencei <= 1'b1;
+            end
+            fenceBus.inst_flush <= commitBus.fence_valid & fence_type.fencei;
+            if(fencei & fenceBus.inst_flush_end)begin
+                fencei <= 1'b0;
+            end
+`endif
             if(fenceBus.store_flush & fenceBus.store_flush_end)begin
                 fenceBus.store_flush <= 1'b0;
             end
             if(sfence_vma & fenceBus.store_flush_end)begin
                 sfence_vma <= 1'b0;
             end
+            if(fence & fenceBus.store_flush_end)begin
+                fence <= 1'b0;
+            end
+
             fenceBus.mmu_flush <= {3{sfence_vma & fenceBus.store_flush_end}};
-            fenceBus.fence_end <= fenceBus.mmu_flush_end | (commitBus.fence_valid & fence_type.csr);
+            fenceBus.fence_end <= fenceBus.mmu_flush_end |
+                                  (commitBus.fence_valid & fence_type.csr) |
+                                  (fence & fenceBus.store_flush_end)
+`ifdef EXT_FENCEI
+                                  | fenceBus.inst_flush_end;
+`endif
+;
         end
     end
     

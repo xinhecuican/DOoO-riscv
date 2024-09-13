@@ -24,26 +24,26 @@ module Backend(
     DisIssueIO #(.PORT_NUM(`LOAD_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_load_io();
     DisIssueIO #(.PORT_NUM(`STORE_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_store_io();
     DisIssueIO #(.PORT_NUM(1), .DATA_SIZE($bits(CsrIssueBundle))) dis_csr_io();
-`ifdef EXT_M
+`ifdef RVM
     DisIssueIO #(.PORT_NUM(`MULT_DIS_PORT), .DATA_SIZE($bits(MultIssueBundle))) dis_mult_io();
 `endif
     IssueRegIO #(`ALU_SIZE, `ALU_SIZE * 2) int_reg_io();
     IssueRegIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_reg_io();
     IssueRegIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_reg_io();
     IssueRegIO #(1, 2) csr_reg_io();
-`ifdef EXT_M
+`ifdef RVM
     IssueRegIO #(`MULT_SIZE, `MULT_SIZE * 2) mult_reg_io();
 `endif
     WakeupBus wakeupBus();
     IssueWakeupIO #(`ALU_SIZE) int_wakeup_io();
     IssueWakeupIO #(`LOAD_PIPELINE) load_wakeup_io();
     IssueWakeupIO #(1) csr_wakeup_io();
-`ifdef EXT_M
+`ifdef RVM
     IssueWakeupIO #(`MULT_SIZE) mult_wakeup_io();
     IssueWakeupIO #(`MULT_SIZE) div_wakeup_io();
 `endif
     IssueCSRIO issue_csr_io();
-`ifdef EXT_M
+`ifdef RVM
     IssueMultIO mult_exu_io();
 `endif
     WriteBackIO #(1) csr_wb_io();
@@ -55,7 +55,7 @@ module Backend(
     RobRedirectIO rob_redirect_io();
     WriteBackIO #(`ALU_SIZE) alu_wb_io();
     WriteBackIO #(`LSU_SIZE) lsu_wb_io();
-`ifdef EXT_M
+`ifdef RVM
     WriteBackIO #(`MULT_SIZE) mult_wb_io();
     WriteBackIO #(`MULT_SIZE) div_wb_io();
 `endif
@@ -96,6 +96,10 @@ module Backend(
     assign fenceBus_o.vma_vaddr = fenceBus.vma_vaddr;
     assign fenceBus_o.vma_asid = fenceBus.vma_asid;
     assign fenceBus.mmu_flush_end = fenceBus_o.mmu_flush_end;
+`ifdef EXT_FENCEI
+    assign fenceBus_o.inst_flush = fenceBus.inst_flush;
+    assign fenceBus.inst_flush_end = fenceBus_o.inst_flush_end;
+`endif
 
     Decode decode(.*,
                   .insts(ifu_backend_io.fetchBundle));
@@ -113,7 +117,7 @@ module Backend(
         .issue_exu_io(int_exu_io)
     );
     CsrIssueQueue csr_issue_queue(.*);
-`ifdef EXT_M
+`ifdef RVM
     MultIssueQueue mult_issue_queue(.*);
 `endif
     LSU lsu(

@@ -22,7 +22,13 @@ module CPUCore (
     CsrTlbIO csr_itlb_io();
     FenceBus fenceBus();
 
-    IFU ifu(.*, .axi_io(icache_io));
+
+    IFU ifu(.*, .axi_io(icache_io)
+`ifdef EXT_FENCEI
+    ,.fenceReq(fenceBus.inst_flush),
+    .fenceEnd(fenceBus.inst_flush_end)
+`endif
+    );
     Backend backend(.*,
                     .commitBus_out(commitBus),
                     .axi_io(dcache_io),

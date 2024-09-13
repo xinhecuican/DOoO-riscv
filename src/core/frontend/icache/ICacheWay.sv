@@ -9,12 +9,11 @@ interface ICacheWayIO;
     logic `N(`ICACHE_SET_WIDTH) tagv_windex;
     logic `ARRAY(2,(`ICACHE_TAG+1)) tagv;
     logic `N(`ICACHE_TAG+1) tagv_wdata;
-    logic `N(`ICACHE_BANK * `ICACHE_SET_WIDTH) index;
     logic `N(`ICACHE_BANK) we;
-    logic `ARRAY(`ICACHE_BANK, `ICACHE_SET_WIDTH) windex;
+    logic `ARRAY(`ICACHE_BANK, `ICACHE_SET_WIDTH) index;
     logic `ARRAY(`ICACHE_BANK, 32) data;
     logic `ARRAY(`ICACHE_BANK, 32) wdata;
-    modport way(input en, tagv_en, tagv_we, span, tagv_index, tagv_windex, tagv_wdata, index, we, windex, wdata, output tagv, data);
+    modport way(input en, tagv_en, tagv_we, span, tagv_index, tagv_windex, tagv_wdata, index, we, wdata, output tagv, data);
 endinterface
 
 module ICacheWay(
@@ -46,21 +45,17 @@ module ICacheWay(
 
     generate;
         for(genvar i=0; i<`ICACHE_BANK; i++)begin
-            MPRAM #(
+            SPRAM #(
                 .WIDTH(32),
                 .DEPTH(`ICACHE_SET),
-                .READ_PORT(1),
-                .WRITE_PORT(1)
-            ) bank(
+                .READ_LATENCY(1)
+            ) bank (
                 .clk(clk),
-                .rst(rst),
                 .en(io.en[i]),
-                .waddr(io.windex[i]),
-                .raddr(io.index[i*`ICACHE_SET_WIDTH+: `ICACHE_SET_WIDTH]),
+                .addr(io.index[i]),
                 .we(io.we[i]),
                 .wdata(io.wdata[i]),
-                .rdata(io.data[i]),
-                .ready()
+                .rdata(io.data[i])
             );
         end
     endgenerate

@@ -10,6 +10,10 @@ module IFU (
     TlbL2IO.tlb itlb_io,
     CsrTlbIO.tlb csr_itlb_io,
     FenceBus.mmu fenceBus
+`ifdef EXT_FENCEI
+    ,input logic fenceReq,
+    output logic fenceEnd
+`endif
 );
     BpuFsqIO bpu_fsq_io();
     FsqCacheIO fsq_cache_io();

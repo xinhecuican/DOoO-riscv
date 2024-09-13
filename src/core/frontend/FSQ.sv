@@ -720,7 +720,7 @@ generate
         end
     end
 endgenerate
-    ParallelAdder #(1, `SLOT_NUM) adder_slotOldAlloc (slotOldAlloc, slotAlloc);
+    ParallelOR #(`SLOT_NUM, `SLOT_NUM) or_slotOldAlloc (slotOldAlloc, slotAlloc);
     always_comb begin
         if((~pred_error))begin
             allocSlot = predAlloc;

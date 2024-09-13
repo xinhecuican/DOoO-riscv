@@ -134,6 +134,7 @@ module PTW(
     assign cache_ptw_io.refill_data = rdata;
 
     always_ff @(posedge clk)begin
+        refill_data_valid <= ptw_request.data_valid;
         if(ptw_request.data_valid)begin
             refill_vaddr <= req_buf.vaddr;
             refill_pn <= {state == WALK_PN1, state == WALK_PN0};

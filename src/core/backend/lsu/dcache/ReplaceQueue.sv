@@ -144,6 +144,10 @@ endgenerate
     assign w_axi_io.maw.lock = 2'b0;
     assign w_axi_io.maw.cache = 4'b0;
     assign w_axi_io.maw.prot = 0;
+    assign w_axi_io.maw.qos = 0;
+    assign w_axi_io.maw.region = 0;
+    assign w_axi_io.maw.user = 0;
+    assign w_axi_io.maw.atop = 0;
 
     assign w_axi_io.mw.data = processEntry.data[widx];
     assign w_axi_io.mw.strb = {`DATA_BYTE{1'b1}};

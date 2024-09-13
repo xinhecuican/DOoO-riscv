@@ -46,6 +46,8 @@
 `define CSR_RSI     `CSROP_WIDTH'b0110
 `define CSR_RCI     `CSROP_WIDTH'b0111
 `define CSR_SFENCE  `CSROP_WIDTH'b1000
+`define CSR_FENCE   `CSROP_WIDTH'b1100
+`define CSR_FENCEI  `CSROP_WIDTH'b1001
 
 // multop
 `define MULT_MUL       `MULTOP_WIDTH'b000

@@ -63,14 +63,14 @@
 `define TAGE_BASE_CTR 2
 `define TAGE_ALT_CTR 7
 `define TAGE_SET_WIDTH 12
-typedef enum logic [1: 0] {
+typedef enum logic [1:0] {
     DIRECT,
     CONDITION,
     INDIRECT,
     CALL
 } BranchType;
 
-typedef enum logic [1: 0] { 
+typedef enum logic [1:0] {
     TAR_NONE,
     TAR_OV,
     TAR_UN
@@ -79,7 +79,7 @@ typedef enum logic [1: 0] {
 `define RAS_SIZE 32
 `define RAS_WIDTH $clog2(`RAS_SIZE)
 `define RAS_CTR_SIZE 8
-typedef enum logic [1: 0] { 
+typedef enum logic [1:0] {
     NONE,
     POP,
     PUSH,
@@ -139,7 +139,7 @@ typedef enum logic [1: 0] {
 `define MULT_DIS_SIZE 8
 `define MULT_DIS_PORT 1
 `define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 \
-`ifdef EXT_M \
+`ifdef RVM \
     + `MULT_DIS_PORT * 2 \
 `endif \
 )
@@ -207,35 +207,35 @@ typedef enum logic [1: 0] {
 
 // exccode
 `define EXC_WIDTH 5
-`define EXC_NONE        `EXC_WIDTH'b11111
-`define EXCI_SSI        `EXC_WIDTH'd1 // supervisor soft interrupt
-`define EXCI_MSI        `EXC_WIDTH'd3 // machine soft interrupt
-`define EXCI_STIMER     `EXC_WIDTH'd5
-`define EXCI_MTIMER     `EXC_WIDTH'd7
-`define EXCI_SEXT       `EXC_WIDTH'd9
-`define EXCI_MEXT       `EXC_WIDTH'd11
-`define EXCI_COUNTEROV  `EXC_WIDTH'd13
-`define EXC_IAM         `EXC_WIDTH'd0 // inst address misaligned
-`define EXC_IAF         `EXC_WIDTH'd1 // inst access fault
-`define EXC_II          `EXC_WIDTH'd2 // illegal inst
-`define EXC_BP          `EXC_WIDTH'd3 // breakpoint
-`define EXC_LAM         `EXC_WIDTH'd4 // load address misaligned
-`define EXC_LAF         `EXC_WIDTH'd5 // load address fault
-`define EXC_SAM         `EXC_WIDTH'd6 // store address misaligned
-`define EXC_SAF         `EXC_WIDTH'd7 // store address fault
-`define EXC_ECU         `EXC_WIDTH'd8 // environment call from U-mode
-`define EXC_ECS         `EXC_WIDTH'd9 // environment call from S-mode
-`define EXC_ECM         `EXC_WIDTH'd11 // environment call from M-mode
-`define EXC_IPF         `EXC_WIDTH'd12 // inst page fault
-`define EXC_LPF         `EXC_WIDTH'd13 // load page fault
-`define EXC_SPF         `EXC_WIDTH'd15 // store page fault
-`define EXC_DT          `EXC_WIDTH'd16 // double trap
-`define EXC_SC          `EXC_WIDTH'd18 // software check
-`define EXC_HE          `EXC_WIDTH'd19 // hardware error
-`define EXC_SRET        `EXC_WIDTH'd25 // user defined.sret 
-`define EXC_MRET        `EXC_WIDTH'd27 // user defined.mret
-`define EXC_EC          `EXC_WIDTH'd28 // user defined.environment call
-`define EXC_MMU         `EXC_WIDTH'd30 // user defined csr fence
+`define EXC_NONE `EXC_WIDTH'b11111
+`define EXCI_SSI `EXC_WIDTH'd1 // supervisor soft interrupt
+`define EXCI_MSI `EXC_WIDTH'd3 // machine soft interrupt
+`define EXCI_STIMER `EXC_WIDTH'd5
+`define EXCI_MTIMER `EXC_WIDTH'd7
+`define EXCI_SEXT `EXC_WIDTH'd9
+`define EXCI_MEXT `EXC_WIDTH'd11
+`define EXCI_COUNTEROV `EXC_WIDTH'd13
+`define EXC_IAM `EXC_WIDTH'd0 // inst address misaligned
+`define EXC_IAF `EXC_WIDTH'd1 // inst access fault
+`define EXC_II `EXC_WIDTH'd2 // illegal inst
+`define EXC_BP `EXC_WIDTH'd3 // breakpoint
+`define EXC_LAM `EXC_WIDTH'd4 // load address misaligned
+`define EXC_LAF `EXC_WIDTH'd5 // load address fault
+`define EXC_SAM `EXC_WIDTH'd6 // store address misaligned
+`define EXC_SAF `EXC_WIDTH'd7 // store address fault
+`define EXC_ECU `EXC_WIDTH'd8 // environment call from U-mode
+`define EXC_ECS `EXC_WIDTH'd9 // environment call from S-mode
+`define EXC_ECM `EXC_WIDTH'd11 // environment call from M-mode
+`define EXC_IPF `EXC_WIDTH'd12 // inst page fault
+`define EXC_LPF `EXC_WIDTH'd13 // load page fault
+`define EXC_SPF `EXC_WIDTH'd15 // store page fault
+`define EXC_DT `EXC_WIDTH'd16 // double trap
+`define EXC_SC `EXC_WIDTH'd18 // software check
+`define EXC_HE `EXC_WIDTH'd19 // hardware error
+`define EXC_SRET `EXC_WIDTH'd25 // user defined.sret 
+`define EXC_MRET `EXC_WIDTH'd27 // user defined.mret
+`define EXC_EC `EXC_WIDTH'd28 // user defined.environment call
+`define EXC_MMU `EXC_WIDTH'd30 // user defined csr fence
 
 // tlb
 `define TLB_OFFSET 12
@@ -245,8 +245,8 @@ typedef enum logic [1: 0] {
 `ifdef SV32
 `define TLB_MODE 1
 `define TLB_ASID 9
-`define TLB_PPN  22
-`define TLB_VPN  10
+`define TLB_PPN 22
+`define TLB_VPN 10
 `define TLB_PPN1 12
 `define TLB_PPN0 10
 `define TLB_PN 2
@@ -269,8 +269,10 @@ typedef enum logic [1: 0] {
 `define TLB_P1_BANK (`DCACHE_BANK)
 `define TLB_P1_SET_WIDTH $clog2(`TLB_P1_SET)
 `define TLB_P1_TAG `TLB_TAG - $clog2(`TLB_P1_BANK) - `TLB_P1_SET_WIDTH - `TLB_VPN
-`define TLB_VPN_IBUS(i, SET, BANK) [`TLB_VPN * i + `TLB_OFFSET + $clog2(BANK) + $clog2(SET) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(BANK)]
-`define TLB_VPN_TBUS(i, SET, BANK) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(SET) + $clog2(BANK)]
+`define TLB_VPN_IBUS(i, SET,
+                     BANK) [`TLB_VPN * i + `TLB_OFFSET + $clog2(BANK) + $clog2(SET) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(BANK)]
+`define TLB_VPN_TBUS(i, SET,
+                     BANK) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(SET) + $clog2(BANK)]
 
 `define TLB_PTB0_SIZE 8
 `define TLB_PTB1_SIZE 4

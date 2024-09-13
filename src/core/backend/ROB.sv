@@ -131,7 +131,7 @@ endgenerate
             fence_redirect <= 0;
         end
         else begin
-            if(wb_sfence & ~irqInfo.irq & ~walk_state & ~exc_exist_n)begin
+            if(wb_sfence & ~irqInfo.irq & ~walk_state & ~exc_exist_n & ~exc_exist)begin
                 fence <= 1'b1;
                 fence_redirect <= 1'b1;
             end
@@ -156,7 +156,7 @@ endgenerate
             else if((|commit_en_n) | exc_exist_n)begin
                 wb_sfence <= 1'b0;
             end
-            commitBus.fence_valid <= wb_sfence & (commit_en[0]) & ~walk_state & ~exc_exist_n;
+            commitBus.fence_valid <= wb_sfence & (commit_en[0]) & ~walk_state & ~exc_exist_n & ~exc_exist;
         end
     end
 
@@ -484,7 +484,7 @@ generate
         assign trapValids[i] = commitBus.en[i] & robData[i].sim_trap;
     end
 endgenerate
-    PEncoder #(`COMMIT_WIDTH) encoder_trap_idx (trapValids, trapIdx);
+    PREncoder #(`COMMIT_WIDTH) encoder_trap_idx (trapValids, trapIdx);
     always_ff @(posedge clk)begin
         trapValid <= |trapValids;
         trapCode <= robData[trapIdx].trapCode;

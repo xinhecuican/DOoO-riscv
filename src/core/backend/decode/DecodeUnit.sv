@@ -16,7 +16,7 @@ module DecodeUnit(
     assign funct3 = inst[14: 12];
     assign funct7 = inst[31: 25];
 
-    logic funct7_0, funct7_5, funct7_1, rs2_0, rs2_1, rs2_2;
+    logic funct7_0, funct7_5, funct7_1, rs2_0, rs2_1, rs2_2, rs2_5;
     logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
     assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_1 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
@@ -32,6 +32,7 @@ module DecodeUnit(
     assign rs2_0 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & ~inst[20];
     assign rs2_1 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & inst[20];
     assign rs2_2 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & ~inst[20];
+    assign rs2_5 = ~inst[24] & ~inst[23] & inst[22] & ~inst[21] & inst[20];
 
     logic lui, auipc, jal, jalr, branch, load, store, miscmem, opimm, opreg, opsystem, unknown;
     assign lui = ~op[4] & op[3] & op[2] & ~op[1] & op[0] & inst[1] & inst[0];
@@ -107,13 +108,18 @@ module DecodeUnit(
     assign info.intop[4] = 1'b0;
     assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
     assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc | sub;
-    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | fence;
-    assign info.intop[0] = lui | andi | _and | srl | srli | fence | sub | sra | srai;
+    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or;
+    assign info.intop[0] = lui | andi | _and | srl | srli | sub | sra | srai;
 
-    // TODO: implement fence, current pass to int, no effect
-    logic fence, sfence_vma;
+    // TODO: impl wfi, current treat as nop
+    logic fence, sfence_vma, wfi;
     assign fence = miscmem & funct3_0;
     assign sfence_vma = opsystem & ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
+    assign wfi = opsystem & funct3_0 & ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0] & rs2_5;
+`ifdef EXT_FENCEI
+    logic fencei;
+    assign fencei = miscmem & funct3_1;
+`endif
 
     logic ecall, ebreak, mret, sret;
     assign ecall = opsystem & funct3_0 & funct7_0 & rs2_0;
@@ -129,13 +135,21 @@ module DecodeUnit(
     assign csrrwi = opsystem & funct3_5;
     assign csrrsi = opsystem & funct3_6;
     assign csrrci = opsystem & funct3_7;
-    assign info.csrop[3] = sfence_vma;
-    assign info.csrop[2] = csrrwi | csrrsi | csrrci;
+    assign info.csrop[3] = sfence_vma | fence
+`ifdef EXT_FENCEI
+    | fencei
+`endif
+    ;
+    assign info.csrop[2] = csrrwi | csrrsi | csrrci | fence;
     assign info.csrop[1] = csrrs | csrrc | csrrsi | csrrci;
-    assign info.csrop[0] = csrrw | csrrc | csrrwi | csrrci;
+    assign info.csrop[0] = csrrw | csrrc | csrrwi | csrrci
+`ifdef EXC_FENCEI
+    | fencei
+`endif
+;
     assign info.csrid = inst[31: 20];
 
-`ifdef EXT_M
+`ifdef RVM
     logic mult, mul, mulh, mulhsu, mulhu, div, divu, rem ,remu;
     assign mult = opreg & funct7_1;
     assign mul = mult & funct3_0;
@@ -154,12 +168,15 @@ module DecodeUnit(
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
                      ~add & ~sub & ~sll & ~slt & ~sltu & ~_xor & ~srl & ~sra & ~_or & ~_and &
                      ~csrrw & ~csrrs & ~csrrc & ~csrrwi & ~csrrsi & ~csrrci & ~ecall & ~ebreak &
-                     ~fence & ~mret & ~sret & ~sfence_vma &
+                     ~fence & ~mret & ~sret & ~sfence_vma & ~wfi &
 `ifdef DIFFTEST
                      & ~sim_trap
 `endif
-`ifdef EXT_M
+`ifdef RVM
                      & ~mult
+`endif
+`ifdef EXT_FENCEI
+                     & ~fencei
 `endif
                      ;
 
@@ -179,7 +196,7 @@ module DecodeUnit(
                       {`DEC_IMM_WIDTH{csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci
                       }} & inst[19: 15] |
                       {`DEC_IMM_WIDTH{store}} & store_imm |
-                      {`DEC_IMM_WIDTH{load | opimm | fence | jalr
+                      {`DEC_IMM_WIDTH{load | opimm | jalr
 `ifdef DIFFTEST
                         | sim_trap
 `endif
@@ -187,15 +204,19 @@ module DecodeUnit(
 
     assign info.intv = (lui | opimm |
                        add | sub | sll | slt | sltu | _xor | srl | sra | _or | _and |
-                       auipc | fence
+                       auipc
 `ifdef DIFFTEST
     | sim_trap
 `endif
     ) & ~ipf & ~iam;
     assign info.branchv = (branch | jal | jalr) & ~ipf & ~iam;
     assign info.memv = (load | store) & ~ipf & ~iam;
-    assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam | sfence_vma | ipf;
-`ifdef EXT_M
+    assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam | sfence_vma | ipf | fence | wfi
+`ifdef EXT_FENCEI
+    | fencei
+`endif
+    ;
+`ifdef RVM
     assign info.multv = mult & ~ipf & ~iam;
 `endif
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw | sfence_vma}} & inst[19: 15];

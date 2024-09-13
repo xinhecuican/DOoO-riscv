@@ -689,6 +689,11 @@ interface FenceBus;
     logic store_flush;
     logic store_flush_end;
 
+`ifdef EXT_FENCEI
+    logic inst_flush;
+    logic inst_flush_end;
+`endif
+
     logic `N(3) mmu_flush;
     logic `N(3) mmu_flush_all;
     logic mmu_flush_end;
@@ -699,12 +704,23 @@ interface FenceBus;
     RobIdx preRobIdx;
     FsqIdxInfo fsqInfo;
 
-    modport csr (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, fence_end, robIdx, preRobIdx, fsqInfo, input store_flush_end, mmu_flush_end);
+    modport csr (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, fence_end, robIdx, preRobIdx, fsqInfo, input store_flush_end, mmu_flush_end
+`ifdef EXT_FENCEI
+    , output inst_flush, input inst_flush_end
+`endif
+    );
     modport lsu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
     modport rob (input fence_end);
     modport mmu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid);
     modport l2tlb (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, output mmu_flush_end);
-    modport backend (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, input mmu_flush_end);
+    modport backend (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, input mmu_flush_end
+`ifdef EXT_FENCEI
+    , output inst_flush, input inst_flush_end
+`endif
+    );
+`ifdef EXT_FENCEI
+    modport ifu (input inst_flush_end, output inst_flush);
+`endif
 endinterface //SFenceBus
 
 `ifdef DIFFTEST

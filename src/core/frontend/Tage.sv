@@ -92,7 +92,7 @@ module Tage(
 	logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr, base_update_ctr, base_ctr_inc;
 	assign base_lookup_idx = tage_io.pc[`TAGE_BASE_WIDTH+1: 2] ^ tage_io.pc[`TAGE_BASE_WIDTH * 2 + 1 : `TAGE_BASE_WIDTH + 2];
 	MPRAM #(
-		.WIDTH(`TAGE_BASE_CTR * `SLOT_NUM),
+		.WIDTH((`TAGE_BASE_CTR * `SLOT_NUM)),
 		.DEPTH(`TAGE_BASE_SIZE),
 		.READ_PORT(1),
 		.WRITE_PORT(1),
@@ -118,7 +118,7 @@ module Tage(
 			PSelector #(`TAGE_BANK) selector_provider(table_hits_reorder[br], provider[br]);
 			assign tage_prediction[br] = |provider[br] ? |(prediction[br] & provider[br]) : base_ctr[br][`TAGE_BASE_CTR-1];
 			assign tage_io.prediction[br] = tage_prediction[br];
-			assign tage_io.meta.altPred = base_ctr[br][`TAGE_BASE_CTR-1];
+			assign tage_io.meta.altPred[br] = base_ctr[br][`TAGE_BASE_CTR-1];
 		end
 	endgenerate
 	assign tage_io.meta.provider = provider;

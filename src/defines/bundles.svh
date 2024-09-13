@@ -181,7 +181,7 @@ typedef struct packed {
     logic memv;
     logic branchv;
     logic csrv;
-`ifdef EXT_M
+`ifdef RVM
     logic multv;
 `endif
     logic [11: 0] csrid;
@@ -192,7 +192,7 @@ typedef struct packed {
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(`BRANCHOP_WIDTH) branchop;
     logic `N(`CSROP_WIDTH) csrop;
-`ifdef EXT_M
+`ifdef RVM
     logic `N(`MULTOP_WIDTH) multop;
 `endif
     logic [4: 0] rs1, rs2, rd;

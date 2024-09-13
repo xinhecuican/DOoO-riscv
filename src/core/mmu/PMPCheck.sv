@@ -20,7 +20,7 @@ module PMPCheck (
 
     assign pmp_cfg = pmpcfg;
     assign paddr_cmp = paddr;
-    PRSelector #(`PMP_SIZE) select_pmp_v (pmp_v, pmp_v_p);
+    PRSelector #(`PMP_SIZE) select_pmp_v (pmp_v_all, pmp_v_p);
     assign pmp_v = |pmp_v_all;
     assign pmp_r = |pmp_r_all;
     assign pmp_w = |pmp_w_all;
@@ -36,7 +36,7 @@ generate
         lzc #(
             .WIDTH(`PADDR_SIZE-`TLB_OFFSET)
         ) lzc_inst (
-            .in_i(cmpaddr),
+            .in_i(cmpaddr[i]),
             .cnt_o(cnt),
             .empty_o()
         );

@@ -9,6 +9,10 @@ module ICache(
     TlbL2IO.tlb itlb_io,
     CsrTlbIO.tlb csr_itlb_io,
     FenceBus.mmu fenceBus
+`ifdef EXT_FENCEI
+    ,input logic fenceReq,
+    output logic fenceEnd
+`endif
 );
 `ifdef DIFFTEST
     typedef struct packed {
@@ -50,6 +54,10 @@ module ICache(
 
     typedef enum { IDLE, LOOKUP, MISS, REFILL } MainState;
     MainState main_state;
+`ifdef EXT_FENCEI
+    logic fenceValid;
+    logic `N(`ICACHE_SET_WIDTH) fenceIdx;
+`endif
 
     ICacheWayIO way_io [`ICACHE_WAY-1: 0]();
     ITLBCacheIO itlb_cache_io();
@@ -107,9 +115,22 @@ module ICache(
                 .io(way_io[i])
             );
             assign way_io[i].tagv_en = fsq_cache_io.en & ~fsq_cache_io.stall;
-            assign way_io[i].tagv_we = {`ICACHE_BANK{replace_way[i] & refill_en}};
-            assign way_io[i].tagv_windex = miss_buffer.windex;
-            assign way_io[i].tagv_wdata = {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
+            assign way_io[i].tagv_we = {`ICACHE_BANK{replace_way[i] & refill_en}}
+`ifdef EXT_FENCEI
+            | fenceValid
+`endif
+            ;
+            assign way_io[i].tagv_windex = 
+`ifdef EXT_FENCEI
+                                            fenceValid ? fenceIdx :
+`endif
+                                            miss_buffer.windex;
+            assign way_io[i].tagv_wdata = 
+`ifdef EXT_FENCEI
+            {~fenceValid, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
+`else
+            {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
+`endif
             assign way_io[i].tagv_index = index;
             assign way_io[i].span = span[1];
             // assign way_io[i].en = {`ICACHE_BANK{fsq_cache_io.en}} &
@@ -118,8 +139,8 @@ module ICache(
             //                       expand_en[`ICACHE_BANK-1: 0]);
             assign way_io[i].en = {`ICACHE_BANK{~fsq_cache_io.stall}};
             for(genvar j=0; j<`ICACHE_BANK; j++)begin
-                assign way_io[i].index[j*`ICACHE_SET_WIDTH+: `ICACHE_SET_WIDTH] = expand_en[j] ? index : indexp1;
-                assign way_io[i].windex[j] = miss_buffer.windex;
+                assign way_io[i].index[j] = refill_en ? miss_buffer.windex :
+                                            expand_en[j] ? index : indexp1;
             end
             for(genvar j=0; j<`ICACHE_BANK-1; j++)begin
                 assign way_io[i].wdata[j] = miss_buffer.replace_data[j];
@@ -159,10 +180,14 @@ module ICache(
     Decoder #(`ICACHE_WAY) decoder_way(replace_io.miss_way, replace_way);
 
 
-    assign fsq_cache_io.ready = (main_state == IDLE && (abandon_idle || (!fsq_cache_io.stall))) ||
+    assign fsq_cache_io.ready = ((main_state == IDLE && (abandon_idle || (!fsq_cache_io.stall))) ||
                                 (main_state == LOOKUP && (!(|cache_miss) &&
                                 !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) &&
-                                (abandon_lookup || abandon_idle || !fsq_cache_io.stall));
+                                (abandon_lookup || abandon_idle || !fsq_cache_io.stall)))
+`ifdef EXT_FENCEI
+                                & ~fenceValid
+`endif
+                                ;
     assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & ((~(|cache_miss)) | (|itlb_cache_io.exception)) & ~abandon_lookup) | miss_data_en}}
                              & request_buffer.expand_en_shift;
     assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
@@ -330,6 +355,30 @@ module ICache(
                             ~fsq_cache_io.stall;
         end
     end
+
+`ifdef EXT_FENCEI
+    logic `N(`ICACHE_SET_WIDTH) fenceIdx_n;
+    assign fenceIdx_n = fenceIdx + 1;
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            fenceValid <= 1'b0;
+            fenceIdx <= 0;
+            fenceEnd <= 1'b0;
+        end
+        else begin
+            if(fenceReq)begin
+                fenceValid <= 1'b1;
+            end
+            if(fenceValid)begin
+                fenceIdx <= fenceIdx_n;
+                if(&fenceIdx)begin
+                    fenceValid <= 1'b0;
+                end
+            end
+            fenceEnd <= fenceValid & (&fenceIdx);
+        end
+    end
+`endif
 
     `Log(DLog::Debug, T_ICACHE, axi_io.ar_valid & axi_io.ar_ready, $sformatf("icache req. %h %d", axi_io.mar.addr, axi_io.mar.len))
     `Log(DLog::Debug, T_ICACHE, refill_en, $sformatf("icache refill. %h %d %d", {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}}, replace_io.miss_way, miss_buffer.windex))

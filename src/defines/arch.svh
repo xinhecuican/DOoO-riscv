@@ -2,9 +2,10 @@
 `define ARCH_H
 
 `define RV32I
+`define RVM
 `define DIFFTEST
 
-`define EXT_M
+`define EXT_FENCEI
 `include "predefine.svh"
 // `ifdef ZICSR
 // parameter HAS_ZICSR=1;

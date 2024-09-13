@@ -6,7 +6,7 @@ module WriteBack(
     WriteBackIO.wb alu_wb_io,
     WriteBackIO.wb lsu_wb_io,
     WriteBackIO.wb csr_wb_io,
-`ifdef EXT_M
+`ifdef RVM
     WriteBackIO.wb mult_wb_io,
     WriteBackIO.wb div_wb_io,
 `endif
@@ -14,12 +14,12 @@ module WriteBack(
     WriteBackBus.wb wbBus
 );
     WBData csrData;
-`ifdef EXT_M
+`ifdef RVM
     WBData `N(`MULT_SIZE) multData, divData;
 `endif
     always_ff @(posedge clk)begin
         csrData <= csr_wb_io.datas[0];
-`ifdef EXT_M
+`ifdef RVM
         multData <= mult_wb_io.datas;
         divData <= div_wb_io.datas;
 `endif
@@ -39,7 +39,7 @@ generate
             assign wbBus.res[i] = csrData.en ? csrData.res : wbData.res;
             assign wbBus.exccode[i] = csrData.en ? csrData.exccode : wbData.exccode;
         end
-`ifdef EXT_M
+`ifdef RVM
         else if(i == 2)begin
             assign wbBus.en[i] = multData[0].en | wbData.en;
             assign wbBus.we[i] = multData[0].en ? multData[0].we : wbData.we;

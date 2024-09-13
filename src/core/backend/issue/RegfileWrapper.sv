@@ -7,7 +7,7 @@ module RegfileWrapper(
     IssueRegIO.regfile load_reg_io,
     IssueRegIO.regfile store_reg_io,
     IssueRegIO.regfile csr_reg_io,
-`ifdef EXT_M
+`ifdef RVM
     IssueRegIO.regfile mult_reg_io,
 `endif
     WriteBackBus wbBus
@@ -40,7 +40,7 @@ generate
                 int_preg[`ALU_SIZE+i] <= csr_reg_io.en ? csr_reg_io.preg[1] : int_reg_io.preg[`ALU_SIZE+i];
             end
         end
-`ifdef EXT_M
+`ifdef RVM
         else if(i == 1)begin
             assign int_reg_io.ready[i] = ~mult_reg_io.en;
             always_ff @(posedge clk)begin

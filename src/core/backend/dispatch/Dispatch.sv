@@ -10,7 +10,7 @@ module Dispatch(
     DisIssueIO.dis dis_load_io,
     DisIssueIO.dis dis_store_io,
     DisIssueIO.dis dis_csr_io,
-`ifdef EXT_M
+`ifdef RVM
     DisIssueIO.dis dis_mult_io,
 `endif
     WakeupBus wakeupBus,
@@ -218,7 +218,7 @@ generate
     end
 endgenerate
 
-`ifdef EXT_M
+`ifdef RVM
     DispatchQueueIO #($bits(MultIssueBundle), `MULT_DIS_PORT) mult_io(.*);
     DispatchQueue #(
         .DATA_WIDTH($bits(MultIssueBundle)),
@@ -239,7 +239,7 @@ endgenerate
 `endif
 
     assign full = int_io.full | load_io.full | store_io.full | csr_io.full
-`ifdef EXT_M
+`ifdef RVM
                   | mult_io.full
 `endif
     ;
@@ -247,7 +247,7 @@ endgenerate
     assign busytable_io.dis_en = rename_dis_io.wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
     assign busytable_io.dis_rd = rename_dis_io.prd;
     assign busytable_io.preg = {
-`ifdef EXT_M
+`ifdef RVM
                                 mult_io.rs2_o, mult_io.rs1_o,
 `endif
                                 store_io.rs2_o, store_io.rs1_o, load_io.rs1_o,
@@ -302,7 +302,7 @@ endgenerate
     assign csr_status.we = csr_io.status_o[0].we;
     assign dis_csr_io.status = csr_status;
 
-`ifdef EXT_M
+`ifdef RVM
     localparam MULT_BASE = `INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT * 2;
     `DEQ_TEMPLATE(mult, MULT_BASE, `MULT_DIS_PORT, 1, 1)
 `endif
