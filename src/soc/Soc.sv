@@ -2,36 +2,43 @@
 `include "../defines/defines.svh"
 
 module Soc(
-    input logic core_clk,
+    input logic clk,
     input logic rst,
 
-    input logic peri_clk,
+    input logic rtc_clk,
     input logic rxd,
     output logic txd
 );
-    AxiIO core_axi();
-    AxiIO peri_axi();
-    AxiIO irq_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+    ) core_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+    ) peri_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+    ) irq_axi();
 
     ClintIO clint_io();
     logic `N(`IRQ_NUM) irq_source;
+    logic uart_irq;
     logic `N(`NUM_CORE) irq;
 
     logic sync_rst_peri, sync_rst_core, core_rst, peri_rst;
     logic peri_rst_s1, core_rst_s1;
-    SyncRst rst_core (core_clk, rst, sync_rst_core);
-    SyncRst rst_peri (peri_clk, rst, sync_rst_peri);
-    always_ff @(posedge core_clk)begin
+    SyncRst rst_core (clk, rst, sync_rst_core);
+    SyncRst rst_peri (clk, rst, sync_rst_peri);
+    always_ff @(posedge clk)begin
         core_rst_s1 <= sync_rst_core;
         core_rst <= core_rst_s1;
     end
-    always_ff @(posedge peri_clk)begin
+    always_ff @(posedge clk)begin
         peri_rst_s1 <= sync_rst_peri;
         peri_rst <= peri_rst_s1;
     end
 
     CPUCore core(
-        .clk(core_clk),
+        .clk(clk),
         .rst(core_rst),
         .ext_irq(irq[0]),
         .axi(core_axi.master),
@@ -55,6 +62,25 @@ module Soc(
         NoAddrRules: AXI_SLAVE_NUM,
         default: 0
     };
+    typedef logic [`PADDR_SIZE-1: 0] addr_t;
+    typedef logic user_t;
+    typedef logic [`CORE_WIDTH+2-1: 0] id_t;
+    typedef logic [`XLEN-1: 0] data_t;
+    typedef logic [`XLEN/8-1: 0] strb_t;
+    `AXI_TYPEDEF_AW_CHAN_T(AxiAW, addr_t, id_t, user_t)
+    `AXI_TYPEDEF_W_CHAN_T(AxiW, data_t, strb_t, user_t)
+    `AXI_TYPEDEF_B_CHAN_T(AxiB, id_t, user_t)
+    `AXI_TYPEDEF_AR_CHAN_T(AxiAR, addr_t, id_t, user_t)
+    `AXI_TYPEDEF_R_CHAN_T(AxiR, data_t, id_t, user_t)
+    `AXI_TYPEDEF_REQ_T(AxiReq, AxiAW, AxiW, AxiAR)
+    `AXI_TYPEDEF_RESP_T(AxiResp, AxiB, AxiR)
+    `AXI_LITE_TYPEDEF_AW_CHAN_T(AxiLAW, addr_t)
+    `AXI_LITE_TYPEDEF_W_CHAN_T(AxiLW, data_t, strb_t)
+    `AXI_LITE_TYPEDEF_B_CHAN_T(AxiLB)
+    `AXI_LITE_TYPEDEF_AR_CHAN_T(AxiLAR, addr_t)
+    `AXI_LITE_TYPEDEF_R_CHAN_T(AxiLR, data_t)
+    `AXI_LITE_TYPEDEF_REQ_T(AxiLReq, AxiLAW, AxiLW, AxiLAR)
+    `AXI_LITE_TYPEDEF_RESP_T(AxiLResp, AxiLB, AxiLR)
 
     AxiReq slv_req_i;
     AxiResp slv_resp_o;
@@ -62,12 +88,12 @@ module Soc(
     AxiResp `N(AXI_SLAVE_NUM) mst_resp_i;
     addr_rule_t `N(AXI_SLAVE_NUM) addr_map;
 
-    `AXI_REQ_ASSIGN(slv_req_i, core_axi)
-    `AXI_RESP_ASSIGN(slv_resp_o, core_axi)
-    `AXI_REQ_RECEIVE(mst_req_o[0], peri_axi)
-    `AXI_RESP_RECEIVE(mst_resp_i[0], peri_axi)
-    `AXI_REQ_RECEIVE(mst_req_o[1], irq_axi)
-    `AXI_RESP_RECEIVE(mst_resp_i[1], irq_axi)
+    `AXI_ASSIGN_TO_REQ(slv_req_i, core_axi)
+    `AXI_ASSIGN_FROM_RESP(core_axi, slv_resp_o)
+    `AXI_ASSIGN_FROM_REQ(peri_axi, mst_req_o[0])
+    `AXI_ASSIGN_TO_RESP(mst_resp_i[0], peri_axi)
+    `AXI_ASSIGN_FROM_REQ(irq_axi, mst_req_o[1])
+    `AXI_ASSIGN_TO_RESP(mst_resp_i[1], irq_axi)
 
     assign addr_map[0] = '{
         idx: 0,
@@ -82,22 +108,22 @@ module Soc(
 
     axi_xbar #(
         .Cfg(crossbar_cfg),
-        .slv_aw_chan_t(AxiMAW),
-        .mst_aw_chan_t(AxiMAW),
-        .w_chan_t(AxiMW),
-        .slv_b_chan_t(AxiSB),
-        .mst_b_chan_t(AxiSB),
-        .slv_ar_chan_t(AxiMAR),
-        .mst_ar_chan_t(AxiMAR),
-        .slv_r_chan_t(AxiSR),
-        .mst_r_chan_t(AxiSR),
+        .slv_aw_chan_t(AxiAW),
+        .mst_aw_chan_t(AxiAW),
+        .w_chan_t(AxiW),
+        .slv_b_chan_t(AxiB),
+        .mst_b_chan_t(AxiB),
+        .slv_ar_chan_t(AxiAR),
+        .mst_ar_chan_t(AxiAR),
+        .slv_r_chan_t(AxiR),
+        .mst_r_chan_t(AxiR),
         .slv_req_t(AxiReq),
         .slv_resp_t(AxiResp),
         .mst_req_t(AxiReq),
         .mst_resp_t(AxiResp),
         .rule_t(addr_rule_t)
     )crossbar(
-        .clk_i(core_clk),
+        .clk_i(clk),
         .rst_ni(~core_rst),
         .test_i(1'b0),
         .slv_ports_req_i(slv_req_i),
@@ -112,8 +138,8 @@ module Soc(
 // interrupt
     AxiReq irq_req;
     AxiResp irq_resp;
-    ApbReq clint_req;
-    ApbResp clint_resp;
+    ApbReq clint_req, plic_req;
+    ApbResp clint_resp, plic_resp;
     addr_rule_t `N(2) irq_map_rules;
     assign irq_map_rules[0] = '{
         idx: 0,
@@ -126,14 +152,14 @@ module Soc(
         end_addr: `PLIC_END
     };
 
-    `AXI_REQ_ASSIGN(irq_req, irq_axi)
-    `AXI_RESP_ASSIGN(irq_resp, irq_axi)
+    `AXI_ASSIGN_TO_REQ(irq_req, irq_axi)
+    `AXI_ASSIGN_FROM_RESP(irq_axi, irq_resp)
     axi_to_apb #(
         .NoApbSlaves(`PERIPHERAL_SIZE),
         .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(`AXI_ID_W),
+        .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
         .AxiMaxWriteTxns(32'd16),
         .AxiMaxReadTxns(32'd16),
@@ -145,13 +171,13 @@ module Soc(
         .apb_resp_t(ApbResp),
         .rule_t(addr_rule_t)
     ) irq_axi_to_apb (
-        .clk_i(clock),
+        .clk_i(clk),
         .rst_ni(~peri_rst),
         .test_i(1'b0),
         .axi_req_i(irq_req),
         .axi_resp_o(irq_resp),
-        .apb_req_o(clint_req),
-        .apb_resp_i(clint_resp),
+        .apb_req_o({plic_req, clint_req}),
+        .apb_resp_i({plic_resp, clint_resp}),
         .addr_map_i(map_rules)
     );
 
@@ -160,8 +186,8 @@ module Soc(
     `APB_RESP_ASSIGN(clint_resp, clint_apb_io)
 
     apb4_clint clint(
-        .clk(clock),
-        .rtc_clk(clock),
+        .clk(clk),
+        .rtc_clk(rtc_clk),
         .rst(peri_rst),
         .apb4(clint_apb_io.slave),
         .clint(clint_io.clint)
@@ -170,6 +196,7 @@ module Soc(
     ApbIO plic_apb_io();
     `APB_REQ_ASSIGN(plic_req, plic_apb_io)
     `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
+    assign irq_source[0] = uart_irq;
     apb4_plic_top #(
         .PADDR_SIZE(`PADDR_SIZE),
         .PDATA_SIZE(`XLEN),
@@ -177,7 +204,7 @@ module Soc(
         .TARGETS(`NUM_CORE)
     ) plic (
         .PRESETn(~peri_rst),
-        .PCLK(clock),
+        .PCLK(clk),
         .apb(plic_apb_io),
         .src(irq_source),
         .irq(irq)
@@ -196,23 +223,23 @@ module Soc(
         end_addr: `UART_END
     };
 
-    `AXI_REQ_ASSIGN(peri_req, peri_axi)
-    `AXI_RESP_ASSIGN(peri_resp, peri_axi)
+    `AXI_ASSIGN_TO_REQ(peri_req, peri_axi)
+    `AXI_ASSIGN_FROM_RESP(peri_axi, peri_resp)
 
     axi_cdc #(
-        .aw_chan_t(AxiMAW),
-        .w_chan_t(AxiMW),
-        .b_chan_t(AxiSB),
-        .ar_chan_t(AxiMAR),
-        .r_chan_t(AxiSR),
+        .aw_chan_t(AxiAW),
+        .w_chan_t(AxiW),
+        .b_chan_t(AxiB),
+        .ar_chan_t(AxiAR),
+        .r_chan_t(AxiR),
         .axi_req_t(AxiReq),
         .axi_resp_t(AxiResp)
     ) uart_axi_cdc(
-        .src_clk_i(core_clk),
+        .src_clk_i(clk),
         .src_rst_ni(~core_rst),
         .src_req_i(peri_req),
         .src_resp_o(peri_resp),
-        .dst_clk_i(peri_clk),
+        .dst_clk_i(clk),
         .dst_rst_ni(~peri_rst),
         .dst_req_o(peri_req_cdc),
         .dst_resp_i(peri_resp_cdc)
@@ -223,7 +250,7 @@ module Soc(
         .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(`AXI_ID_W),
+        .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
         .AxiMaxWriteTxns(32'd16),
         .AxiMaxReadTxns(32'd16),
@@ -235,7 +262,7 @@ module Soc(
         .apb_resp_t(ApbResp),
         .rule_t(addr_rule_t)
     ) uart_axi_to_apb (
-        .clk_i(clock),
+        .clk_i(clk),
         .rst_ni(~peri_rst),
         .test_i(1'b0),
         .axi_req_i(peri_req_cdc),
@@ -250,10 +277,10 @@ module Soc(
     `APB_REQ_ASSIGN(uart_req, uart_io)
     `APB_RESP_ASSIGN(uart_resp, uart_io)
     uart uart_inst(
-        .clk(peri_clk),
+        .clk(clk),
         .rstn(~peri_rst),
         .s_apb_intf(uart_io),
-        .irq_out(),
+        .irq_out(uart_irq),
         .uart_rx(rxd),
         .uart_tx(txd)
     );

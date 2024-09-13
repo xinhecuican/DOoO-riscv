@@ -213,22 +213,22 @@ endgenerate
     end
 
 // uncache
-    assign saxi_io.maw.id = `AXI_ID_DUCACHE;
-    assign saxi_io.maw.addr = uncache_addr;
-    assign saxi_io.maw.len = 0;
-    assign saxi_io.maw.size = $clog2(`DATA_BYTE);
-    assign saxi_io.maw.burst = 0;
-    assign saxi_io.maw.lock = 0;
-    assign saxi_io.maw.cache = 0;
-    assign saxi_io.maw.prot = 0;
-    assign saxi_io.maw.qos = 0;
-    assign saxi_io.maw.region = 0;
-    assign saxi_io.maw.user = 0;
-    assign saxi_io.maw.atop = 0;
-    assign saxi_io.mw.data = uncache_data;
-    assign saxi_io.mw.strb = uncache_strb;
-    assign saxi_io.mw.last = 1'b1;
-    assign saxi_io.mw.user = 0;
+    assign saxi_io.aw_id = `AXI_ID_DUCACHE;
+    assign saxi_io.aw_addr = uncache_addr;
+    assign saxi_io.aw_len = 0;
+    assign saxi_io.aw_size = $clog2(`DATA_BYTE);
+    assign saxi_io.aw_burst = 0;
+    assign saxi_io.aw_lock = 0;
+    assign saxi_io.aw_cache = 0;
+    assign saxi_io.aw_prot = 0;
+    assign saxi_io.aw_qos = 0;
+    assign saxi_io.aw_region = 0;
+    assign saxi_io.aw_user = 0;
+    assign saxi_io.aw_atop = 0;
+    assign saxi_io.w_data = uncache_data;
+    assign saxi_io.w_strb = uncache_strb;
+    assign saxi_io.w_last = 1'b1;
+    assign saxi_io.w_user = 0;
 
     assign saxi_io.aw_valid = uncache_req;
     assign saxi_io.w_valid = uncache_wreq;

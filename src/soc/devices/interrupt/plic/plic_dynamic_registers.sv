@@ -381,180 +381,6 @@ module plic_dynamic_registers #(
   endfunction : encode_th
 
 
-  /** Display Register layout/map
-   */
-  //synopsys translate_off
-  function string register_function_name;
-    //returns the 'string' name associated with a register type
-    input register_types function_number;
-
-    string name_array[register_types];
-    name_array[CONFIG   ] = "Configuration";
-    name_array[EL       ] = "Edge/Level";
-    name_array[IE       ] = "Interrupt Enable";
-    name_array[PRIORITY ] = "Interrupt Priority";
-    name_array[THRESHOLD] = "Priority Threshold";
-    name_array[ID       ] = "ID";
-
-    return name_array[function_number];
-  endfunction : register_function_name
-
-
-  //Display IP configuration; register map
-  task display_configuration;
-    $display ("------------------------------------------------------------");
-    $display (" ,------.                    ,--.                ,--.       ");
-    $display (" |  .--. ' ,---.  ,--,--.    |  |    ,---. ,---. `--' ,---. ");
-    $display (" |  '--'.'| .-. |' ,-.  |    |  |   | .-. | .-. |,--.| .--' ");
-    $display (" |  |\\  \\ ' '-' '\\ '-'  |    |  '--.' '-' ' '-' ||  |\\ `--. ");
-    $display (" `--' '--' `---'  `--`--'    `-----' `---' `-   /`--' `---' ");
-    $display ("                                           `---'            ");
-    $display (" RISC-V Platform Level Interrupt Controller                 ");
-
-    $display ("- Configuration Report -------------------------------------");
-    $display (" Sources | Targets | Priority-lvl | Threshold? | Event-Cnt  ");
-      $write ("  %4d   |", SOURCES);
-      $write ("  %3d    |", TARGETS);
-      $write ("  %5d       |", PRIORITIES);
-      $write ("  %5s     |", HAS_THRESHOLD ? "YES" : "NO");
-     $display("  %3d    ", MAX_PENDING_COUNT);
-
-    $display ("- Register Map ---------------------------------------------");
-    display_register_map();
-
-    $display ("- End Configuration Report ---------------------------------");
-  endtask : display_configuration
-
-  task display_register_map;
-    int address;
-
-    $display (" Address  Function               Mapping");
-    for (int r=0; r < TOTAL_REGS; r++)
-    begin
-        //display address + function
-        address = r * (DATA_SIZE / 8);
-        $write (" 0x%04x   %-23s", address, register_function_name(register_function(r)));
-
-        //display register mapping
-        case ( register_function(r) )
-          CONFIG   : display_config_map   ( register_idx(r) );
-          EL       : display_el_map       ( register_idx(r) );
-          PRIORITY : display_priority_map ( register_idx(r) );
-          IE       : display_ie_map       ( register_idx(r) );
-          THRESHOLD: display_threshold_map( register_idx(r) );
-          ID       : display_id_map       ( register_idx(r) );
-          default  : $display("");
-        endcase
-    end
-  endtask : display_register_map
-
-  task display_config_map;
-    input int r;
-
-    if (CONFIG_REGS == 1)
-      $display ("15'h0,TH,PRIORITES,TARGETS,SOURCES");
-    else
-      if (r == 0)
-        $display ("TARGETS,SOURCES");
-      else
-        $display ("15'h0,TH,PRIORITIES"); 
-  endtask : display_config_map
-
-  task display_el_map;
-    input int r;
-
-    if ((r+1)*DATA_SIZE <= SOURCES)
-      $display ("EL[%0d:%0d]", (r+1)*DATA_SIZE -1, r*DATA_SIZE);
-    else
-      $display ("%0d'h0, EL[%0d:%0d]", (r+1)*DATA_SIZE-SOURCES, SOURCES-1, r*DATA_SIZE);
-  endtask : display_el_map
-
-  task display_ie_map;
-    input int ri;
-
-    int target, r;
-
-    target = ri / EL_REGS;
-    r = ri % EL_REGS;
-
-    if ((r+1)*DATA_SIZE <= SOURCES)
-      $display ("IE[%0d][%0d:%0d]", target, (r+1)*DATA_SIZE -1, r*DATA_SIZE);
-    else
-      $display ("%0d'h0, IE[%0d][%0d:%0d]", (r+1)*DATA_SIZE-SOURCES, target, SOURCES-1, r*DATA_SIZE);
-  endtask : display_ie_map
-
-  task display_priority_map;
-    input int r;
-
-    if ((r+1)*PRIORITY_FIELDS_PER_REG <= SOURCES)
-    begin
-        for (int s=(r+1)*PRIORITY_FIELDS_PER_REG -1; s >= r*PRIORITY_FIELDS_PER_REG; s--)
-        begin
-            if (PRIORITY_BITS % 4) $write("%0d'b0,", 4- (PRIORITY_BITS % 4));
-            $write ("P[%0d][%0d:%0d]", s, PRIORITY_BITS -1, 0);
-            if (s != r*PRIORITY_FIELDS_PER_REG) $write(",");
-        end
-    end
-    else
-    begin
-        $write ("%0d'h0,", DATA_SIZE - (SOURCES-r*PRIORITY_FIELDS_PER_REG) * PRIORITY_NIBBLES*4);
-
-        for (int s=SOURCES-1; s >= r*PRIORITY_FIELDS_PER_REG; s--)
-        begin
-            if (PRIORITY_BITS % 4) $write("%0d'b0,", 4- (PRIORITY_BITS % 4));
-            $write ("P[%0d][%0d:%0d]", s, PRIORITY_BITS -1, 0);
-            if (s != r*PRIORITY_FIELDS_PER_REG) $write(",");
-        end
-    end
-
-    $display("");
-  endtask : display_priority_map
-
-/*
-  task display_threshold_map;
-    input int r;
-
-    if ((r+1)*PRIORITY_FIELDS_PER_REG <= TARGETS)
-    begin
-        for (int t=(r+1)*PRIORITY_FIELDS_PER_REG -1; t >= r*PRIORITY_FIELDS_PER_REG; t--)
-        begin
-            if (PRIORITY_BITS % 4) $write("%0d'b0,", 4- (PRIORITY_BITS % 4));
-            $write ("Th[%0d][%0d:%0d]", t, PRIORITY_BITS -1, 0);
-            if (t != r*PRIORITY_FIELDS_PER_REG) $write(",");
-        end
-    end
-    else
-    begin
-        $write ("%0d'h0,", DATA_SIZE - (TARGETS-r*PRIORITY_FIELDS_PER_REG) * PRIORITY_NIBBLES*4);
-
-        for (int t=TARGETS-1; t >= r*PRIORITY_FIELDS_PER_REG; t--)
-        begin
-            if (PRIORITY_BITS % 4) $write("%0d'b0,", 4- (PRIORITY_BITS % 4));
-            $write ("Th[%0d][%0d:%0d]", t, PRIORITY_BITS -1, 0);
-            if (t != r*PRIORITY_FIELDS_PER_REG) $write(",");
-        end
-    end
-
-    $display("");
-  endtask : display_threshold_map
-*/
-
-  task display_threshold_map;
-    input int r;
-
-    $display ("%0d'h0, Th[%0d][%0d:%0d]", DATA_SIZE-PRIORITY_BITS, r, PRIORITY_BITS-1, 0);
-  endtask : display_threshold_map
-
-
-  task display_id_map;
-    input int r;
-
-    $display ("%0d'h0, ID[%0d][%0d:%0d]", DATA_SIZE-SOURCES_BITS, r, SOURCES_BITS-1, 0);
-  endtask : display_id_map
-
-  //synopsys translate_on
-
-
   //////////////////////////////////////////////////////////////////
   //
   // Module Body
@@ -626,14 +452,14 @@ generate
                                 s < (register_idx(r)+1) * PRIORITY_FIELDS_PER_REG;
                                 s++)
                            begin : decode_p0
-                               always_comb p[s] = decode_p(r,s);
+                               always @(*) p[s] = decode_p(r,s);
                            end
                          else
                            for (s = register_idx(r) * PRIORITY_FIELDS_PER_REG;
                                 s < SOURCES;
                                 s++)
                            begin : decode_p1
-                               always_comb p[s] = decode_p(r,s);
+                               always @(*) p[s] = decode_p(r,s);
                            end
                      end
 

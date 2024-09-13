@@ -41,7 +41,7 @@ module LSU(
     WriteBackBus wbBus,
     CommitBus.mem commitBus,
     BackendCtrl backendCtrl,
-    DCacheAxi.cache axi_io,
+    AxiIO.master axi_io,
     AxiIO.master ducache_io,
     BackendRedirectIO.mem redirect_io,
     CsrTlbIO.tlb csr_ltlb_io,
@@ -63,10 +63,15 @@ module LSU(
     DCacheLoadIO rio();
     DCacheStoreIO wio();
     LoadQueueIO load_queue_io();
-    AxiIO laxi_io();
+
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+    ) laxi_io();
     StoreUnitIO store_io();
     StoreQueueIO store_queue_io();
-    AxiIO saxi_io();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+    ) saxi_io();
     StoreCommitIO store_commit_io();
     ViolationIO violation_io();
     LoadForwardIO store_queue_fwd();
@@ -103,8 +108,8 @@ module LSU(
 
     assign lqIdx = load_queue_io.lqIdx;
     assign sqIdx = store_queue_io.sqIdx;
-    `AXI_R_ASSIGN(laxi_io, ducache_io)
-    `AXI_W_ASSIGN(saxi_io, ducache_io)
+    `AXI_ASSIGN_R_REQ(ducache_io, laxi_io)
+    `AXI_ASSIGN_W_REQ(ducache_io, saxi_io)
     always_ff @(posedge clk)begin
         fenceBus.store_flush_end <= sc_buffer_empty & sc_queue_empty;
     end

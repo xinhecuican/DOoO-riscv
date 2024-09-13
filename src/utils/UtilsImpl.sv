@@ -188,6 +188,19 @@ module PEncoder4 (
 	assign out[0] = in[3] | ((~in[2]) & in[1]);
 endmodule
 
+module PEncoder7 (
+	input logic [6: 0] in,
+	output logic [2: 0] out
+);
+	logic [1: 0] out1, out2;
+	logic is_high;
+	PEncoder4 high({1'b0, in[6: 4]}, out1);
+	PEncoder4 low(in[3: 0], out2);
+	assign is_high = |in[6: 4];
+	assign out[2] = is_high;
+	assign out[1: 0] = is_high ? out1 : out2;
+endmodule
+
 module PEncoder8 (
 	input logic [7: 0] in,
 	output logic [2: 0] out

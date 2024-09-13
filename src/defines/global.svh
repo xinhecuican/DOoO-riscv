@@ -10,6 +10,9 @@
         name_n <= name; \
     end
 
+`define NUM_CORE 1
+`define CORE_WIDTH $clog2(`NUM_CORE + 1)
+
 `define RST 1'b1
 `ifdef RV32I
 `define XLEN 32

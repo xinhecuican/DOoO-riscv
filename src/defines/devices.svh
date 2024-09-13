@@ -3,7 +3,6 @@
 `include "global.svh"
 
 `define IRQ_NUM 1
-`define NUM_CORE 1
 
 `define IRQ_START           `PADDR_SIZE'h08000000
 `define IRQ_END             `PADDR_SIZE'h10000000

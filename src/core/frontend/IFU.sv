@@ -3,7 +3,7 @@
 module IFU (
     input logic clk,
     input logic rst,
-    ICacheAxi.cache axi_io,
+    AxiIO.masterr axi_io,
     IfuBackendIO.ifu ifu_backend_io,
     FsqBackendIO.fsq fsq_back_io,
     CommitBus.in commitBus,

@@ -5,7 +5,7 @@ module ICache(
     input logic rst,
     FsqCacheIO.cache fsq_cache_io,
     CachePreDecodeIO.cache cache_pd_io,
-    ICacheAxi.cache axi_io,
+    AxiIO.masterr axi_io,
     TlbL2IO.tlb itlb_io,
     CsrTlbIO.tlb csr_itlb_io,
     FenceBus.mmu fenceBus
@@ -145,7 +145,7 @@ module ICache(
             for(genvar j=0; j<`ICACHE_BANK-1; j++)begin
                 assign way_io[i].wdata[j] = miss_buffer.replace_data[j];
             end
-            assign way_io[i].wdata[`ICACHE_BANK-1] = axi_io.sr.data;
+            assign way_io[i].wdata[`ICACHE_BANK-1] = axi_io.r_data;
             assign way_io[i].we = {`ICACHE_BANK{replace_way[i] & refill_en}};
 
             assign hit[0][i] = way_io[i].tagv[0][`ICACHE_TAG] && (way_io[i].tagv[0][(`ICACHE_TAG-1): 0] == ptag1);
@@ -215,18 +215,18 @@ module ICache(
                                             rdata[hit_index[0]][bank_index[BANK_IDX_SIZE-2: 0]];
         end
     endgenerate
-    assign axi_io.mar.id = 0;
-    assign axi_io.mar.addr = {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}};
-    assign axi_io.mar.len = {3'b0, miss_buffer.length};
-    assign axi_io.mar.size = 3'b010;
-    assign axi_io.mar.burst = 2'b01;
-    assign axi_io.mar.lock = 0;
-    assign axi_io.mar.cache = 0;
-    assign axi_io.mar.prot = 0;
+    assign axi_io.ar_id = 0;
+    assign axi_io.ar_addr = {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}};
+    assign axi_io.ar_len = {3'b0, miss_buffer.length};
+    assign axi_io.ar_size = 3'b010;
+    assign axi_io.ar_burst = 2'b01;
+    assign axi_io.ar_lock = 0;
+    assign axi_io.ar_cache = 0;
+    assign axi_io.ar_prot = 0;
     assign axi_io.ar_valid = main_state == MISS;
-    assign axi_io.mar.qos = 0;
-    assign axi_io.mar.region = 0;
-    assign axi_io.mar.user = 0;
+    assign axi_io.ar_qos = 0;
+    assign axi_io.ar_region = 0;
+    assign axi_io.ar_user = 0;
     assign axi_io.r_ready = 1'b1;
 
 `define REQ_DEF \
@@ -314,17 +314,17 @@ module ICache(
             REFILL:begin
                 if(axi_io.r_valid)begin
                     miss_buffer.stream_index <= next_stream_index;
-                    miss_buffer.replace_data[miss_buffer.stream_index] <= axi_io.sr.data;
+                    miss_buffer.replace_data[miss_buffer.stream_index] <= axi_io.r_data;
                     if(request_buffer.expand_en[miss_buffer.line][miss_buffer.stream_index])begin
                         miss_buffer.current_index <= miss_buffer.current_index + 1;
-                        miss_buffer.data[miss_buffer.current_index] <= axi_io.sr.data;
+                        miss_buffer.data[miss_buffer.current_index] <= axi_io.r_data;
                     end
                     if(next_stream_index == 0)begin
                         miss_buffer.line <= 1;
                         miss_buffer.windex <= request_buffer.index2;
                     end
                 end
-                if(axi_io.r_valid && axi_io.sr.last)begin
+                if(axi_io.r_valid && axi_io.r_last)begin
                     if(!miss_buffer.addition_request)begin
                         main_state <= IDLE;
                     end
@@ -337,7 +337,7 @@ module ICache(
                 end
             end
             endcase
-            if(axi_io.r_valid & axi_io.sr.last)begin
+            if(axi_io.r_valid & axi_io.r_last)begin
                 miss_buffer.flush <= 1'b0;
             end
             else if(fsq_cache_io.flush && (main_state == MISS || main_state == REFILL))begin
@@ -347,7 +347,7 @@ module ICache(
                           fsq_cache_io.stall & main_state == REFILL ? 1'b1 : stall_wait;
             miss_data_en <= ((main_state == REFILL) & 
                             axi_io.r_valid & 
-                            axi_io.sr.last &
+                            axi_io.r_last &
                             (~miss_buffer.addition_request) |
                             stall_wait) &
                             ~miss_buffer.flush &
@@ -380,6 +380,6 @@ module ICache(
     end
 `endif
 
-    `Log(DLog::Debug, T_ICACHE, axi_io.ar_valid & axi_io.ar_ready, $sformatf("icache req. %h %d", axi_io.mar.addr, axi_io.mar.len))
+    `Log(DLog::Debug, T_ICACHE, axi_io.ar_valid & axi_io.ar_ready, $sformatf("icache req. %h %d", axi_io.ar_addr, axi_io.ar_len))
     `Log(DLog::Debug, T_ICACHE, refill_en, $sformatf("icache refill. %h %d %d", {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}}, replace_io.miss_way, miss_buffer.windex))
 endmodule

@@ -146,18 +146,6 @@ interface CachePreDecodeIO;
     modport pd (input en, exception, start_addr, data, stream, fsqIdx, shiftIdx);
 endinterface
 
-interface ICacheAxi;
-    AxiMAR mar;
-    AxiSR sr;
-    logic ar_valid;
-    logic ar_ready;
-    logic r_valid;
-    logic r_ready;
-
-    modport cache(output mar, ar_valid, r_ready, input sr, ar_ready, r_valid);
-    modport axi(input mar, ar_valid, r_ready, output sr, ar_ready, r_valid);
-endinterface
-
 interface ReplaceIO #(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
@@ -526,35 +514,6 @@ interface StoreCommitIO;
 
     modport queue (output en, addr, mask, data, uncache, input conflict);
     modport buffer (input en, addr, mask, data, uncache, output conflict);
-endinterface
-
-interface DCacheAxi;
-    logic ar_valid;
-    logic ar_ready;
-    logic aw_valid;
-    logic aw_ready;
-    logic r_valid;
-    logic r_ready;
-    logic w_valid;
-    logic w_ready;
-    logic b_valid;
-    logic b_ready;
-    AxiMAR mar;
-    AxiSR sr;
-    AxiMAW maw;
-    AxiMW mw;
-    AxiSB sb;
-
-    modport cache(
-        output mar, maw, mw, ar_valid, aw_valid, w_valid, r_ready, b_ready,
-        input sr, sb, ar_ready, aw_ready, w_ready, r_valid, b_valid
-    );
-    modport replace(output maw, mw, aw_valid, w_valid, b_ready, input sb, aw_ready, w_ready, b_valid);
-    modport miss(output mar, ar_valid, r_ready, input sr, ar_ready, r_valid);
-    modport axi(
-        input mar, maw, mw, ar_valid, aw_valid, w_valid, r_ready, b_ready,
-        output sr, sb, ar_ready, aw_ready, w_ready, r_valid, b_valid
-    );
 endinterface
 
 interface ITLBCacheIO;

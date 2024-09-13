@@ -5,7 +5,7 @@ module DCache(
     input logic rst,
     DCacheLoadIO.dcache rio,
     DCacheStoreIO.dcache wio,
-    DCacheAxi.cache axi_io,
+    AxiIO.master axi_io,
     PTWRequest.cache ptw_io,
     BackendCtrl backendCtrl
 );
@@ -44,34 +44,23 @@ module DCache(
 
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
-    DCacheAxi dcache_axi_io();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+    ) dcache_axi_io();
     ReplaceIO #(
         .DEPTH(`DCACHE_SET),
         .WAY_NUM(`DCACHE_WAY),
         .READ_PORT(`LOAD_PIPELINE)
     ) replace_io();
-    DCacheMiss dcache_miss(.*, .io(miss_io), .r_axi_io(dcache_axi_io.miss));
+    DCacheMiss dcache_miss(.*, .io(miss_io), .r_axi_io(dcache_axi_io.masterr));
     PLRU #(
         .DEPTH(`DCACHE_SET),
         .WAY_NUM(`DCACHE_WAY),
         .READ_PORT(`LOAD_PIPELINE)
     ) plru(.*);
-    ReplaceQueue replace_queue(.*, .io(replace_queue_io), .w_axi_io(dcache_axi_io.replace));
-    assign axi_io.mar = dcache_axi_io.mar;
-    assign axi_io.maw = dcache_axi_io.maw;
-    assign axi_io.mw = dcache_axi_io.mw;
-    assign axi_io.ar_valid = dcache_axi_io.ar_valid;
-    assign axi_io.aw_valid = dcache_axi_io.aw_valid;
-    assign axi_io.w_valid = dcache_axi_io.w_valid;
-    assign axi_io.r_ready = dcache_axi_io.r_ready;
-    assign axi_io.b_ready = dcache_axi_io.b_ready;
-    assign dcache_axi_io.sr = axi_io.sr;
-    assign dcache_axi_io.sb = axi_io.sb;
-    assign dcache_axi_io.ar_ready = axi_io.ar_ready;
-    assign dcache_axi_io.aw_ready = axi_io.aw_ready;
-    assign dcache_axi_io.w_ready = axi_io.w_ready;
-    assign dcache_axi_io.r_valid = axi_io.r_valid;
-    assign dcache_axi_io.b_valid = axi_io.b_valid;
+    ReplaceQueue replace_queue(.*, .io(replace_queue_io), .w_axi_io(dcache_axi_io.masterw));
+    `AXI_ASSIGN_REQ_INTF(axi_io, dcache_axi_io)
+    `AXI_ASSIGN_RESP_INTF(dcache_axi_io, axi_io)
 
 // read
     logic `N(`LOAD_PIPELINE) r_req, r_req_s3;

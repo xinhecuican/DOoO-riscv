@@ -30,188 +30,166 @@
 `define AXI_ID_DCACHE 4'd1
 `define AXI_ID_DUCACHE 4'd2
 
-typedef struct packed {
-    logic [`AXI_ID_W-1: 0] id;
-    logic `PADDR_BUS addr;
-    logic [7: 0] len;
-    logic [2: 0] size;
-    logic [1: 0] burst;
-    logic lock;
-    logic [3: 0] cache;
-    logic [2: 0] prot;
-    logic [3: 0] qos; // axi4
-    logic [3: 0] region; // axi4
-    logic `N(`AXI_USER_W) user; // axi4
-} AxiMAR;
+interface AxiIO #(
+  parameter int unsigned AXI_ADDR_WIDTH = 0,
+  parameter int unsigned AXI_DATA_WIDTH = 0,
+  parameter int unsigned AXI_ID_WIDTH   = 0,
+  parameter int unsigned AXI_USER_WIDTH = 0
+);
 
-typedef struct packed {
-    logic `PADDR_BUS addr;
-    logic [2: 0] prot;
-} AxiLMAR;
+  localparam int unsigned AXI_STRB_WIDTH = AXI_DATA_WIDTH / 8;
 
-typedef struct packed {
-    logic [`AXI_ID_W-1: 0] id;
-    logic `N(`XLEN) data;
-    logic [1 :0] resp;
-    logic last;
-    logic `N(`AXI_USER_W) user; // axi4
-} AxiSR;
+  typedef logic [AXI_ID_WIDTH-1:0]   id_t;
+  typedef logic [AXI_ADDR_WIDTH-1:0] addr_t;
+  typedef logic [AXI_DATA_WIDTH-1:0] data_t;
+  typedef logic [AXI_STRB_WIDTH-1:0] strb_t;
+  typedef logic [AXI_USER_WIDTH-1:0] user_t;
 
-typedef struct packed {
-    logic `N(`XLEN) data;
-    logic [1 :0] resp;
-} AxiLSR;
+  id_t              aw_id;
+  addr_t            aw_addr;
+  logic [7: 0]    aw_len;
+  logic [2: 0]   aw_size;
+  logic [1: 0]  aw_burst;
+  logic             aw_lock;
+  logic [3: 0]  aw_cache;
+  logic [2: 0]   aw_prot;
+  logic [3: 0]    aw_qos;
+  logic [3: 0] aw_region;
+  logic [5: 0]   aw_atop;
+  user_t            aw_user;
+  logic             aw_valid;
+  logic             aw_ready;
 
-typedef struct packed {
-    logic [`AXI_ID_W-1 :0] id;
-    logic `PADDR_BUS addr;
-    logic [7 :0] len;
-    logic [2 :0] size;
-    logic [1 :0] burst;
-    logic lock;
-    logic [3 :0] cache;
-    logic [2 :0] prot;
-    logic [3: 0] qos; // axi4
-    logic [3: 0] region; // axi4
-    logic `N(`AXI_USER_W) user; // axi4
-    logic `N(6) atop; // axi5
-} AxiMAW;
+  data_t            w_data;
+  strb_t            w_strb;
+  logic             w_last;
+  user_t            w_user;
+  logic             w_valid;
+  logic             w_ready;
 
-typedef struct packed {
-    logic `PADDR_BUS addr;
-    logic [2 :0] prot;
-} AxiLMAW;
+  id_t              b_id;
+  logic [1: 0]   b_resp;
+  user_t            b_user;
+  logic             b_valid;
+  logic             b_ready;
 
-typedef struct packed {
-    // logic [3 :0] id; // remove in axi4
-    logic `N(`XLEN) data;
-    logic [`XLEN/8-1 :0] strb;
-    logic last;
-    logic `N(`AXI_USER_W) user; // axi4
-} AxiMW;
+  id_t              ar_id;
+  addr_t            ar_addr;
+  logic [7: 0]    ar_len;
+  logic [2: 0]   ar_size;
+  logic [1: 0]  ar_burst;
+  logic             ar_lock;
+  logic [3: 0]  ar_cache;
+  logic [2: 0]   ar_prot;
+  logic [3: 0]    ar_qos;
+  logic [3: 0] ar_region;
+  user_t            ar_user;
+  logic             ar_valid;
+  logic             ar_ready;
 
-typedef struct packed {
-    logic `N(`XLEN) data;
-    logic [`XLEN/8-1 :0] strb;
-} AxiLMW;
+  id_t              r_id;
+  data_t            r_data;
+  logic [1: 0]   r_resp;
+  logic             r_last;
+  user_t            r_user;
+  logic             r_valid;
+  logic             r_ready;
 
-typedef struct packed {
-    logic [`AXI_ID_W - 1 :0] id;
-    logic [1 :0] resp;
-    logic `N(`AXI_USER_W) user; // axi4
-} AxiSB;
+  modport master (
+    output aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid, input aw_ready,
+    output w_data, w_strb, w_last, w_user, w_valid, input w_ready,
+    input b_id, b_resp, b_user, b_valid, output b_ready,
+    output ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, input ar_ready,
+    input r_id, r_data, r_resp, r_last, r_user, r_valid, output r_ready
+  );
 
-typedef struct packed {
-    logic [1 :0] resp;
-} AxiLSB;
+  modport slave (
+    input aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid, output aw_ready,
+    input w_data, w_strb, w_last, w_user, w_valid, output w_ready,
+    output b_id, b_resp, b_user, b_valid, input b_ready,
+    input ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, output ar_ready,
+    output r_id, r_data, r_resp, r_last, r_user, r_valid, input r_ready
+  );
 
-interface AxiIO;
-    logic ar_valid;
-    logic ar_ready;
-    logic aw_valid;
-    logic aw_ready;
-    logic r_valid;
-    logic r_ready;
-    logic w_valid;
-    logic w_ready;
-    logic b_valid;
-    logic b_ready;
-    AxiMAR mar;
-    AxiSR sr;
-    AxiMAW maw;
-    AxiMW mw;
-    AxiSB sb;
+  modport masterr(
+    output ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, input ar_ready,
+    input r_id, r_data, r_resp, r_last, r_user, r_valid, output r_ready
+  );
 
-    modport master(
-        output mar, maw, mw, ar_valid, aw_valid, w_valid, r_ready, b_ready,
-        input sr, sb, ar_ready, aw_ready, w_ready, r_valid, b_valid
-    );
+  modport slaver(
+    input ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, output ar_ready,
+    output r_id, r_data, r_resp, r_last, r_user, r_valid, input r_ready
+  );
 
-    modport slave(
-        input mar, maw, mw, ar_valid, aw_valid, w_valid, r_ready, b_ready,
-        output sr, sb, ar_ready, aw_ready, w_ready, r_valid, b_valid
-    );
+  modport masterw(
+    output aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid, input aw_ready,
+    output w_data, w_strb, w_last, w_user, w_valid, input w_ready,
+    input b_id, b_resp, b_user, b_valid, output b_ready
+  );
 
-    modport masterr(
-      output mar, ar_valid, r_ready,
-      input sr, ar_ready, r_valid
-    );
-
-    modport masterw(
-      output maw, mw, aw_valid, w_valid, b_ready,
-      input sb, aw_ready, w_ready, b_valid
-    );
 endinterface
 
-interface AxiLIO;
-    logic ar_valid;
-    logic ar_ready;
-    logic aw_valid;
-    logic aw_ready;
-    logic r_valid;
-    logic r_ready;
-    logic w_valid;
-    logic w_ready;
-    logic b_valid;
-    logic b_ready;
-    AxiLMAR mar;
-    AxiLSR sr;
-    AxiLMAW maw;
-    AxiLMW mw;
-    AxiLSB sb;
+interface AxiLIO #(
+  parameter int unsigned AXI_ADDR_WIDTH = 0,
+  parameter int unsigned AXI_DATA_WIDTH = 0
+);
 
-    modport master(
-        output mar, maw, mw, ar_valid, aw_valid, w_valid, r_ready, b_ready,
-        input sr, sb, ar_ready, aw_ready, w_ready, r_valid, b_valid
-    );
+  localparam int unsigned AXI_STRB_WIDTH = AXI_DATA_WIDTH / 8;
 
-    modport slave(
-        input mar, maw, mw, ar_valid, aw_valid, w_valid, r_ready, b_ready,
-        output sr, sb, ar_ready, aw_ready, w_ready, r_valid, b_valid
-    );
+  typedef logic [AXI_ADDR_WIDTH-1:0] addr_t;
+  typedef logic [AXI_DATA_WIDTH-1:0] data_t;
+  typedef logic [AXI_STRB_WIDTH-1:0] strb_t;
+
+  // AW channel
+  addr_t          aw_addr;
+  logic [2: 0] aw_prot;
+  logic           aw_valid;
+  logic           aw_ready;
+
+  data_t          w_data;
+  strb_t          w_strb;
+  logic           w_valid;
+  logic           w_ready;
+
+  logic [1: 0] b_resp;
+  logic           b_valid;
+  logic           b_ready;
+
+  addr_t          ar_addr;
+  logic [2: 0] ar_prot;
+  logic           ar_valid;
+  logic           ar_ready;
+
+  data_t          r_data;
+  logic [1: 0] r_resp;
+  logic           r_valid;
+  logic           r_ready;
+
+  modport Master (
+    output aw_addr, aw_prot, aw_valid, input aw_ready,
+    output w_data, w_strb, w_valid, input w_ready,
+    input b_resp, b_valid, output b_ready,
+    output ar_addr, ar_prot, ar_valid, input ar_ready,
+    input r_data, r_resp, r_valid, output r_ready
+  );
+
+  modport Slave (
+    input aw_addr, aw_prot, aw_valid, output aw_ready,
+    input w_data, w_strb, w_valid, output w_ready,
+    output b_resp, b_valid, input b_ready,
+    input ar_addr, ar_prot, ar_valid, output ar_ready,
+    output r_data, r_resp, r_valid, input r_ready
+  );
+
+  modport Monitor (
+    input aw_addr, aw_prot, aw_valid, aw_ready,
+          w_data, w_strb, w_valid, w_ready,
+          b_resp, b_valid, b_ready,
+          ar_addr, ar_prot, ar_valid, ar_ready,
+          r_data, r_resp, r_valid, r_ready
+  );
+
 endinterface
-
-typedef struct packed {
-    AxiMAR ar;
-    AxiMAW aw;
-    AxiMW w;
-    logic ar_valid;
-    logic aw_valid;
-    logic w_valid;
-    logic r_ready;
-    logic b_ready;
-} AxiReq;
-
-typedef struct packed {
-    AxiSR r;
-    AxiSB b;
-    logic ar_ready;
-    logic aw_ready;
-    logic w_ready;
-    logic r_valid;
-    logic b_valid;
-} AxiResp;
-
-typedef struct packed {
-    AxiLMAR ar;
-    AxiLMAW aw;
-    AxiLMW w;
-    logic ar_valid;
-    logic aw_valid;
-    logic w_valid;
-    logic r_ready;
-    logic b_ready;
-} AxiLReq;
-
-typedef struct packed {
-    AxiLSR r;
-    AxiLSB b;
-    logic ar_ready;
-    logic aw_ready;
-    logic w_ready;
-    logic r_valid;
-    logic b_valid;
-} AxiLResp;
 
   /// Configuration for `axi_xbar`.
   typedef struct packed {
@@ -255,63 +233,6 @@ typedef struct packed {
     /// If a transaction can not be routed the xbar will answer with an `axi_pkg::RESP_DECERR`.
     int unsigned   NoAddrRules;
   } xbar_cfg_t;
-
-`define AXI_R_ASSIGN(intf_r, intf) \
-    assign intf.mar = intf_r.mar; \
-    assign intf.ar_valid = intf_r.ar_valid; \
-    assign intf.r_ready = intf_r.r_ready; \
-    assign intf_r.ar_ready = intf.ar_ready; \
-    assign intf_r.r_valid = intf.r_valid; \
-    assign intf_r.sr = intf.sr;
-
-`define AXI_W_ASSIGN(intf_w, intf) \
-    assign intf.maw = intf_w.maw; \
-    assign intf.mw = intf_w.mw; \
-    assign intf.aw_valid = intf_w.aw_valid; \
-    assign intf.w_valid = intf_w.w_valid; \
-    assign intf.b_ready = intf_w.b_ready; \
-    assign intf_w.aw_ready = intf.aw_ready; \
-    assign intf_w.w_ready = intf.w_ready; \
-    assign intf_w.b_valid = intf.b_valid; \
-    assign intf_w.sb = intf.sb;
-
-`define AXI_REQ_ASSIGN(name, intf) \
-    assign name.ar = intf.mar; \
-    assign name.aw = intf.maw; \
-    assign name.w = intf.mw; \
-    assign name.ar_valid = intf.ar_valid; \
-    assign name.aw_valid = intf.aw_valid; \
-    assign name.w_valid = intf.w_valid; \
-    assign name.r_ready = intf.r_ready; \
-    assign name.b_ready = intf.b_ready;
-
-`define AXI_REQ_RECEIVE(name, intf) \
-    assign intf.mar = name.ar; \
-    assign intf.maw = name.aw; \
-    assign intf.mw = name.w; \
-    assign intf.ar_valid = name.ar_valid; \
-    assign intf.aw_valid = name.aw_valid; \
-    assign intf.w_valid = name.w_valid; \
-    assign intf.r_ready = name.r_ready; \
-    assign intf.b_ready = name.b_ready;
-
-`define AXI_RESP_ASSIGN(name, intf) \
-    assign intf.sr = name.r; \
-    assign intf.sb = name.b; \
-    assign intf.ar_ready = name.ar_ready; \
-    assign intf.aw_ready = name.aw_ready; \
-    assign intf.w_ready = name.w_ready; \
-    assign intf.r_valid = name.r_valid; \
-    assign intf.b_valid = name.b_valid;
-
-`define AXI_RESP_RECEIVE(name, intf) \
-    assign name.r = intf.sr; \
-    assign name.b = intf.sb; \
-    assign name.ar_ready = intf.ar_ready; \
-    assign name.aw_ready = intf.aw_ready; \
-    assign name.w_ready = intf.w_ready; \
-    assign name.r_valid = intf.r_valid; \
-    assign name.b_valid = intf.b_valid;
 
 `define AXI_TYPEDEF_AW_CHAN_T(aw_chan_t, addr_t, id_t, user_t)  \
   typedef struct packed {                                       \
@@ -387,7 +308,7 @@ typedef struct packed {
 `define AXI_LITE_TYPEDEF_AW_CHAN_T(aw_chan_lite_t, addr_t)  \
   typedef struct packed {                                   \
     addr_t          addr;                                   \
-    axi_pkg::prot_t prot;                                   \
+    logic [2: 0] prot;                                   \
   } aw_chan_lite_t;
 `define AXI_LITE_TYPEDEF_W_CHAN_T(w_chan_lite_t, data_t, strb_t)  \
   typedef struct packed {                                         \
@@ -396,17 +317,17 @@ typedef struct packed {
   } w_chan_lite_t;
 `define AXI_LITE_TYPEDEF_B_CHAN_T(b_chan_lite_t)  \
   typedef struct packed {                         \
-    axi_pkg::resp_t resp;                         \
+    logic [1: 0] resp;                         \
   } b_chan_lite_t;
 `define AXI_LITE_TYPEDEF_AR_CHAN_T(ar_chan_lite_t, addr_t)  \
   typedef struct packed {                                   \
     addr_t          addr;                                   \
-    axi_pkg::prot_t prot;                                   \
+    logic [2: 0] prot;                                   \
   } ar_chan_lite_t;
 `define AXI_LITE_TYPEDEF_R_CHAN_T(r_chan_lite_t, data_t)  \
   typedef struct packed {                                 \
     data_t          data;                                 \
-    axi_pkg::resp_t resp;                                 \
+    logic [1: 0] resp;                                 \
   } r_chan_lite_t;
 `define AXI_LITE_TYPEDEF_REQ_T(req_lite_t, aw_chan_lite_t, w_chan_lite_t, ar_chan_lite_t)  \
   typedef struct packed {                                                                  \
@@ -487,33 +408,160 @@ typedef struct packed {
   __opt_as __lhs.r_valid = __rhs.r_valid;                           \
   `__AXI_TO_R(__opt_as, __lhs.r, __lhs_sep, __rhs.r, __rhs_sep)
 
-`define __AXI_TO_REQ(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep)  \
-  `__AXI_TO_AW(__opt_as, __lhs.aw, __lhs_sep, __rhs.aw, __rhs_sep)  \
-  __opt_as __lhs.aw_valid = __rhs.aw_valid;                         \
-  `__AXI_TO_W(__opt_as, __lhs.w, __lhs_sep, __rhs.w, __rhs_sep)     \
-  __opt_as __lhs.w_valid = __rhs.w_valid;                           \
-  __opt_as __lhs.b_ready = __rhs.b_ready;                           \
-  `__AXI_TO_AR(__opt_as, __lhs.ar, __lhs_sep, __rhs.ar, __rhs_sep)  \
-  __opt_as __lhs.ar_valid = __rhs.ar_valid;                         \
-  __opt_as __lhs.r_ready = __rhs.r_ready;
-
-`define __AXI_TO_RESP(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep) \
-  __opt_as __lhs.aw_ready = __rhs.aw_ready;                         \
-  __opt_as __lhs.ar_ready = __rhs.ar_ready;                         \
-  __opt_as __lhs.w_ready = __rhs.w_ready;                           \
-  __opt_as __lhs.b_valid = __rhs.b_valid;                           \
-  `__AXI_TO_B(__opt_as, __lhs.b, __lhs_sep, __rhs.b, __rhs_sep)     \
-  __opt_as __lhs.r_valid = __rhs.r_valid;                           \
-  `__AXI_TO_R(__opt_as, __lhs.r, __lhs_sep, __rhs.r, __rhs_sep)
 
 `define AXI_SET_AW_STRUCT(lhs, rhs)     `__AXI_TO_AW(, lhs, ., rhs, .)
 `define AXI_SET_W_STRUCT(lhs, rhs)       `__AXI_TO_W(, lhs, ., rhs, .)
 `define AXI_SET_B_STRUCT(lhs, rhs)       `__AXI_TO_B(, lhs, ., rhs, .)
 `define AXI_SET_AR_STRUCT(lhs, rhs)     `__AXI_TO_AR(, lhs, ., rhs, .)
 `define AXI_SET_R_STRUCT(lhs, rhs)       `__AXI_TO_R(, lhs, ., rhs, .)
+`define AXI_SET_REQ_STRUCT(lhs, rhs)   `__AXI_TO_REQ(, lhs, ., rhs, .)
+`define AXI_SET_RESP_STRUCT(lhs, rhs) `__AXI_TO_RESP(, lhs, ., rhs, .)
+`define AXI_ASSIGN_TO_AW(aw_struct, axi_if)     `__AXI_TO_AW(assign, aw_struct, ., axi_if.aw, _)
+`define AXI_ASSIGN_TO_W(w_struct, axi_if)       `__AXI_TO_W(assign, w_struct, ., axi_if.w, _)
+`define AXI_ASSIGN_TO_B(b_struct, axi_if)       `__AXI_TO_B(assign, b_struct, ., axi_if.b, _)
+`define AXI_ASSIGN_TO_AR(ar_struct, axi_if)     `__AXI_TO_AR(assign, ar_struct, ., axi_if.ar, _)
+`define AXI_ASSIGN_TO_R(r_struct, axi_if)       `__AXI_TO_R(assign, r_struct, ., axi_if.r, _)
+`define AXI_ASSIGN_TO_REQ(req_struct, axi_if)   `__AXI_TO_REQ(assign, req_struct, ., axi_if, _)
+`define AXI_ASSIGN_TO_RESP(resp_struct, axi_if) `__AXI_TO_RESP(assign, resp_struct, ., axi_if, _)
+`define AXI_ASSIGN_AW_STRUCT(lhs, rhs)     `__AXI_TO_AW(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_W_STRUCT(lhs, rhs)       `__AXI_TO_W(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_B_STRUCT(lhs, rhs)       `__AXI_TO_B(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_AR_STRUCT(lhs, rhs)     `__AXI_TO_AR(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_R_STRUCT(lhs, rhs)       `__AXI_TO_R(assign, lhs, ., rhs, .)
 `define AXI_ASSIGN_REQ_STRUCT(lhs, rhs)   `__AXI_TO_REQ(assign, lhs, ., rhs, .)
 `define AXI_ASSIGN_RESP_STRUCT(lhs, rhs) `__AXI_TO_RESP(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_REQ_INTF(lhs, rhs) `__AXI_TO_REQ(assign, lhs, _, rhs, _)
+`define AXI_ASSIGN_RESP_INTF(lhs, rhs) `__AXI_TO_RESP(assign, lhs, _, rhs, _)
+`define AXI_ASSIGN_FROM_AW(axi_if, aw_struct)     `__AXI_TO_AW(assign, axi_if.aw, _, aw_struct, .)
+`define AXI_ASSIGN_FROM_W(axi_if, w_struct)       `__AXI_TO_W(assign, axi_if.w, _, w_struct, .)
+`define AXI_ASSIGN_FROM_B(axi_if, b_struct)       `__AXI_TO_B(assign, axi_if.b, _, b_struct, .)
+`define AXI_ASSIGN_FROM_AR(axi_if, ar_struct)     `__AXI_TO_AR(assign, axi_if.ar, _, ar_struct, .)
+`define AXI_ASSIGN_FROM_R(axi_if, r_struct)       `__AXI_TO_R(assign, axi_if.r, _, r_struct, .)
+`define AXI_ASSIGN_FROM_REQ(axi_if, req_struct)   `__AXI_TO_REQ(assign, axi_if, _, req_struct, .)
+`define AXI_ASSIGN_FROM_RESP(axi_if, resp_struct) `__AXI_TO_RESP(assign, axi_if, _, resp_struct, .)
+`define AXI_SET_TO_AW(aw_struct, axi_if)     `__AXI_TO_AW(, aw_struct, ., axi_if.aw, _)
+`define AXI_SET_TO_W(w_struct, axi_if)       `__AXI_TO_W(, w_struct, ., axi_if.w, _)
+`define AXI_SET_TO_B(b_struct, axi_if)       `__AXI_TO_B(, b_struct, ., axi_if.b, _)
+`define AXI_SET_TO_AR(ar_struct, axi_if)     `__AXI_TO_AR(, ar_struct, ., axi_if.ar, _)
+`define AXI_SET_TO_R(r_struct, axi_if)       `__AXI_TO_R(, r_struct, ., axi_if.r, _)
+`define AXI_SET_TO_REQ(req_struct, axi_if)   `__AXI_TO_REQ(, req_struct, ., axi_if, _)
+`define AXI_SET_TO_RESP(resp_struct, axi_if) `__AXI_TO_RESP(, resp_struct, ., axi_if, _)
 
+`define AXI_ASSIGN_R_REQ(lhs, rhs) \
+    `__AXI_TO_AR(assign, lhs.ar, _, rhs.ar, _) \
+    `__AXI_TO_R(assign, rhs.r, _, lhs.r, _) \
+    assign lhs.ar_valid = rhs.ar_valid; \
+    assign rhs.ar_ready = lhs.ar_ready; \
+    assign rhs.r_valid = lhs.r_valid; \
+    assign rhs.r_ready = lhs.r_ready;
+`define AXI_ASSIGN_W_REQ(lhs, rhs) \
+    `__AXI_TO_AW(assign, lhs.aw, _, rhs.aw, _) \
+    `__AXI_TO_W(assign, lhs.w, _, rhs.w, _) \
+    `__AXI_TO_B(assign, rhs.b, _, lhs.b, _) \
+    assign lhs.aw_valid = rhs.aw_valid; \
+    assign lhs.w_valid = rhs.w_valid; \
+    assign lhs.b_ready = rhs.b_ready; \
+    assign rhs.aw_ready = lhs.aw_ready; \
+    assign rhs.w_ready = lhs.w_ready; \
+    assign rhs.b_valid = lhs.b_valid;
+
+
+`define __AXI_LITE_TO_AX(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep)  \
+  __opt_as __lhs``__lhs_sep``addr = __rhs``__rhs_sep``addr;             \
+  __opt_as __lhs``__lhs_sep``prot = __rhs``__rhs_sep``prot;
+`define __AXI_LITE_TO_W(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep) \
+  __opt_as __lhs``__lhs_sep``data = __rhs``__rhs_sep``data;           \
+  __opt_as __lhs``__lhs_sep``strb = __rhs``__rhs_sep``strb;
+`define __AXI_LITE_TO_B(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep) \
+  __opt_as __lhs``__lhs_sep``resp = __rhs``__rhs_sep``resp;
+`define __AXI_LITE_TO_R(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep) \
+  __opt_as __lhs``__lhs_sep``data = __rhs``__rhs_sep``data;           \
+  __opt_as __lhs``__lhs_sep``resp = __rhs``__rhs_sep``resp;
+`define __AXI_LITE_TO_REQ(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep) \
+  `__AXI_LITE_TO_AX(__opt_as, __lhs.aw, __lhs_sep, __rhs.aw, __rhs_sep) \
+  __opt_as __lhs.aw_valid = __rhs.aw_valid;                             \
+  `__AXI_LITE_TO_W(__opt_as, __lhs.w, __lhs_sep, __rhs.w, __rhs_sep)    \
+  __opt_as __lhs.w_valid = __rhs.w_valid;                               \
+  __opt_as __lhs.b_ready = __rhs.b_ready;                               \
+  `__AXI_LITE_TO_AX(__opt_as, __lhs.ar, __lhs_sep, __rhs.ar, __rhs_sep) \
+  __opt_as __lhs.ar_valid = __rhs.ar_valid;                             \
+  __opt_as __lhs.r_ready = __rhs.r_ready;
+`define __AXI_LITE_TO_RESP(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep)  \
+  __opt_as __lhs.aw_ready = __rhs.aw_ready;                               \
+  __opt_as __lhs.ar_ready = __rhs.ar_ready;                               \
+  __opt_as __lhs.w_ready = __rhs.w_ready;                                 \
+  __opt_as __lhs.b_valid = __rhs.b_valid;                                 \
+  `__AXI_LITE_TO_B(__opt_as, __lhs.b, __lhs_sep, __rhs.b, __rhs_sep)      \
+  __opt_as __lhs.r_valid = __rhs.r_valid;                                 \
+  `__AXI_LITE_TO_R(__opt_as, __lhs.r, __lhs_sep, __rhs.r, __rhs_sep)
+`define AXI_LITE_ASSIGN_AW(dst, src)              \
+  `__AXI_LITE_TO_AX(assign, dst.aw, _, src.aw, _) \
+  assign dst.aw_valid = src.aw_valid;             \
+  assign src.aw_ready = dst.aw_ready;
+`define AXI_LITE_ASSIGN_W(dst, src)             \
+  `__AXI_LITE_TO_W(assign, dst.w, _, src.w, _)  \
+  assign dst.w_valid  = src.w_valid;            \
+  assign src.w_ready  = dst.w_ready;
+`define AXI_LITE_ASSIGN_B(dst, src)             \
+  `__AXI_LITE_TO_B(assign, dst.b, _, src.b, _)  \
+  assign dst.b_valid  = src.b_valid;            \
+  assign src.b_ready  = dst.b_ready;
+`define AXI_LITE_ASSIGN_AR(dst, src)              \
+  `__AXI_LITE_TO_AX(assign, dst.ar, _, src.ar, _) \
+  assign dst.ar_valid = src.ar_valid;             \
+  assign src.ar_ready = dst.ar_ready;
+`define AXI_LITE_ASSIGN_R(dst, src)             \
+  `__AXI_LITE_TO_R(assign, dst.r, _, src.r, _)  \
+  assign dst.r_valid  = src.r_valid;            \
+  assign src.r_ready  = dst.r_ready;
+`define AXI_LITE_ASSIGN(slv, mst) \
+  `AXI_LITE_ASSIGN_AW(slv, mst)   \
+  `AXI_LITE_ASSIGN_W(slv, mst)    \
+  `AXI_LITE_ASSIGN_B(mst, slv)    \
+  `AXI_LITE_ASSIGN_AR(slv, mst)   \
+  `AXI_LITE_ASSIGN_R(mst, slv)
+`define AXI_LITE_SET_FROM_AW(axi_if, aw_struct)      `__AXI_LITE_TO_AX(, axi_if.aw, _, aw_struct, .)
+`define AXI_LITE_SET_FROM_W(axi_if, w_struct)        `__AXI_LITE_TO_W(, axi_if.w, _, w_struct, .)
+`define AXI_LITE_SET_FROM_B(axi_if, b_struct)        `__AXI_LITE_TO_B(, axi_if.b, _, b_struct, .)
+`define AXI_LITE_SET_FROM_AR(axi_if, ar_struct)      `__AXI_LITE_TO_AX(, axi_if.ar, _, ar_struct, .)
+`define AXI_LITE_SET_FROM_R(axi_if, r_struct)        `__AXI_LITE_TO_R(, axi_if.r, _, r_struct, .)
+`define AXI_LITE_SET_FROM_REQ(axi_if, req_struct)    `__AXI_LITE_TO_REQ(, axi_if, _, req_struct, .)
+`define AXI_LITE_SET_FROM_RESP(axi_if, resp_struct)  `__AXI_LITE_TO_RESP(, axi_if, _, resp_struct, .)
+`define AXI_LITE_ASSIGN_FROM_AW(axi_if, aw_struct)     `__AXI_LITE_TO_AX(assign, axi_if.aw, _, aw_struct, .)
+`define AXI_LITE_ASSIGN_FROM_W(axi_if, w_struct)       `__AXI_LITE_TO_W(assign, axi_if.w, _, w_struct, .)
+`define AXI_LITE_ASSIGN_FROM_B(axi_if, b_struct)       `__AXI_LITE_TO_B(assign, axi_if.b, _, b_struct, .)
+`define AXI_LITE_ASSIGN_FROM_AR(axi_if, ar_struct)     `__AXI_LITE_TO_AX(assign, axi_if.ar, _, ar_struct, .)
+`define AXI_LITE_ASSIGN_FROM_R(axi_if, r_struct)       `__AXI_LITE_TO_R(assign, axi_if.r, _, r_struct, .)
+`define AXI_LITE_ASSIGN_FROM_REQ(axi_if, req_struct)   `__AXI_LITE_TO_REQ(assign, axi_if, _, req_struct, .)
+`define AXI_LITE_ASSIGN_FROM_RESP(axi_if, resp_struct) `__AXI_LITE_TO_RESP(assign, axi_if, _, resp_struct, .)
+`define AXI_LITE_SET_TO_AW(aw_struct, axi_if)     `__AXI_LITE_TO_AX(, aw_struct, ., axi_if.aw, _)
+`define AXI_LITE_SET_TO_W(w_struct, axi_if)       `__AXI_LITE_TO_W(, w_struct, ., axi_if.w, _)
+`define AXI_LITE_SET_TO_B(b_struct, axi_if)       `__AXI_LITE_TO_B(, b_struct, ., axi_if.b, _)
+`define AXI_LITE_SET_TO_AR(ar_struct, axi_if)     `__AXI_LITE_TO_AX(, ar_struct, ., axi_if.ar, _)
+`define AXI_LITE_SET_TO_R(r_struct, axi_if)       `__AXI_LITE_TO_R(, r_struct, ., axi_if.r, _)
+`define AXI_LITE_SET_TO_REQ(req_struct, axi_if)   `__AXI_LITE_TO_REQ(, req_struct, ., axi_if, _)
+`define AXI_LITE_SET_TO_RESP(resp_struct, axi_if) `__AXI_LITE_TO_RESP(, resp_struct, ., axi_if, _)
+`define AXI_LITE_ASSIGN_TO_AW(aw_struct, axi_if)     `__AXI_LITE_TO_AX(assign, aw_struct, ., axi_if.aw, _)
+`define AXI_LITE_ASSIGN_TO_W(w_struct, axi_if)       `__AXI_LITE_TO_W(assign, w_struct, ., axi_if.w, _)
+`define AXI_LITE_ASSIGN_TO_B(b_struct, axi_if)       `__AXI_LITE_TO_B(assign, b_struct, ., axi_if.b, _)
+`define AXI_LITE_ASSIGN_TO_AR(ar_struct, axi_if)     `__AXI_LITE_TO_AX(assign, ar_struct, ., axi_if.ar, _)
+`define AXI_LITE_ASSIGN_TO_R(r_struct, axi_if)       `__AXI_LITE_TO_R(assign, r_struct, ., axi_if.r, _)
+`define AXI_LITE_ASSIGN_TO_REQ(req_struct, axi_if)   `__AXI_LITE_TO_REQ(assign, req_struct, ., axi_if, _)
+`define AXI_LITE_ASSIGN_TO_RESP(resp_struct, axi_if) `__AXI_LITE_TO_RESP(assign, resp_struct, ., axi_if, _)
+`define AXI_LITE_SET_AW_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(, lhs, ., rhs, .)
+`define AXI_LITE_SET_W_STRUCT(lhs, rhs)       `__AXI_LITE_TO_W(, lhs, ., rhs, .)
+`define AXI_LITE_SET_B_STRUCT(lhs, rhs)       `__AXI_LITE_TO_B(, lhs, ., rhs, .)
+`define AXI_LITE_SET_AR_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(, lhs, ., rhs, .)
+`define AXI_LITE_SET_R_STRUCT(lhs, rhs)       `__AXI_LITE_TO_R(, lhs, ., rhs, .)
+`define AXI_LITE_SET_REQ_STRUCT(lhs, rhs)   `__AXI_LITE_TO_REQ(, lhs, ., rhs, .)
+`define AXI_LITE_SET_RESP_STRUCT(lhs, rhs) `__AXI_LITE_TO_RESP(, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_AW_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_W_STRUCT(lhs, rhs)       `__AXI_LITE_TO_W(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_B_STRUCT(lhs, rhs)       `__AXI_LITE_TO_B(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_AR_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_R_STRUCT(lhs, rhs)       `__AXI_LITE_TO_R(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_REQ_STRUCT(lhs, rhs)   `__AXI_LITE_TO_REQ(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_RESP_STRUCT(lhs, rhs) `__AXI_LITE_TO_RESP(assign, lhs, ., rhs, .)
     /// Index width required to be able to represent up to `num_idx` indices as a binary
     /// encoded signal.
     /// Ensures that the minimum width if an index signal is `1`, regardless of parametrization.

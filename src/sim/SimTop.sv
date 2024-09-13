@@ -69,10 +69,18 @@ module SimTop(
         peri_rst <= peri_rst_s1;
     end
 
-    AxiIO mem_axi();
-    AxiIO core_axi();
-    AxiIO peri_axi();
-    AxiIO irq_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+    ) mem_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+    ) core_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+    ) peri_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+    ) irq_axi();
 
     ClintIO clint_io();
     logic `N(`IRQ_NUM) irq_source;
@@ -101,6 +109,25 @@ module SimTop(
         NoAddrRules: AXI_SLAVE_NUM,
         default: 0
     };
+    typedef logic [`PADDR_SIZE-1: 0] addr_t;
+    typedef logic user_t;
+    typedef logic [`CORE_WIDTH+2-1: 0] id_t;
+    typedef logic [`XLEN-1: 0] data_t;
+    typedef logic [`XLEN/8-1: 0] strb_t;
+    `AXI_TYPEDEF_AW_CHAN_T(AxiAW, addr_t, id_t, user_t)
+    `AXI_TYPEDEF_W_CHAN_T(AxiW, data_t, strb_t, user_t)
+    `AXI_TYPEDEF_B_CHAN_T(AxiB, id_t, user_t)
+    `AXI_TYPEDEF_AR_CHAN_T(AxiAR, addr_t, id_t, user_t)
+    `AXI_TYPEDEF_R_CHAN_T(AxiR, data_t, id_t, user_t)
+    `AXI_TYPEDEF_REQ_T(AxiReq, AxiAW, AxiW, AxiAR)
+    `AXI_TYPEDEF_RESP_T(AxiResp, AxiB, AxiR)
+    `AXI_LITE_TYPEDEF_AW_CHAN_T(AxiLAW, addr_t)
+    `AXI_LITE_TYPEDEF_W_CHAN_T(AxiLW, data_t, strb_t)
+    `AXI_LITE_TYPEDEF_B_CHAN_T(AxiLB)
+    `AXI_LITE_TYPEDEF_AR_CHAN_T(AxiLAR, addr_t)
+    `AXI_LITE_TYPEDEF_R_CHAN_T(AxiLR, data_t)
+    `AXI_LITE_TYPEDEF_REQ_T(AxiLReq, AxiLAW, AxiLW, AxiLAR)
+    `AXI_LITE_TYPEDEF_RESP_T(AxiLResp, AxiLB, AxiLR)
 
     AxiReq slv_req_i;
     AxiResp slv_resp_o;
@@ -108,14 +135,14 @@ module SimTop(
     AxiResp `N(AXI_SLAVE_NUM) mst_resp_i;
     addr_rule_t `N(AXI_SLAVE_NUM) addr_map;
 
-    `AXI_REQ_ASSIGN(slv_req_i, core_axi)
-    `AXI_RESP_ASSIGN(slv_resp_o, core_axi)
-    `AXI_REQ_RECEIVE(mst_req_o[0], peri_axi)
-    `AXI_RESP_RECEIVE(mst_resp_i[0], peri_axi)
-    `AXI_REQ_RECEIVE(mst_req_o[1], mem_axi)
-    `AXI_RESP_RECEIVE(mst_resp_i[1], mem_axi)
-    `AXI_REQ_RECEIVE(mst_req_o[2], irq_axi)
-    `AXI_RESP_RECEIVE(mst_resp_i[2], irq_axi)
+    `AXI_ASSIGN_TO_REQ(slv_req_i, core_axi)
+    `AXI_ASSIGN_FROM_RESP(core_axi, slv_resp_o)
+    `AXI_ASSIGN_FROM_REQ(peri_axi, mst_req_o[0])
+    `AXI_ASSIGN_TO_RESP(mst_resp_i[0], peri_axi)
+    `AXI_ASSIGN_FROM_REQ(mem_axi, mst_req_o[1])
+    `AXI_ASSIGN_TO_RESP(mst_resp_i[1], mem_axi)
+    `AXI_ASSIGN_FROM_REQ(irq_axi, mst_req_o[2])
+    `AXI_ASSIGN_TO_RESP(mst_resp_i[2], irq_axi)
 
     assign addr_map[0] = '{
         idx: 0,
@@ -135,15 +162,15 @@ module SimTop(
 
     axi_xbar #(
         .Cfg(crossbar_cfg),
-        .slv_aw_chan_t(AxiMAW),
-        .mst_aw_chan_t(AxiMAW),
-        .w_chan_t(AxiMW),
-        .slv_b_chan_t(AxiSB),
-        .mst_b_chan_t(AxiSB),
-        .slv_ar_chan_t(AxiMAR),
-        .mst_ar_chan_t(AxiMAR),
-        .slv_r_chan_t(AxiSR),
-        .mst_r_chan_t(AxiSR),
+        .slv_aw_chan_t(AxiAW),
+        .mst_aw_chan_t(AxiAW),
+        .w_chan_t(AxiW),
+        .slv_b_chan_t(AxiB),
+        .mst_b_chan_t(AxiB),
+        .slv_ar_chan_t(AxiAR),
+        .mst_ar_chan_t(AxiAR),
+        .slv_r_chan_t(AxiR),
+        .mst_r_chan_t(AxiR),
         .slv_req_t(AxiReq),
         .slv_resp_t(AxiResp),
         .mst_req_t(AxiReq),
@@ -179,14 +206,14 @@ module SimTop(
         end_addr: `PLIC_END
     };
 
-    `AXI_REQ_ASSIGN(irq_req, irq_axi)
-    `AXI_RESP_ASSIGN(irq_resp, irq_axi)
+    `AXI_ASSIGN_TO_REQ(irq_req, irq_axi)
+    `AXI_ASSIGN_FROM_RESP(irq_axi, irq_resp)
     axi_to_apb #(
         .NoApbSlaves(`PERIPHERAL_SIZE),
         .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(`AXI_ID_W),
+        .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
         .AxiMaxWriteTxns(32'd16),
         .AxiMaxReadTxns(32'd16),
@@ -250,15 +277,15 @@ module SimTop(
         end_addr: `UART_END
     };
 
-    `AXI_REQ_ASSIGN(peri_req, peri_axi)
-    `AXI_RESP_ASSIGN(peri_resp, peri_axi)
+    `AXI_ASSIGN_TO_REQ(peri_req, peri_axi)
+    `AXI_ASSIGN_FROM_RESP(peri_axi, peri_resp)
 
     axi_to_apb #(
         .NoApbSlaves(`PERIPHERAL_SIZE),
         .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(`AXI_ID_W),
+        .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
         .AxiMaxWriteTxns(32'd16),
         .AxiMaxReadTxns(32'd16),
@@ -298,45 +325,45 @@ module SimTop(
 `ifdef DRAMSIM3
     assign mem_axi.aw_ready = io_memAXI_0_aw_ready;
     assign io_memAXI_0_aw_valid = mem_axi.aw_valid;
-    assign io_memAXI_0_aw_bits_addr = mem_axi.maw.addr;
-    assign io_memAXI_0_aw_bits_prot = mem_axi.maw.prot;
-    assign io_memAXI_0_aw_bits_id = mem_axi.maw.id;
-    assign io_memAXI_0_aw_bits_len = mem_axi.maw.len;
-    assign io_memAXI_0_aw_bits_burst = mem_axi.maw.burst;
-    assign io_memAXI_0_aw_bits_size = mem_axi.maw.size;
-    assign io_memAXI_0_aw_bits_lock = mem_axi.maw.lock;
-    assign io_memAXI_0_aw_bits_cache = mem_axi.maw.cache;
-    assign io_memAXI_0_aw_bits_qos = mem_axi.maw.qos;
+    assign io_memAXI_0_aw_bits_addr = mem_axi.aw_addr;
+    assign io_memAXI_0_aw_bits_prot = mem_axi.aw_prot;
+    assign io_memAXI_0_aw_bits_id = mem_axi.aw_id;
+    assign io_memAXI_0_aw_bits_len = mem_axi.aw_len;
+    assign io_memAXI_0_aw_bits_burst = mem_axi.aw_burst;
+    assign io_memAXI_0_aw_bits_size = mem_axi.aw_size;
+    assign io_memAXI_0_aw_bits_lock = mem_axi.aw_lock;
+    assign io_memAXI_0_aw_bits_cache = mem_axi.aw_cache;
+    assign io_memAXI_0_aw_bits_qos = mem_axi.aw_qos;
 
     assign mem_axi.w_ready = io_memAXI_0_w_ready;
     assign io_memAXI_0_w_valid = mem_axi.w_valid;
-    assign io_memAXI_0_w_bits_data = mem_axi.mw.data;
-    assign io_memAXI_0_w_bits_strb = mem_axi.mw.strb;
-    assign io_memAXI_0_w_bits_last = mem_axi.mw.last;
+    assign io_memAXI_0_w_bits_data = mem_axi.w_data;
+    assign io_memAXI_0_w_bits_strb = mem_axi.w_strb;
+    assign io_memAXI_0_w_bits_last = mem_axi.w_last;
 
     assign io_memAXI_0_b_ready = mem_axi.b_ready;
     assign mem_axi.b_valid = io_memAXI_0_b_valid;
-    assign mem_axi.sb.resp = io_memAXI_0_b_bits_resp;
-    assign mem_axi.sb.id = io_memAXI_0_b_bits_id;
+    assign mem_axi.b_resp = io_memAXI_0_b_bits_resp;
+    assign mem_axi.b_id = io_memAXI_0_b_bits_id;
 
     assign mem_axi.ar_ready = io_memAXI_0_ar_ready;
     assign io_memAXI_0_ar_valid = mem_axi.ar_valid;
-    assign io_memAXI_0_ar_bits_addr = mem_axi.mar.addr;
-    assign io_memAXI_0_ar_bits_prot = mem_axi.mar.prot;
-    assign io_memAXI_0_ar_bits_id = mem_axi.mar.id;
-    assign io_memAXI_0_ar_bits_len = mem_axi.mar.len;
-    assign io_memAXI_0_ar_bits_size = mem_axi.mar.size;
-    assign io_memAXI_0_ar_bits_burst = mem_axi.mar.burst;
-    assign io_memAXI_0_ar_bits_lock = mem_axi.mar.lock;
-    assign io_memAXI_0_ar_bits_cache = mem_axi.mar.cache;
-    assign io_memAXI_0_ar_bits_qos = mem_axi.mar.qos;
+    assign io_memAXI_0_ar_bits_addr = mem_axi.ar_addr;
+    assign io_memAXI_0_ar_bits_prot = mem_axi.ar_prot;
+    assign io_memAXI_0_ar_bits_id = mem_axi.ar_id;
+    assign io_memAXI_0_ar_bits_len = mem_axi.ar_len;
+    assign io_memAXI_0_ar_bits_size = mem_axi.ar_size;
+    assign io_memAXI_0_ar_bits_burst = mem_axi.ar_burst;
+    assign io_memAXI_0_ar_bits_lock = mem_axi.ar_lock;
+    assign io_memAXI_0_ar_bits_cache = mem_axi.ar_cache;
+    assign io_memAXI_0_ar_bits_qos = mem_axi.ar_qos;
 
     assign io_memAXI_0_r_ready = mem_axi.r_ready;
     assign mem_axi.r_valid = io_memAXI_0_r_valid;
-    assign mem_axi.sr.resp = io_memAXI_0_r_bits_resp;
-    assign mem_axi.sr.data = io_memAXI_0_r_bits_data;
-    assign mem_axi.sr.last = io_memAXI_0_r_bits_last;
-    assign mem_axi.sr.id = io_memAXI_0_r_bits_id;
+    assign mem_axi.r_resp = io_memAXI_0_r_bits_resp;
+    assign mem_axi.r_data = io_memAXI_0_r_bits_data;
+    assign mem_axi.r_last = io_memAXI_0_r_bits_last;
+    assign mem_axi.r_id = io_memAXI_0_r_bits_id;
 
 `else
     SimRam ram(

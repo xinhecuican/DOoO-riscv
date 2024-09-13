@@ -9,9 +9,15 @@ module CPUCore (
     ClintIO.cpu clint_io
 );
 
-    ICacheAxi icache_io();
-    DCacheAxi dcache_io();
-    AxiIO   ducache_io();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+    ) icache_io();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+    ) dcache_io();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+    ) ducache_io();
     IfuBackendIO ifu_backend_io();
     FsqBackendIO fsq_back_io();
     CommitBus commitBus();

@@ -65,6 +65,7 @@ generate;
 	1: PEncoder1 pencoder(in, out);
 	2: PEncoder2 pencoder(in, out);
 	4: PEncoder4 pencoder(in, out);
+	7: PEncoder7 pencoder(in, out);
 	8: PEncoder8 pencoder(in, out);
 	16: PEncoder16 pencoder(in, out);
 	32: PEncoder32 pencoder(in, out);

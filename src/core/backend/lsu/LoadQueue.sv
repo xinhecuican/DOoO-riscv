@@ -298,18 +298,18 @@ endgenerate
 
 // uncache
     assign mask_data = mask[head*$bits(MaskData)+: $bits(MaskData)];
-    RDataGen uncache_data_gen (mask_data.uext, mask_data.size, mask_data.offset, laxi_io.sr.data, uncache_data);
-    assign laxi_io.mar.id = `AXI_ID_DUCACHE;
-    assign laxi_io.mar.addr = uncache_addr;
-    assign laxi_io.mar.len = 0;
-    assign laxi_io.mar.size = $clog2(`DATA_BYTE);
-    assign laxi_io.mar.burst = 0;
-    assign laxi_io.mar.lock = 0;
-    assign laxi_io.mar.cache = 0;
-    assign laxi_io.mar.prot = 0;
-    assign laxi_io.mar.qos = 0;
-    assign laxi_io.mar.region = 0;
-    assign laxi_io.mar.user = 0;
+    RDataGen uncache_data_gen (mask_data.uext, mask_data.size, mask_data.offset, laxi_io.r_data, uncache_data);
+    assign laxi_io.ar_id = `AXI_ID_DUCACHE;
+    assign laxi_io.ar_addr = uncache_addr;
+    assign laxi_io.ar_len = 0;
+    assign laxi_io.ar_size = $clog2(`DATA_BYTE);
+    assign laxi_io.ar_burst = 0;
+    assign laxi_io.ar_lock = 0;
+    assign laxi_io.ar_cache = 0;
+    assign laxi_io.ar_prot = 0;
+    assign laxi_io.ar_qos = 0;
+    assign laxi_io.ar_region = 0;
+    assign laxi_io.ar_user = 0;
 
     assign laxi_io.ar_valid = uncache_req;
     assign laxi_io.r_ready = 1'b1;

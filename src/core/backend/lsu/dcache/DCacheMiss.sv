@@ -47,7 +47,7 @@ module DCacheMiss(
     input logic rst,
     DCacheMissIO.miss io,
     ReplaceQueueIO.miss replace_queue_io,
-    DCacheAxi.miss r_axi_io,
+    AxiIO.masterr r_axi_io,
     BackendCtrl backendCtrl
 );
 `ifdef DIFFTEST
@@ -334,7 +334,7 @@ endgenerate
 
     assign io.req = en[head] & ~req_start;
     assign io.req_addr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
-    assign rlast = r_axi_io.r_valid & r_axi_io.sr.last;
+    assign rlast = r_axi_io.r_valid & r_axi_io.r_last;
 
 generate
     for(genvar i=0; i<`DCACHE_LINE / `DATA_BYTE; i++)begin
@@ -346,7 +346,7 @@ endgenerate
 
     always_ff @(posedge clk)begin
         req_next <= io.req & io.req_success;
-        req_last <= r_axi_io.r_valid & r_axi_io.sr.last;
+        req_last <= r_axi_io.r_valid & r_axi_io.r_last;
     end
     always_ff @(posedge clk)begin
         if(rst == `RST)begin
@@ -392,7 +392,7 @@ endgenerate
             end
         end
         if(r_axi_io.r_valid)begin
-            cacheData[cacheIdx] <= r_axi_io.sr.data;
+            cacheData[cacheIdx] <= r_axi_io.r_data;
         end
         if(rlast)begin
             req_data <= data[head];
@@ -401,17 +401,17 @@ endgenerate
     end
 
     assign r_axi_io.ar_valid = req_cache;
-    assign r_axi_io.mar.id = `DCACHE_ID;
-    assign r_axi_io.mar.addr = cache_addr;
-    assign r_axi_io.mar.len = `DCACHE_LINE / `DATA_BYTE - 1;
-    assign r_axi_io.mar.size = $clog2(`DATA_BYTE);
-    assign r_axi_io.mar.burst = 2'b01;
-    assign r_axi_io.mar.lock = 2'b00;
-    assign r_axi_io.mar.cache = 4'b0;
-    assign r_axi_io.mar.prot = 3'b0;
-    assign r_axi_io.mar.qos = 0;
-    assign r_axi_io.mar.region = 0;
-    assign r_axi_io.mar.user = 0;
+    assign r_axi_io.ar_id = `DCACHE_ID;
+    assign r_axi_io.ar_addr = cache_addr;
+    assign r_axi_io.ar_len = `DCACHE_LINE / `DATA_BYTE - 1;
+    assign r_axi_io.ar_size = $clog2(`DATA_BYTE);
+    assign r_axi_io.ar_burst = 2'b01;
+    assign r_axi_io.ar_lock = 2'b00;
+    assign r_axi_io.ar_cache = 4'b0;
+    assign r_axi_io.ar_prot = 3'b0;
+    assign r_axi_io.ar_qos = 0;
+    assign r_axi_io.ar_region = 0;
+    assign r_axi_io.ar_user = 0;
 
     assign r_axi_io.r_ready = 1'b1;
 

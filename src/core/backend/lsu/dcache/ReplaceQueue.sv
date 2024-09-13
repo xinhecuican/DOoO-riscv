@@ -22,7 +22,7 @@ module ReplaceQueue(
     input logic clk,
     input logic rst,
     ReplaceQueueIO.queue io,
-    DCacheAxi.replace w_axi_io
+    AxiIO.masterw w_axi_io
 );
     localparam TRANSFER_BANK = `DCACHE_LINE / `DATA_BYTE;
     typedef struct packed {
@@ -136,24 +136,24 @@ endgenerate
     end
 
     assign w_axi_io.aw_valid = aw_valid;
-    assign w_axi_io.maw.id = `DCACHE_ID;
-    assign w_axi_io.maw.addr = {processEntry.addr, {`DCACHE_LINE_WIDTH{1'b0}}};
-    assign w_axi_io.maw.len = `DCACHE_LINE / `DATA_BYTE - 1;
-    assign w_axi_io.maw.size = $clog2(`DATA_BYTE);
-    assign w_axi_io.maw.burst = 2'b01;
-    assign w_axi_io.maw.lock = 2'b0;
-    assign w_axi_io.maw.cache = 4'b0;
-    assign w_axi_io.maw.prot = 0;
-    assign w_axi_io.maw.qos = 0;
-    assign w_axi_io.maw.region = 0;
-    assign w_axi_io.maw.user = 0;
-    assign w_axi_io.maw.atop = 0;
+    assign w_axi_io.aw_id = `DCACHE_ID;
+    assign w_axi_io.aw_addr = {processEntry.addr, {`DCACHE_LINE_WIDTH{1'b0}}};
+    assign w_axi_io.aw_len = `DCACHE_LINE / `DATA_BYTE - 1;
+    assign w_axi_io.aw_size = $clog2(`DATA_BYTE);
+    assign w_axi_io.aw_burst = 2'b01;
+    assign w_axi_io.aw_lock = 2'b0;
+    assign w_axi_io.aw_cache = 4'b0;
+    assign w_axi_io.aw_prot = 0;
+    assign w_axi_io.aw_qos = 0;
+    assign w_axi_io.aw_region = 0;
+    assign w_axi_io.aw_user = 0;
+    assign w_axi_io.aw_atop = 0;
 
-    assign w_axi_io.mw.data = processEntry.data[widx];
-    assign w_axi_io.mw.strb = {`DATA_BYTE{1'b1}};
-    assign w_axi_io.mw.last = wlast;
+    assign w_axi_io.w_data = processEntry.data[widx];
+    assign w_axi_io.w_strb = {`DATA_BYTE{1'b1}};
+    assign w_axi_io.w_last = wlast;
     assign w_axi_io.w_valid = wvalid;
-    assign w_axi_io.mw.user = 0;
+    assign w_axi_io.w_user = 0;
 
     assign w_axi_io.b_ready = 1'b1;
 
