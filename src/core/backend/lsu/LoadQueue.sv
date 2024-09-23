@@ -42,7 +42,6 @@ module LoadQueue(
     logic `N(`LOAD_QUEUE_WIDTH) head, tail, head_n, tail_n;
     logic hdir, tdir, hdir_n;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) eqIdx;
-    logic violation;
     logic `N(`LOAD_QUEUE_WIDTH) violation_idx;
     logic `ARRAY(`COMMIT_WIDTH, `LOAD_QUEUE_WIDTH) commitIdx;
     LoadIdx redirectIdx;
@@ -198,6 +197,24 @@ generate
     end
 endgenerate
 
+    logic `ARRAY(`COMMIT_WIDTH, `LOAD_QUEUE_SIZE) commit_invalid;
+    logic `ARRAY(`LOAD_DIS_PORT, `LOAD_QUEUE_SIZE) dis_lq_valid;
+    logic `N(`LOAD_QUEUE_SIZE) commit_invalid_combine, dis_lq_idx_combine;
+generate
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        logic `N(`LOAD_QUEUE_SIZE) commit_idx_decode;
+        Decoder #(`LOAD_QUEUE_SIZE) decoder_commit_idx (commitIdx[i], commit_idx_decode);
+        assign commit_invalid[i] = {`LOAD_QUEUE_SIZE{i < commitBus.loadNum}} & commit_idx_decode;
+    end
+    for(genvar i=0; i<`LOAD_DIS_PORT; i++)begin
+        logic `N(`LOAD_QUEUE_SIZE) dis_lq_idx_dec;
+        Decoder #(`LOAD_QUEUE_SIZE) decoder_lq_idx (load_io.dis_lq_idx[i].idx, dis_lq_idx_dec);
+        assign dis_lq_valid[i] = {`LOAD_QUEUE_SIZE{load_io.dis_en[i] & ~load_io.dis_stall}} & dis_lq_idx_dec;
+    end
+    ParallelOR #(`LOAD_QUEUE_SIZE, `COMMIT_WIDTH) or_commit (commit_invalid, commit_invalid_combine);
+    ParallelOR #(`LOAD_QUEUE_SIZE, `LOAD_DIS_PORT) or_dis_lq (dis_lq_valid, dis_lq_idx_combine);
+endgenerate
+
     MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_redirect (walk_tail, redirect_mask);
     MaskGen #(`LOAD_QUEUE_SIZE) mask_gen_head_n (head_n, head_n_mask);
     always_ff @(posedge clk or posedge rst)begin
@@ -210,9 +227,13 @@ endgenerate
             uncache <= 0;
         end
         else begin
+            for(int i=0; i<`LOAD_QUEUE_SIZE; i++)begin
+                valid[i] <= (valid[i] | dis_lq_idx_combine[i]) &
+                            ~(backendCtrl.redirect & ~bigger[i]) &
+                            ~commit_invalid_combine[i];
+            end
             for(int i=0; i<`LOAD_DIS_PORT; i++)begin
                 if(load_io.dis_en[i] & ~load_io.dis_stall)begin
-                    valid[load_io.dis_lq_idx[i].idx] <= 1'b1;
                     dataValid[load_io.dis_lq_idx[i].idx] <= 1'b0;
                     addrValid[load_io.dis_lq_idx[i].idx] <= 1'b0;
                     uncache[load_io.dis_lq_idx[i].idx] <= 1'b0;
@@ -230,19 +251,6 @@ endgenerate
                 end
                 if(io.wbData[i].en & io.wb_valid[i])begin
                     writeback[wbIdx[i]] <= 1'b1;
-                end
-            end
-            for(int i=0; i<`COMMIT_WIDTH; i++)begin
-                if(i < commitBus.loadNum)begin
-                    valid[commitIdx[i]] <= 1'b0;
-                end
-            end
-            if(redirect_next)begin
-                if(walk_valid)begin
-                    valid <= hdir_n ^ walk_dir ? ~(head_n_mask ^ redirect_mask) : head_n_mask ^ redirect_mask;
-                end
-                else begin
-                    valid <= 0;
                 end
             end
             for(int i=0; i<`LOAD_REFILL_SIZE; i++)begin
@@ -273,7 +281,7 @@ endgenerate
     ) load_queue_data (
         .clk(clk),
         .rst(rst),
-        .en({2'b11, violation}),
+        .en({2'b11, 1'b1}),
         .raddr({wbIdx, violation_idx}),
         .rdata({wb_queue_data, vio_storeData}),
         .we(io.en),
@@ -354,24 +362,24 @@ endgenerate
 
 // violation detect
     logic `ARRAY(`STORE_PIPELINE, `LOAD_QUEUE_SIZE) cmp_vec, wb_vec, valid_vec, violation_vec;
-    logic `N(`LOAD_QUEUE_SIZE) violation_vec_combine, violation_vec_mask;
+    logic `N(`LOAD_QUEUE_SIZE) violation_vec_combine, violation_vec_mask, vio_vec_n, vio_vec_redirect;
     logic `N(`LOAD_QUEUE_WIDTH) violation_encode, violation_mask_encode;
-    logic `N(`LOAD_QUEUE_WIDTH) vio_enc_next, vio_mask_next;
-    logic `N(`STORE_PIPELINE) span;
-    logic span_combine, span_next, span_en;
-    logic `N(`LOAD_QUEUE_SIZE) tail_mask, mask_vec;
+    logic `N(`STORE_PIPELINE) span, span_n;
+    logic span_combine;
+    logic `N(`LOAD_QUEUE_SIZE) tail_mask, head_mask_n;
     // r 0 0000 0 0111 1 0011
     // w 0 0001 1 0000 0 0001
     // ^   0001   1000   1101
     MaskGen #(`LOAD_QUEUE_SIZE) maskgen_head (head, head_mask);
     MaskGen #(`LOAD_QUEUE_SIZE) maskgen_tail (tail, tail_mask);
-    assign mask_vec = {`LOAD_QUEUE_SIZE{hdir ^ tdir}} ^ (head_mask ^ tail_mask);
+
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_QUEUE_SIZE; j++)begin
             assign cmp_vec[i][j] = io.write_violation[i].en & 
                                    (io.write_violation[i].addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] == addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE]) &
                                    (|(io.write_violation[i].mask & addr_mask[j][`DCACHE_BYTE-1: 0]));
+            assign wb_vec[i][j] = valid[j] & addrValid[j] & (~backendCtrl.redirect | bigger[j]);
         end
         logic `N(`LOAD_QUEUE_SIZE) store_mask;
         logic overflow;
@@ -379,28 +387,31 @@ generate
         assign span[i] = overflow ? 0 : hdir ^ io.write_violation[i].lqIdx.dir;
         MaskGen #(`LOAD_QUEUE_SIZE) maskgen_store (io.write_violation[i].lqIdx.idx, store_mask);
         assign valid_vec[i] = overflow ? 0 : ~({`LOAD_QUEUE_SIZE{span[i]}} ^ (head_mask ^ store_mask));
-        assign wb_vec[i] = valid & addrValid;
     end
     assign violation_vec = wb_vec & valid_vec & cmp_vec;
     ParallelOR #(`LOAD_QUEUE_SIZE, `STORE_PIPELINE) or_violation_vec(violation_vec, violation_vec_combine);
-    ParallelOR #(1, `STORE_PIPELINE) or_span (span, span_combine);
-    assign violation_vec_mask = violation_vec_combine & ~head_mask;
-    PREncoder #(`LOAD_QUEUE_SIZE) encoder_violation(violation_vec_combine, violation_encode);
-    PREncoder #(`LOAD_QUEUE_SIZE) encoder_violation_mask(violation_vec_mask, violation_mask_encode);
 endgenerate
     always_ff @(posedge clk)begin
-        violation <= |violation_vec;
-        vio_enc_next <= violation_encode;
-        vio_mask_next <= violation_mask_encode;
-        span_en <= |violation_vec_mask;
-        span_next <= span_combine;
+        vio_vec_n <= violation_vec_combine;
+        span_n <= span;
+        head_mask_n <= head_mask;
     end
-    assign violation_idx = span_en & span_next ? vio_mask_next : vio_enc_next;
+generate
+    for(genvar i=0; i<`LOAD_QUEUE_SIZE; i++)begin
+        assign vio_vec_redirect[i] = vio_vec_n[i] & (~backendCtrl.redirect | bigger[i]);
+    end
+endgenerate
+
+    assign span_combine = |span_n;
+    assign violation_vec_mask = vio_vec_redirect & ~head_mask_n;
+    PREncoder #(`LOAD_QUEUE_SIZE) encoder_violation(vio_vec_redirect, violation_encode);
+    PREncoder #(`LOAD_QUEUE_SIZE) encoder_violation_mask(violation_vec_mask, violation_mask_encode);
+    assign violation_idx = (|violation_vec_mask) & span_combine ? violation_mask_encode : violation_encode;
 
     logic lq_violation_en;
     logic `N(`LOAD_QUEUE_WIDTH) lq_violation_idx;
     always_ff @(posedge clk)begin
-        lq_violation_en <= violation;
+        lq_violation_en <= |vio_vec_redirect;
         lq_violation_idx <= violation_idx;
     end
     assign io.lq_violation.en = lq_violation_en;

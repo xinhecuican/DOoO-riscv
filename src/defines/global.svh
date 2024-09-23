@@ -99,6 +99,8 @@ typedef enum logic [1:0] {
 `define ICACHE_SET 64
 `define ICACHE_WAY 8
 `define ICACHE_LINE 64
+`define ICACHE_BYTE 4 // bank byte
+`define ICACHE_BITS (`DCACHE_BYTE * 8)
 `define ICACHE_BANK (`ICACHE_LINE / 4)
 `define ICACHE_BANK_WIDTH $clog2(`ICACHE_BANK)
 `define ICACHE_WAY_WIDTH $clog2(`ICACHE_WAY)

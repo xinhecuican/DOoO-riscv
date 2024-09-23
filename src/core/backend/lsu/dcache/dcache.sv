@@ -10,7 +10,6 @@ module DCache(
     input BackendCtrl backendCtrl
 );
 
-    DCacheWayIO way_io [`ICACHE_WAY-1: 0]();
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_SET_WIDTH) loadIdx, tagvIdx;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_LINE_WIDTH-2) loadOffset;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BANK) loadBankDecode;
@@ -41,6 +40,7 @@ module DCache(
 
     logic ptw_req, ptw_req_n;
     logic `N(`PADDR_SIZE) ptw_addr;
+    logic `N(`DCACHE_WAY) way_dirty;
 
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
@@ -66,9 +66,9 @@ module DCache(
     logic `N(`LOAD_PIPELINE) r_req, r_req_s3;
     logic req_bank_conflict;
     logic `N(`LOAD_PIPELINE) req_cancel;
-generate
     /* UNPARAM */
     assign req_bank_conflict = (rio.req[0] & rio.req[1] & (rio.vaddr[0]`DCACHE_BANK_BUS == rio.vaddr[1]`DCACHE_BANK_BUS));
+generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign loadIdx[i] = rio.vaddr[i]`DCACHE_SET_BUS;
         assign loadOffset[i] = rio.vaddr[i][`DCACHE_LINE_WIDTH-1: `DCACHE_BYTE_WIDTH];
@@ -76,33 +76,72 @@ generate
                             loadIdx[i];
         Decoder #(`DCACHE_BANK) decoder_offset (loadOffset[i], loadBankDecode[i]);
     end
+endgenerate
     ParallelOR #(.WIDTH(`DCACHE_BANK), .DEPTH(`LOAD_PIPELINE)) or_bank(loadBankDecode, loadBank);
 
-    for(genvar i=0; i<`DCACHE_WAY; i++)begin
-        DCacheWay way(
-            .clk(clk),
-            .rst(rst),
-            .io(way_io[i])
-        );
-        for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
-            assign way_io[i].tagv_en[j] = rio.req[j] | ptw_io.req;
-            assign way_io[i].tagv_index[j] = tagvIdx[j];
-        end
-        assign way_io[i].en = loadBank | {`DCACHE_BANK{miss_io.refill_en | ptw_io.req}};
-        for(genvar j=0; j<`DCACHE_BANK; j++)begin
-            /* UNPARAM */
-            assign way_io[i].index[j] = ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
-                                        {`DCACHE_SET_WIDTH{loadBankDecode[0][j] & rio.req[0] & ~req_cancel[0]}} & loadIdx[0] |
-                                        {`DCACHE_SET_WIDTH{loadBankDecode[1][j] & rio.req[1] & ~req_cancel[1]}} & loadIdx[1];
-        end
-        assign rdata[i] = way_io[i].data;
-    end
+    logic `N(`LOAD_PIPELINE+1) tagv_en;
+    logic `N(`DCACHE_WAY) tagv_we;
+    logic `TENSOR(`LOAD_PIPELINE+1, `DCACHE_WAY, `DCACHE_TAG+1) tagv;
+    logic `TENSOR(`DCACHE_BANK, `DCACHE_WAY, `DCACHE_BYTE) data_we;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_SET_WIDTH) data_index;
+    logic `N(`DCACHE_SET_WIDTH) refillIdx;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refillData;
+    logic `TENSOR(`DCACHE_BANK, `DCACHE_WAY, `DCACHE_BITS) data_rdata;
+    logic `N(`DCACHE_WAY) dirty_we, dirty_wdata;
 
+generate
+    
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign tagv_en[i] = rio.req[i] | ptw_io.req;
+    end
+    assign tagv_en[`LOAD_PIPELINE] = wreq | miss_io.refill_en;
+    assign tagv_we = {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way;
+    for(genvar i=0; i<`DCACHE_BANK; i++)begin
+        for(genvar j=0; j<`DCACHE_WAY; j++)begin
+            assign data_we[i][j] = {`DCACHE_BYTE{wreq_n & w_wayhit[j]}} & wmask_n[i] |
+                                   {`DCACHE_BYTE{miss_io.refill_valid & miss_io.refill_en & refill_way[j]}};
+            assign rdata[j][i] = data_rdata[i][j];
+        end
+        assign data_index[i] = ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
+                            {`DCACHE_SET_WIDTH{loadBankDecode[0][i] & rio.req[0] & ~req_cancel[0]}} & loadIdx[0] |
+                            {`DCACHE_SET_WIDTH{loadBankDecode[1][i] & rio.req[1] & ~req_cancel[1]}} & loadIdx[1];
+    end
+endgenerate
+
+    assign refillIdx = wreq_n & (|w_wayhit) ? waddr_n`DCACHE_SET_BUS :
+                                                miss_io.refillAddr`DCACHE_SET_BUS;
+    assign refillData = wreq_n & (|w_wayhit) ? wdata_n : miss_io.refillData;
+    assign dirty_we = {`DCACHE_WAY{wreq_n}} & w_wayhit | 
+                      {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way;
+    assign dirty_wdata = ({`DCACHE_WAY{wreq_n}} & w_wayhit) |
+                         ({`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en & miss_io.refill_dirty}} & refill_way);
+
+    DCacheData cache_data (
+        .clk,
+        .rst,
+        .tagv_en,
+        .tagv_we,
+        .tagv_index(tagvIdx),
+        .tagv_windex((wreq ? widx : miss_io.refillAddr`DCACHE_SET_BUS)),
+        .tagv_wdata({miss_io.refillAddr`DCACHE_TAG_BUS, 1'b1}),
+        .tagv,
+        .en((loadBank | {`DCACHE_BANK{miss_io.refill_en | ptw_io.req}})),
+        .we(data_we),
+        .index(data_index),
+        .windex({`DCACHE_BANK{refillIdx}}),
+        .wdata(refillData),
+        .data(data_rdata),
+        .dirty_en(miss_io.refill_en),
+        .dirty_index(miss_io.refillAddr`DCACHE_SET_BUS),
+        .dirty(way_dirty),
+        .dirty_we,
+        .dirty_windex(refillIdx),
+        .dirty_wdata
+    );
+generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`DCACHE_WAY; j++)begin
-            logic `N(`DCACHE_TAG+1) tagv;
-            assign tagv = way_io[j].tagv[i * (`DCACHE_TAG+1)+: (`DCACHE_TAG+1)];
-            assign wayHit[i][j] = tagv[0] & (tagv[`DCACHE_TAG: 1] == rio.ptag[i]);
+            assign wayHit[i][j] = tagv[i][j][0] & (tagv[i][j][`DCACHE_TAG: 1] == rio.ptag[i]);
         end
         Encoder #(`DCACHE_WAY) encoder_hit_way (wayHit[i], hitWay_encode[i]);
         always_ff @(posedge clk)begin
@@ -186,12 +225,10 @@ endgenerate
 
 generate
     for(genvar i=0; i<`DCACHE_WAY; i++)begin
-        assign way_io[i].tagv_en[`LOAD_PIPELINE] = wreq | miss_io.refill_en;
-        assign wtagv[i] = way_io[i].tagv[`LOAD_PIPELINE*(`DCACHE_TAG+1)+: (`DCACHE_TAG+1)];
+        assign wtagv[i] = tagv[`LOAD_PIPELINE][i];
         assign w_wayhit[i] = wtagv[i][0] & (wtagv[i][`DCACHE_TAG: 1] == waddr_n`DCACHE_TAG_BUS);
     end
 endgenerate
-    logic `N(`DCACHE_WAY) way_dirty;
     logic `N(`STORE_COMMIT_WIDTH) scIdx_n;
     always_ff @(posedge clk)begin
         wreq_n <= wio.req;
@@ -228,35 +265,9 @@ endgenerate
     // write hit
     logic `N(`DCACHE_WAY) refill_way;
     Decoder #(`DCACHE_WAY) decoder_refill_way (miss_io.refillWay, refill_way);
-generate
-    for(genvar i=0; i<`DCACHE_WAY; i++)begin
-        logic `N(`DCACHE_SET_WIDTH) refillIdx;
-        logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refillData;
-        assign refillIdx = wreq_n & w_wayhit[i] ? waddr_n`DCACHE_SET_BUS :
-                                                  miss_io.refillAddr`DCACHE_SET_BUS;
-        assign refillData = wreq_n & w_wayhit[i] ? wdata_n : miss_io.refillData;
-        for(genvar j=0; j<`DCACHE_BANK; j++)begin
-            assign way_io[i].we[j] = {`DCACHE_BYTE{wreq_n & w_wayhit[i]}} & wmask_n[j] |
-                                     {`DCACHE_BYTE{miss_io.refill_valid & miss_io.refill_en & refill_way[i]}};
-            assign way_io[i].windex[j] = refillIdx;
-        end
-        assign way_io[i].wdata = refillData;
-        assign way_dirty[i] = way_io[i].dirty;
 
-        assign way_io[i].dirty_we = wreq_n & w_wayhit[i] | miss_io.refill_valid & miss_io.refill_en & refill_way[i];
-        assign way_io[i].dirty_windex = refillIdx;
-        assign way_io[i].dirty_wdata = (wreq_n & w_wayhit[i]) |
-                                       (miss_io.refill_valid & miss_io.refill_en & refill_way[i] & miss_io.refill_dirty);
-        assign way_io[i].dirty_en = miss_io.refill_en;
-        assign way_io[i].dirty_index = miss_io.refillAddr`DCACHE_SET_BUS;
-
-        assign way_io[i].tagv_we = miss_io.refill_valid & miss_io.refill_en & refill_way[i];
-        assign way_io[i].tagv_windex =  wreq ? widx : miss_io.refillAddr`DCACHE_SET_BUS;
-        assign way_io[i].tagv_wdata = {miss_io.refillAddr`DCACHE_TAG_BUS, 1'b1};
-    end
-endgenerate
     // refill
-    assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit & refill_way))) & ~wio.req;
+    assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit))) & ~wio.req;
     always_ff @(posedge clk)begin
         wio.refill <= miss_io.refill_en & miss_io.refill_valid & miss_io.refill_dirty;
         wio.refillIdx <= miss_io.refill_scIdx;

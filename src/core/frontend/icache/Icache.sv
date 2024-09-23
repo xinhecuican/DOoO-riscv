@@ -58,7 +58,6 @@ module ICache(
     logic `N(`ICACHE_SET_WIDTH) fenceIdx;
 `endif
 
-    ICacheWayIO way_io [`ICACHE_WAY-1: 0]();
     ITLBCacheIO itlb_cache_io();
     ITLB itlb(.*, .tlb_l2_io(itlb_io));
     logic `N(`ICACHE_BANK * 2) expand_en, expand_exception;
@@ -107,51 +106,62 @@ module ICache(
     assign ptag1 = itlb_cache_io.paddr[0][`PADDR_SIZE-1: `TLB_OFFSET];
     assign ptag2 = itlb_cache_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET];
 
-    generate;
-        for(genvar i=0; i<`ICACHE_WAY; i++)begin
-            ICacheWay way(
-                .clk(clk),
-                .rst(rst),
-                .io(way_io[i])
-            );
-            assign way_io[i].tagv_en = fsq_cache_io.en & ~fsq_cache_io.stall;
-            assign way_io[i].tagv_we = {`ICACHE_BANK{replace_way[i] & refill_en}}
+    logic `N(`ICACHE_WAY) tagv_we;
+    logic `N(`ICACHE_SET_WIDTH) tagv_index, tagv_windex;
+    logic `N(`ICACHE_TAG+1) tagv_wdata;
+    logic `ARRAY(`ICACHE_WAY, `ICACHE_TAG+1) tagv0, tagv1;
+    logic `N(`ICACHE_BANK) data_en;
+    logic `ARRAY(`ICACHE_BANK, `ICACHE_WAY) data_we;
+    logic `ARRAY(`ICACHE_BANK, `ICACHE_SET_WIDTH) data_index;
+    logic `ARRAY(`ICACHE_BANK, `ICACHE_BITS) data_wdata;
+    logic `TENSOR(`ICACHE_BANK, `ICACHE_WAY, `ICACHE_BITS) data_rdata;
+
+    assign tagv_we = replace_way & {`ICACHE_BANK{refill_en}};
+    assign tagv_index = index;
+    assign tagv_windex = 
 `ifdef EXT_FENCEI
-            | fenceValid
+                        fenceValid ? fenceIdx :
 `endif
-            ;
-            assign way_io[i].tagv_windex = 
+                        miss_buffer.windex;
+    assign tagv_wdata = 
 `ifdef EXT_FENCEI
-                                            fenceValid ? fenceIdx :
-`endif
-                                            miss_buffer.windex;
-            assign way_io[i].tagv_wdata = 
-`ifdef EXT_FENCEI
-            {~fenceValid, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
+    {~fenceValid, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
 `else
-            {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
+    {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
 `endif
-            assign way_io[i].tagv_index = index;
-            assign way_io[i].span = span[1];
-            // assign way_io[i].en = {`ICACHE_BANK{fsq_cache_io.en}} &
-            //                       (({`ICACHE_BANK{span}} &
-            //                       expand_en[`ICACHE_BANK * 2 - 1: `ICACHE_BANK]) |
-            //                       expand_en[`ICACHE_BANK-1: 0]);
-            assign way_io[i].en = {`ICACHE_BANK{~fsq_cache_io.stall}};
-            for(genvar j=0; j<`ICACHE_BANK; j++)begin
-                assign way_io[i].index[j] = refill_en ? miss_buffer.windex :
-                                            expand_en[j] ? index : indexp1;
+    assign data_en = {`ICACHE_BANK{~fsq_cache_io.stall}};
+    assign data_we = {`ICACHE_BANK{replace_way & {`ICACHE_WAY{refill_en}}}};
+    ICacheData icache_data(
+        .clk,
+        .rst,
+        .tagv_en((fsq_cache_io.en & ~fsq_cache_io.stall)),
+        .tagv_we,
+        .tagv_index,
+        .tagv_windex,
+        .tagv_wdata,
+        .tagv0,
+        .tagv1,
+        .en(data_en),
+        .we(data_we),
+        .index(data_index),
+        .wdata(data_wdata),
+        .data(data_rdata)
+    );
+    generate;
+        for(genvar i=0; i<`ICACHE_BANK; i++)begin
+            assign data_index[i] = refill_en ? miss_buffer.windex :
+                                    expand_en[i] ? index : indexp1;
+            for(genvar j=0; j<`ICACHE_WAY; j++)begin
+                assign rdata[j][i] = data_rdata[i][j];
             end
-            for(genvar j=0; j<`ICACHE_BANK-1; j++)begin
-                assign way_io[i].wdata[j] = miss_buffer.replace_data[j];
-            end
-            assign way_io[i].wdata[`ICACHE_BANK-1] = axi_io.r_data;
-            assign way_io[i].we = {`ICACHE_BANK{replace_way[i] & refill_en}};
-
-            assign hit[0][i] = way_io[i].tagv[0][`ICACHE_TAG] && (way_io[i].tagv[0][(`ICACHE_TAG-1): 0] == ptag1);
-            assign hit[1][i] = way_io[i].tagv[1][`ICACHE_TAG] && (way_io[i].tagv[1][`ICACHE_TAG-1: 0] == ptag2);
-
-            assign rdata[i] = way_io[i].data;
+        end
+        for(genvar j=0; j<`ICACHE_BANK-1; j++)begin
+            assign data_wdata[j] = miss_buffer.replace_data[j];
+        end
+        assign data_wdata[`ICACHE_BANK-1] = axi_io.r_data;
+        for(genvar i=0; i<`ICACHE_WAY; i++)begin
+            assign hit[0][i] = tagv0[i][`ICACHE_TAG] && (tagv0[i][(`ICACHE_TAG-1): 0] == ptag1);
+            assign hit[1][i] = tagv1[i][`ICACHE_TAG] && (tagv1[i][`ICACHE_TAG-1: 0] == ptag2);
         end
     endgenerate
     Encoder #(`ICACHE_WAY) encoder_hit_index0(hit[0], hit_index[0]);

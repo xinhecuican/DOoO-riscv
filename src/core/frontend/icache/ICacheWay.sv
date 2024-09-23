@@ -1,61 +1,60 @@
 `include "../../../defines/defines.svh"
 
-interface ICacheWayIO;
-    logic `N(`ICACHE_BANK) en;
-    logic tagv_en;
-    logic tagv_we;
-    logic span; //request span one line
-    logic `N(`ICACHE_SET_WIDTH) tagv_index;
-    logic `N(`ICACHE_SET_WIDTH) tagv_windex;
-    logic `ARRAY(2,(`ICACHE_TAG+1)) tagv;
-    logic `N(`ICACHE_TAG+1) tagv_wdata;
-    logic `N(`ICACHE_BANK) we;
-    logic `ARRAY(`ICACHE_BANK, `ICACHE_SET_WIDTH) index;
-    logic `ARRAY(`ICACHE_BANK, 32) data;
-    logic `ARRAY(`ICACHE_BANK, 32) wdata;
-    modport way(input en, tagv_en, tagv_we, span, tagv_index, tagv_windex, tagv_wdata, index, we, wdata, output tagv, data);
-endinterface
-
-module ICacheWay(
+module ICacheData(
     input logic clk,
     input logic rst,
-    ICacheWayIO.way io
+    input logic tagv_en,
+    input logic `N(`ICACHE_WAY) tagv_we,
+    input logic `N(`ICACHE_SET_WIDTH) tagv_index,
+    input logic `N(`ICACHE_SET_WIDTH) tagv_windex,
+    input logic `N(`ICACHE_TAG+1) tagv_wdata,
+    output logic `ARRAY(`ICACHE_WAY, `ICACHE_TAG+1) tagv0,
+    output logic `ARRAY(`ICACHE_WAY, `ICACHE_TAG+1) tagv1,
+    input logic `N(`ICACHE_BANK) en,
+    input logic `ARRAY(`ICACHE_BANK, `ICACHE_WAY) we,
+    input logic `ARRAY(`ICACHE_BANK, `ICACHE_SET_WIDTH) index,
+    input logic `ARRAY(`ICACHE_BANK, `ICACHE_BITS) wdata,
+    output logic `TENSOR(`ICACHE_BANK, `ICACHE_WAY, `ICACHE_BITS) data
 );
-    logic `N(`ICACHE_SET_WIDTH) tagv_index_p1;
-    logic `N(`ICACHE_TAG+1) tagv `N(`ICACHE_SET);
-
-    assign tagv_index_p1 = io.tagv_index + 1;
-
-    always_ff @( posedge clk ) begin
-        if(io.tagv_en)begin
-            io.tagv[0] <= tagv[io.tagv_index];
-            io.tagv[1] <= tagv[tagv_index_p1];
-        end
-    end
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            tagv <= '{default: 0};
-        end
-        else begin
-            if(io.tagv_we)begin
-                tagv[io.tagv_windex] <= io.tagv_wdata;
-            end
-        end
-    end
+    logic `N(`ICACHE_SET_WIDTH) tagv_waddr, tagv_index_p1;
+    assign tagv_index_p1 = tagv_index + 1;
+    assign tagv_waddr = |tagv_we ? tagv_windex : tagv_index_p1;
+    MPRAM #(
+        .WIDTH(`ICACHE_WAY * (`ICACHE_TAG+1)),
+        .DEPTH(`ICACHE_SET),
+        .READ_PORT(1),
+        .RW_PORT(1),
+        .WRITE_PORT(0),
+        .RESET(1),
+        .BYTE_WRITE(1),
+        .BYTES(`ICACHE_WAY)
+    ) tagv_ram (
+        .clk,
+        .rst,
+        .en({2{tagv_en}}),
+        .raddr(tagv_index),
+        .rdata({tagv1, tagv0}),
+        .we(tagv_we),
+        .waddr(tagv_waddr),
+        .wdata({`ICACHE_WAY{tagv_wdata}}),
+        .ready()
+    );
 
     generate;
         for(genvar i=0; i<`ICACHE_BANK; i++)begin
             SPRAM #(
-                .WIDTH(32),
+                .WIDTH(`ICACHE_WAY * `ICACHE_BITS),
                 .DEPTH(`ICACHE_SET),
-                .READ_LATENCY(1)
+                .READ_LATENCY(1),
+                .BYTE_WRITE(1),
+                .BYTES(`ICACHE_WAY)
             ) bank (
                 .clk(clk),
-                .en(io.en[i]),
-                .addr(io.index[i]),
-                .we(io.we[i]),
-                .wdata(io.wdata[i]),
-                .rdata(io.data[i])
+                .en(en[i]),
+                .addr(index[i]),
+                .we(we[i]),
+                .wdata({`ICACHE_WAY{wdata[i]}}),
+                .rdata(data[i])
             );
         end
     endgenerate
