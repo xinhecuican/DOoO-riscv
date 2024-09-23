@@ -10,7 +10,7 @@ module RegfileWrapper(
 `ifdef RVM
     IssueRegIO.regfile mult_reg_io,
 `endif
-    WriteBackBus wbBus
+    input WriteBackBus wbBus
 `ifdef DIFFTEST
     ,DiffRAT.regfile diff_rat
 `endif

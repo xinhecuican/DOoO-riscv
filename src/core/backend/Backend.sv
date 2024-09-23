@@ -19,7 +19,7 @@ module Backend(
     DecodeRenameIO dec_rename_io();
     RenameDisIO rename_dis_io();
     ROBRenameIO rob_rename_io();
-    WriteBackBus wbBus();
+    WriteBackBus wbBus;
     DisIssueIO #(.PORT_NUM(`INT_DIS_PORT), .DATA_SIZE($bits(IntIssueBundle))) dis_int_io();
     DisIssueIO #(.PORT_NUM(`LOAD_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_load_io();
     DisIssueIO #(.PORT_NUM(`STORE_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_store_io();
@@ -34,7 +34,7 @@ module Backend(
 `ifdef RVM
     IssueRegIO #(`MULT_SIZE, `MULT_SIZE * 2) mult_reg_io();
 `endif
-    WakeupBus wakeupBus();
+    WakeupBus wakeupBus;
     IssueWakeupIO #(`ALU_SIZE) int_wakeup_io();
     IssueWakeupIO #(`LOAD_PIPELINE) load_wakeup_io();
     IssueWakeupIO #(1) csr_wakeup_io();
@@ -48,9 +48,9 @@ module Backend(
 `endif
     WriteBackIO #(1) csr_wb_io();
     IntIssueExuIO int_exu_io();
-    BackendCtrl backendCtrl();
+    BackendCtrl backendCtrl;
     CommitBus commitBus();
-    CommitWalk commitWalk();
+    CommitWalk commitWalk;
     BackendRedirectIO backendRedirect();
     RobRedirectIO rob_redirect_io();
     WriteBackIO #(`ALU_SIZE) alu_wb_io();

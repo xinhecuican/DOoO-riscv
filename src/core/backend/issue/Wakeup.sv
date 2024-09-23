@@ -16,8 +16,8 @@ module Wakeup(
     IssueWakeupIO.wakeup mult_wakeup_io,
     IssueWakeupIO.wakeup div_wakeup_io,
 `endif
-    WakeupBus.wakeup wakeupBus,
-    WriteBackBus wbBus
+    output WakeupBus wakeupBus,
+    input WriteBackBus wbBus
 );
 
     logic `N(`ALU_SIZE) int_en, int_we;

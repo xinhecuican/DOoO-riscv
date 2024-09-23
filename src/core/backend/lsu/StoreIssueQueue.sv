@@ -27,8 +27,8 @@ module StoreIssueQueue(
     input logic rst,
     DisIssueIO.issue dis_store_io,
     IssueRegIO.issue store_reg_io,
-    WakeupBus wakeupBus,
-    BackendCtrl backendCtrl,
+    input WakeupBus wakeupBus,
+    input BackendCtrl backendCtrl,
     StoreUnitIO.store store_io,
     DTLBLsuIO.sq tlb_lsu_io
 );
@@ -134,8 +134,8 @@ module StoreAddrBank(
     input logic clk,
     input logic rst,
     StoreAddrBankIO.bank io,
-    WakeupBus wakeupBus,
-    BackendCtrl backendCtrl
+    input WakeupBus wakeupBus,
+    input BackendCtrl backendCtrl
 );
     typedef struct packed {
         logic rs1v;
@@ -309,8 +309,8 @@ module StoreDataBank(
     input logic clk,
     input logic rst,
     StoreDataBankIO.bank io,
-    WakeupBus wakeupBus,
-    BackendCtrl backendCtrl
+    input WakeupBus wakeupBus,
+    input BackendCtrl backendCtrl
 );
     typedef struct packed {
         logic rs2v;

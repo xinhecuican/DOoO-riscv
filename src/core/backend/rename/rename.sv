@@ -7,8 +7,8 @@ module Rename(
     RenameDisIO.rename rename_dis_io,
     ROBRenameIO.rename rob_rename_io,
     CommitBus.in commitBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl,
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl,
     output logic full
 `ifdef DIFFTEST
     ,DiffRAT.rat diff_rat
@@ -92,12 +92,21 @@ endgenerate
     logic `N($clog2(`FETCH_WIDTH) + 1) validNum;
     ParallelAdder #(1, `FETCH_WIDTH) adder_valid (en, validNum);
     assign rob_rename_io.validNum = validNum;
+    always_ff @(posedge clk)begin
+        if(~stall)begin
+            rename_dis_io.prs1 <= prs1;
+            rename_dis_io.prs2 <= prs2;
+            rename_dis_io.prd <= prd;
+            rename_dis_io.old_prd <= old_prd;
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                rename_dis_io.robIdx[i].idx <= robIdx[i];
+                rename_dis_io.robIdx[i].dir <= rob_rename_io.robIdx.idx[`ROB_WIDTH-1] & ~robIdx[i][`ROB_WIDTH-1] ? ~rob_rename_io.robIdx.dir : rob_rename_io.robIdx.dir;
+            end
+        end
+    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             rename_dis_io.op <= 0;
-            rename_dis_io.prs1 <= 0;
-            rename_dis_io.prd <= 0;
-            rename_dis_io.robIdx <= 0;
             rename_dis_io.wen <= 0;
         end
         else if(backendCtrl.redirect)begin
@@ -116,14 +125,6 @@ endgenerate
             else begin
                 rename_dis_io.op <= dec_rename_io.op;
                 rename_dis_io.wen <= rd_en;
-            end
-            rename_dis_io.prs1 <= prs1;
-            rename_dis_io.prs2 <= prs2;
-            rename_dis_io.prd <= prd;
-            rename_dis_io.old_prd <= old_prd;
-            for(int i=0; i<`FETCH_WIDTH; i++)begin
-                rename_dis_io.robIdx[i].idx <= robIdx[i];
-                rename_dis_io.robIdx[i].dir <= rob_rename_io.robIdx.idx[`ROB_WIDTH-1] & ~robIdx[i][`ROB_WIDTH-1] ? ~rob_rename_io.robIdx.dir : rob_rename_io.robIdx.dir;
             end
         end
     end

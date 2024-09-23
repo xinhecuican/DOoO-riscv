@@ -13,10 +13,10 @@ module Dispatch(
 `ifdef RVM
     DisIssueIO.dis dis_mult_io,
 `endif
-    WakeupBus wakeupBus,
+    input WakeupBus wakeupBus,
     CommitBus.in commitBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl,
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl,
     output logic full
 );
     BusyTableIO busytable_io();
@@ -343,8 +343,8 @@ module DispatchQueue #(
     input logic clk,
     input logic rst,
     DispatchQueueIO.dis_queue io,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl
 );
 
     DisStatusBundle status_ram `N(DEPTH);
@@ -459,8 +459,8 @@ module MemDispatchQueue #(
     input logic rst,
     input logic `ARRAY(`FETCH_WIDTH, IDX_WIDTH) idx,
     DispatchQueueIO.dis_queue io,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl,
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl,
     output logic need_redirect,
     output logic redirect_free,
     output logic `N(IDX_WIDTH) redirect_idx

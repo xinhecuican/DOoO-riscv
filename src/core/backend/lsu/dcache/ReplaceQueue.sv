@@ -44,7 +44,9 @@ module ReplaceQueue(
     assign tail_n = tail + 1;
     assign newEntry.addr = io.addr;
     assign newEntry.data = io.data;
-    assign io.idx = tail;
+    always_ff @(posedge clk)begin
+        io.idx <= tail;
+    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             bhead <= 0;
@@ -56,7 +58,7 @@ module ReplaceQueue(
             dirty <= 0;
         end
         else begin
-            if(io.en & ~full)begin
+            if(io.en & ~full & ~(|hit))begin
                 tail <= tail_n;
                 tdir <= tail[`DCACHE_REPLACE_WIDTH-1] & ~tail_n[`DCACHE_REPLACE_WIDTH-1] ? ~tdir : tdir;
             end
@@ -71,7 +73,6 @@ module ReplaceQueue(
                 bhead <= bhead_n;
                 bhdir <= bhead[`DCACHE_REPLACE_WIDTH-1] & ~bhead_n[`DCACHE_REPLACE_WIDTH-1] ? ~bhdir : bhdir;
                 dataValid[bhead] <= 1'b0;
-                dirty[bhead] <= 1'b0;
             end
         end
     end

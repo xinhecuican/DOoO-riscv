@@ -10,8 +10,7 @@ module WriteBack(
     WriteBackIO.wb mult_wb_io,
     WriteBackIO.wb div_wb_io,
 `endif
-    BackendCtrl backendCtrl,
-    WriteBackBus.wb wbBus
+    output WriteBackBus wbBus
 );
     WBData csrData;
 `ifdef RVM

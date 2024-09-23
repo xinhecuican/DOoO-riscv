@@ -34,6 +34,8 @@ module UBTB(
     Encoder #(`UBTB_SIZE) encoder_lookup(lookup_hits, lookup_index);
     Encoder #(`UBTB_SIZE) encoder_update(updateHits, updateIdx);
     BTBTagGen gen_tag(ubtb_io.pc, lookup_tag);
+    assign replace_io.hit_en = 0;
+    assign replace_io.hit_way = 0;
     assign lookup_hit = |lookup_hits;
     assign updateHit = |updateHits;
     assign updateSelectIdx = updateHit ? updateIdx : replace_io.miss_way;

@@ -5,8 +5,8 @@ module Decode(
     input logic rst,
     input FetchBundle insts,
     DecodeRenameIO.decode dec_rename_io,
-    BackendCtrl backendCtrl,
-    CommitWalk commitWalk
+    input BackendCtrl backendCtrl,
+    input CommitWalk commitWalk
 );
     DecodeInfo decodeInfo `N(`FETCH_WIDTH);
 

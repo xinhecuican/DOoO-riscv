@@ -20,7 +20,7 @@ module RenameTable(
     input logic rst,
     RenameTableIO.rename rename_io,
     CommitBus.in commitBus,
-    CommitWalk commitWalk
+    input CommitWalk commitWalk
 `ifdef DIFFTEST
     ,DiffRAT.rat diff_rat
 `endif

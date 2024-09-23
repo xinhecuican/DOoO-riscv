@@ -6,7 +6,7 @@ module PreDecode(
     CachePreDecodeIO.pd cache_pd_io,
     PreDecodeRedirect.predecode pd_redirect,
     PreDecodeIBufferIO.predecode pd_ibuffer_io,
-    FrontendCtrl frontendCtrl
+    input FrontendCtrl frontendCtrl
 );
     PreDecodeBundle bundles`N(`BLOCK_INST_SIZE);
     PreDecodeBundle bundles_next `N(`BLOCK_INST_SIZE);

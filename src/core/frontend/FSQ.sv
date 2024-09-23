@@ -11,7 +11,7 @@ module FSQ (
     PreDecodeRedirect.redirect pd_redirect,
     FsqBackendIO.fsq fsq_back_io,
     CommitBus.in commitBus,
-    FrontendCtrl frontendCtrl
+    input FrontendCtrl frontendCtrl
 );
     logic `N(`FSQ_WIDTH) search_head, commit_head, tail, write_index;
     logic `N(`FSQ_WIDTH) search_head_n1, tail_n1, n_commit_head;
@@ -29,7 +29,7 @@ module FSQ (
     logic `N(`FSQ_WIDTH) searchIdx;
     FetchStream commitStream, searchStream, writeStream;
     logic initReady;
-    
+    logic commitValid;
 
     assign tail_n1 = tail + 1;
     assign search_head_n1 = search_head + 1;
@@ -426,7 +426,6 @@ endgenerate
     end
 
     logic `N(8) commitNum;
-    logic commitValid;
     BTBUpdateInfo commitUpdateEntry;
     FsqIdxInfo commitFsqInfo;
     // because streamVec is not init

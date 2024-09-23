@@ -30,7 +30,7 @@ module DivUnit(
     output logic `N(`PREG_WIDTH) wakeup_rd,
     output logic ready,
     output logic div_end,
-    BackendCtrl backendCtrl
+    input BackendCtrl backendCtrl
 );
 
     logic `N(`XLEN) abs_a, abs_b;
@@ -165,7 +165,7 @@ module DivPipe #(
     output logic `N(PIPE_WIDTH+1) cnt_o,
     output logic ready,
     output logic clean,
-    BackendCtrl backendCtrl
+    input BackendCtrl backendCtrl
 );
     logic `N(PIPE_WIDTH+1) cnt;
     logic `N(PIPE_ALL_WIDTH) cnt_global;

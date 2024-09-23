@@ -28,10 +28,10 @@ module LoadIssueQueue(
     input logic rst,
     DisIssueIO.issue dis_load_io,
     IssueRegIO.issue load_reg_io,
-    WakeupBus wakeupBus,
+    input WakeupBus wakeupBus,
     LoadUnitIO.load load_io,
     DTLBLsuIO.lq tlb_lsu_io,
-    BackendCtrl backendCtrl
+    input BackendCtrl backendCtrl
 );
 
     LoadIssueBankIO bank_io [`LOAD_ISSUE_BANK_NUM-1: 0]();
@@ -122,8 +122,8 @@ module LoadIssueBank(
     input logic clk,
     input logic rst,
     LoadIssueBankIO.bank io,
-    WakeupBus wakeupBus,
-    BackendCtrl backendCtrl
+    input WakeupBus wakeupBus,
+    input BackendCtrl backendCtrl
 );
     typedef struct packed {
         logic rs1v;

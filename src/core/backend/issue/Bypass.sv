@@ -4,7 +4,7 @@ module Bypass(
     input logic clk,
     input logic rst,
     RegfileIO.bypass reg_io,
-    WriteBackBus wbBus,
+    input WriteBackBus wbBus,
     output logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata
 );
     logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr_n;

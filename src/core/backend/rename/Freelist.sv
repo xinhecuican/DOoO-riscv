@@ -15,8 +15,8 @@ module Freelist(
     input logic rst,
     FreelistIO.freelist fl_io,
     CommitBus.in commitBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl
 );
     logic `N(`PREG_WIDTH) freelist `N(`PREG_SIZE);
     logic `N(`PREG_WIDTH) head, tail, tail_n;

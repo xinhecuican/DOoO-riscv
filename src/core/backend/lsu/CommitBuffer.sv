@@ -356,23 +356,33 @@ module SCDataBank(
     logic `ARRAY(`DCACHE_BYTE, 8) d `N(`STORE_COMMIT_SIZE);
     logic `N(`DCACHE_BYTE) v `N(`STORE_COMMIT_SIZE);
     logic wconflict;
-    logic `N(`STORE_PIPELINE) we_new_conflict;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) waddr_decode;
+    logic `N(`STORE_COMMIT_SIZE) waddr_combine;
+    logic `ARRAY(`STORE_COMMIT_SIZE, `DCACHE_BYTE) wmask_map;
     `UNPARAM
-    assign wconflict = (|we_new) & (waddr[0] == waddr[1]);
-    assign we_new_conflict[0] = we_new[0];
-    assign we_new_conflict[1] = we_new[1] & ~wconflict;
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        logic `ARRAY(`DCACHE_BYTE, 8) pipe_data;
-        assign pipe_data = wdata[i];
+        Decoder #(`STORE_COMMIT_SIZE) decoder_waddr (waddr[i], waddr_decode[i]);
+    end
+
+    for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
         for(genvar j=0; j<`DCACHE_BYTE; j++)begin
-            always_ff @(posedge clk)begin
-                if(wmask[i][j])begin
-                    d[waddr[i]][j] <= pipe_data[j];
+            always_ff @( posedge clk ) begin
+                `UNPARAM
+                if(waddr_decode[1][i] & wmask[1][j])begin
+                    d[i][j] <= wdata[1][j*8 +: 8];
                 end
-                if(we_new_conflict[i] | wmask[i][j])begin
-                    v[waddr[i]][j] <= wmask[i][j];
+                else if(waddr_decode[0][i] & wmask[0][j])begin
+                    d[i][j] <= wdata[0][j*8 +: 8];
+                end
+                if(waddr_decode[1][i] & wmask[1][j] |
+                   waddr_decode[0][i] & wmask[0][j])begin
+                    v[i][j] <= 1'b1;
+                end
+                else if(waddr_decode[1][i] & we_new[1] |
+                        waddr_decode[0][i] & we_new[0])begin
+                    v[i][j] <= 1'b0;
                 end
             end
         end

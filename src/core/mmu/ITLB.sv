@@ -30,8 +30,8 @@ module ITLB(
     assign tlb_l2_io0.req_addr = req_buf.req_addr;
     TLBRepeater #(.FRONT(1)) repeater0(.*, .flush(itlb_cache_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io));
 
-    ReplaceD1IO #(.WAY_NUM(`DTLB_SIZE)) replace_io();
-    RandomReplaceD1 #(1, `DTLB_SIZE) replace (.*);
+    ReplaceD1IO #(.WAY_NUM(`ITLB_SIZE)) replace_io();
+    RandomReplaceD1 #(1, `ITLB_SIZE) replace (.*);
     assign replace_io.hit_en = 0;
     assign replace_io.hit_way = 0;
 generate

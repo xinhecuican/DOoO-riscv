@@ -21,7 +21,7 @@ module IFU (
     PreDecodeRedirect pd_redirect();
     PreDecodeIBufferIO pd_ibuffer_io();
     FetchBundle fetchBundle;
-    FrontendCtrl frontendCtrl();
+    FrontendCtrl frontendCtrl;
 
     assign ifu_backend_io.fetchBundle = fetchBundle;
     assign frontendCtrl.redirect = fsq_back_io.redirect.en;

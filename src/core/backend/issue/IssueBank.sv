@@ -32,9 +32,9 @@ module IssueBank #(
     input logic clk,
     input logic rst,
     IssueBankIO.bank io,
-    WakeupBus wakeupBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl
+    input WakeupBus wakeupBus,
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl
 );
     logic `N(DEPTH) en;
     logic `N(DEPTH) we;
@@ -77,14 +77,16 @@ generate
         end
         assign io.rs2 = rs2[selectIdx];
         for(genvar i=0; i<DEPTH; i++)begin
+            always_ff @(posedge clk)begin
+                if(io.en & free_en[i])begin
+                    rs2[i] <= io.status.rs2;
+                end
+            end
             always_ff @(posedge clk or posedge rst)begin
                 if(rst == `RST)begin
                     rs2v[i] <= 0;
                 end
                 else begin
-                    if(io.en & free_en[i])begin
-                        rs2[i] <= io.status.rs2;
-                    end
                     if(io.en & free_en[i])begin
                         rs2v[i] <= io.status.rs2v;
                     end
@@ -152,6 +154,11 @@ endgenerate
         io.status_o.we <= io.we;
         io.status_o.rd <= io.rd;
         io.status_o.robIdx <= robIdx[selectIdx];
+        if(io.en)begin
+            rs1[freeIdx] <= io.status.rs1;
+            robIdx[freeIdx] <= io.status.robIdx;
+            rd[freeIdx] <= io.status.rd;
+        end
     end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -170,10 +177,7 @@ endgenerate
             end
             
             if(io.en)begin
-                rs1[freeIdx] <= io.status.rs1;
-                robIdx[freeIdx] <= io.status.robIdx;
                 we[freeIdx] <= io.status.we;
-                rd[freeIdx] <= io.status.rd;
             end
 
             for(int i=0; i<DEPTH; i++)begin

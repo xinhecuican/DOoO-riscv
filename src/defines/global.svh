@@ -63,9 +63,11 @@
 `define TAGE_TAG_COMPRESS2 10
 `define TAGE_BASE_SIZE 4096
 `define TAGE_BASE_WIDTH $clog2(`TAGE_BASE_SIZE)
+`define TAGE_SLICE 512
+`define TAGE_BASE_SLICE 512
 `define TAGE_BASE_CTR 2
 `define TAGE_ALT_CTR 7
-`define TAGE_SET_WIDTH 12
+`define TAGE_SET_WIDTH 11
 typedef enum logic [1:0] {
     DIRECT,
     CONDITION,
@@ -272,11 +274,11 @@ typedef enum logic [1:0] {
 `define TLB_P1_BANK (`DCACHE_BANK)
 `define TLB_P1_SET_WIDTH $clog2(`TLB_P1_SET)
 `define TLB_P1_TAG `TLB_TAG - $clog2(`TLB_P1_BANK) - `TLB_P1_SET_WIDTH - `TLB_VPN
-`define TLB_VPN_IBUS(i, SET,
-                     BANK) [`TLB_VPN * i + `TLB_OFFSET + $clog2(BANK) + $clog2(SET) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(BANK)]
-`define TLB_VPN_TBUS(i, SET,
-                     BANK) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(SET) + $clog2(BANK)]
+`define TLB_VPN_IBUS(i, SET, BANK) [`TLB_VPN * i + `TLB_OFFSET + $clog2(BANK) + $clog2(SET) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(BANK)]
+`define TLB_VPN_TBUS(i, SET, BANK) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(SET) + $clog2(BANK)]
 
 `define TLB_PTB0_SIZE 8
 `define TLB_PTB1_SIZE 4
+
+typedef enum logic [1: 0] { UC, UD, SC, SD } CoherentState;
 `endif

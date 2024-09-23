@@ -40,7 +40,6 @@ module ICache(
         logic `N(`ICACHE_TAG + `ICACHE_SET_WIDTH) addition_paddr;
         logic addition_request;
         logic flush;
-        logic [4: 0] length;
         logic `N(`BLOCK_INST_WIDTH) current_index;
         logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
         logic `ARRAY(`ICACHE_BANK, 32) replace_data;
@@ -80,6 +79,7 @@ module ICache(
     logic miss_data_en; // send miss data to ifu
     logic abandon_lookup, abandon_idle;
     logic stall_wait;
+    logic `N(`ICACHE_WAY) replace_way;
 
     assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx;
     assign stream_size = fsq_cache_io.stream.size + 1;
@@ -163,10 +163,9 @@ module ICache(
 
 
     ReplaceIO #(.DEPTH(`ICACHE_SET),.WAY_NUM(`ICACHE_WAY)) replace_io();
-    logic `N(`ICACHE_WAY) replace_way;
     assign replace_io.hit_en = main_state == LOOKUP && (!cache_miss[0] && !cache_miss[1]) ||
                                refill_en;
-    assign replace_io.hit_way = refill_en ? replace_io.miss_way : hit_index[0];
+    assign replace_io.hit_way = refill_en ? replace_io.miss_way : hit[0];
     assign replace_io.hit_index = refill_en ? miss_buffer.windex : request_buffer.index1;
     assign replace_io.miss_index = miss_buffer.windex;
     PLRU #(
@@ -177,7 +176,7 @@ module ICache(
         .rst(rst),
         .replace_io(replace_io)
     );
-    Decoder #(`ICACHE_WAY) decoder_way(replace_io.miss_way, replace_way);
+    assign replace_way = replace_io.miss_way;
 
 
     assign fsq_cache_io.ready = ((main_state == IDLE && (abandon_idle || (!fsq_cache_io.stall))) ||
@@ -217,7 +216,9 @@ module ICache(
     endgenerate
     assign axi_io.ar_id = 0;
     assign axi_io.ar_addr = {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}};
-    assign axi_io.ar_len = {3'b0, miss_buffer.length};
+    logic `N(5) len;
+    assign len = `DCACHE_LINE / `DATA_BYTE - 1;
+    assign axi_io.ar_len = {3'b0, len};
     assign axi_io.ar_size = 3'b010;
     assign axi_io.ar_burst = 2'b01;
     assign axi_io.ar_lock = 0;
@@ -264,7 +265,7 @@ module ICache(
                 end
             end
             LOOKUP:begin
-                if(fsq_cache_io.flush | abandon_lookup | (abandon_idle & ~fsq_cache_io.stall))begin
+                if(fsq_cache_io.flush | abandon_lookup)begin
                     main_state <= IDLE;
                 end
                 else if(fsq_cache_io.stall | (itlb_cache_io.miss & ~(|itlb_cache_io.exception)))begin
@@ -283,13 +284,7 @@ module ICache(
                         miss_buffer.line <= 1;
                     end
                     miss_buffer.addition_paddr <= {ptag2, request_buffer.index2};
-                    if((&cache_miss) & ~request_buffer.multi_tag)begin
-                        miss_buffer.length <= 2 * (`DCACHE_LINE / `DATA_BYTE) - 1;
-                    end
-                    else begin
-                        miss_buffer.length <= `DCACHE_LINE / `DATA_BYTE - 1;
-                    end
-                    miss_buffer.addition_request <= (&cache_miss) & request_buffer.multi_tag;
+                    miss_buffer.addition_request <= (&cache_miss);
                     miss_buffer.data <= cache_pd_io.data;
                     miss_buffer.stream_index <= 0;
                     if(cache_miss[1] & ~cache_miss[0] & ~request_buffer.span[0])begin
@@ -299,7 +294,7 @@ module ICache(
                         miss_buffer.current_index <= 0;
                     end
                 end
-                else if(fsq_cache_io.en)begin
+                else if(fsq_cache_io.en & ~abandon_idle)begin
                     `REQ_DEF
                 end
                 else begin
@@ -325,13 +320,12 @@ module ICache(
                     end
                 end
                 if(axi_io.r_valid && axi_io.r_last)begin
-                    if(!miss_buffer.addition_request)begin
+                    if(!miss_buffer.addition_request || miss_buffer.flush)begin
                         main_state <= IDLE;
                     end
                     else begin
                         main_state <= MISS;
                         miss_buffer.paddr <= miss_buffer.addition_paddr;
-                        miss_buffer.length <= 4'h7;
                         miss_buffer.addition_request <= 1'b0;
                     end
                 end

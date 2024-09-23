@@ -7,14 +7,13 @@ module Execute(
     IssueCSRIO.csr issue_csr_io,
     IssueMultIO.mult mult_exu_io,
     WriteBackIO.fu alu_wb_io,
-    WriteBackBus.wb wbBus,
 `ifdef RVM
     WriteBackIO.fu mult_wb_io,
     IssueWakeupIO.issue mult_wakeup_io,
     WriteBackIO.fu div_wb_io,
     IssueWakeupIO.issue div_wakeup_io,
 `endif
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo,
     output BranchRedirectInfo branchRedirectInfo
 );

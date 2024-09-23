@@ -23,7 +23,7 @@ module StoreQueue(
     StoreCommitIO.queue queue_commit_io,
     LoadForwardIO.queue loadFwd,
     CommitBus.mem commitBus,
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     AxiIO.masterw saxi_io,
     output logic commit_empty,
     output logic `N(`LOAD_PIPELINE) fwd_data_invalid
@@ -183,14 +183,14 @@ endgenerate
 
 
     RobIdx redirect_robIdxs `N(`STORE_QUEUE_SIZE);
-generate
-    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        always_ff @(posedge clk) begin
+    always_ff @(posedge clk) begin
+        for(int i=0; i<`STORE_PIPELINE; i++)begin
             if(issue_queue_io.dis_en[i] & ~issue_queue_io.dis_stall)begin
                 redirect_robIdxs[issue_queue_io.dis_sq_idx[i].idx] <= issue_queue_io.dis_rob_idx[i];
             end
         end
     end
+generate
     for(genvar i=0; i<`STORE_QUEUE_SIZE; i++)begin
         LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i], backendCtrl.redirectIdx, bigger[i]);
         logic `N(`STORE_QUEUE_WIDTH) i_n, i_p;
@@ -287,9 +287,9 @@ endgenerate
     logic `N(`STORE_PIPELINE) queue_commit_en_pre, queue_commit_en;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        logic `N(`STORE_QUEUE_WIDTH) queue_idx;
         assign queue_commit_en_pre[i] = valid[queue_idx] & addrValid[queue_idx] & dataValid[queue_idx] & commited[queue_idx];
         assign queue_commit_en[i] = &queue_commit_en_pre[i: 0];
-        logic `N(`STORE_QUEUE_WIDTH) queue_idx;
         assign queue_idx = storeHead + i;
         assign queue_commit_io.en[i] = queue_commit_en[i];
         assign queue_commit_io.uncache[i] = uncache[queue_idx];

@@ -36,11 +36,11 @@ module LSU(
     IssueRegIO.issue load_reg_io,
     IssueRegIO.issue store_reg_io,
     IssueWakeupIO.issue load_wakeup_io,
-    WakeupBus wakeupBus,
+    input WakeupBus wakeupBus,
     WriteBackIO.fu lsu_wb_io,
-    WriteBackBus wbBus,
+    input WriteBackBus wbBus,
     CommitBus.mem commitBus,
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     AxiIO.master axi_io,
     AxiIO.master ducache_io,
     BackendRedirectIO.mem redirect_io,
@@ -360,7 +360,8 @@ endgenerate
     logic `N(`STORE_PIPELINE) stlb_exception, stlb_exception_s2;
     logic `N(`STORE_PIPELINE) stlb_miss;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s2;
-
+    logic `N(`STORE_PIPELINE) store_en_s4, store_en_s4_unexc;
+    logic `N(`STORE_PIPELINE) store_redirect_s4;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic older;
@@ -428,10 +429,8 @@ endgenerate
     logic `N(`STORE_PIPELINE) suncache_s3;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr_s3;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s3;
-    logic `N(`STORE_PIPELINE) store_en_s4, store_en_s4_unexc;
     RobIdx `N(`STORE_PIPELINE) store_robIdx_s4;
     logic `ARRAY(`STORE_PIPELINE, `EXC_WIDTH) exccode_s4;
-    logic `N(`STORE_PIPELINE) store_redirect_s4;
     logic `N(`STORE_PIPELINE) stlb_miss_s4;
     logic `N(`STORE_PIPELINE) suncache_s4;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr_s4;
@@ -637,7 +636,7 @@ module ViolationDetect(
     input LoadIdx tail,
     ViolationIO.violation io,
     BackendRedirectIO.mem redirect_io,
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     FenceBus.lsu fenceBus
 );
     ViolationData `ARRAY(`STORE_PIPELINE, `LOAD_PIPELINE) s1_cmp;
@@ -764,7 +763,7 @@ endmodule
 module MisalignDetect(
     input logic [1: 0] size,
     input logic `N(`DCACHE_BYTE_WIDTH) offset,
-    output misalign
+    output logic misalign
 );
     always_comb begin
         case(size)

@@ -11,7 +11,7 @@ module CSR(
     input CSRRedirectInfo redirect,
     IssueCSRIO.csr issue_csr_io,
     WriteBackIO.fu csr_wb_io,
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     CsrTlbIO.csr csr_itlb_io,
     CsrTlbIO.csr csr_ltlb_io,
     CsrTlbIO.csr csr_stlb_io,

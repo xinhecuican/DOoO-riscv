@@ -31,7 +31,7 @@ generate
         assign pmp_na4[i] = paddr_cmp == cmpaddr[i];
         assign pmp_v_all[i] = ((pmp_cfg[i].a == `PMP_TOR) & pmp_tor[i]) |
                           ((pmp_cfg[i].a == `PMP_NAPOT) & pmp_napot[i]);
-        logic `N($clog2(`PADDR_SIZE-`TLB_OFFSET)+1) cnt;
+        logic `N($clog2(`PADDR_SIZE-`TLB_OFFSET)) cnt;
         logic `N(`PADDR_SIZE-`TLB_OFFSET) mask;
         lzc #(
             .WIDTH(`PADDR_SIZE-`TLB_OFFSET)

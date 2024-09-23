@@ -155,8 +155,8 @@ module Soc(
     `AXI_ASSIGN_TO_REQ(irq_req, irq_axi)
     `AXI_ASSIGN_FROM_RESP(irq_axi, irq_resp)
     axi_to_apb #(
-        .NoApbSlaves(`PERIPHERAL_SIZE),
-        .NoRules(`PERIPHERAL_SIZE),
+        .NoApbSlaves(2),
+        .NoRules(2),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
         .AxiIdWidth(`CORE_WIDTH+2),

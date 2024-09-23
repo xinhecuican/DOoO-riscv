@@ -83,9 +83,27 @@ match RAM_68x256_1R1W
     or_next_if_better
 endmatch
 
-bram RAM_4x4096_1R1W
+
+bram RAM_156x32_1R1W
+	init 0
+	abits 5
+	dbits 156
+	groups 2
+	ports 1 1
+	wrmode 1 0
+	enable 1 1
+	transp 0 0
+	clocks 1 1
+	clkpol 1 1
+endbram
+match RAM_156x32_1R1W
+	min efficiency 80
+	or_next_if_better
+endmatch
+
+bram RAM_4x512_1R1W
     init 0
-    abits 12
+    abits 9
     dbits 4
     groups 2
     ports 1 1
@@ -95,14 +113,14 @@ bram RAM_4x4096_1R1W
     clocks 1 1
     clkpol 1 1
 endbram
-match RAM_4x4096_1R1W
+match RAM_4x512_1R1W
     min efficiency 80
     or_next_if_better
 endmatch
 
-bram RAM_11x2048_1R1W
+bram RAM_11x512_1R1W
     init 0
-    abits 11
+    abits 9
     dbits 11
     groups 2
     ports 1 1
@@ -112,6 +130,6 @@ bram RAM_11x2048_1R1W
     clocks 1 1
     clkpol 1 1
 endbram
-match RAM_11x2048_1R1W
+match RAM_11x512_1R1W
     min efficiency 80
 endmatch

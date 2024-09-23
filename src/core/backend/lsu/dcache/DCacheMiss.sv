@@ -48,7 +48,7 @@ module DCacheMiss(
     DCacheMissIO.miss io,
     ReplaceQueueIO.miss replace_queue_io,
     AxiIO.masterr r_axi_io,
-    BackendCtrl backendCtrl
+    input BackendCtrl backendCtrl
 );
 `ifdef DIFFTEST
     typedef struct packed {
@@ -239,9 +239,23 @@ endgenerate
     end
 
     ParallelAdder #(1, `LOAD_PIPELINE+1) adder_free (free_en, free_num);
+    always_ff @(posedge clk)begin
+        if(io.wen & ~rlast & ~req_last & (write_remain_valid | whit_combine))begin
+            data[widx] <= combine_data;
+            mask[widx] <= combine_mask;
+        end
+        if(req_last)begin
+            data[head] <= cache_eq_data;
+        end
+        if(io.refill_en & io.refill_valid)begin
+            mask[head] <= 0;
+        end
+    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             en <= 0;
+            addr <= '{default: 0};
+            mshr <= '{default: 0};
             ptw_en <= 0;
             dataValid <= 0;
             refilled <= 0;
@@ -249,6 +263,7 @@ endgenerate
             mshr_head <= 0;
             head <= 0;
             tail <= 0;
+            scIdxs <= '{default: 0};
             remain_count <= `DCACHE_MISS_SIZE;
         end
         else begin
@@ -301,21 +316,17 @@ endgenerate
                 dataValid[freeIdx[`LOAD_PIPELINE]] <= 1'b0;
             end
             if(io.wen & ~rlast & ~req_last & (write_remain_valid | whit_combine))begin
-                data[widx] <= combine_data;
-                mask[widx] <= combine_mask;
                 scIdxs[widx] <= io.scIdx;
             end
             if(req_last)begin
-                data[head] <= cache_eq_data;
                 dataValid[head] <= 1'b1;
             end
-            if(io.req & io.req_success)begin
+            if(req_next & io.req_success)begin
                 replace_idx[head] <= replace_queue_io.idx;
             end
             if(io.refill_en & io.refill_valid)begin
                 refilled[head] <= 1'b1;
                 en[head] <= 1'b0;
-                mask[head] <= 0;
             end
             if(refilled[mshr_head] & ~(|mshr_hit))begin
                 refilled[mshr_head] <= 1'b0;
@@ -345,7 +356,7 @@ generate
 endgenerate
 
     always_ff @(posedge clk)begin
-        req_next <= io.req & io.req_success;
+        req_next <= io.req;
         req_last <= r_axi_io.r_valid & r_axi_io.r_last;
     end
     always_ff @(posedge clk)begin
@@ -357,25 +368,25 @@ endgenerate
             way <= '{default: 0};
         end
         else begin
-            if(io.req & io.req_success)begin
+            if(io.req)begin
                 req_start <= 1'b1;
-                cache_addr <= io.req_addr;
             end
 
-            // if(req_next & ~io.req_success)begin
-            //     req_start <= 1'b0;
-            // end
+            if(req_next & ~io.req_success)begin
+                req_start <= 1'b0;
+            end
 
             if(io.refill_en & io.refill_valid)begin
                 req_start <= 1'b0;
             end
 
-            if(io.req & io.req_success)begin
+            if(req_next & io.req_success)begin
                 req_cache <= 1'b1;
                 req_ptw <= ptw_en[head];
+                cache_addr <= io.req_addr;
             end
 
-            if(req_next)begin
+            if(req_next & io.req_success)begin
                 way[head] <= io.replaceWay;
             end
 

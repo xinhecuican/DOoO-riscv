@@ -15,7 +15,7 @@ module SPRAM#(
     input logic [BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
     output logic `N(WIDTH) rdata
 );
-
+    (* ram_style="block" *)
     logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
     generate;
         if(READ_LATENCY == 0)begin
@@ -234,13 +234,14 @@ module MPREG #(
     output logic `ARRAY(READ_PORT+RW_PORT, WIDTH) rdata,
     output logic ready
 );
+    (* ram_style="block" *)
     logic `ARRAY(BYTES, WIDTH / BYTES) mem `N(DEPTH);
     logic `N(ADDR_WIDTH) resetAddr;
     logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
+    logic `N(ADDR_WIDTH+1) counter;
+    logic resetState;
 generate
     if(RESET)begin
-        logic `N(ADDR_WIDTH+1) counter;
-        logic resetState;
         assign resetAddr = resetState ? counter : waddr[0];
         assign resetData = resetState ? 0 : wdata[0];
         always_ff @(posedge clk or posedge rst)begin
@@ -259,27 +260,12 @@ generate
                 end
             end
         end
-
-        for(genvar i=0; i<BYTES; i++)begin
-            always_ff @(posedge clk)begin
-                if(we[0][i] | resetState)begin
-                    mem[resetAddr][i] <= resetData[i];
-                end
-            end
-        end
-        
     end
     else begin
         assign resetAddr = waddr[0];
         assign resetData = wdata[0];
+        assign resetState = 0;
         assign ready = 1'b1;
-        for(genvar i=0; i<BYTES; i++)begin
-            always_ff @(posedge clk)begin
-                if(we[0][i])begin
-                    mem[resetAddr][i] <= resetData[i];
-                end
-            end
-        end
     end
 endgenerate
 
@@ -332,11 +318,20 @@ generate;
 endgenerate
 
 generate
-    for(genvar i=1; i<WRITE_PORT+RW_PORT; i++)begin
-        for(genvar j=0; j<BYTES; j++)begin
-            always_ff @(posedge clk)begin
-                if(we[i][j])begin
-                    mem[waddr[i]][j] <= wdata[i][j];
+    always_ff @(posedge clk)begin
+        for(int i=0; i<WRITE_PORT+RW_PORT; i++)begin
+            if(i == 0 && RESET)begin
+                for(int j=0; j<BYTES; j++)begin
+                    if(we[i][j] | resetState)begin
+                        mem[resetAddr][j] <= resetData[j];
+                    end
+                end
+            end
+            else begin
+                for(int j=0; j<BYTES; j++)begin
+                    if(we[i][j])begin
+                        mem[waddr[i]][j] <= wdata[i][j];
+                    end
                 end
             end
         end
@@ -380,7 +375,7 @@ module MPRAMInner #(
     ) regs (.*);
 
     // initial begin
-    //     $display("%0dr%0dw%0drw_%0dx%0d%s", READ_PORT, WRITE_PORT, RW_PORT, WIDTH, DEPTH, BYTE_WRITE ? "_8" : "");
+	//     $display("%0dr%0dw%0drw_%0dx%0d%s", READ_PORT, WRITE_PORT, RW_PORT, WIDTH, DEPTH, BYTE_WRITE ? "_8" : "");
     // end
 endmodule
 
@@ -515,8 +510,8 @@ generate
                 .clk,
                 .rst,
                 .en((en & bank_en[i])),
-                .raddr(raddr_bank[i]),
-                .waddr(waddr_bank[i]),
+                .raddr(raddr_bank),
+                .waddr(waddr_bank),
                 .we(we_bank[i]),
                 .wdata(wdata_bank),
                 .rdata(rdata_bank[i]),
@@ -537,8 +532,8 @@ generate
                 .clk,
                 .rst,
                 .en((en & bank_en[BANK])),
-                .raddr(raddr_bank[BANK]),
-                .waddr(waddr_bank[BANK]),
+                .raddr(raddr_bank),
+                .waddr(waddr_bank),
                 .we(we_bank[BANK]),
                 .wdata(wdata_bank),
                 .rdata(rdata_bank[BANK]),

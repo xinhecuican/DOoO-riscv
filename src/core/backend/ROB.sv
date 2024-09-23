@@ -11,10 +11,11 @@ module ROB(
     RenameDisIO.rob dis_io,
     ROBRenameIO.rob rob_rename_io,
     RobRedirectIO.rob rob_redirect_io,
-    WriteBackBus wbBus,
+    input WriteBackBus wbBus,
     CommitBus.rob commitBus,
-    CommitWalk.rob commitWalk,
+    output CommitWalk commitWalk,
     FenceBus.rob fenceBus,
+    input BackendCtrl backendCtrl,
     output logic full
 
 `ifdef DIFFTEST
@@ -147,6 +148,7 @@ endgenerate
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             wb_sfence <= 0;
+            commitBus.fence_valid <= 0;
         end
         else begin
             // en[0] is csr issue queue idx and it's in order
@@ -349,12 +351,22 @@ generate
     end
 endgenerate
     // TODO: dataWIdx改为rw port，walk使用widx，从而walk和commit同时进行
+    logic `N(`COMMIT_WIDTH) commit_walk_en;
+    logic walk;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) commit_walk_num;
+    logic walk_start;
+    assign commitWalk.en = commit_walk_en;
+    assign commitWalk.walk = walk;
+    assign commitWalk.num = commit_walk_num;
+    assign commitWalk.walkStart = walk_start;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             walk_state <= 1'b0;
             walkInfo <= '{default: 0};
-            commitWalk.en <= `COMMIT_WIDTH'b0;
-            commitWalk.walk <= 1'b0;
+            commit_walk_en <= `COMMIT_WIDTH'b0;
+            walk <= 1'b0;
+            commit_walk_num <= 0;
+            walk_start <= 0;
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 dataRIdx[i] <= i;
             end
@@ -365,21 +377,21 @@ endgenerate
         else begin
             if(walk_state)begin
                 if(walk_remain_count == 0)begin
-                    commitWalk.walk <= 1'b0;
+                    walk <= 1'b0;
                     walk_state <= 1'b0;
-                    commitWalk.en <= 0;
-                    commitWalk.num <= 0;
+                    commit_walk_en <= 0;
+                    commit_walk_num <= 0;
                 end
-                commitWalk.walkStart <= 1'b0;
-                commitWalk.en <= walk_en;
-                commitWalk.num <= walk_num;
+                walk_start <= 1'b0;
+                commit_walk_en <= walk_en;
+                commit_walk_num <= walk_num;
                 walkInfo.remainCount <= walk_remain_count - walk_num;
             end
             else if(backendRedirect.en)begin
                 walk_state <= 1'b1;
                 walkInfo.remainCount <= walk_remainCount_n;
-                commitWalk.walk <= 1'b1;
-                commitWalk.walkStart <= 1'b1;
+                walk <= 1'b1;
+                walk_start <= 1'b1;
             end
 
             if(walk_state && walk_remain_count == 0)begin

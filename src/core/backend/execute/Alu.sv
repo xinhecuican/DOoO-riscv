@@ -4,7 +4,7 @@ module ALU(
     input logic clk,
     input logic rst,
     IssueAluIO.alu io,
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     input logic valid,
     output WBData wbData,
     output BranchUnitRes branchRes

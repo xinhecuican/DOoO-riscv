@@ -12,7 +12,7 @@ module MultUnit(
     output logic wakeup_en,
     output logic wakeup_we,
     output logic `N(`PREG_WIDTH) wakeup_rd,
-    BackendCtrl backendCtrl
+    input BackendCtrl backendCtrl
 );
     localparam NUM = `XLEN + 2;
     localparam HNUM = (NUM / 2); // 17 33

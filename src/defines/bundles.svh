@@ -438,4 +438,55 @@ typedef struct packed {
     logic req;
     RobIdx robIdx;
 } FenceReq;
+
+typedef struct packed {
+    logic ibuf_full;
+    logic redirect;
+} FrontendCtrl;
+
+typedef struct packed {
+    logic rename_full;
+    logic dis_full;
+
+    logic redirect;
+    RobIdx redirectIdx;
+} BackendCtrl;
+
+typedef struct packed {
+    logic walk;
+    logic walkStart;
+
+    logic `N(`COMMIT_WIDTH) en;
+    logic `N(`COMMIT_WIDTH) we;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) num;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) weNum;
+    logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
+    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) old_prd;
+} CommitWalk;
+
+typedef struct packed {
+    logic `N(`WAKEUP_SIZE) en;
+    logic `N(`WAKEUP_SIZE) we;
+    logic `ARRAY(`WAKEUP_SIZE, `PREG_WIDTH) rd;
+} WakeupBus;
+
+typedef struct packed {
+    logic `N(`WB_SIZE) en;
+    logic `N(`WB_SIZE) we;
+    RobIdx `N(`WB_SIZE) robIdx;
+    logic `ARRAY(`WB_SIZE, `PREG_WIDTH) rd;
+    logic `ARRAY(`WB_SIZE, `XLEN) res;
+    logic `ARRAY(`WB_SIZE, `EXC_WIDTH) exccode;
+} WriteBackBus;
+
+`define DIRECTORY_ENTRY_DEF(NUM_ENTRY)  \
+typedef struct packed { \
+    logic en; \
+    CoherentState state; \
+    logic `N($clog2(NUM_ENTRY+1)) owner; \
+    logic `N(NUM_ENTRY) sharers; \
+} DirectoryEntry;
+
+
 `endif

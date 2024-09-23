@@ -3,6 +3,7 @@
 `include "bundles.svh"
 `include "axi.svh"
 `include "apb.svh"
+`include "ace.svh"
 
 interface BpuBtbIO(
     input RedirectCtrl redirect,
@@ -26,15 +27,13 @@ interface BpuUBtbIO(
     input SquashInfo squashInfo,
     input BranchUpdateInfo updateInfo
 );
-    logic request;
     logic `VADDR_BUS pc;
     logic `N(`FSQ_WIDTH) fsqIdx;
     logic fsqDir;
-    logic `N(`GHIST_WIDTH) ghistIdx;
     PredictionResult result;
     UBTBMeta meta;
 
-    modport ubtb (input request, pc, fsqIdx, ghistIdx, fsqDir, history, redirect, squash, squashInfo, update, updateInfo, output result, meta);
+    modport ubtb (input pc, fsqIdx, fsqDir, history, redirect, squash, squashInfo, update, updateInfo, output result, meta);
 endinterface
 
 interface BpuTageIO(
@@ -154,8 +153,8 @@ interface ReplaceIO #(
     parameter ADDR_WIDTH = $clog2(DEPTH)
 );
     logic `N(READ_PORT) hit_en;
-    logic `ARRAY(READ_PORT, WAY_WIDTH) hit_way;
-    logic `N(WAY_WIDTH) miss_way;
+    logic `ARRAY(READ_PORT, WAY_NUM) hit_way;
+    logic `N(WAY_NUM) miss_way;
     logic `N(ADDR_WIDTH) miss_index;
     logic `ARRAY(READ_PORT, ADDR_WIDTH) hit_index;
 
@@ -297,15 +296,6 @@ interface IssueWakeupIO #(
     modport wakeup(input en, we, rd, output ready);
 endinterface
 
-interface WakeupBus;
-
-    logic `N(`WAKEUP_SIZE) en;
-    logic `N(`WAKEUP_SIZE) we;
-    logic `ARRAY(`WAKEUP_SIZE, `PREG_WIDTH) rd;
-
-    modport wakeup(output en, we, rd);
-endinterface
-
 interface IntIssueExuIO;
     logic `N(`ALU_SIZE) en;
     logic `N(`ALU_SIZE) valid; // fu valid
@@ -368,17 +358,6 @@ interface WriteBackIO#(
     modport fu (output datas, input valid);
 endinterface
 
-interface WriteBackBus;
-    logic `N(`WB_SIZE) en;
-    logic `N(`WB_SIZE) we;
-    RobIdx `N(`WB_SIZE) robIdx;
-    logic `ARRAY(`WB_SIZE, `PREG_WIDTH) rd;
-    logic `ARRAY(`WB_SIZE, `XLEN) res;
-    logic `ARRAY(`WB_SIZE, `EXC_WIDTH) exccode;
-
-    modport wb (output en, we, robIdx, rd, res, exccode);
-endinterface
-
 interface CommitBus;
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
@@ -399,35 +378,6 @@ interface CommitBus;
     modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
     modport mem(input loadNum, storeNum, robIdx);
     modport csr(input robIdx, fsqInfo, fence_valid, en);
-endinterface
-
-interface CommitWalk;
-    logic walk;
-    logic walkStart;
-    RobIdx walkIdx;
-
-    logic `N(`COMMIT_WIDTH) en;
-    logic `N(`COMMIT_WIDTH) we;
-    logic `N($clog2(`COMMIT_WIDTH) + 1) num;
-    logic `N($clog2(`COMMIT_WIDTH) + 1) weNum;
-    logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
-    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
-    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) old_prd;
-
-    modport rob (output walk, walkStart, walkIdx, en, we, vrd, prd, old_prd, num, weNum);
-endinterface
-
-interface FrontendCtrl;
-    logic ibuf_full;
-    logic redirect;
-endinterface
-
-interface BackendCtrl;
-    logic rename_full;
-    logic dis_full;
-
-    logic redirect;
-    RobIdx redirectIdx;
 endinterface
 
 interface BackendRedirectIO;
@@ -627,6 +577,7 @@ interface CachePTWIO;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refill_data;
 
     modport cache(output req, info, vaddr, valid, paddr, refill_ready, input full, refill_req, refill_pn, refill_addr, refill_data);
+    modport page (input full, refill_req, refill_pn, refill_addr, refill_data);
     modport ptw (input req, info, vaddr, valid, paddr, refill_ready, output full, refill_req, refill_pn, refill_addr, refill_data);
 endinterface
 

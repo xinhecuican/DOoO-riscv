@@ -25,18 +25,18 @@ module ICacheWay(
     logic `N(`ICACHE_TAG+1) tagv `N(`ICACHE_SET);
 
     assign tagv_index_p1 = io.tagv_index + 1;
+
+    always_ff @( posedge clk ) begin
+        if(io.tagv_en)begin
+            io.tagv[0] <= tagv[io.tagv_index];
+            io.tagv[1] <= tagv[tagv_index_p1];
+        end
+    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             tagv <= '{default: 0};
         end
         else begin
-            if(io.tagv_en)begin
-                io.tagv[0] <= tagv[io.tagv_index];
-                // if(io.span)begin
-                    io.tagv[1] <= tagv[tagv_index_p1];
-                // end
-            end
-
             if(io.tagv_we)begin
                 tagv[io.tagv_windex] <= io.tagv_wdata;
             end

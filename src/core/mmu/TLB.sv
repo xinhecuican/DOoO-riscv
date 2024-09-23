@@ -79,7 +79,9 @@ generate
             case(entrys[i].size)
             2'b00: pn_mask[i] = {`TLB_PN{1'b1}};
             2'b01: pn_mask[i] = {1'b0, {`TLB_PN-1{1'b1}}};
+`ifdef SV39
             2'b10: pn_mask[i] = {2'b0, {`TLB_PN-2{1'b1}}};
+`endif
             default: pn_mask[i] = 0;
             endcase
         end
@@ -190,6 +192,11 @@ endgenerate
     end
     logic `N(ADDR_WIDTH) hit_n_idx;
     PEncoder #(DEPTH) encoder_fence_idx (hit_n, hit_n_idx);
+    always_ff @(posedge clk)begin
+        if(fenceState == IDLE && fenceBus.mmu_flush[SOURCE])begin
+            fenceVaddr <= fenceBus.vma_vaddr[SOURCE][`VADDR_SIZE-1: `TLB_OFFSET];
+        end
+    end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             fenceState <= IDLE;
@@ -210,7 +217,6 @@ endgenerate
                         fenceReq <= 1'b1;
                         fenceState <= FENCE;
                     end
-                    fenceVaddr <= fenceBus.vma_vaddr[SOURCE][`VADDR_SIZE-1: `TLB_OFFSET];
                 end
             end
             FENCE: begin

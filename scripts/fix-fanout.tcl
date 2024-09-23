@@ -7,15 +7,16 @@ set FOUNDRY_NAME [lindex $argv 4]
 
 if { $FOUNDRY_NAME == "sky130" } {
     set env(FOUNDRY_DIR) $PROJ_PATH/utils/iEDA/scripts/foundry/sky130
-    source $PROJ_PATH/utils/iEDA/scripts/design/sky130_gcd/script/DB_script/db_path_setting.tcl
-    set FIXFANOUT_FILE build/sky130_merge.lib
+    source $PROJ_PATH/config/sky130/db_path_setting.tcl
+    set LIB_PATH $LIB_PATH_FIXFANOUT
     set NO_FIXFANOUT_FILE scripts/no_default_config_fixfanout.json
 }
 
-db_init -lib_path $FIXFANOUT_FILE
+db_init -lib_path $LIB_PATH
 db_init -sdc_path $SDC_FILE
-tech_lef_init -path $TECH_LEF_PATH
-lef_init -path $LEF_PATH
+tech_lef_init -path utils/iEDA/scripts/foundry/sky130/lef/sky130_fd_sc_hd.tlef
+lef_init -path utils/iEDA/scripts/foundry/sky130/lef/sky130_fd_sc_hd_merged.lef
+lef_init -path utils/iEDA/scripts/foundry/sky130/lef/sky130_sram_1r1w0rw_32x64_8.lef
 
 verilog_init -path $NETLIST_V -top $DESIGN
 run_no_fixfanout -config $NO_FIXFANOUT_FILE

@@ -8,7 +8,7 @@ module CsrIssueQueue(
     IssueWakeupIO.issue csr_wakeup_io,
     IssueCSRIO.issue issue_csr_io,
     CommitBus.csr commitBus,
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     FenceBus.csr fenceBus,
     output logic `N(32) trapInst,
     output FenceReq fence_req

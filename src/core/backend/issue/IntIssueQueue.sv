@@ -8,9 +8,9 @@ module IntIssueQueue(
     IssueWakeupIO.issue int_wakeup_io,
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
-    WakeupBus wakeupBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl
+    input WakeupBus wakeupBus,
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl
 );
 
     localparam BANK_SIZE = `INT_ISSUE_SIZE / `ALU_SIZE;

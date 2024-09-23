@@ -27,7 +27,7 @@ module LoadQueue(
     LoadQueueIO.queue io,
     LoadUnitIO.queue load_io,
     CommitBus.mem commitBus,
-    BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl,
     DCacheLoadIO.queue rio,
     AxiIO.masterr laxi_io
 );
@@ -92,14 +92,14 @@ endgenerate
     logic walk_valid, walk_dir, walk_full;
     assign walk_en = valid & bigger;
     assign walk_full = &walk_en;
-generate
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        always_ff @(posedge clk) begin
+    always_ff @(posedge clk) begin
+        for(int i=0; i<`LOAD_PIPELINE; i++)begin
             if(load_io.dis_en[i] & ~load_io.dis_stall)begin
                 redirect_robIdxs[load_io.dis_lq_idx[i].idx] <= load_io.dis_rob_idx[i];
             end
         end
     end
+generate
     for(genvar i=0; i<`LOAD_QUEUE_SIZE; i++)begin
         LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i], backendCtrl.redirectIdx, bigger[i]);
         logic `N(`LOAD_QUEUE_WIDTH) i_n, i_p;

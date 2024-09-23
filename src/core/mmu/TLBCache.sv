@@ -36,6 +36,12 @@ module TLBCache(
     } RequestBuffer;
     RequestBuffer req_buf;
 
+    CachePTWIO ptw_page_io();
+    assign ptw_page_io.full = cache_ptw_io.full;
+    assign ptw_page_io.refill_req = cache_ptw_io.refill_req;
+    assign ptw_page_io.refill_pn = cache_ptw_io.refill_pn;
+    assign ptw_page_io.refill_addr = cache_ptw_io.refill_addr;
+    assign ptw_page_io.refill_data = cache_ptw_io.refill_data;
     TLBPageIO #(`TLB_P0_BANK, `TLB_P0_BANK) pn0_io();
     logic pn0_fence_end;
     TLBPage #(
@@ -133,7 +139,7 @@ module TLBPage #(
     input logic rst,
     TLBCacheIO.cache cache_io,
     TLBPageIO.page page_io,
-    CachePTWIO.cache cache_ptw_io,
+    CachePTWIO.page ptw_page_io,
     FenceBus.mmu fenceBus,
     output logic fence_finish
 );
@@ -151,6 +157,7 @@ module TLBPage #(
     logic `N(`TLB_P0_TAG) tag;
     logic `N(BANK_WIDTH) offset;
     logic `ARRAY(WAY_NUM, BANK * `PTE_BITS) rdata;
+    logic `ARRAY(WAY_NUM, INFO_WIDTH) rtag;
     logic `N(BANK) unaligned;
 generate
     if(WAY_NUM > 1)begin
@@ -160,7 +167,7 @@ generate
     end
     for(genvar j=0; j<BANK; j++)begin
         if(PN == 1)begin
-            assign unaligned[j] = cache_ptw_io.refill_data[j][`TLB_PPN0+10: 10] != 0;
+            assign unaligned[j] = ptw_page_io.refill_data[j][`TLB_PPN0+10: 10] != 0;
         end
         else begin
             assign unaligned[j] = 0;
@@ -180,13 +187,14 @@ generate
         assign way_io[i].en = cache_io.req | fenceReq;
 
         assign way_io[i].idx = fenceReq | fenceWe ? fenceIdx : 
-                               cache_ptw_io.refill_req ? cache_ptw_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK) : 
+                               ptw_page_io.refill_req ? ptw_page_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK) : 
                                               cache_io.req_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
         assign rdata[i] = way_io[i].rdata;
-        assign way_io[i].we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN];
-        assign way_io[i].tag_we = cache_ptw_io.refill_req & cache_ptw_io.refill_pn[PN] | fenceWe;
-        assign way_io[i].wdata = cache_ptw_io.refill_data;
-        assign way_io[i].wtag = fenceWe ? {INFO_WIDTH{1'b0}} : {1'b1, unaligned, cache_ptw_io.refill_addr`TLB_VPN_TBUS(PN, DEPTH, BANK)};
+        assign rtag[i] = way_io[i].tag;
+        assign way_io[i].we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN];
+        assign way_io[i].tag_we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN] | fenceWe;
+        assign way_io[i].wdata = ptw_page_io.refill_data;
+        assign way_io[i].wtag = fenceWe ? {INFO_WIDTH{1'b0}} : {1'b1, unaligned, ptw_page_io.refill_addr`TLB_VPN_TBUS(PN, DEPTH, BANK)};
     end
 endgenerate
 
@@ -210,13 +218,13 @@ generate
         PEncoder #(WAY_NUM) encoder_hit_idx (tag_hits, hit_way);
         assign way_data = rdata[hit_way];
         assign page_io.entry = way_data[offset];
-        assign meta = way_io[hit_way].tag[INFO_WIDTH-2: TAG_WIDTH];
+        assign meta = rtag[hit_way][INFO_WIDTH-2: TAG_WIDTH];
         assign page_io.meta = meta[offset];
     end
     else begin
         assign way_data = rdata;
         assign page_io.entry = way_data[offset];
-        assign meta = way_io[0].tag[INFO_WIDTH-2: TAG_WIDTH];
+        assign meta = rtag[0][INFO_WIDTH-2: TAG_WIDTH];
         assign page_io.meta = meta[offset];
     end
 endgenerate

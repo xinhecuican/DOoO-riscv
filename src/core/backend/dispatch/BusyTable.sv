@@ -13,10 +13,10 @@ module BusyTable(
     input logic clk,
     input logic rst,
     BusyTableIO.busytable io,
-    WakeupBus wakeupBus,
+    input WakeupBus wakeupBus,
     CommitBus.in commitBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl
 );
     logic `N(`PREG_SIZE) valid;
 

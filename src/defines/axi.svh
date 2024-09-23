@@ -13,13 +13,13 @@
 `define AXI_RESP_DECERR 2'b11
 
 `define AXI_BURST_FIXED 2'b00
-`define AXI_BURST_INCR  2'b01
-`define AXI_BURST_WRAP  2'b10
+`define AXI_BURST_INCR 2'b01
+`define AXI_BURST_WRAP 2'b10
 
 `define AXI_CACHE_BUFFERABLE 4'b0001
 `define AXI_CACHE_MODIFIABLE 4'b0010
-`define AXI_CACHE_RD_ALLOC   4'b0100
-`define AXI_CACHE_WR_ALLOC   4'b1000
+`define AXI_CACHE_RD_ALLOC 4'b0100
+`define AXI_CACHE_WR_ALLOC 4'b1000
 
 `define AXI_ATOP_NONE 2'b00
 `define AXI_ATOP_ATOMICSTORE 2'b01
@@ -31,208 +31,235 @@
 `define AXI_ID_DUCACHE 4'd2
 
 interface AxiIO #(
-  parameter int unsigned AXI_ADDR_WIDTH = 0,
-  parameter int unsigned AXI_DATA_WIDTH = 0,
-  parameter int unsigned AXI_ID_WIDTH   = 0,
-  parameter int unsigned AXI_USER_WIDTH = 0
+    parameter int AXI_ADDR_WIDTH = 0,
+    parameter int AXI_DATA_WIDTH = 0,
+    parameter int AXI_ID_WIDTH   = 0,
+    parameter int AXI_USER_WIDTH = 0
 );
 
-  localparam int unsigned AXI_STRB_WIDTH = AXI_DATA_WIDTH / 8;
+    localparam int AXI_STRB_WIDTH = AXI_DATA_WIDTH / 8;
 
-  typedef logic [AXI_ID_WIDTH-1:0]   id_t;
-  typedef logic [AXI_ADDR_WIDTH-1:0] addr_t;
-  typedef logic [AXI_DATA_WIDTH-1:0] data_t;
-  typedef logic [AXI_STRB_WIDTH-1:0] strb_t;
-  typedef logic [AXI_USER_WIDTH-1:0] user_t;
+    typedef logic [AXI_ID_WIDTH-1:0] id_t;
+    typedef logic [AXI_ADDR_WIDTH-1:0] addr_t;
+    typedef logic [AXI_DATA_WIDTH-1:0] data_t;
+    typedef logic [AXI_STRB_WIDTH-1:0] strb_t;
+    typedef logic [AXI_USER_WIDTH-1:0] user_t;
 
-  id_t              aw_id;
-  addr_t            aw_addr;
-  logic [7: 0]    aw_len;
-  logic [2: 0]   aw_size;
-  logic [1: 0]  aw_burst;
-  logic             aw_lock;
-  logic [3: 0]  aw_cache;
-  logic [2: 0]   aw_prot;
-  logic [3: 0]    aw_qos;
-  logic [3: 0] aw_region;
-  logic [5: 0]   aw_atop;
-  user_t            aw_user;
-  logic             aw_valid;
-  logic             aw_ready;
+    id_t         aw_id;
+    addr_t       aw_addr;
+    logic  [7:0] aw_len;
+    logic  [2:0] aw_size;
+    logic  [1:0] aw_burst;
+    logic        aw_lock;
+    logic  [3:0] aw_cache;
+    logic  [2:0] aw_prot;
+    logic  [3:0] aw_qos;
+    logic  [3:0] aw_region;
+    logic  [5:0] aw_atop;
+    user_t       aw_user;
+    logic        aw_valid;
+    logic        aw_ready;
 
-  data_t            w_data;
-  strb_t            w_strb;
-  logic             w_last;
-  user_t            w_user;
-  logic             w_valid;
-  logic             w_ready;
+    data_t       w_data;
+    strb_t       w_strb;
+    logic        w_last;
+    user_t       w_user;
+    logic        w_valid;
+    logic        w_ready;
 
-  id_t              b_id;
-  logic [1: 0]   b_resp;
-  user_t            b_user;
-  logic             b_valid;
-  logic             b_ready;
+    id_t         b_id;
+    logic  [1:0] b_resp;
+    user_t       b_user;
+    logic        b_valid;
+    logic        b_ready;
 
-  id_t              ar_id;
-  addr_t            ar_addr;
-  logic [7: 0]    ar_len;
-  logic [2: 0]   ar_size;
-  logic [1: 0]  ar_burst;
-  logic             ar_lock;
-  logic [3: 0]  ar_cache;
-  logic [2: 0]   ar_prot;
-  logic [3: 0]    ar_qos;
-  logic [3: 0] ar_region;
-  user_t            ar_user;
-  logic             ar_valid;
-  logic             ar_ready;
+    id_t         ar_id;
+    addr_t       ar_addr;
+    logic  [7:0] ar_len;
+    logic  [2:0] ar_size;
+    logic  [1:0] ar_burst;
+    logic        ar_lock;
+    logic  [3:0] ar_cache;
+    logic  [2:0] ar_prot;
+    logic  [3:0] ar_qos;
+    logic  [3:0] ar_region;
+    user_t       ar_user;
+    logic        ar_valid;
+    logic        ar_ready;
 
-  id_t              r_id;
-  data_t            r_data;
-  logic [1: 0]   r_resp;
-  logic             r_last;
-  user_t            r_user;
-  logic             r_valid;
-  logic             r_ready;
+    id_t         r_id;
+    data_t       r_data;
+    logic  [1:0] r_resp;
+    logic        r_last;
+    user_t       r_user;
+    logic        r_valid;
+    logic        r_ready;
 
-  modport master (
-    output aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid, input aw_ready,
-    output w_data, w_strb, w_last, w_user, w_valid, input w_ready,
-    input b_id, b_resp, b_user, b_valid, output b_ready,
-    output ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, input ar_ready,
-    input r_id, r_data, r_resp, r_last, r_user, r_valid, output r_ready
-  );
+    modport master(
+        output aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid,
+        input aw_ready,
+        output w_data, w_strb, w_last, w_user, w_valid,
+        input w_ready,
+        input b_id, b_resp, b_user, b_valid,
+        output b_ready,
+        output ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid,
+        input ar_ready,
+        input r_id, r_data, r_resp, r_last, r_user, r_valid,
+        output r_ready
+    );
 
-  modport slave (
-    input aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid, output aw_ready,
-    input w_data, w_strb, w_last, w_user, w_valid, output w_ready,
-    output b_id, b_resp, b_user, b_valid, input b_ready,
-    input ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, output ar_ready,
-    output r_id, r_data, r_resp, r_last, r_user, r_valid, input r_ready
-  );
+    modport slave(
+        input aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid,
+        output aw_ready,
+        input w_data, w_strb, w_last, w_user, w_valid,
+        output w_ready,
+        output b_id, b_resp, b_user, b_valid,
+        input b_ready,
+        input ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid,
+        output ar_ready,
+        output r_id, r_data, r_resp, r_last, r_user, r_valid,
+        input r_ready
+    );
 
-  modport masterr(
-    output ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, input ar_ready,
-    input r_id, r_data, r_resp, r_last, r_user, r_valid, output r_ready
-  );
+    modport masterr(
+        output ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid,
+        input ar_ready,
+        input r_id, r_data, r_resp, r_last, r_user, r_valid,
+        output r_ready
+    );
 
-  modport slaver(
-    input ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid, output ar_ready,
-    output r_id, r_data, r_resp, r_last, r_user, r_valid, input r_ready
-  );
+    modport slaver(
+        input ar_id, ar_addr, ar_len, ar_size, ar_burst, ar_lock, ar_cache, ar_prot, ar_qos, ar_region, ar_user, ar_valid,
+        output ar_ready,
+        output r_id, r_data, r_resp, r_last, r_user, r_valid,
+        input r_ready
+    );
 
-  modport masterw(
-    output aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid, input aw_ready,
-    output w_data, w_strb, w_last, w_user, w_valid, input w_ready,
-    input b_id, b_resp, b_user, b_valid, output b_ready
-  );
+    modport masterw(
+        output aw_id, aw_addr, aw_len, aw_size, aw_burst, aw_lock, aw_cache, aw_prot, aw_qos, aw_region, aw_atop, aw_user, aw_valid,
+        input aw_ready,
+        output w_data, w_strb, w_last, w_user, w_valid,
+        input w_ready,
+        input b_id, b_resp, b_user, b_valid,
+        output b_ready
+    );
 
 endinterface
 
 interface AxiLIO #(
-  parameter int unsigned AXI_ADDR_WIDTH = 0,
-  parameter int unsigned AXI_DATA_WIDTH = 0
+    parameter int AXI_ADDR_WIDTH = 0,
+    parameter int AXI_DATA_WIDTH = 0
 );
 
-  localparam int unsigned AXI_STRB_WIDTH = AXI_DATA_WIDTH / 8;
+    localparam int AXI_STRB_WIDTH = AXI_DATA_WIDTH / 8;
 
-  typedef logic [AXI_ADDR_WIDTH-1:0] addr_t;
-  typedef logic [AXI_DATA_WIDTH-1:0] data_t;
-  typedef logic [AXI_STRB_WIDTH-1:0] strb_t;
+    typedef logic [AXI_ADDR_WIDTH-1:0] addr_t;
+    typedef logic [AXI_DATA_WIDTH-1:0] data_t;
+    typedef logic [AXI_STRB_WIDTH-1:0] strb_t;
 
-  // AW channel
-  addr_t          aw_addr;
-  logic [2: 0] aw_prot;
-  logic           aw_valid;
-  logic           aw_ready;
+    // AW channel
+    addr_t       aw_addr;
+    logic  [2:0] aw_prot;
+    logic        aw_valid;
+    logic        aw_ready;
 
-  data_t          w_data;
-  strb_t          w_strb;
-  logic           w_valid;
-  logic           w_ready;
+    data_t       w_data;
+    strb_t       w_strb;
+    logic        w_valid;
+    logic        w_ready;
 
-  logic [1: 0] b_resp;
-  logic           b_valid;
-  logic           b_ready;
+    logic  [1:0] b_resp;
+    logic        b_valid;
+    logic        b_ready;
 
-  addr_t          ar_addr;
-  logic [2: 0] ar_prot;
-  logic           ar_valid;
-  logic           ar_ready;
+    addr_t       ar_addr;
+    logic  [2:0] ar_prot;
+    logic        ar_valid;
+    logic        ar_ready;
 
-  data_t          r_data;
-  logic [1: 0] r_resp;
-  logic           r_valid;
-  logic           r_ready;
+    data_t       r_data;
+    logic  [1:0] r_resp;
+    logic        r_valid;
+    logic        r_ready;
 
-  modport Master (
-    output aw_addr, aw_prot, aw_valid, input aw_ready,
-    output w_data, w_strb, w_valid, input w_ready,
-    input b_resp, b_valid, output b_ready,
-    output ar_addr, ar_prot, ar_valid, input ar_ready,
-    input r_data, r_resp, r_valid, output r_ready
-  );
+    modport Master(
+        output aw_addr, aw_prot, aw_valid,
+        input aw_ready,
+        output w_data, w_strb, w_valid,
+        input w_ready,
+        input b_resp, b_valid,
+        output b_ready,
+        output ar_addr, ar_prot, ar_valid,
+        input ar_ready,
+        input r_data, r_resp, r_valid,
+        output r_ready
+    );
 
-  modport Slave (
-    input aw_addr, aw_prot, aw_valid, output aw_ready,
-    input w_data, w_strb, w_valid, output w_ready,
-    output b_resp, b_valid, input b_ready,
-    input ar_addr, ar_prot, ar_valid, output ar_ready,
-    output r_data, r_resp, r_valid, input r_ready
-  );
+    modport Slave(
+        input aw_addr, aw_prot, aw_valid,
+        output aw_ready,
+        input w_data, w_strb, w_valid,
+        output w_ready,
+        output b_resp, b_valid,
+        input b_ready,
+        input ar_addr, ar_prot, ar_valid,
+        output ar_ready,
+        output r_data, r_resp, r_valid,
+        input r_ready
+    );
 
-  modport Monitor (
-    input aw_addr, aw_prot, aw_valid, aw_ready,
+    modport Monitor(
+        input aw_addr, aw_prot, aw_valid, aw_ready,
           w_data, w_strb, w_valid, w_ready,
           b_resp, b_valid, b_ready,
           ar_addr, ar_prot, ar_valid, ar_ready,
           r_data, r_resp, r_valid, r_ready
-  );
+    );
 
 endinterface
 
-  /// Configuration for `axi_xbar`.
-  typedef struct packed {
+/// Configuration for `axi_xbar`.
+typedef struct packed {
     /// Number of slave ports of the crossbar.
     /// This many master modules are connected to it.
-    int unsigned   NoSlvPorts;
+    int NoSlvPorts;
     /// Number of master ports of the crossbar.
     /// This many slave modules are connected to it.
-    int unsigned   NoMstPorts;
+    int NoMstPorts;
     /// Maximum number of open transactions each master connected to the crossbar can have in
     /// flight at the same time.
-    int unsigned   MaxMstTrans;
+    int MaxMstTrans;
     /// Maximum number of open transactions each slave connected to the crossbar can have in
     /// flight at the same time.
-    int unsigned   MaxSlvTrans;
+    int MaxSlvTrans;
     /// Determine if the internal FIFOs of the crossbar are instantiated in fallthrough mode.
     /// 0: No fallthrough
     /// 1: Fallthrough
-    bit            FallThrough;
+    bit          FallThrough;
     /// The Latency mode of the xbar. This determines if the channels on the ports have
     /// a spill register instantiated.
     /// Example configurations are provided with the enum `xbar_latency_e`.
-    bit [9:0]      LatencyMode;
+    bit [9:0]    LatencyMode;
     /// This is the number of `axi_multicut` stages instantiated in the line cross of the channels.
     /// Having multiple stages can potentially add a large number of FFs!
-    int unsigned   PipelineStages;
+    int PipelineStages;
     /// AXI ID width of the salve ports. The ID width of the master ports is determined
     /// Automatically. See `axi_mux` for details.
-    int unsigned   AxiIdWidthSlvPorts;
+    int AxiIdWidthSlvPorts;
     /// The used ID portion to determine if a different salve is used for the same ID.
     /// See `axi_demux` for details.
-    int unsigned   AxiIdUsedSlvPorts;
+    int AxiIdUsedSlvPorts;
     /// Are IDs unique?
-    bit            UniqueIds;
+    bit          UniqueIds;
     /// AXI4+ATOP address field width.
-    int unsigned   AxiAddrWidth;
+    int AxiAddrWidth;
     /// AXI4+ATOP data field width.
-    int unsigned   AxiDataWidth;
+    int AxiDataWidth;
     /// The number of address rules defined for routing of the transactions.
     /// Each master port can have multiple rules, should have however at least one.
     /// If a transaction can not be routed the xbar will answer with an `axi_pkg::RESP_DECERR`.
-    int unsigned   NoAddrRules;
-  } xbar_cfg_t;
+    int NoAddrRules;
+} xbar_cfg_t;
 
 `define AXI_TYPEDEF_AW_CHAN_T(aw_chan_t, addr_t, id_t, user_t)  \
   typedef struct packed {                                       \
@@ -409,42 +436,42 @@ endinterface
   `__AXI_TO_R(__opt_as, __lhs.r, __lhs_sep, __rhs.r, __rhs_sep)
 
 
-`define AXI_SET_AW_STRUCT(lhs, rhs)     `__AXI_TO_AW(, lhs, ., rhs, .)
-`define AXI_SET_W_STRUCT(lhs, rhs)       `__AXI_TO_W(, lhs, ., rhs, .)
-`define AXI_SET_B_STRUCT(lhs, rhs)       `__AXI_TO_B(, lhs, ., rhs, .)
-`define AXI_SET_AR_STRUCT(lhs, rhs)     `__AXI_TO_AR(, lhs, ., rhs, .)
-`define AXI_SET_R_STRUCT(lhs, rhs)       `__AXI_TO_R(, lhs, ., rhs, .)
-`define AXI_SET_REQ_STRUCT(lhs, rhs)   `__AXI_TO_REQ(, lhs, ., rhs, .)
+`define AXI_SET_AW_STRUCT(lhs, rhs) `__AXI_TO_AW(, lhs, ., rhs, .)
+`define AXI_SET_W_STRUCT(lhs, rhs) `__AXI_TO_W(, lhs, ., rhs, .)
+`define AXI_SET_B_STRUCT(lhs, rhs) `__AXI_TO_B(, lhs, ., rhs, .)
+`define AXI_SET_AR_STRUCT(lhs, rhs) `__AXI_TO_AR(, lhs, ., rhs, .)
+`define AXI_SET_R_STRUCT(lhs, rhs) `__AXI_TO_R(, lhs, ., rhs, .)
+`define AXI_SET_REQ_STRUCT(lhs, rhs) `__AXI_TO_REQ(, lhs, ., rhs, .)
 `define AXI_SET_RESP_STRUCT(lhs, rhs) `__AXI_TO_RESP(, lhs, ., rhs, .)
-`define AXI_ASSIGN_TO_AW(aw_struct, axi_if)     `__AXI_TO_AW(assign, aw_struct, ., axi_if.aw, _)
-`define AXI_ASSIGN_TO_W(w_struct, axi_if)       `__AXI_TO_W(assign, w_struct, ., axi_if.w, _)
-`define AXI_ASSIGN_TO_B(b_struct, axi_if)       `__AXI_TO_B(assign, b_struct, ., axi_if.b, _)
-`define AXI_ASSIGN_TO_AR(ar_struct, axi_if)     `__AXI_TO_AR(assign, ar_struct, ., axi_if.ar, _)
-`define AXI_ASSIGN_TO_R(r_struct, axi_if)       `__AXI_TO_R(assign, r_struct, ., axi_if.r, _)
-`define AXI_ASSIGN_TO_REQ(req_struct, axi_if)   `__AXI_TO_REQ(assign, req_struct, ., axi_if, _)
+`define AXI_ASSIGN_TO_AW(aw_struct, axi_if) `__AXI_TO_AW(assign, aw_struct, ., axi_if.aw, _)
+`define AXI_ASSIGN_TO_W(w_struct, axi_if) `__AXI_TO_W(assign, w_struct, ., axi_if.w, _)
+`define AXI_ASSIGN_TO_B(b_struct, axi_if) `__AXI_TO_B(assign, b_struct, ., axi_if.b, _)
+`define AXI_ASSIGN_TO_AR(ar_struct, axi_if) `__AXI_TO_AR(assign, ar_struct, ., axi_if.ar, _)
+`define AXI_ASSIGN_TO_R(r_struct, axi_if) `__AXI_TO_R(assign, r_struct, ., axi_if.r, _)
+`define AXI_ASSIGN_TO_REQ(req_struct, axi_if) `__AXI_TO_REQ(assign, req_struct, ., axi_if, _)
 `define AXI_ASSIGN_TO_RESP(resp_struct, axi_if) `__AXI_TO_RESP(assign, resp_struct, ., axi_if, _)
-`define AXI_ASSIGN_AW_STRUCT(lhs, rhs)     `__AXI_TO_AW(assign, lhs, ., rhs, .)
-`define AXI_ASSIGN_W_STRUCT(lhs, rhs)       `__AXI_TO_W(assign, lhs, ., rhs, .)
-`define AXI_ASSIGN_B_STRUCT(lhs, rhs)       `__AXI_TO_B(assign, lhs, ., rhs, .)
-`define AXI_ASSIGN_AR_STRUCT(lhs, rhs)     `__AXI_TO_AR(assign, lhs, ., rhs, .)
-`define AXI_ASSIGN_R_STRUCT(lhs, rhs)       `__AXI_TO_R(assign, lhs, ., rhs, .)
-`define AXI_ASSIGN_REQ_STRUCT(lhs, rhs)   `__AXI_TO_REQ(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_AW_STRUCT(lhs, rhs) `__AXI_TO_AW(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_W_STRUCT(lhs, rhs) `__AXI_TO_W(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_B_STRUCT(lhs, rhs) `__AXI_TO_B(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_AR_STRUCT(lhs, rhs) `__AXI_TO_AR(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_R_STRUCT(lhs, rhs) `__AXI_TO_R(assign, lhs, ., rhs, .)
+`define AXI_ASSIGN_REQ_STRUCT(lhs, rhs) `__AXI_TO_REQ(assign, lhs, ., rhs, .)
 `define AXI_ASSIGN_RESP_STRUCT(lhs, rhs) `__AXI_TO_RESP(assign, lhs, ., rhs, .)
 `define AXI_ASSIGN_REQ_INTF(lhs, rhs) `__AXI_TO_REQ(assign, lhs, _, rhs, _)
 `define AXI_ASSIGN_RESP_INTF(lhs, rhs) `__AXI_TO_RESP(assign, lhs, _, rhs, _)
-`define AXI_ASSIGN_FROM_AW(axi_if, aw_struct)     `__AXI_TO_AW(assign, axi_if.aw, _, aw_struct, .)
-`define AXI_ASSIGN_FROM_W(axi_if, w_struct)       `__AXI_TO_W(assign, axi_if.w, _, w_struct, .)
-`define AXI_ASSIGN_FROM_B(axi_if, b_struct)       `__AXI_TO_B(assign, axi_if.b, _, b_struct, .)
-`define AXI_ASSIGN_FROM_AR(axi_if, ar_struct)     `__AXI_TO_AR(assign, axi_if.ar, _, ar_struct, .)
-`define AXI_ASSIGN_FROM_R(axi_if, r_struct)       `__AXI_TO_R(assign, axi_if.r, _, r_struct, .)
-`define AXI_ASSIGN_FROM_REQ(axi_if, req_struct)   `__AXI_TO_REQ(assign, axi_if, _, req_struct, .)
+`define AXI_ASSIGN_FROM_AW(axi_if, aw_struct) `__AXI_TO_AW(assign, axi_if.aw, _, aw_struct, .)
+`define AXI_ASSIGN_FROM_W(axi_if, w_struct) `__AXI_TO_W(assign, axi_if.w, _, w_struct, .)
+`define AXI_ASSIGN_FROM_B(axi_if, b_struct) `__AXI_TO_B(assign, axi_if.b, _, b_struct, .)
+`define AXI_ASSIGN_FROM_AR(axi_if, ar_struct) `__AXI_TO_AR(assign, axi_if.ar, _, ar_struct, .)
+`define AXI_ASSIGN_FROM_R(axi_if, r_struct) `__AXI_TO_R(assign, axi_if.r, _, r_struct, .)
+`define AXI_ASSIGN_FROM_REQ(axi_if, req_struct) `__AXI_TO_REQ(assign, axi_if, _, req_struct, .)
 `define AXI_ASSIGN_FROM_RESP(axi_if, resp_struct) `__AXI_TO_RESP(assign, axi_if, _, resp_struct, .)
-`define AXI_SET_TO_AW(aw_struct, axi_if)     `__AXI_TO_AW(, aw_struct, ., axi_if.aw, _)
-`define AXI_SET_TO_W(w_struct, axi_if)       `__AXI_TO_W(, w_struct, ., axi_if.w, _)
-`define AXI_SET_TO_B(b_struct, axi_if)       `__AXI_TO_B(, b_struct, ., axi_if.b, _)
-`define AXI_SET_TO_AR(ar_struct, axi_if)     `__AXI_TO_AR(, ar_struct, ., axi_if.ar, _)
-`define AXI_SET_TO_R(r_struct, axi_if)       `__AXI_TO_R(, r_struct, ., axi_if.r, _)
-`define AXI_SET_TO_REQ(req_struct, axi_if)   `__AXI_TO_REQ(, req_struct, ., axi_if, _)
+`define AXI_SET_TO_AW(aw_struct, axi_if) `__AXI_TO_AW(, aw_struct, ., axi_if.aw, _)
+`define AXI_SET_TO_W(w_struct, axi_if) `__AXI_TO_W(, w_struct, ., axi_if.w, _)
+`define AXI_SET_TO_B(b_struct, axi_if) `__AXI_TO_B(, b_struct, ., axi_if.b, _)
+`define AXI_SET_TO_AR(ar_struct, axi_if) `__AXI_TO_AR(, ar_struct, ., axi_if.ar, _)
+`define AXI_SET_TO_R(r_struct, axi_if) `__AXI_TO_R(, r_struct, ., axi_if.r, _)
+`define AXI_SET_TO_REQ(req_struct, axi_if) `__AXI_TO_REQ(, req_struct, ., axi_if, _)
 `define AXI_SET_TO_RESP(resp_struct, axi_if) `__AXI_TO_RESP(, resp_struct, ., axi_if, _)
 
 `define AXI_ASSIGN_R_REQ(lhs, rhs) \
@@ -520,58 +547,66 @@ endinterface
   `AXI_LITE_ASSIGN_B(mst, slv)    \
   `AXI_LITE_ASSIGN_AR(slv, mst)   \
   `AXI_LITE_ASSIGN_R(mst, slv)
-`define AXI_LITE_SET_FROM_AW(axi_if, aw_struct)      `__AXI_LITE_TO_AX(, axi_if.aw, _, aw_struct, .)
-`define AXI_LITE_SET_FROM_W(axi_if, w_struct)        `__AXI_LITE_TO_W(, axi_if.w, _, w_struct, .)
-`define AXI_LITE_SET_FROM_B(axi_if, b_struct)        `__AXI_LITE_TO_B(, axi_if.b, _, b_struct, .)
-`define AXI_LITE_SET_FROM_AR(axi_if, ar_struct)      `__AXI_LITE_TO_AX(, axi_if.ar, _, ar_struct, .)
-`define AXI_LITE_SET_FROM_R(axi_if, r_struct)        `__AXI_LITE_TO_R(, axi_if.r, _, r_struct, .)
-`define AXI_LITE_SET_FROM_REQ(axi_if, req_struct)    `__AXI_LITE_TO_REQ(, axi_if, _, req_struct, .)
-`define AXI_LITE_SET_FROM_RESP(axi_if, resp_struct)  `__AXI_LITE_TO_RESP(, axi_if, _, resp_struct, .)
-`define AXI_LITE_ASSIGN_FROM_AW(axi_if, aw_struct)     `__AXI_LITE_TO_AX(assign, axi_if.aw, _, aw_struct, .)
-`define AXI_LITE_ASSIGN_FROM_W(axi_if, w_struct)       `__AXI_LITE_TO_W(assign, axi_if.w, _, w_struct, .)
-`define AXI_LITE_ASSIGN_FROM_B(axi_if, b_struct)       `__AXI_LITE_TO_B(assign, axi_if.b, _, b_struct, .)
-`define AXI_LITE_ASSIGN_FROM_AR(axi_if, ar_struct)     `__AXI_LITE_TO_AX(assign, axi_if.ar, _, ar_struct, .)
-`define AXI_LITE_ASSIGN_FROM_R(axi_if, r_struct)       `__AXI_LITE_TO_R(assign, axi_if.r, _, r_struct, .)
-`define AXI_LITE_ASSIGN_FROM_REQ(axi_if, req_struct)   `__AXI_LITE_TO_REQ(assign, axi_if, _, req_struct, .)
-`define AXI_LITE_ASSIGN_FROM_RESP(axi_if, resp_struct) `__AXI_LITE_TO_RESP(assign, axi_if, _, resp_struct, .)
-`define AXI_LITE_SET_TO_AW(aw_struct, axi_if)     `__AXI_LITE_TO_AX(, aw_struct, ., axi_if.aw, _)
-`define AXI_LITE_SET_TO_W(w_struct, axi_if)       `__AXI_LITE_TO_W(, w_struct, ., axi_if.w, _)
-`define AXI_LITE_SET_TO_B(b_struct, axi_if)       `__AXI_LITE_TO_B(, b_struct, ., axi_if.b, _)
-`define AXI_LITE_SET_TO_AR(ar_struct, axi_if)     `__AXI_LITE_TO_AX(, ar_struct, ., axi_if.ar, _)
-`define AXI_LITE_SET_TO_R(r_struct, axi_if)       `__AXI_LITE_TO_R(, r_struct, ., axi_if.r, _)
-`define AXI_LITE_SET_TO_REQ(req_struct, axi_if)   `__AXI_LITE_TO_REQ(, req_struct, ., axi_if, _)
+`define AXI_LITE_SET_FROM_AW(axi_if, aw_struct) `__AXI_LITE_TO_AX(, axi_if.aw, _, aw_struct, .)
+`define AXI_LITE_SET_FROM_W(axi_if, w_struct) `__AXI_LITE_TO_W(, axi_if.w, _, w_struct, .)
+`define AXI_LITE_SET_FROM_B(axi_if, b_struct) `__AXI_LITE_TO_B(, axi_if.b, _, b_struct, .)
+`define AXI_LITE_SET_FROM_AR(axi_if, ar_struct) `__AXI_LITE_TO_AX(, axi_if.ar, _, ar_struct, .)
+`define AXI_LITE_SET_FROM_R(axi_if, r_struct) `__AXI_LITE_TO_R(, axi_if.r, _, r_struct, .)
+`define AXI_LITE_SET_FROM_REQ(axi_if, req_struct) `__AXI_LITE_TO_REQ(, axi_if, _, req_struct, .)
+`define AXI_LITE_SET_FROM_RESP(axi_if, resp_struct) `__AXI_LITE_TO_RESP(, axi_if, _, resp_struct, .)
+`define AXI_LITE_ASSIGN_FROM_AW(axi_if,
+                                aw_struct) `__AXI_LITE_TO_AX(assign, axi_if.aw, _, aw_struct, .)
+`define AXI_LITE_ASSIGN_FROM_W(axi_if, w_struct) `__AXI_LITE_TO_W(assign, axi_if.w, _, w_struct, .)
+`define AXI_LITE_ASSIGN_FROM_B(axi_if, b_struct) `__AXI_LITE_TO_B(assign, axi_if.b, _, b_struct, .)
+`define AXI_LITE_ASSIGN_FROM_AR(axi_if,
+                                ar_struct) `__AXI_LITE_TO_AX(assign, axi_if.ar, _, ar_struct, .)
+`define AXI_LITE_ASSIGN_FROM_R(axi_if, r_struct) `__AXI_LITE_TO_R(assign, axi_if.r, _, r_struct, .)
+`define AXI_LITE_ASSIGN_FROM_REQ(axi_if,
+                                 req_struct) `__AXI_LITE_TO_REQ(assign, axi_if, _, req_struct, .)
+`define AXI_LITE_ASSIGN_FROM_RESP(
+    axi_if, resp_struct) `__AXI_LITE_TO_RESP(assign, axi_if, _, resp_struct, .)
+`define AXI_LITE_SET_TO_AW(aw_struct, axi_if) `__AXI_LITE_TO_AX(, aw_struct, ., axi_if.aw, _)
+`define AXI_LITE_SET_TO_W(w_struct, axi_if) `__AXI_LITE_TO_W(, w_struct, ., axi_if.w, _)
+`define AXI_LITE_SET_TO_B(b_struct, axi_if) `__AXI_LITE_TO_B(, b_struct, ., axi_if.b, _)
+`define AXI_LITE_SET_TO_AR(ar_struct, axi_if) `__AXI_LITE_TO_AX(, ar_struct, ., axi_if.ar, _)
+`define AXI_LITE_SET_TO_R(r_struct, axi_if) `__AXI_LITE_TO_R(, r_struct, ., axi_if.r, _)
+`define AXI_LITE_SET_TO_REQ(req_struct, axi_if) `__AXI_LITE_TO_REQ(, req_struct, ., axi_if, _)
 `define AXI_LITE_SET_TO_RESP(resp_struct, axi_if) `__AXI_LITE_TO_RESP(, resp_struct, ., axi_if, _)
-`define AXI_LITE_ASSIGN_TO_AW(aw_struct, axi_if)     `__AXI_LITE_TO_AX(assign, aw_struct, ., axi_if.aw, _)
-`define AXI_LITE_ASSIGN_TO_W(w_struct, axi_if)       `__AXI_LITE_TO_W(assign, w_struct, ., axi_if.w, _)
-`define AXI_LITE_ASSIGN_TO_B(b_struct, axi_if)       `__AXI_LITE_TO_B(assign, b_struct, ., axi_if.b, _)
-`define AXI_LITE_ASSIGN_TO_AR(ar_struct, axi_if)     `__AXI_LITE_TO_AX(assign, ar_struct, ., axi_if.ar, _)
-`define AXI_LITE_ASSIGN_TO_R(r_struct, axi_if)       `__AXI_LITE_TO_R(assign, r_struct, ., axi_if.r, _)
-`define AXI_LITE_ASSIGN_TO_REQ(req_struct, axi_if)   `__AXI_LITE_TO_REQ(assign, req_struct, ., axi_if, _)
-`define AXI_LITE_ASSIGN_TO_RESP(resp_struct, axi_if) `__AXI_LITE_TO_RESP(assign, resp_struct, ., axi_if, _)
-`define AXI_LITE_SET_AW_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(, lhs, ., rhs, .)
-`define AXI_LITE_SET_W_STRUCT(lhs, rhs)       `__AXI_LITE_TO_W(, lhs, ., rhs, .)
-`define AXI_LITE_SET_B_STRUCT(lhs, rhs)       `__AXI_LITE_TO_B(, lhs, ., rhs, .)
-`define AXI_LITE_SET_AR_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(, lhs, ., rhs, .)
-`define AXI_LITE_SET_R_STRUCT(lhs, rhs)       `__AXI_LITE_TO_R(, lhs, ., rhs, .)
-`define AXI_LITE_SET_REQ_STRUCT(lhs, rhs)   `__AXI_LITE_TO_REQ(, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_TO_AW(aw_struct,
+                              axi_if) `__AXI_LITE_TO_AX(assign, aw_struct, ., axi_if.aw, _)
+`define AXI_LITE_ASSIGN_TO_W(w_struct, axi_if) `__AXI_LITE_TO_W(assign, w_struct, ., axi_if.w, _)
+`define AXI_LITE_ASSIGN_TO_B(b_struct, axi_if) `__AXI_LITE_TO_B(assign, b_struct, ., axi_if.b, _)
+`define AXI_LITE_ASSIGN_TO_AR(ar_struct,
+                              axi_if) `__AXI_LITE_TO_AX(assign, ar_struct, ., axi_if.ar, _)
+`define AXI_LITE_ASSIGN_TO_R(r_struct, axi_if) `__AXI_LITE_TO_R(assign, r_struct, ., axi_if.r, _)
+`define AXI_LITE_ASSIGN_TO_REQ(req_struct,
+                               axi_if) `__AXI_LITE_TO_REQ(assign, req_struct, ., axi_if, _)
+`define AXI_LITE_ASSIGN_TO_RESP(resp_struct,
+                                axi_if) `__AXI_LITE_TO_RESP(assign, resp_struct, ., axi_if, _)
+`define AXI_LITE_SET_AW_STRUCT(lhs, rhs) `__AXI_LITE_TO_AX(, lhs, ., rhs, .)
+`define AXI_LITE_SET_W_STRUCT(lhs, rhs) `__AXI_LITE_TO_W(, lhs, ., rhs, .)
+`define AXI_LITE_SET_B_STRUCT(lhs, rhs) `__AXI_LITE_TO_B(, lhs, ., rhs, .)
+`define AXI_LITE_SET_AR_STRUCT(lhs, rhs) `__AXI_LITE_TO_AX(, lhs, ., rhs, .)
+`define AXI_LITE_SET_R_STRUCT(lhs, rhs) `__AXI_LITE_TO_R(, lhs, ., rhs, .)
+`define AXI_LITE_SET_REQ_STRUCT(lhs, rhs) `__AXI_LITE_TO_REQ(, lhs, ., rhs, .)
 `define AXI_LITE_SET_RESP_STRUCT(lhs, rhs) `__AXI_LITE_TO_RESP(, lhs, ., rhs, .)
-`define AXI_LITE_ASSIGN_AW_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(assign, lhs, ., rhs, .)
-`define AXI_LITE_ASSIGN_W_STRUCT(lhs, rhs)       `__AXI_LITE_TO_W(assign, lhs, ., rhs, .)
-`define AXI_LITE_ASSIGN_B_STRUCT(lhs, rhs)       `__AXI_LITE_TO_B(assign, lhs, ., rhs, .)
-`define AXI_LITE_ASSIGN_AR_STRUCT(lhs, rhs)     `__AXI_LITE_TO_AX(assign, lhs, ., rhs, .)
-`define AXI_LITE_ASSIGN_R_STRUCT(lhs, rhs)       `__AXI_LITE_TO_R(assign, lhs, ., rhs, .)
-`define AXI_LITE_ASSIGN_REQ_STRUCT(lhs, rhs)   `__AXI_LITE_TO_REQ(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_AW_STRUCT(lhs, rhs) `__AXI_LITE_TO_AX(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_W_STRUCT(lhs, rhs) `__AXI_LITE_TO_W(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_B_STRUCT(lhs, rhs) `__AXI_LITE_TO_B(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_AR_STRUCT(lhs, rhs) `__AXI_LITE_TO_AX(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_R_STRUCT(lhs, rhs) `__AXI_LITE_TO_R(assign, lhs, ., rhs, .)
+`define AXI_LITE_ASSIGN_REQ_STRUCT(lhs, rhs) `__AXI_LITE_TO_REQ(assign, lhs, ., rhs, .)
 `define AXI_LITE_ASSIGN_RESP_STRUCT(lhs, rhs) `__AXI_LITE_TO_RESP(assign, lhs, ., rhs, .)
-    /// Index width required to be able to represent up to `num_idx` indices as a binary
-    /// encoded signal.
-    /// Ensures that the minimum width if an index signal is `1`, regardless of parametrization.
-    ///
-    /// Sample usage in type definition:
-    /// As parameter:
-    ///   `parameter type idx_t = logic[cf_math_pkg::idx_width(NumIdx)-1:0]`
-    /// As typedef:
-    ///   `typedef logic [cf_math_pkg::idx_width(NumIdx)-1:0] idx_t`
-    function automatic integer unsigned idx_width (input integer unsigned num_idx);
-        return (num_idx > 32'd1) ? unsigned'($clog2(num_idx)) : 32'd1;
-    endfunction
+/// Index width required to be able to represent up to `num_idx` indices as a binary
+/// encoded signal.
+/// Ensures that the minimum width if an index signal is `1`, regardless of parametrization.
+///
+/// Sample usage in type definition:
+/// As parameter:
+///   `parameter type idx_t = logic[cf_math_pkg::idx_width(NumIdx)-1:0]`
+/// As typedef:
+///   `typedef logic [cf_math_pkg::idx_width(NumIdx)-1:0] idx_t`
+function automatic integer idx_width(input integer num_idx);
+    return (num_idx > 32'd1) ?$clog2(num_idx) : 32'd1;
+endfunction
 `endif

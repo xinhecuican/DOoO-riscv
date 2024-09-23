@@ -96,6 +96,7 @@ module Tage(
 		.DEPTH(`TAGE_BASE_SIZE),
 		.READ_PORT(1),
 		.WRITE_PORT(1),
+		.BANK_SIZE(`TAGE_BASE_SLICE),
 		.RESET(1)
 	) base_table (
 		.clk(clk),
@@ -259,7 +260,7 @@ module TageTable #(
 	logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr, update_ctr_provider;
 	generate;
 		for(genvar i=0; i<`SLOT_NUM; i++)begin
-			assign lookup_match[i] = search_tag[i] == match_tag;
+			assign lookup_match[i] = search_tag[i] == match_tag[i];
 			assign u[i] = lookup_u[i] != 0;
 			assign taken[i] = lookup_ctr[i][`TAGE_CTR_SIZE-1];
 			assign update_ctr[i] = alloc[i] ? (realTaken[i] ? (1 << (`TAGE_CTR_SIZE - 1)) : (1 << (`TAGE_CTR_SIZE - 2))) : update_ctr_provider[i];
@@ -273,6 +274,7 @@ module TageTable #(
 			.DEPTH(HEIGHT),
 			.READ_PORT(1),
 			.WRITE_PORT(1),
+			.BANK_SIZE(`TAGE_SLICE),
 			.RESET(1)
 		)tage_bank(
 			.clk(clk),
@@ -291,6 +293,7 @@ module TageTable #(
 			.DEPTH(HEIGHT),
 			.READ_PORT(1),
 			.WRITE_PORT(1),
+			.BANK_SIZE(`TAGE_SLICE),
 			.RESET(1)
 		) u_bank (
 			.clk(clk),

@@ -6,9 +6,9 @@ module MultIssueQueue(
     DisIssueIO.issue dis_mult_io,
     IssueRegIO.issue mult_reg_io,
     IssueMultIO.issue mult_exu_io,
-    WakeupBus wakeupBus,
-    CommitWalk commitWalk,
-    BackendCtrl backendCtrl
+    input WakeupBus wakeupBus,
+    input CommitWalk commitWalk,
+    input BackendCtrl backendCtrl
 );
     IssueBankIO #($bits(MultIssueBundle), `MULT_ISSUE_SIZE) bank_io [`MULT_SIZE-1: 0]();
     // logic `ARRAY(`MULT_SIZE, $clog2(`MULT_SIZE)) order;

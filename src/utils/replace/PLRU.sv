@@ -1,4 +1,4 @@
-`include "../../defines/defines.svh"
+`include "defines.svh"
 
 // only support 4-way
 module PLRU#(
@@ -17,31 +17,31 @@ generate
         assign replace_io.miss_way = 0;
     end
     else begin 
-        logic `N(DEPTH * (WAY_NUM - 1)) plru;
+        logic `N((WAY_NUM - 1)) plru `N(DEPTH);
         logic `N(WAY_NUM-1) rdata `N(READ_PORT);
         logic `N(WAY_NUM-1) updateData `N(READ_PORT);
 
 
         for(genvar i=0; i<READ_PORT; i++)begin
-            assign rdata[i] = plru[replace_io.hit_index[i]*(WAY_NUM-1)+: (WAY_NUM-1)];
+            assign rdata[i] = plru[replace_io.hit_index[i]];
             PLRUUpdate #(WAY_NUM) update (rdata[i], replace_io.hit_way[i], updateData[i]);
         end
 
 
-        logic `N(WAY_WIDTH) replaceOut;
-        PLRUReplace #(WAY_NUM) replace (plru[replace_io.miss_index*(WAY_NUM-1)+: (WAY_NUM-1)], replaceOut);
+        logic `N(WAY_NUM) replaceOut;
+        PLRUReplace #(WAY_NUM) replace (plru[replace_io.miss_index], replaceOut);
         always_ff @(posedge clk)begin
             replace_io.miss_way <= replaceOut;
         end
 
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
-                plru <= 0;
+                plru <= '{default: 0};
             end
             else begin
                 for(int i=0; i<READ_PORT; i++)begin
                     if(replace_io.hit_en[i])begin
-                        plru[replace_io.hit_index[i]*(WAY_NUM-1)+: WAY_NUM-1] <= updateData[i];
+                        plru[replace_io.hit_index[i]] <= updateData[i];
                     end
                 end
             end
@@ -57,39 +57,33 @@ module PLRUUpdate #(
     parameter WAY_WIDTH = $clog2(WAY_NUM)
 )(
     input logic `N(WAY_NUM-1) rdata,
-    input logic `N(WAY_WIDTH) hit_way,
+    input logic `N(WAY_NUM) hit_way,
     output logic `N(WAY_NUM-1) out
 );
-generate
-    if(WAY_NUM == 4)begin
-        always_comb begin
-            case (hit_way)
-                2'b00: out = {2'b11, rdata[0]};
-                2'b01: out = {2'b01, rdata[0]};
-                2'b10: out = {rdata[2], 2'b01};
-                2'b11: out = {rdata[2], 2'b00};
-            endcase
+    always_comb begin
+        automatic int unsigned idx_base, shift;
+        automatic logic new_index;
+        idx_base    = 0;
+        shift       = 0;
+        new_index   = 1'b0;
+        out = rdata;
+
+        for (int unsigned i = 0; i < WAY_NUM; i++) begin
+            // we got a hit so update the pointer as it was least recently used
+            if (hit_way[i]) begin
+                // Set the nodes to the values we would expect
+                for (int unsigned lvl = 0; lvl < WAY_WIDTH; lvl++) begin
+
+                    idx_base = $unsigned((2**lvl)-1);
+                    // lvl0 <=> MSB, lvl1 <=> MSB-1, ...
+                    shift = WAY_WIDTH - lvl;
+                    // to circumvent the 32 bit integer arithmetic assignment
+                    new_index = 1'(~(i >> (shift-1)));
+                    out[idx_base + (i >> shift)] = new_index;
+                end
+            end
         end
     end
-    else if (WAY_NUM == 8) begin
-        always_comb begin
-            case (hit_way)
-                3'b000: out = {2'b11, rdata[5], 1'b1, rdata[2:0]};
-                3'b001: out = {2'b01, rdata[5], 1'b1, rdata[2:0]};
-                3'b010: out = {rdata[6], 3'b011, rdata[2:0]};
-                3'b011: out = {rdata[6], 3'b001, rdata[2:0]};
-                3'b100: out = {rdata[6: 4], 3'b011, rdata[0]};
-                3'b101: out = {rdata[6: 4], 3'b010, rdata[0]};
-                3'b110: out = {rdata[6: 4], 2'b00, rdata[1], 1'b1};
-                3'b111: out = {rdata[6: 4], 2'b00, rdata[1], 1'b0};
-            endcase
-        end
-    end
-    else begin
-        $warning("plru way unfit");
-        assign out = rdata;
-    end
-endgenerate
 endmodule
 
 module PLRUReplace #(
@@ -97,38 +91,42 @@ module PLRUReplace #(
     parameter WAY_WIDTH = $clog2(WAY_NUM)
 )(
     input logic `N(WAY_NUM-1) rdata,
-    output logic `N(WAY_WIDTH) out
+    output logic `N(WAY_NUM) out
 );
-generate
-    if(WAY_NUM == 4)begin
-        always_comb begin
-            casez (rdata)
-            3'b00?: out = 2'b00;
-            3'b10?: out = 2'b01;
-            3'b?10: out = 2'b10;
-            3'b?11: out = 2'b11;
-            default: out = 0;
-            endcase
+    always_comb begin : plru_output
+        automatic int unsigned idx_base, shift;
+        automatic logic new_index;
+        idx_base  = 0;
+        shift     = 0;
+        new_index = 1'b0;
+        out = '1;
+        // Decode tree to write enable signals
+        // Next for-loop basically creates the following logic for e.g. an 8 entry
+        // TLB (note: pseudo-code obviously):
+        // plru_o[7] = &plru_tree_q[ 6, 2, 0]; //plru_tree_q[0,2,6]=={1,1,1}
+        // plru_o[6] = &plru_tree_q[~6, 2, 0]; //plru_tree_q[0,2,6]=={1,1,0}
+        // plru_o[5] = &plru_tree_q[ 5,~2, 0]; //plru_tree_q[0,2,5]=={1,0,1}
+        // plru_o[4] = &plru_tree_q[~5,~2, 0]; //plru_tree_q[0,2,5]=={1,0,0}
+        // plru_o[3] = &plru_tree_q[ 4, 1,~0]; //plru_tree_q[0,1,4]=={0,1,1}
+        // plru_o[2] = &plru_tree_q[~4, 1,~0]; //plru_tree_q[0,1,4]=={0,1,0}
+        // plru_o[1] = &plru_tree_q[ 3,~1,~0]; //plru_tree_q[0,1,3]=={0,0,1}
+        // plru_o[0] = &plru_tree_q[~3,~1,~0]; //plru_tree_q[0,1,3]=={0,0,0}
+        // For each entry traverse the tree. If every tree-node matches,
+        // the corresponding bit of the entry's index, this is
+        // the next entry to replace.
+        for (int unsigned i = 0; i < WAY_NUM; i += 1) begin
+            for (int unsigned lvl = 0; lvl < WAY_WIDTH; lvl++) begin
+                idx_base = $unsigned((2**lvl)-1);
+                // lvl0 <=> MSB, lvl1 <=> MSB-1, ...
+                shift = WAY_WIDTH - lvl;
+                // plru_o[i] &= plru_tree_q[idx_base + (i>>shift)] == ((i >> (shift-1)) & 1'b1);
+                new_index = 1'(i >> (shift-1));
+                if (new_index) begin
+                  out[i] &= rdata[idx_base + (i>>shift)];
+                end else begin
+                  out[i] &= ~rdata[idx_base + (i>>shift)];
+                end
+            end
         end
     end
-    else if (WAY_NUM == 8) begin
-        always_comb begin
-            casez (rdata)
-                7'b00?0???: out = 0;
-                7'b10?0???: out = 1;
-                7'b?100???: out = 2;
-                7'b?110???: out = 3;
-                7'b???100?: out = 4;
-                7'b???110?: out = 5;
-                7'b???1?10: out = 6;
-                7'b???1?11: out = 7;
-                default: out    = 0;
-            endcase
-        end
-
-    end
-    else begin
-        assign out = 0;
-    end
-endgenerate
 endmodule

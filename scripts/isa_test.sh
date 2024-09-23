@@ -65,5 +65,5 @@ for arg in "$@"; do
 done
 
 for test in "${selected_tests[@]}"; do
-    make emu-run S=0 E=0 I=$test
+    make emu-run S=0 E=0 I=$test EMU_TRACE=0
 done

@@ -7,7 +7,7 @@ module DCache(
     DCacheStoreIO.dcache wio,
     AxiIO.master axi_io,
     PTWRequest.cache ptw_io,
-    BackendCtrl backendCtrl
+    input BackendCtrl backendCtrl
 );
 
     DCacheWayIO way_io [`ICACHE_WAY-1: 0]();
@@ -31,7 +31,7 @@ module DCache(
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask, wmask_n;
     logic `N(`DCACHE_WAY) w_wayhit;
     logic whit;
-    logic `N(`DCACHE_WAY_WIDTH) w_wayIdx;
+    logic `N(`DCACHE_WAY_WIDTH) w_wayIdx, missWay_encode;
     logic `N(`LOAD_PIPELINE) write_valid;
 
     logic refill_en_n;
@@ -163,8 +163,8 @@ endgenerate
         `UNPARAM
         replace_io.hit_en[0] <= r_req_s3[0] & rio.hit[0] | wreq_n;
         replace_io.hit_en[1] <= r_req_s3[1] & rio.hit[1] | refill_en_n;
-        replace_io.hit_way[0] <= wreq_n ? w_wayIdx : hitWay_encode[0];
-        replace_io.hit_way[1] <= refill_en_n ? refill_way_n : hitWay_encode[1];
+        replace_io.hit_way[0] <= wreq_n ? w_wayhit : wayHit[0];
+        replace_io.hit_way[1] <= refill_en_n ? refill_way_n : wayHit[1];
         replace_io.hit_index[0] <= wreq_n ? waddr_n`DCACHE_SET_BUS : miss_io.raddr[0]`DCACHE_SET_BUS;
         replace_io.hit_index[1] <= refill_en_n ? refill_addr_n`DCACHE_SET_BUS : miss_io.raddr[1]`DCACHE_SET_BUS;
     end
@@ -203,28 +203,21 @@ endgenerate
         // write_invalid <= miss_req_n && (waddr_n`DCACHE_BLOCK_BUS == waddr`DCACHE_BLOCK_BUS);
     end
 
-    // 如果该项在replace queue中，那么它不能在miss queue中, 避免miss queue先写入导致错误
-    logic refill_write_conflict;
-    logic replace_conflict, replace_conflict_n;
-    assign replace_queue_io.waddr = wio.paddr;
-    always_ff @(posedge clk)begin
-        refill_write_conflict <= replace_queue_io.refill_en & replace_queue_io.refill_dirty &
-                                 (wio.paddr`DCACHE_BLOCK_BUS == replace_addr);
-        replace_conflict_n <= replace_conflict & wreq_n & ~whit;
-    end
-    assign replace_conflict = refill_write_conflict | replace_queue_io.whit;
+    // 如果该项在replace queue中，那么需要等它写回miss queue才能进行读取
+    assign replace_queue_io.waddr = miss_io.req_addr;
 
     // write miss
     assign whit = (|w_wayhit);
     Encoder #(`DCACHE_WAY) encoder_way (w_wayhit, w_wayIdx);
-    assign miss_io.wen = ~whit & wreq_n & ~replace_conflict;
+    Encoder #(`DCACHE_WAY) encoder_miss_way (replace_io.miss_way, missWay_encode);
+    assign miss_io.wen = ~whit & wreq_n;
     assign miss_io.waddr = waddr_n;
     assign miss_io.wdata = wdata_n;
     assign miss_io.wmask = wmask_n;
-    assign miss_io.req_success = miss_io.req & ~replace_queue_io.full;
-    assign miss_io.replaceWay = replace_io.miss_way;
+    assign miss_io.req_success = miss_req_n & ~replace_queue_io.full & ~replace_queue_io.whit;
+    assign miss_io.replaceWay = missWay_encode;
     assign miss_io.scIdx = scIdx_n;
-    assign wio.conflict = miss_io.wfull | replace_conflict_n;
+    assign wio.conflict = miss_io.wfull;
     assign wio.success = wreq_n2;
     assign replace_queue_io.en = miss_io.req;
     always_ff @(posedge clk)begin

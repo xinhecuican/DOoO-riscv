@@ -1,21 +1,26 @@
 yosys -import
-set files [glob build/v/*]
+if {[info exists ::env(FILES)]} {
+    set files $::env(FILES)
+} else {
+    set files [glob build/v/*]
+}
 set foundry $::env(FOUNDRY)
 set CLK_FREQ $::env(CLK_FREQ)
 set CLK_PERIOD_NS [expr 1000.0 / $CLK_FREQ]
 set LOG_DIR $::env(LOG_DIR)
 set SYNTH_V $::env(SYNTH)
+set TOP $::env(TOP)
 set abc_script  "+strash;ifraig;retime,-D,{D},-M,6;strash;dch,-f;map,-p,-M,1,{D},-f;topo;dnsize;buffer,-p;upsize;"
 if { $foundry == "sky130" } {
     if {![file exists build/sky130_merge.lib]} {
         set env(FOUNDRY_DIR) utils/iEDA/scripts/foundry/sky130
-        source utils/iEDA/scripts/design/sky130_gcd/script/DB_script/db_path_setting.tcl
+        source config/sky130/db_path_setting.tcl
         set output [exec ./scripts/mergeLib.pl sky130_merge {*}$LIB_PATH > build/sky130_merge.lib]
     }
     set lib_file build/sky130_merge.lib
-	set TIEHI_PORT "sky130_fd_sc_hs__conb_1 HI"
-	set TIELO_PORT "sky130_fd_sc_hs__conb_1 LO"
-	set MIN_BUF_PORT "sky130_fd_sc_hs__buf_1 A X"
+	set TIEHI_PORT "sky130_fd_sc_hd__conb_1 HI"
+	set TIELO_PORT "sky130_fd_sc_hd__conb_1 LO"
+	set MIN_BUF_PORT "sky130_fd_sc_hd__buf_1 A X"
 }
 foreach lib $lib_file {
     read_liberty -lib -ignore_miss_dir -setattr blackbox $lib
@@ -25,7 +30,7 @@ foreach file $files {
     read_verilog -sv -Ibuild/ -Isrc/defines/ $file
 }
 # synth
-hierarchy -check -top Soc
+hierarchy -check -top $TOP
 procs
 opt_expr
 opt_clean
