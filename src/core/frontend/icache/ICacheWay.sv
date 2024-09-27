@@ -50,11 +50,13 @@ module ICacheData(
                 .BYTES(`ICACHE_WAY)
             ) bank (
                 .clk(clk),
+                .rst(rst),
                 .en(en[i]),
                 .addr(index[i]),
                 .we(we[i]),
                 .wdata({`ICACHE_WAY{wdata[i]}}),
-                .rdata(data[i])
+                .rdata(data[i]),
+                .ready()
             );
         end
     endgenerate

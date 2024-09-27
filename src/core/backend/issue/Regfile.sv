@@ -3,7 +3,12 @@
 module Regfile(
     input logic clk,
     input logic rst,
-    RegfileIO.regfile io
+    input logic `N(`REGFILE_READ_PORT) en,
+    input logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr,
+    output logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata,
+    input logic `N(`REGFILE_WRITE_PORT) we,
+    input logic `ARRAY(`REGFILE_WRITE_PORT, `PREG_WIDTH) waddr,
+    input logic `ARRAY(`REGFILE_WRITE_PORT, `XLEN) wdata
 `ifdef DIFFTEST
     ,DiffRAT.regfile diff_rat
 `endif
@@ -13,16 +18,17 @@ module Regfile(
         .DEPTH(`PREG_SIZE),
         .READ_PORT(`REGFILE_READ_PORT),
         .WRITE_PORT(`REGFILE_WRITE_PORT),
+        .BANK_SIZE(`PREG_SIZE/2),
         .RESET(1)
     ) ram (
         .clk(clk),
         .rst(rst),
-        .en(io.en),
-        .raddr(io.raddr),
-        .rdata(io.rdata),
-        .we(io.we),
-        .waddr(io.waddr),
-        .wdata(io.wdata),
+        .en(en),
+        .raddr(raddr),
+        .rdata(rdata),
+        .we(we),
+        .waddr(waddr),
+        .wdata(wdata),
         .ready()
     );
     
@@ -31,8 +37,8 @@ module Regfile(
     logic `ARRAY(32, `XLEN) diff_data;
     always_ff @(posedge clk)begin
         for(int i=0; i<`REGFILE_WRITE_PORT; i++)begin
-            if(io.we[i])begin
-                data[io.waddr[i]] <= io.wdata[i];
+            if(we[i])begin
+                data[waddr[i]] <= wdata[i];
             end
         end
     end

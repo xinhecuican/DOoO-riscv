@@ -168,7 +168,8 @@ module StoreAddrBank(
         .addr1(selectIdxNext),
         .we(io.en),
         .wdata({io.data.uext, size, io.data.imm, io.data.sqIdx, io.data.lqIdx, io.status.robIdx, io.data.fsqInfo}),
-        .rdata1(data_o)
+        .rdata1(data_o),
+        .ready()
     );
 
 generate

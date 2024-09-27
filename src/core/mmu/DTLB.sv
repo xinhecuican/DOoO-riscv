@@ -89,7 +89,7 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lidx;
     logic `N(`LOAD_ISSUE_BANK_WIDTH+$clog2(`LOAD_PIPELINE)) lidx_s2;
 generate
-    /* UNPARAM */
+    `UNPARAM(LOAD_PIPELINE, 2, "lreq_cancel_s2")
     assign lreq_cancel_s2[0] = 0;
     assign lreq_cancel_s2[1] = ~(ltlb_io[0].miss & ~ltlb_io[0].exception);
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin

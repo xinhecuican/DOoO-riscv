@@ -10,7 +10,8 @@ module DCache(
     input BackendCtrl backendCtrl
 );
 
-    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_SET_WIDTH) loadIdx, tagvIdx;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_SET_WIDTH) loadIdx;
+    logic `ARRAY(`LOAD_PIPELINE+1, `DCACHE_SET_WIDTH) tagvIdx;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_LINE_WIDTH-2) loadOffset;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BANK) loadBankDecode;
     logic `N(`DCACHE_BANK) loadBank;
@@ -34,6 +35,7 @@ module DCache(
     logic `N(`LOAD_PIPELINE) write_valid;
 
     logic refill_en_n;
+    logic `N(`DCACHE_WAY) refill_way;
     logic `N(`DCACHE_WAY_WIDTH) refill_way_n;
     logic `N(`PADDR_SIZE) refill_addr_n;
     logic `N(`DCACHE_BLOCK_SIZE) replace_addr;
@@ -66,14 +68,12 @@ module DCache(
     logic `N(`LOAD_PIPELINE) r_req, r_req_s3;
     logic req_bank_conflict;
     logic `N(`LOAD_PIPELINE) req_cancel;
-    /* UNPARAM */
+    `UNPARAM(LOAD_PIPELINE, 2, "detect req bank conflict")
     assign req_bank_conflict = (rio.req[0] & rio.req[1] & (rio.vaddr[0]`DCACHE_BANK_BUS == rio.vaddr[1]`DCACHE_BANK_BUS));
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign loadIdx[i] = rio.vaddr[i]`DCACHE_SET_BUS;
         assign loadOffset[i] = rio.vaddr[i][`DCACHE_LINE_WIDTH-1: `DCACHE_BYTE_WIDTH];
-        assign tagvIdx[i] = ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
-                            loadIdx[i];
         Decoder #(`DCACHE_BANK) decoder_offset (loadOffset[i], loadBankDecode[i]);
     end
 endgenerate
@@ -93,8 +93,12 @@ generate
     
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign tagv_en[i] = rio.req[i] | ptw_io.req;
+        assign tagvIdx[i] = miss_io.refill_en ? miss_io.refillAddr`DCACHE_SET_BUS :
+                            ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
+                            loadIdx[i];
     end
     assign tagv_en[`LOAD_PIPELINE] = wreq | miss_io.refill_en;
+    assign tagvIdx[`LOAD_PIPELINE] = wreq ? widx : miss_io.refillAddr`DCACHE_SET_BUS;
     assign tagv_we = {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way;
     for(genvar i=0; i<`DCACHE_BANK; i++)begin
         for(genvar j=0; j<`DCACHE_WAY; j++)begin
@@ -122,7 +126,6 @@ endgenerate
         .tagv_en,
         .tagv_we,
         .tagv_index(tagvIdx),
-        .tagv_windex((wreq ? widx : miss_io.refillAddr`DCACHE_SET_BUS)),
         .tagv_wdata({miss_io.refillAddr`DCACHE_TAG_BUS, 1'b1}),
         .tagv,
         .en((loadBank | {`DCACHE_BANK{miss_io.refill_en | ptw_io.req}})),
@@ -199,7 +202,7 @@ endgenerate
     logic `N(`DCACHE_WAY_WIDTH) replace_hit_way;
     logic `N(`DCACHE_SET_WIDTH) replace_idx;
     always_ff @(posedge clk)begin
-        `UNPARAM
+        `UNPARAM(LOAD_PIPELINE, 2, "replace reuse hit port")
         replace_io.hit_en[0] <= r_req_s3[0] & rio.hit[0] | wreq_n;
         replace_io.hit_en[1] <= r_req_s3[1] & rio.hit[1] | refill_en_n;
         replace_io.hit_way[0] <= wreq_n ? w_wayhit : wayHit[0];
@@ -263,7 +266,6 @@ endgenerate
     end
 
     // write hit
-    logic `N(`DCACHE_WAY) refill_way;
     Decoder #(`DCACHE_WAY) decoder_refill_way (miss_io.refillWay, refill_way);
 
     // refill
@@ -301,7 +303,7 @@ endgenerate
 
 generate
     for(genvar j=0; j<`DCACHE_WAY; j++)begin
-        assign ptw_way_hit[j] = way_io[j].tagv[0] & (way_io[j].tagv[`DCACHE_TAG: 1] == ptw_tag);
+        assign ptw_way_hit[j] = tagv[0][j] & (tagv[0][j][`DCACHE_TAG: 1] == ptw_tag);
     end
 endgenerate
     Encoder #(`DCACHE_WAY) encoder_ptw_hit (ptw_way_hit, ptw_hit_way);

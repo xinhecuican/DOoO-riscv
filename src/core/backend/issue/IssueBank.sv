@@ -61,7 +61,8 @@ module IssueBank #(
         .addr1(selectIdx),
         .we(io.en),
         .wdata(io.data),
-        .rdata1(data_o)
+        .rdata1(data_o),
+        .ready()
     );
 
 generate

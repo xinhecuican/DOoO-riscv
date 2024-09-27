@@ -6,6 +6,9 @@
 `define DIFFTEST
 
 `define EXT_FENCEI
+
+// `define SYNTH_VIVADO
+
 `include "predefine.svh"
 // `ifdef ZICSR
 // parameter HAS_ZICSR=1;

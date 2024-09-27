@@ -215,7 +215,7 @@ generate
     end
 endgenerate
     assign redirectIsCond = fsq_back_io.redirectBr.en & fsq_back_io.redirectBr.br_type == CONDITION;
-    /* UNPARAM */
+    `UNPARAM(SLOT_NUM, 2, "condSmallNum adder")
     assign condSmallNumAll = condSmallNum[0] + condSmallNum[1];
     assign pd_smallNumAll[1] = pd_smallNum[0] & pd_smallNum[1];
     assign pd_smallNumAll[0] = pd_smallNum[0] ^ pd_smallNum[1];

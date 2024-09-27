@@ -374,6 +374,21 @@ typedef struct packed {
 } LoadFwdData;
 
 typedef struct packed {
+    logic dir;
+    logic we;
+    logic `N(`PREG_WIDTH) rd;
+    RobIdx robIdx;
+    FsqIdxInfo fsqInfo;
+} LoadQueueData;
+
+typedef struct packed {
+    logic uext;
+    logic [1: 0] size;
+    logic `N(`DCACHE_BYTE_WIDTH) offset;
+    logic `N(`DCACHE_BYTE) mask;
+} LoadMaskData;
+
+typedef struct packed {
     logic en;
     logic [1: 0] reason;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) issue_idx;

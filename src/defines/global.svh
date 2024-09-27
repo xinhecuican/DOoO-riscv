@@ -127,6 +127,7 @@ typedef enum logic [1:0] {
 
 // rob
 `define ROB_SIZE 128
+`define ROB_BANK 2
 `define ROB_WIDTH $clog2(`ROB_SIZE)
 `define COMMIT_WIDTH 4
 
@@ -171,6 +172,8 @@ typedef enum logic [1:0] {
 `define LOAD_QUEUE_SIZE 32
 `define LOAD_QUEUE_WIDTH $clog2(`LOAD_QUEUE_SIZE)
 `define LOAD_PIPELINE 2
+`define LOAD_UNCACHE_SIZE 4
+`define LOAD_UNCACHE_WIDTH $clog2(`LOAD_UNCACHE_SIZE)
 `define STORE_QUEUE_SIZE 32
 `define STORE_QUEUE_WIDTH $clog2(`STORE_QUEUE_SIZE)
 `define STORE_PIPELINE 2
@@ -207,8 +210,10 @@ typedef enum logic [1:0] {
 
 `define DCACHE_MISS_SIZE 16
 `define DCACHE_MSHR_SIZE 16
+`define DCACHE_MSHR_BANK (`DCACHE_MSHR_SIZE / `LOAD_PIPELINE)
 `define DCACHE_MISS_WIDTH $clog2(`DCACHE_MISS_SIZE)
 `define DCACHE_MSHR_WIDTH $clog2(`DCACHE_MSHR_SIZE)
+`define DCACHE_MSHR_BANK_WIDTH $clog2(`DCACHE_MSHR_BANK)
 `define DCACHE_REPLACE_SIZE 16
 `define DCACHE_REPLACE_WIDTH $clog2(`DCACHE_REPLACE_SIZE)
 

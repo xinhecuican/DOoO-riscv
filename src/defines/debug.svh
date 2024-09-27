@@ -10,6 +10,10 @@
 `define T_SCB
 // `define T_ICACHE
 
+// `define REPORT_RAM
+// `define REPORT_UNPARAM
+// `define REPORT_CONSTRAINT
+
 `define PERF(name, cond) \
 `ifdef DIFFTEST \
     logic [31: 0] perf_counter_``name; \
@@ -65,6 +69,22 @@ endpackage
 `endif \
 
 
-`define UNPARAM /* UNPARAM */
+`define UNPARAM(name, default_value, reason) \
+`ifdef REPORT_UNPARAM \
+    initial begin \
+        if(`name != default_value)begin \
+            $display("Error0-0. [%s] unsupport %d, because %s", `"name`", `name, `"reason`"); \
+        end \
+    end \
+`endif
+
+`define CONSTRAINT(name, default_value, reason) \
+`ifdef REPORT_CONSTRAINT \
+    initial begin \
+        if(`name != default_value)begin \
+            $display("Error0-1. [%s] unsupport %d, because %s", `"name`", `name, `"reason`"); \
+        end \
+    end \
+`endif
 
 `endif

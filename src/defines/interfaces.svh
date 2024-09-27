@@ -235,18 +235,6 @@ interface RenameDisIO;
     modport rob(input op, prd, old_prd, robIdx);
 endinterface
 
-interface RegfileIO;
-    logic `N(`REGFILE_READ_PORT) en;
-    logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr;
-    logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata;
-    logic `N(`REGFILE_WRITE_PORT) we;
-    logic `ARRAY(`REGFILE_WRITE_PORT, `PREG_WIDTH) waddr;
-    logic `ARRAY(`REGFILE_WRITE_PORT, `XLEN) wdata;
-
-    modport regfile (input raddr, waddr, wdata, en, we, output rdata);
-    modport bypass  (input raddr, rdata);
-endinterface
-
 interface DisIssueIO #(
     parameter PORT_NUM = 4,
     parameter DATA_SIZE = 32

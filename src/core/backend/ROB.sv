@@ -100,6 +100,7 @@ endgenerate
         .DEPTH(`ROB_SIZE),
         .READ_PORT(`COMMIT_WIDTH),
         .WRITE_PORT(`FETCH_WIDTH),
+        .BANK_SIZE(`ROB_SIZE / `ROB_BANK),
         .RESET(1)
     ) rob_data_ram (
         .clk(clk),
@@ -338,7 +339,6 @@ endgenerate
     assign ext_tail = {tdir ^ backendRedirect.robIdx.dir, tail};
     assign walk_remainCount_n = ext_tail - backendRedirect.robIdx.idx - 1;
     assign walk_remain_count = backendRedirect.en ? walk_remainCount_n : walkInfo.remainCount;
-    /* UNPARAM */
     assign redirect_num = (|walk_remainCount_n[`ROB_WIDTH: $clog2(`COMMIT_WIDTH)]) ? `COMMIT_WIDTH : walk_remainCount_n;
     assign walk_normal_num =  (|walkInfo.remainCount[`ROB_WIDTH: $clog2(`COMMIT_WIDTH)]) ? `COMMIT_WIDTH : walkInfo.remainCount;
     assign walk_num = backendRedirect.en ? redirect_num : walk_normal_num;

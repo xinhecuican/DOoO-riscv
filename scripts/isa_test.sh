@@ -31,7 +31,13 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-for arg in "$@"; do
+args=("$@")
+
+if [[ " ${args[@]} " =~ " all " ]]; then
+    args=("rv32i" "rv32m" "rv32s" "benchmarks")
+fi
+
+for arg in "${args[@]}"; do
     case $arg in
         rv32i)
             for test in "${rv32i[@]}"; do

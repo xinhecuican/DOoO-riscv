@@ -70,7 +70,7 @@ endgenerate
     logic `N(`STORE_PIPELINE) free_valid;
     assign full = &addr_en;
     assign empty = ~(|addr_en);
-    /* UNPARAM */
+    `UNPARAM(STORE_PIPELINE, 2, "use encoder & rencoder")
     PEncoder #(`STORE_COMMIT_SIZE) encoder_free (~addr_en, free_idx[0]);
     PREncoder #(`STORE_COMMIT_SIZE) encoder_free_rev (~addr_en, free_idx[1]);
     assign free_valid[0] = ~full;
@@ -359,7 +359,6 @@ module SCDataBank(
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) waddr_decode;
     logic `N(`STORE_COMMIT_SIZE) waddr_combine;
     logic `ARRAY(`STORE_COMMIT_SIZE, `DCACHE_BYTE) wmask_map;
-    `UNPARAM
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
@@ -369,7 +368,6 @@ generate
     for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
         for(genvar j=0; j<`DCACHE_BYTE; j++)begin
             always_ff @( posedge clk ) begin
-                `UNPARAM
                 if(waddr_decode[1][i] & wmask[1][j])begin
                     d[i][j] <= wdata[1][j*8 +: 8];
                 end

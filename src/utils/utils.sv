@@ -258,6 +258,8 @@ module LoopOldestSelect #(
 );
 generate
 	if(RADIX == 1)begin
+		assign en_o = en;
+		assign cmp_o = cmp;
 		assign data_o = data_i;
 	end
 	else if(RADIX == 2)begin
@@ -433,6 +435,20 @@ module LoopFull #(
 	output logic full
 );
 	assign full = (cmp1[0] ^ cmp2[0]) & (cmp1[WIDTH: 1] == cmp2[WIDTH: 1]);
+endmodule
+
+module LoopMaskGen #(
+	parameter SIZE=4,
+	parameter WIDTH=$clog2(SIZE)
+)(
+	input logic [WIDTH: 0] in1,
+	input logic [WIDTH: 0] in2,
+	output logic [SIZE-1: 0] mask
+);
+	logic [SIZE-1: 0] mask1, mask2;
+	MaskGen #(SIZE) mask_gen_in1(in1[WIDTH: 1], mask1);
+	MaskGen #(SIZE) mask_gen_in2(in2[WIDTH: 1], mask2);
+	assign mask = {SIZE{in1[0] ^ in2[0]}} ^ (mask1 ^ mask2);
 endmodule
 
 module MaskExpand #(

@@ -84,7 +84,7 @@ module PreDecode(
     assign pd_redirect.stream.branch_type = stream_next.branch_type;
     assign pd_redirect.stream.ras_type = stream_next.ras_type;
     assign pd_redirect.stream.target = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? next_pc : bundles_next[selectIdx].target;
-    assign pd_redirect.stream.size = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? stream_next.size : selectIdx;
+    assign pd_redirect.stream.size = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? stream_next.size : selectIdx + shiftIdx;
     assign pd_redirect.ras_type = en_next[0] & stream_next.taken & ~bundles_next[tailIdx].branch ? NONE : bundles_next[selectIdx].ras_type;
 
     always_comb begin

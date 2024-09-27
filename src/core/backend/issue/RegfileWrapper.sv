@@ -15,7 +15,12 @@ module RegfileWrapper(
     ,DiffRAT.regfile diff_rat
 `endif
 );
-    RegfileIO reg_io();
+    logic `N(`REGFILE_READ_PORT) en;
+    logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr;
+    logic `ARRAY(`REGFILE_READ_PORT, `XLEN) reg_rdata;
+    logic `N(`REGFILE_WRITE_PORT) we;
+    logic `ARRAY(`REGFILE_WRITE_PORT, `PREG_WIDTH) waddr;
+    logic `ARRAY(`REGFILE_WRITE_PORT, `XLEN) wdata;
     logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata;
 
 
@@ -60,9 +65,9 @@ generate
         end
     end
 endgenerate
-    assign reg_io.en[`ALU_SIZE-1: 0] = int_en;
-    assign reg_io.en[`ALU_SIZE*2-1: `ALU_SIZE] = int_en;
-    assign reg_io.raddr[`ALU_SIZE*2-1: 0] = int_preg;
+    assign en[`ALU_SIZE-1: 0] = int_en;
+    assign en[`ALU_SIZE*2-1: `ALU_SIZE] = int_en;
+    assign raddr[`ALU_SIZE*2-1: 0] = int_preg;
 
     localparam LOAD_BASE = `ALU_SIZE * 2;
     logic `N(`LOAD_PIPELINE) load_en;
@@ -73,8 +78,8 @@ endgenerate
         load_en <= load_reg_io.en;
         load_preg <= load_reg_io.preg;
     end
-    assign reg_io.en[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_en;
-    assign reg_io.raddr[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_preg;
+    assign en[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_en;
+    assign raddr[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_preg;
 
     localparam STORE_BASE = `ALU_SIZE * 2 + `LOAD_PIPELINE;
     logic `N(`STORE_PIPELINE * 2) store_en;
@@ -85,22 +90,20 @@ endgenerate
         store_en <= store_reg_io.en;
         store_preg <= store_reg_io.preg;
     end
-    assign reg_io.en[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_en;
-    assign reg_io.raddr[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_preg;
+    assign en[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_en;
+    assign raddr[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_preg;
 
 generate
     for(genvar i=0; i<`WB_SIZE; i++)begin
-        assign reg_io.we[i] = wbBus.en[i] & wbBus.we[i];
-        assign reg_io.waddr[i] = wbBus.rd[i];
-        assign reg_io.wdata[i] = wbBus.res[i];
+        assign we[i] = wbBus.en[i] & wbBus.we[i];
+        assign waddr[i] = wbBus.rd[i];
+        assign wdata[i] = wbBus.res[i];
     end
 endgenerate
 
     Regfile regfile(
-        .clk(clk),
-        .rst(rst),
-        .io(reg_io),
-        .*
+        .*,
+        .rdata(reg_rdata)
     );
     Bypass bypass(.*);
 endmodule

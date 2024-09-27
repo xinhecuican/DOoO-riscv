@@ -53,7 +53,8 @@ module RAS(
         .addr0(waddr),
         .addr1(top_p1),
         .wdata(updateEntry),
-        .rdata1(entry)
+        .rdata1(entry),
+        .ready()
     );
 
     always_ff @(posedge clk or posedge rst)begin

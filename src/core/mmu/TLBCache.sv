@@ -310,11 +310,13 @@ module TLBWay #(
         .READ_LATENCY(1)
     ) tag_ram (
         .clk(clk),
+        .rst(rst),
         .en(io.tag_en),
         .we(io.tag_we),
         .addr(io.idx),
         .wdata(io.wtag),
-        .rdata(io.tag)
+        .rdata(io.tag),
+        .ready()
     );
 
 generate
@@ -325,11 +327,13 @@ generate
             .READ_LATENCY(1)
         ) data_ram (
             .clk(clk),
+            .rst(rst),
             .en(io.en),
             .we(io.we),
             .addr(io.idx),
             .wdata(io.wdata[i]),
-            .rdata(io.rdata[i])
+            .rdata(io.rdata[i]),
+            .ready()
         );
     end
 endgenerate

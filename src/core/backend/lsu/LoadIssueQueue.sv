@@ -35,11 +35,15 @@ module LoadIssueQueue(
 );
 
     LoadIssueBankIO bank_io [`LOAD_ISSUE_BANK_NUM-1: 0]();
+    MemIssueBundle `N(`LOAD_ISSUE_BANK_NUM) mem_issue_bundle;
     logic `ARRAY(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_NUM)) order;
     logic `ARRAY(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_SIZE)) bankNum;
-    logic `ARRAY(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_NUM)) originOrder, sortOrder;
     logic `N(`LOAD_ISSUE_BANK_NUM) full, enNext, bigger;
     logic `N($clog2(`LOAD_DIS_PORT)+1) disNum;
+
+    `UNPARAM(LOAD_ISSUE_BANK_NUM, 2, "order for load queue bank")
+    assign order[0] = ~(mem_issue_bundle[0].lqIdx.idx[0] == 0);
+    assign order[1] = mem_issue_bundle[0].lqIdx.idx[0] == 0;
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_NUM; i++)begin
         LoadIssueBank issue_bank (
@@ -48,10 +52,8 @@ generate
             .io(bank_io[i]),
             .*
         );
-        MemIssueBundle mem_issue_bundle;
-        assign mem_issue_bundle = dis_load_io.data[i];
+        assign mem_issue_bundle[i] = dis_load_io.data[i];
         assign bankNum[i] = bank_io[i].bankNum;
-        assign originOrder[i] = i;
 
         assign bank_io[i].en = dis_load_io.en[order[i]] & ~dis_load_io.full;
         assign bank_io[i].status = dis_load_io.status[order[i]];
@@ -66,25 +68,24 @@ generate
         assign bank_io[i].tlb_bank_idx = tlb_lsu_io.lwb_idx[i];
         assign full[i] = bank_io[i].full;
 
+        assign load_io.dis_en[i] = bank_io[i].en;
+
         assign load_reg_io.en[i] = bank_io[i].reg_en;
         assign load_reg_io.preg[i] = bank_io[i].rs1;
         assign load_io.loadIssueData[i] = bank_io[i].data_o;
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
-        assign load_io.dis_rob_idx[i] = dis_load_io.status[i].robIdx;
-        assign load_io.dis_lq_idx[i] = mem_issue_bundle.lqIdx;
+        assign load_io.dis_rob_idx[i] = dis_load_io.status[order[i]].robIdx;
+        assign load_io.dis_lq_idx[i] = mem_issue_bundle[order[i]].lqIdx;
         assign load_io.exception[i] = bank_io[i].exception_o;
 
         LoopCompare #(`ROB_WIDTH) cmp_bigger(bank_io[i].robIdx_o, backendCtrl.redirectIdx, bigger[i]);
     end
 endgenerate
     assign dis_load_io.full = (|full) | load_io.full;
-    Sort #(`LOAD_ISSUE_BANK_NUM, $clog2(`LOAD_ISSUE_BANK_SIZE), $clog2(`LOAD_ISSUE_BANK_NUM)) sort_order (bankNum, originOrder, sortOrder); 
-    assign load_io.dis_en = dis_load_io.en;
     assign load_io.dis_stall = dis_load_io.full;
     ParallelAdder #(1, `LOAD_ISSUE_BANK_NUM) adder_dis_num (dis_load_io.en, disNum);
     assign load_io.eqNum = disNum;
     always_ff @(posedge clk)begin
-        order <= sortOrder;
         enNext <= load_reg_io.en;
         for(int i=0; i<`LOAD_ISSUE_BANK_NUM; i++)begin
             load_io.en[i] <= enNext[i] & (~backendCtrl.redirect | bigger[i]) & load_reg_io.ready[i];
@@ -158,7 +159,8 @@ module LoadIssueBank(
         .addr1(selectIdxNext),
         .we(io.en),
         .wdata({io.status.we, io.data.uext, size, io.data.imm, io.status.rd, io.data.lqIdx, io.data.sqIdx, io.status.robIdx, io.data.fsqInfo}),
-        .rdata1(data_o)
+        .rdata1(data_o),
+        .ready()
     );
 
 generate

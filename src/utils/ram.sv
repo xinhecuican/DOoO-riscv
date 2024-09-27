@@ -6,18 +6,108 @@ module SPRAM#(
     parameter ADDR_WIDTH = $clog2(DEPTH),
     parameter READ_LATENCY = 0,
     parameter BYTE_WRITE = 0,
+    parameter RESET = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
+    input logic rst,
     input logic en,
     input logic `N(ADDR_WIDTH) addr,
     input logic [BYTES-1: 0] we,
     input logic [BYTES-1: 0][WIDTH/BYTES-1: 0] wdata,
-    output logic `N(WIDTH) rdata
+    output logic `N(WIDTH) rdata,
+    output logic ready
 );
-    (* ram_style="block" *)
-    logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
-    generate;
+`ifdef SYNTH_VIVADO
+generate
+    if(!BYTE_WRITE || (BYTE_WRITE && 
+     ((BYTES == 1) ||
+      (WIDTH/BYTES % 8 == 0) ||
+      (WIDTH/BYTES % 9 == 0))))begin
+        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH :
+                                      WIDTH/BYTES % 8 == 0 ? 8 : 9;
+        localparam BYTES_LOCAL = WIDTH / BYTE_WRITE_WIDTH;
+        localparam DELTA = BYTES_LOCAL / BYTES;
+        logic [BYTES_LOCAL-1: 0] we_local;
+        for(genvar i=0; i<BYTES; i++)begin
+            assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
+        end
+        assign ready = 1'b1;
+        
+        wire sbiterra;
+        wire dbiterra;
+        xpm_memory_spram #(
+            .ADDR_WIDTH_A(ADDR_WIDTH),
+            .AUTO_SLEEP_TIME(0),
+            .BYTE_WRITE_WIDTH_A(BYTE_WRITE_WIDTH),
+            .CASCADE_HEIGHT(0),
+            .ECC_MODE("no_ecc"),
+            .MEMORY_INIT_FILE("none"),
+            .MEMORY_INIT_PARAM("0"),
+            .MEMORY_OPTIMIZATION("true"),
+            .MEMORY_PRIMITIVE("block"),
+            .MEMORY_SIZE(WIDTH * DEPTH),
+            .MESSAGE_CONTROL(0),
+            .READ_DATA_WIDTH_A(WIDTH),
+            .READ_LATENCY_A(READ_LATENCY),
+            .READ_RESET_VALUE_A("0"),
+            .RST_MODE_A("SYNC"),
+            .SIM_ASSERT_CHK(0),
+            .USE_MEM_INIT(1),
+            .WAKEUP_TIME("disable_sleep"),
+            .WRITE_DATA_WIDTH_A(WIDTH),
+            .WRITE_MODE_A("read_first")
+        )
+        xpm_memory_spram_inst (
+            .douta(rdata),
+            .addra(addr),
+            .clka(clk),
+            .dina(wdata),
+            .ena(en),
+            .injectdbiterra(1'b0),
+            .injectsbiterra(1'b0),
+            .sbiterra(sbiterra),
+            .dbiterra(dbiterra), 
+            .regcea(1'b0),
+            .rsta(1'b0),
+            .sleep(1'b0),
+            .wea(we_local)
+        );
+    end
+    else begin
+`endif
+        logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
+
+        logic `N(ADDR_WIDTH) resetAddr;
+        logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
+        logic `N(ADDR_WIDTH+1) counter;
+        logic resetState;
+        if(RESET)begin
+            assign resetAddr = resetState ? counter : addr;
+            assign resetData = resetState ? 0 : wdata;
+            always_ff @(posedge clk or posedge rst)begin
+                if(rst == `RST)begin
+                    counter <= 0;
+                    resetState <= 1'b1;
+                    ready <= 1'b0;
+                end
+                else begin
+                    if(resetState)begin
+                        counter <= counter + 1;
+                        if(counter == DEPTH)begin
+                            resetState <= 1'b0;
+                            ready <= 1'b1;
+                        end
+                    end
+                end
+            end
+        end
+        else begin
+            assign resetAddr = addr;
+            assign resetData = wdata;
+            assign resetState = 0;
+            assign ready = 1'b1;
+        end
         if(READ_LATENCY == 0)begin
             assign rdata = data[addr];
         end
@@ -28,15 +118,24 @@ module SPRAM#(
                 end
             end
         end
-    endgenerate
 
-    for(genvar j=0; j<BYTES; j++)begin
-        always_ff @(posedge clk)begin
-            if(we[j])begin
-                data[addr][j] <= wdata[j];
+        for(genvar j=0; j<BYTES; j++)begin
+            always_ff @(posedge clk)begin
+                if(we[j] | resetState)begin
+                    data[resetAddr][j] <= resetData[j];
+                end
             end
         end
+`ifdef SYNTH_VIVADO
     end
+endgenerate
+`endif
+
+`ifdef REPORT_RAM
+    initial begin
+        $display("0r0w1rw_%0dx%0d_%0d %m", WIDTH, DEPTH, WIDTH / BYTES);
+    end
+`endif
 endmodule
 
 module SDPRAM#(
@@ -46,6 +145,7 @@ module SDPRAM#(
     parameter INIT_VALUE = 0,
     parameter READ_LATENCY = 0,
     parameter BYTE_WRITE = 0,
+    parameter RESET = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
@@ -55,11 +155,105 @@ module SDPRAM#(
     input logic `N(ADDR_WIDTH) addr1,
     input logic [BYTES-1: 0] we,
     input logic `ARRAY(BYTES, WIDTH / BYTES) wdata,
-    output logic `N(WIDTH) rdata1
+    output logic `N(WIDTH) rdata1,
+    output logic ready
 );
 
-    logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
-    generate;
+generate
+`ifdef SYNTH_VIVADO
+    if(!BYTE_WRITE || (BYTE_WRITE && 
+     ((BYTES == 1) ||
+      (WIDTH/BYTES % 8 == 0) ||
+      (WIDTH/BYTES % 9 == 0))))begin
+        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH :
+                                      WIDTH/BYTES % 8 == 0 ? 8 : 9;
+        localparam BYTES_LOCAL = WIDTH / BYTE_WRITE_WIDTH;
+        localparam DELTA = BYTES_LOCAL / BYTES;
+        logic [BYTES_LOCAL-1: 0] we_local;
+        for(genvar i=0; i<BYTES; i++)begin
+            assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
+        end
+        assign ready = 1'b1;
+        
+        wire dbiterrb, sbiterrb;
+        xpm_memory_sdpram #(
+            .ADDR_WIDTH_A(ADDR_WIDTH),
+            .ADDR_WIDTH_B(ADDR_WIDTH),
+            .AUTO_SLEEP_TIME(0),
+            .BYTE_WRITE_WIDTH_A(BYTE_WRITE_WIDTH),
+            .CASCADE_HEIGHT(0),
+            .ECC_MODE("no_ecc"),
+            .MEMORY_INIT_FILE("none"),
+            .MEMORY_INIT_PARAM("0"),
+            .MEMORY_OPTIMIZATION("true"),
+            .MEMORY_PRIMITIVE("auto"),
+            .MEMORY_SIZE(WIDTH * DEPTH),
+            .MESSAGE_CONTROL(0),
+            .READ_DATA_WIDTH_B(WIDTH),
+            .READ_LATENCY_B(READ_LATENCY),
+            .READ_RESET_VALUE_B("0"),
+            .RST_MODE_A("SYNC"),
+            .RST_MODE_B("SYNC"),
+            .SIM_ASSERT_CHK(0),
+            .USE_MEM_INIT(1),
+            .WAKEUP_TIME("disable_sleep"),
+            .WRITE_DATA_WIDTH_A(WIDTH),
+            .WRITE_MODE_B("read_first")
+        )
+        xpm_memory_sdpram_inst (
+            .doutb(rdata1),
+            .addra(addr0),
+            .addrb(addr1),
+            .clka(clk),
+            .clkb(clk),
+            .dina(wdata),
+            .ena(|we_local),
+            .enb(en),
+            .injectdbiterra(1'b0),
+            .injectsbiterra(1'b0),
+            .sbiterrb(sbiterrb),
+            .dbiterrb(dbiterrb), 
+            .regceb(1'b0),
+            .rstb(1'b0),
+            .sleep(1'b0),
+            .wea(we_local)
+        );
+    end
+    else begin
+`endif
+        logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
+
+        logic `N(ADDR_WIDTH) resetAddr;
+        logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
+        logic `N(ADDR_WIDTH+1) counter;
+        logic resetState;
+        if(RESET)begin
+            assign resetAddr = resetState ? counter : addr0;
+            assign resetData = resetState ? 0 : wdata;
+            always_ff @(posedge clk or posedge rst)begin
+                if(rst == `RST)begin
+                    counter <= 0;
+                    resetState <= 1'b1;
+                    ready <= 1'b0;
+                end
+                else begin
+                    if(resetState)begin
+                        counter <= counter + 1;
+                        if(counter == DEPTH)begin
+                            resetState <= 1'b0;
+                            ready <= 1'b1;
+                        end
+                    end
+                end
+            end
+        end
+        else begin
+            assign resetAddr = addr0;
+            assign resetData = wdata;
+            assign resetState = 0;
+            assign ready = 1'b1;
+        end
+
         if(READ_LATENCY == 0)begin
             assign rdata1 = data[addr1];
         end
@@ -71,22 +265,18 @@ module SDPRAM#(
 
             end
         end
-    endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            for(int i=0; i<DEPTH; i++)begin
-                data[i] <= '{default: INIT_VALUE};
-            end
-        end
-        else begin
-            if(|we)begin
-                for(int i=0; i<BYTES; i++)begin
-                    data[addr0][i] <= wdata[i];
+        always_ff @(posedge clk or posedge rst)begin
+            for(int i=0; i<BYTES; i++)begin
+                if(we[i] | resetState)begin
+                    data[resetAddr][i] <= resetData[i];
                 end
             end
         end
+`ifdef SYNTH_VIVADO
     end
+`endif
+endgenerate
 endmodule
 
 // rw port use waddr to read
@@ -241,21 +431,99 @@ module MPRAMInner #(
     output logic `ARRAY(READ_PORT+RW_PORT, WIDTH) rdata,
     output logic ready
 );
-    MPREG #(
-        .WIDTH(WIDTH),
-        .DEPTH(DEPTH),
-        .READ_PORT(READ_PORT),
-        .WRITE_PORT(WRITE_PORT),
-        .RW_PORT(RW_PORT),
-        .READ_LATENCY(READ_LATENCY),
-        .BYTE_WRITE(BYTE_WRITE),
-        .BYTES(BYTES),
-        .RESET(RESET)
-    ) regs (.*);
+generate
+    if(RW_PORT == 1 && READ_PORT == 0 && WRITE_PORT == 0)begin
+        SPRAM #(
+            .WIDTH(WIDTH),
+            .DEPTH(DEPTH),
+            .READ_LATENCY(READ_LATENCY),
+            .BYTE_WRITE(BYTE_WRITE),
+            .BYTES(BYTES),
+            .RESET(RESET)
+        ) spram (
+            .*,
+            .addr(waddr)
+        );
+    end
+    else if(RW_PORT == 0 && READ_PORT == 1 && WRITE_PORT == 1)begin
+        SDPRAM #(
+            .WIDTH(WIDTH),
+            .DEPTH(DEPTH),
+            .READ_LATENCY(READ_LATENCY),
+            .BYTE_WRITE(BYTE_WRITE),
+            .BYTES(BYTES),
+            .RESET(RESET)
+        ) sdpram (
+            .*,
+            .addr0(waddr),
+            .addr1(raddr),
+            .rdata1(rdata)
+        );
+    end
+`ifdef SYNTH_VIVADO
+    else if(RW_PORT == 1 && READ_PORT == 1 && WRITE_PORT == 0 && BYTE_WRITE == 0)begin
+        xpm_memory_dpdistram #(
+            .ADDR_WIDTH_A(ADDR_WIDTH),               // DECIMAL
+            .ADDR_WIDTH_B(ADDR_WIDTH),               // DECIMAL
+            .BYTE_WRITE_WIDTH_A(WIDTH),        // DECIMAL
+            .CLOCKING_MODE("common_clock"), // String
+            .MEMORY_INIT_FILE(""),      // String
+            .MEMORY_INIT_PARAM("0"),        // String
+            .MEMORY_OPTIMIZATION("true"),   // String
+            .MEMORY_SIZE(WIDTH * DEPTH),             // DECIMAL
+            .MESSAGE_CONTROL(0),            // DECIMAL
+            .READ_DATA_WIDTH_A(WIDTH),         // DECIMAL
+            .READ_DATA_WIDTH_B(WIDTH),         // DECIMAL
+            .READ_LATENCY_A(READ_LATENCY),             // DECIMAL
+            .READ_LATENCY_B(READ_LATENCY),             // DECIMAL
+            .READ_RESET_VALUE_A("0"),       // String
+            .READ_RESET_VALUE_B("0"),       // String
+            .RST_MODE_A("SYNC"),            // String
+            .RST_MODE_B("SYNC"),            // String
+            .SIM_ASSERT_CHK(0),
+            .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
+            .USE_MEM_INIT(1),               // DECIMAL
+            .WRITE_DATA_WIDTH_A(WIDTH)         // DECIMAL
+        )
+        xpm_memory_dpdistram_inst (
+            .douta(rdata[1]),
+            .doutb(rdata[0]),
+            .addra(waddr),
+            .addrb(raddr),
+            .clka(clk),
+            .clkb(clk),
+            .dina(wdata),
+            .ena(en[1] | (|we)),
+            .enb(en[0]),
+            .regcea(0),
+            .regceb(0),
+            .rsta(1'b0),
+            .rstb(1'b0),
+            .wea(we)
+        );
+    end
+`endif
+    else begin
+        MPREG #(
+            .WIDTH(WIDTH),
+            .DEPTH(DEPTH),
+            .READ_PORT(READ_PORT),
+            .WRITE_PORT(WRITE_PORT),
+            .RW_PORT(RW_PORT),
+            .READ_LATENCY(READ_LATENCY),
+            .BYTE_WRITE(BYTE_WRITE),
+            .BYTES(BYTES),
+            .RESET(RESET)
+        ) regs (.*);
+    end
+endgenerate
 
-    // initial begin
-	//     $display("%0dr%0dw%0drw_%0dx%0d%s", READ_PORT, WRITE_PORT, RW_PORT, WIDTH, DEPTH, BYTE_WRITE ? "_8" : "");
-    // end
+
+`ifdef REPORT_RAM
+    initial begin
+        $display("%0dr%0dw%0drw_%0dx%0d_%0d %m", READ_PORT, WRITE_PORT, RW_PORT, WIDTH, DEPTH, WIDTH / BYTES);
+    end
+`endif
 endmodule
 
 module MPRAM #(
@@ -440,146 +708,3 @@ generate
 endgenerate
 
 endmodule
-
-// multi bank fifo
-// module MBFIFO #(
-//     parameter WIDTH = 32,
-//     parameter DEPTH = 8,
-//     parameter BANK = 4,
-//     parameter ADDR_WIDTH = $clog2(DEPTH),
-//     parameter INIT_VALUE = 0,
-//     parameter READ_LATENCY = 0,
-//     parameter BYTE_WRITE = 0,
-//     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
-// )(
-//     input logic clk,
-//     input logic rst,
-//     input logic `N(BANK) en,
-//     input logic `N(BANK) we,
-//     input logic `N($clog2(BANK)) enNum,
-//     input logic `N($clog2(BANK)) weNum,
-//     input logic `ARRAY(BANK, WIDTH) wdata,
-//     output logic `ARRAY(BANK, WIDTH) rdata
-// );
-//     typedef struct {
-//         logic en;
-//         logic we;
-//         logic `N(ADDR_WIDTH) raddr;
-//         logic `N(ADDR_WIDTH) waddr;
-//         logic `N(WIDTH) wdata;
-//         logic `N(WIDTH) rdata;
-//     } BankCtrl;
-//     BankCtrl ctrl `N(BANK);
-//     logic `N($clog2(BANK)) head, tail;
-//     logic `N(BANK * 2) shift_head, shift_tail;
-//     assign shift_head = en << head;
-//     assign shift_tail = we << tail;
-
-// generate
-//     for(genvar i=0; i<BANK; i++)begin
-//         SDPRAM #(
-//             .WIDTH(WIDTH),
-//             .DEPTH(DEPTH),
-//             .READ_LATENCY(READ_LATENCY)
-//         ) ram (
-//             .clk(clk),
-//             .rst(rst),
-//             .addr0(ctrl[i].waddr),
-//             .addr1(ctrl[i].raddr),
-//             .en(ctrl[i].en),
-//             .we(ctrl[i].we),
-//             .wdata(ctrl[i].wdata),
-//             .rdata1(ctrl[i].rdata)
-//         );
-//         assign ctrl[i].en = shift_head[i] | shift_head[i + BANK];
-//         assign ctrl[i].we = shift_tail[i] | shift_tail[i + BANK];
-//         assign ctrl[i].wdata = wdata[tail + i];
-//         assign rdata[i] = ctrl[head + i].rdata;
-//     end
-// endgenerate
-
-//     always_ff @(posedge clk or posedge rst)begin
-//         if(rst == `RST)begin
-//             head <= 0;
-//             tail <= 0;
-//             for(int i=0; i<BANK; i++)begin
-//                 ctrl[i].raddr <= 0;
-//                 ctrl[i].waddr <= 0;
-//             end
-//         end
-//         else begin
-//             head <= head + enNum;
-//             tail <= tail + weNum;
-//             for(int i=0; i<BANK; i++)begin
-//                 if(ctrl[i].en)begin
-//                     ctrl[i].raddr <= ctrl[i].raddr + 1;
-//                 end
-//                 if(ctrl[i].we)begin
-//                     ctrl[i].waddr <= ctrl[i].waddr + 1;
-//                 end
-//             end
-//         end
-//     end
-
-// endmodule
-
-// module FIFO#(
-//     parameter WIDTH = 32,
-//     parameter DEPTH = 8,
-//     parameter ADDR_WIDTH = $clog2(DEPTH),
-//     parameter INIT_VALUE = 0,
-//     parameter READ_LATENCY = 0
-// )(
-//     input logic clk,
-//     input logic rst,
-//     input logic rd_en,
-//     input logic wr_en,
-//     input logic `N(WIDTH) wdata,
-//     output logic `N(WIDTH) rdata,
-//     output logic full
-// );
-//     logic `N(WIDTH) queue `N(DEPTH);
-//     logic `N($clog2(DEPTH)) head, tail;
-//     logic `N($clog2(DEPTH)+1) remain_count, next_remain_count;
-
-
-//     always_comb begin 
-//         case({wr_en, rd_en})
-//         2'b00, 2'b11: next_remain_count = remain_count;
-//         2'b10: next_remain_count = remain_count - 1;
-//         2'b01: next_remain_count = remain_count + 1;
-//         endcase
-//     end
-
-//     generate;
-//         if(READ_LATENCY == 0)begin
-//             assign rdata = queue[head];
-//         end
-//         else if(READ_LATENCY == 1)begin
-//             always_ff @(posedge clk)begin
-//                 rdata <= queue[head];
-//             end
-//         end
-//     endgenerate
-
-//     always_ff @(posedge clk or posedge rst)begin
-//         if(rst == `RST)begin
-//             queue <= '{default: INIT_VALUE};
-//             head <= 0;
-//             tail <= 0;
-//             remain_count <= INIT_VALUE;
-//             full <= 0;
-//         end
-//         else begin
-//             remain_count <= next_remain_count;
-//             full <= next_remain_count == 0;
-//             if(wr_en)begin
-//                 tail <= tail + 1;
-//                 queue[tail] <= wdata;
-//             end
-//             if(rd_en)begin
-//                 head <= head + 1;
-//             end
-//         end
-//     end
-// endmodule

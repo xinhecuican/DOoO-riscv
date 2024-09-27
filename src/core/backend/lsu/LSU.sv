@@ -165,6 +165,7 @@ endgenerate
     logic `N(`LOAD_PIPELINE) lmisalign_s2;
     logic `N(`LOAD_PIPELINE) tlb_exception_s2, tlb_exception_s2_pre;
     logic `N(`LOAD_PIPELINE) luncache_s2, luncache_s3;
+    logic `N(`LOAD_PIPELINE) uncache_full_s3, uncache_full_s4;
 
     assign tlb_lsu_io.lreq = load_io.en & ~load_io.exception;
     assign tlb_lsu_io.lidx = load_io.issue_idx;
@@ -263,7 +264,8 @@ endgenerate
         rhit <= rio.hit;
         lvaddr_s3 <= loadAddrNext;
     end
-    assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3;
+    assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3 & ~uncache_full_s3;
+    assign uncache_full_s3 = luncache_s3 & load_queue_io.uncache_full;
     assign load_queue_io.en = leq_valid;
     assign load_queue_io.data = leq_data;
     assign load_queue_io.paddr = lpaddrNext;
@@ -295,12 +297,13 @@ endgenerate
         lreply_en <= leq_en & ~redirect_clear_s3;
         issue_idx_n2 <= issue_idx_next;
         lmiss <= ~rhit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
+        uncache_full_s4 <= uncache_full_s3;
     end
-    assign load_io.success = lreply_en & ~fwd_data_invalid_n & ~redirect_clear_s4 & ~(lmiss & rio.full);
+    assign load_io.success = lreply_en & ~fwd_data_invalid_n & ~redirect_clear_s4 & ~(lmiss & rio.full) & ~uncache_full_s4;
     assign load_io.success_idx = issue_idx_n2;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i])) | tlb_lsu_io.lcancel[i];
+        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i])) | tlb_lsu_io.lcancel[i] | uncache_full_s4[i];
         assign load_io.reply_slow[i].issue_idx = issue_idx_n2[i];
         assign load_io.reply_slow[i].reason = fwd_data_invalid_n ? 2'b10 : 2'b00;
     end
@@ -651,7 +654,6 @@ generate
             ViolationCompare cmp_s1(tail, io.wdata[i], io.s1_data[j], s1_cmp[i][j]);
             ViolationCompare cmp_s2(tail, io.wdata[i], io.s2_data[j], s2_cmp[i][j]);
         end
-        /* UNPARAM */
         ViolationOlderCompare cmp_s1_result (s1_cmp[i][0], s1_cmp[i][1], s1_result[i]);
         ViolationOlderCompare cmp_s2_result (s2_cmp[i][0], s2_cmp[i][1], s2_result[i]);
     end
@@ -664,7 +666,7 @@ endgenerate
         redirectIdx_s1 <= backendCtrl.redirectIdx;
     end
     ViolationData s1_older, s2_older, pipeline_result, pipeline_o;
-    /* UNPARAM */
+    `UNPARAM(LOAD_PIPELINE, 2, "violation compare")
     ViolationOlderCompare cmp_s1_older (s1_result_o[0], s1_result_o[1], s1_older);
     ViolationOlderCompare cmp_s2_older (s2_result_o[0], s2_result_o[1], s2_older);
     ViolationOlderCompare cmp_pipeline (s1_older, s2_older, pipeline_result);
@@ -699,7 +701,7 @@ endgenerate
 endmodule
 
 module ViolationCompare(
-    input StoreIdx tail,
+    input LoadIdx tail,
     input ViolationData cmp1,
     input ViolationData cmp2,
     output ViolationData out

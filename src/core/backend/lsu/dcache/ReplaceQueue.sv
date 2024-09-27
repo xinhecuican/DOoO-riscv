@@ -35,6 +35,7 @@ module ReplaceQueue(
     logic `N(`DCACHE_REPLACE_WIDTH) bhead, tail, bhead_n, tail_n;
     logic bhdir, tdir;
     logic full;
+    logic `N(`DCACHE_REPLACE_SIZE) hit;
 
     ReplaceEntry newEntry;
 
@@ -78,7 +79,6 @@ module ReplaceQueue(
     end
 
 // write conflict detect
-    logic `N(`DCACHE_REPLACE_SIZE) hit;
 generate
     for(genvar i=0; i<`DCACHE_REPLACE_SIZE; i++)begin
         assign hit[i] = dataValid[i] & dirty[i] & (io.waddr`DCACHE_BLOCK_BUS == entrys[i].addr);
