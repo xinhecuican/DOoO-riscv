@@ -20,17 +20,16 @@ module SPRAM#(
 );
 `ifdef SYNTH_VIVADO
 generate
-    if(!BYTE_WRITE || (BYTE_WRITE && 
-     ((BYTES == 1) ||
-      (WIDTH/BYTES % 8 == 0) ||
-      (WIDTH/BYTES % 9 == 0))))begin
-        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH :
-                                      WIDTH/BYTES % 8 == 0 ? 8 : 9;
-        localparam BYTES_LOCAL = WIDTH / BYTE_WRITE_WIDTH;
+    if(1)begin
+        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
+        localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
+        localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
         localparam DELTA = BYTES_LOCAL / BYTES;
         logic [BYTES_LOCAL-1: 0] we_local;
+        logic [BYTES_LOCAL-1: 0][BYTE_WRITE_WIDTH-1: 0] wdata_local;
         for(genvar i=0; i<BYTES; i++)begin
             assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
+            assign wdata_local[i*DELTA +: DELTA] = wdata[i];
         end
         assign ready = 1'b1;
         
@@ -45,24 +44,23 @@ generate
             .MEMORY_INIT_FILE("none"),
             .MEMORY_INIT_PARAM("0"),
             .MEMORY_OPTIMIZATION("true"),
-            .MEMORY_PRIMITIVE("block"),
-            .MEMORY_SIZE(WIDTH * DEPTH),
+            .MEMORY_PRIMITIVE("auto"),
+            .MEMORY_SIZE(WIDTH_LOCAL * DEPTH),
             .MESSAGE_CONTROL(0),
-            .READ_DATA_WIDTH_A(WIDTH),
+            .READ_DATA_WIDTH_A(WIDTH_LOCAL),
             .READ_LATENCY_A(READ_LATENCY),
             .READ_RESET_VALUE_A("0"),
             .RST_MODE_A("SYNC"),
             .SIM_ASSERT_CHK(0),
             .USE_MEM_INIT(1),
             .WAKEUP_TIME("disable_sleep"),
-            .WRITE_DATA_WIDTH_A(WIDTH),
+            .WRITE_DATA_WIDTH_A(WIDTH_LOCAL),
             .WRITE_MODE_A("read_first")
-        )
-        xpm_memory_spram_inst (
+        ) xpm_memory_spram_inst (
             .douta(rdata),
             .addra(addr),
             .clka(clk),
-            .dina(wdata),
+            .dina(wdata_local),
             .ena(en),
             .injectdbiterra(1'b0),
             .injectsbiterra(1'b0),
@@ -161,17 +159,16 @@ module SDPRAM#(
 
 generate
 `ifdef SYNTH_VIVADO
-    if(!BYTE_WRITE || (BYTE_WRITE && 
-     ((BYTES == 1) ||
-      (WIDTH/BYTES % 8 == 0) ||
-      (WIDTH/BYTES % 9 == 0))))begin
-        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH :
-                                      WIDTH/BYTES % 8 == 0 ? 8 : 9;
-        localparam BYTES_LOCAL = WIDTH / BYTE_WRITE_WIDTH;
+    if(1)begin
+        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
+        localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
+        localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
         localparam DELTA = BYTES_LOCAL / BYTES;
         logic [BYTES_LOCAL-1: 0] we_local;
+        logic [BYTES_LOCAL-1: 0][BYTE_WRITE_WIDTH-1: 0] wdata_local;
         for(genvar i=0; i<BYTES; i++)begin
             assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
+            assign wdata_local[i*DELTA +: DELTA] = wdata[i];
         end
         assign ready = 1'b1;
         
@@ -187,9 +184,9 @@ generate
             .MEMORY_INIT_PARAM("0"),
             .MEMORY_OPTIMIZATION("true"),
             .MEMORY_PRIMITIVE("auto"),
-            .MEMORY_SIZE(WIDTH * DEPTH),
+            .MEMORY_SIZE(WIDTH_LOCAL * DEPTH),
             .MESSAGE_CONTROL(0),
-            .READ_DATA_WIDTH_B(WIDTH),
+            .READ_DATA_WIDTH_B(WIDTH_LOCAL),
             .READ_LATENCY_B(READ_LATENCY),
             .READ_RESET_VALUE_B("0"),
             .RST_MODE_A("SYNC"),
@@ -197,7 +194,7 @@ generate
             .SIM_ASSERT_CHK(0),
             .USE_MEM_INIT(1),
             .WAKEUP_TIME("disable_sleep"),
-            .WRITE_DATA_WIDTH_A(WIDTH),
+            .WRITE_DATA_WIDTH_A(WIDTH_LOCAL),
             .WRITE_MODE_B("read_first")
         )
         xpm_memory_sdpram_inst (
@@ -206,7 +203,7 @@ generate
             .addrb(addr1),
             .clka(clk),
             .clkb(clk),
-            .dina(wdata),
+            .dina(wdata_local),
             .ena(|we_local),
             .enb(en),
             .injectdbiterra(1'b0),

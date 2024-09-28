@@ -53,6 +53,10 @@ module ROB(
     logic `N(`COMMIT_WIDTH) excValid, exc_en, exc_mask, exc_en_n;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx;
     logic `ARRAY(`COMMIT_WIDTH, `EXC_WIDTH) rexccode;
+    logic `N($clog2(`FETCH_WIDTH)) tail_shift;
+    logic `N(`FETCH_WIDTH) data_we;
+    logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) data_we_shift;
+    logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE / `FETCH_WIDTH)) data_widx, data_ridx;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataWIdx;
     logic `ARRAY(`COMMIT_WIDTH, $clog2(`ROB_SIZE)) dataRIdx;
     logic `N(`FETCH_WIDTH) data_en;
@@ -79,40 +83,54 @@ module ROB(
     logic `N(`EXC_WIDTH) redirect_exccode;
     logic irq_n, irq_deleg_n;
 
-    RobData `N(`FETCH_WIDTH) robData, rob_wdata;
+    RobData `N(`FETCH_WIDTH) robData_pre, robData, rob_wdata_pre, rob_wdata;
+    `CONSTRAINT(COMMIT_WIDTH, `FETCH_WIDTH, "commit width and fetch width must be same")
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
-        assign rob_wdata[i].we = dis_io.op[i].di.we;
-        assign rob_wdata[i].mem = dis_io.op[i].di.memv;
-        assign rob_wdata[i].store = dis_io.op[i].di.memop[`MEMOP_WIDTH-1];
-        assign rob_wdata[i].fsqInfo = dis_io.op[i].fsqInfo;
-        assign rob_wdata[i].vrd = dis_io.op[i].di.rd;
-        assign rob_wdata[i].prd = dis_io.prd[i];
-        assign rob_wdata[i].old_prd = dis_io.old_prd[i];
+        assign rob_wdata_pre[i].we = dis_io.op[i].di.we;
+        assign rob_wdata_pre[i].mem = dis_io.op[i].di.memv;
+        assign rob_wdata_pre[i].store = dis_io.op[i].di.memop[`MEMOP_WIDTH-1];
+        assign rob_wdata_pre[i].fsqInfo = dis_io.op[i].fsqInfo;
+        assign rob_wdata_pre[i].vrd = dis_io.op[i].di.rd;
+        assign rob_wdata_pre[i].prd = dis_io.prd[i];
+        assign rob_wdata_pre[i].old_prd = dis_io.old_prd[i];
 `ifdef DIFFTEST
-        assign rob_wdata[i].sim_trap = dis_io.op[i].di.sim_trap;
-        assign rob_wdata[i].trapCode = dis_io.op[i].di.imm;
+        assign rob_wdata_pre[i].sim_trap = dis_io.op[i].di.sim_trap;
+        assign rob_wdata_pre[i].trapCode = dis_io.op[i].di.imm;
 `endif
+
+        logic `N($clog2(`FETCH_WIDTH)) shift_idx, shift_ridx;
+        logic `N(`FETCH_WIDTH) shift_idx_decode;
+        assign shift_idx = dataWIdx[i][$clog2(`FETCH_WIDTH)-1: 0];
+        assign shift_ridx = dataRIdx[i][$clog2(`FETCH_WIDTH)-1: 0];
+        assign data_ridx[shift_ridx] = dataRIdx[i][`ROB_WIDTH-1: $clog2(`FETCH_WIDTH)];
+        assign data_widx[shift_idx] = dataWIdx[i][`ROB_WIDTH-1: $clog2(`FETCH_WIDTH)];
+        Decoder #(`FETCH_WIDTH) decoder_shift (shift_idx, shift_idx_decode);
+        assign data_we_shift[i] = shift_idx_decode & {`FETCH_WIDTH{dis_en[i]}};
+        `SIG_N(robData_pre[shift_ridx], robData[i])
+        assign rob_wdata[shift_idx] = rob_wdata_pre[i];
+        MPRAM #(
+            .WIDTH($bits(RobData)),
+            .DEPTH(`ROB_SIZE / `FETCH_WIDTH),
+            .READ_PORT(1),
+            .WRITE_PORT(1),
+            .READ_LATENCY(0),
+            .RESET(1)
+        ) rob_data_ram (
+            .clk(clk),
+            .rst(rst),
+            .en(1),
+            .raddr(data_ridx[i]),
+            .rdata(robData_pre[i]),
+            .we(data_we[i]),
+            .waddr(data_widx[i]),
+            .wdata(rob_wdata[i]),
+            .ready(initReady)
+        );
     end
+    ParallelOR #(`FETCH_WIDTH, `FETCH_WIDTH) or_data_we (data_we_shift, data_we);
 endgenerate
-    MPRAM #(
-        .WIDTH($bits(RobData)),
-        .DEPTH(`ROB_SIZE),
-        .READ_PORT(`COMMIT_WIDTH),
-        .WRITE_PORT(`FETCH_WIDTH),
-        .BANK_SIZE(`ROB_SIZE / `ROB_BANK),
-        .RESET(1)
-    ) rob_data_ram (
-        .clk(clk),
-        .rst(rst),
-        .en({`COMMIT_WIDTH{1'b1}}),
-        .raddr(dataRIdx),
-        .rdata(robData),
-        .we(data_en),
-        .waddr(dataWIdx),
-        .wdata(rob_wdata),
-        .ready(initReady)
-    );
+
 
 //enqueue
 generate

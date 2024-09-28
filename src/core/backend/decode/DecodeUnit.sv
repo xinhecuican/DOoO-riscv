@@ -168,7 +168,7 @@ module DecodeUnit(
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
                      ~add & ~sub & ~sll & ~slt & ~sltu & ~_xor & ~srl & ~sra & ~_or & ~_and &
                      ~csrrw & ~csrrs & ~csrrc & ~csrrwi & ~csrrsi & ~csrrci & ~ecall & ~ebreak &
-                     ~fence & ~mret & ~sret & ~sfence_vma & ~wfi &
+                     ~fence & ~mret & ~sret & ~sfence_vma & ~wfi
 `ifdef DIFFTEST
                      & ~sim_trap
 `endif
