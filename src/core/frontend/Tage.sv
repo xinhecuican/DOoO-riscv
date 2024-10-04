@@ -254,7 +254,9 @@ module TageTable #(
 );
 	logic `ARRAY(`SLOT_NUM, `TAGE_TAG_SIZE) match_tag;
 	always_ff @(posedge clk)begin
-		match_tag <= {`SLOT_NUM{lookup_tag}};
+		if(en)begin
+			match_tag <= {`SLOT_NUM{lookup_tag}};
+		end
 	end
 	logic `ARRAY(`SLOT_NUM, `TAGE_TAG_SIZE) search_tag;
 	logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr, update_ctr_provider;

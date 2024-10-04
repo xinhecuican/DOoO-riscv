@@ -43,10 +43,10 @@ module LSU(
     input BackendCtrl backendCtrl,
     AxiIO.master axi_io,
     AxiIO.master ducache_io,
+    NativeSnoopIO.master snoop_io,
     BackendRedirectIO.mem redirect_io,
     CsrTlbIO.tlb csr_ltlb_io,
     CsrTlbIO.tlb csr_stlb_io,
-    PTWRequest.cache ptw_request,
     TlbL2IO.tlb dtlb_io,
     FenceBus.lsu fenceBus,
     output StoreWBData `N(`STORE_PIPELINE) storeWBData,
@@ -82,7 +82,7 @@ module LSU(
     LoadIssueQueue load_issue_queue(
         .*
     );
-    DCache dcache(.*, .ptw_io(ptw_request));
+    DCache dcache(.*);
     LoadQueue load_queue(.*, .io(load_queue_io));
     StoreIssueQueue store_issue_queue(
         .*

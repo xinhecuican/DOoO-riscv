@@ -16,15 +16,20 @@ module CPUCore (
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
     ) dcache_io();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, `DCACHE_WAY_WIDTH
     ) ducache_io();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+    ) tlb_io();
+    NativeSnoopIO #(
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2
+    ) dcache_snoop_io();
     IfuBackendIO ifu_backend_io();
     FsqBackendIO fsq_back_io();
     CommitBus commitBus();
     TlbL2IO itlb_io();
     TlbL2IO dtlb_io();
     CsrL2IO csr_l2_io();
-    PTWRequest ptw_request();
     CsrTlbIO csr_itlb_io();
     FenceBus fenceBus();
 
@@ -40,5 +45,5 @@ module CPUCore (
                     .axi_io(dcache_io),
                     .fenceBus_o(fenceBus));
     AxiInterface axi_interface(.*);
-    L2TLB l2_tlb(.*, .csr_io(csr_l2_io), .flush(fsq_back_io.redirect.en));
+    L2TLB l2_tlb(.*, .csr_io(csr_l2_io), .flush(fsq_back_io.redirect.en), .axi_io(tlb_io.master));
 endmodule

@@ -60,7 +60,7 @@ module BranchPredictor(
         else if(redirect.flush)begin
             pc <= squashInfo.target_pc;
         end
-        else if(!redirect.stall)begin
+        else if(!redirect.stall)begin // TODO: s2_redirect priority higher than stall
             if(redirect.s2_redirect)begin
                 pc <= s2_result_out.stream.target;
             end
@@ -97,7 +97,7 @@ module BranchPredictor(
 
     assign bpu_fsq_io.en = bpu_fsq_io.prediction.en & ~redirect.flush;
     assign bpu_fsq_io.prediction = redirect.s2_redirect ? s2_result_out : s1_result;
-    assign bpu_fsq_io.redirect = redirect.s2_redirect & ~redirect.flush;
+    assign bpu_fsq_io.redirect = redirect.s2_redirect & ~redirect.flush & ~redirect.stall;
     assign bpu_fsq_io.lastStage = s2_result_out.en  & ~redirect.flush;
     assign bpu_fsq_io.lastStageIdx = s2_result_out.stream_idx;
     assign bpu_fsq_io.lastStageMeta = s2_meta_out;

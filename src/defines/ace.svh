@@ -155,18 +155,49 @@ interface SnoopIO #(
   logic                 cd_valid;
   logic                 cd_ready;
 
-  modport Master (
+  modport master (
     input   ac_addr, ac_prot, ac_snoop, ac_valid, output ac_ready,
     input   cr_ready, output cr_valid, cr_resp,
     input   cd_ready, output cd_data, cd_last, cd_valid
   );
 
- modport Slave (
+ modport slave (
     output   ac_addr, ac_prot, ac_snoop, ac_valid, input ac_ready,
     output   cr_ready, input cr_valid, cr_resp,
     output   cd_ready, input cd_data, cd_last, cd_valid
   );
 
+endinterface
+
+interface NativeSnoopIO #(
+  parameter int SNOOP_ADDR_WIDTH = 0,
+  parameter int SNOOP_DATA_WIDTH = 0,
+  parameter int SNOOP_USER_WIDTH = 1
+);
+  logic [SNOOP_ADDR_WIDTH-1: 0] ac_addr;
+  logic ac_valid;
+  logic ac_ready;
+  logic [SNOOP_USER_WIDTH-1: 0] ac_user;
+
+  logic [SNOOP_DATA_WIDTH-1: 0] cd_data;
+  logic cd_last;
+  logic cd_valid;
+  logic cd_ready;
+  logic [SNOOP_USER_WIDTH-1: 0] cd_user;
+
+  modport master (
+    input ac_addr, ac_valid, ac_user, output ac_ready,
+    input cd_ready, output cd_data, cd_last, cd_valid, cd_user
+  );
+
+  modport masterd (
+    input cd_ready, output cd_data, cd_last, cd_valid, cd_user
+  );
+
+  modport slave (
+    output ac_addr, ac_valid, ac_user, input ac_ready,
+    output cd_ready, input cd_data, cd_last, cd_valid, cd_user
+  );
 endinterface
 
   /// Slice on Demux AW channel.

@@ -16,26 +16,42 @@ module ICacheData(
     input logic `ARRAY(`ICACHE_BANK, `ICACHE_BITS) wdata,
     output logic `TENSOR(`ICACHE_BANK, `ICACHE_WAY, `ICACHE_BITS) data
 );
-    logic `N(`ICACHE_SET_WIDTH) tagv_waddr, tagv_index_p1;
+    logic `N(`ICACHE_SET_WIDTH) tagv_waddr, tagv_index_p1, tagv_waddr0;
     assign tagv_index_p1 = tagv_index + 1;
+    assign tagv_waddr0 = |tagv_we ? tagv_windex : tagv_index;
     assign tagv_waddr = |tagv_we ? tagv_windex : tagv_index_p1;
-    MPRAM #(
+    SPRAM #(
         .WIDTH(`ICACHE_WAY * (`ICACHE_TAG+1)),
         .DEPTH(`ICACHE_SET),
-        .READ_PORT(1),
-        .RW_PORT(1),
-        .WRITE_PORT(0),
         .RESET(1),
         .BYTE_WRITE(1),
-        .BYTES(`ICACHE_WAY)
-    ) tagv_ram (
+        .BYTES(`ICACHE_WAY),
+        .READ_LATENCY(1)
+    ) tagv_ram0 (
         .clk,
         .rst,
-        .en({2{tagv_en}}),
-        .raddr(tagv_index),
-        .rdata({tagv1, tagv0}),
+        .en(tagv_en),
+        .rdata(tagv0),
         .we(tagv_we),
-        .waddr(tagv_waddr),
+        .addr(tagv_waddr0),
+        .wdata({`ICACHE_WAY{tagv_wdata}}),
+        .ready()
+    );
+
+    SPRAM #(
+        .WIDTH(`ICACHE_WAY * (`ICACHE_TAG+1)),
+        .DEPTH(`ICACHE_SET),
+        .RESET(1),
+        .BYTE_WRITE(1),
+        .BYTES(`ICACHE_WAY),
+        .READ_LATENCY(1)
+    ) tagv_ram1 (
+        .clk,
+        .rst,
+        .en(tagv_en),
+        .rdata(tagv1),
+        .we(tagv_we),
+        .addr(tagv_waddr),
         .wdata({`ICACHE_WAY{tagv_wdata}}),
         .ready()
     );

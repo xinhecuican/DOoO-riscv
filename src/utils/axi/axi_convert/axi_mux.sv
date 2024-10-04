@@ -288,7 +288,10 @@ module axi_mux #(
       end else begin
         if (!w_fifo_full && aw_valid) begin
           mst_aw_valid = 1'b1;
-          w_fifo_push = 1'b1;
+          // TODO: 暂时用来代替ace中WriteEvict事务，因为这个事务不需要写
+          if(!(mst_aw_chan.burst == 2'b01 && mst_aw_chan.len == 0))begin
+            w_fifo_push = 1'b1;
+          end
           if (mst_aw_ready) begin
             aw_ready = 1'b1;
           end else begin

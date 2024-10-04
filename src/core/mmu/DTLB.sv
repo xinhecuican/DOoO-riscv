@@ -91,7 +91,7 @@ endgenerate
 generate
     `UNPARAM(LOAD_PIPELINE, 2, "lreq_cancel_s2")
     assign lreq_cancel_s2[0] = 0;
-    assign lreq_cancel_s2[1] = ~(ltlb_io[0].miss & ~ltlb_io[0].exception);
+    assign lreq_cancel_s2[1] = (ltlb_io[0].miss & ~ltlb_io[0].exception);
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign lreq[i] = ltlb_io[i].miss & ~ltlb_io[i].exception;
         always_ff @(posedge clk)begin
@@ -117,7 +117,7 @@ endgenerate
     logic `N(`STORE_ISSUE_BANK_WIDTH+$clog2(`STORE_PIPELINE)) sidx_s2;
 generate
     assign sreq_cancel_s2[0] = 0;
-    assign sreq_cancel_s2[1] = ~(stlb_io[0].miss & ~stlb_io[0].exception);
+    assign sreq_cancel_s2[1] = (stlb_io[0].miss & ~stlb_io[0].exception);
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign sreq[i] = stlb_io[i].miss & ~stlb_io[i].exception;
         always_ff @(posedge clk)begin

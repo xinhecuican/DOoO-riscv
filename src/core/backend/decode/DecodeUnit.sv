@@ -143,7 +143,7 @@ module DecodeUnit(
     assign info.csrop[2] = csrrwi | csrrsi | csrrci | fence;
     assign info.csrop[1] = csrrs | csrrc | csrrsi | csrrci;
     assign info.csrop[0] = csrrw | csrrc | csrrwi | csrrci
-`ifdef EXC_FENCEI
+`ifdef EXT_FENCEI
     | fencei
 `endif
 ;

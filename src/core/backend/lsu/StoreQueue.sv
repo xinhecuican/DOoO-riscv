@@ -213,7 +213,7 @@ endgenerate
     end
 
 // uncache
-    assign saxi_io.aw_id = `AXI_ID_DUCACHE;
+    assign saxi_io.aw_id = 0;
     assign saxi_io.aw_addr = uncache_addr;
     assign saxi_io.aw_len = 0;
     assign saxi_io.aw_size = $clog2(`DATA_BYTE);

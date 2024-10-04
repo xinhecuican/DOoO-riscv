@@ -32,6 +32,7 @@ foreach file $files {
 # synth
 hierarchy -check -top $TOP
 procs
+flatten
 opt_expr
 opt_clean
 check

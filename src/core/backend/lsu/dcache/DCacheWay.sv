@@ -11,7 +11,6 @@ module DCacheData(
     input logic `N(`DCACHE_BANK) en,
     input logic `ARRAY(`DCACHE_BANK, `DCACHE_WAY * `DCACHE_BYTE) we,
     input logic `ARRAY(`DCACHE_BANK, `DCACHE_SET_WIDTH) index,
-    input logic `ARRAY(`DCACHE_BANK, `DCACHE_SET_WIDTH) windex,
     input logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) wdata,
     output logic `TENSOR(`DCACHE_BANK, `DCACHE_WAY, `DCACHE_BITS) data,
     input logic dirty_en,
@@ -57,8 +56,6 @@ endgenerate
 
 generate
     for(genvar i=0; i<`DCACHE_BANK; i++)begin
-        logic `N(`DCACHE_SET_WIDTH) idx;
-        assign idx = |we[i] ? windex[i] : index[i];
         SPRAM #(
             .WIDTH(`DCACHE_WAY * `DCACHE_BITS),
             .DEPTH(`DCACHE_SET),
@@ -68,7 +65,7 @@ generate
             .clk(clk),
             .rst(rst),
             .en(en[i]),
-            .addr(idx),
+            .addr(index[i]),
             .we(we[i]),
             .wdata({`DCACHE_WAY{wdata[i]}}),
             .rdata(data[i]),

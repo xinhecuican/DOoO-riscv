@@ -569,19 +569,6 @@ interface CachePTWIO;
     modport ptw (input req, info, vaddr, valid, paddr, refill_ready, output full, refill_req, refill_pn, refill_addr, refill_data);
 endinterface
 
-interface PTWRequest;
-    logic req;
-    logic `N(`PADDR_SIZE) paddr;
-
-    logic ready;
-    logic full;
-    logic data_valid;
-    logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) rdata;
-    
-    modport ptw (output req, paddr, input ready, full, data_valid, rdata);
-    modport cache (input req, paddr, output ready, full, data_valid, rdata);
-endinterface
-
 interface FenceBus;
     logic fence_end;
     logic store_flush;

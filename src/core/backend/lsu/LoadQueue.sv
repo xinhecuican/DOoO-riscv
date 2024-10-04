@@ -188,7 +188,7 @@ endgenerate
     end
 
 // uncache
-    assign laxi_io.ar_id = `AXI_ID_DUCACHE;
+    assign laxi_io.ar_id = 0;
     always_comb begin
         case(uncache_arvalid)
         2'b00: laxi_io.ar_addr = uncache_addr[0];

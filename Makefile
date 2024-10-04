@@ -59,17 +59,17 @@ build/v/Soc.v: ${SRC}
 yosys: ${SYNTH_V}
 ${SYNTH_V}: scripts/gen_netlist.tcl
 	mkdir -p ${SYNTH_LOG}
-	env CLK_FREQ=${CLK_FREQ} FOUNDRY=${FOUNDRY} LOG_DIR=${SYNTH_LOG} SYNTH=${SYNTH_V} TOP=${TOP} FILES="testbench/sram_map/test.sv build/v/MPRAM.v build/v/MPREG.v build/v/MPRAMInner.v build/v/SPRAM.v" yosys -c scripts/gen_netlist.tcl > ${SYNTH_LOG}/yosys_build.log
+	env CLK_FREQ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} LOG_DIR=${SYNTH_LOG} SYNTH=${SYNTH_V} TOP=${TOP} yosys -c scripts/gen_netlist.tcl > ${SYNTH_LOG}/yosys_build.log
 
-fix-fanout: ${SYNTH_FIX_V}
-${SYNTH_FIX_V}: scripts/fix-fanout.tcl ${SDC_FILE} ${SYNTH_V}
-	env RUST_BACKTRACE=full utils/iEDA/bin/iEDA -script $^ ${TOP} $@ ${FOUNDRY} 2>&1 | tee ${SYNTH_LOG}/fix-fanout.log
+# fix-fanout: ${SYNTH_FIX_V}
+# ${SYNTH_FIX_V}: scripts/fix-fanout.tcl ${SDC_FILE} ${SYNTH_V}
+# 	utils/iEDA/bin/iEDA -script $^ ${TOP} $@ ${FOUNDRY} 2>&1 | tee ${SYNTH_LOG}/fix-fanout.log
 
 sta: ${TIMING_RPT}
-${TIMING_RPT}: scripts/sta.tcl ${SDC_FILE} ${SYNTH_FIX_V}
-	utils/iEDA/bin/iEDA -script $^ ${TOP} ${SYNTH_LOG} ${FOUNDRY} 2>&1 | tee ${SYNTH_LOG}/sta.log
+${TIMING_RPT}: scripts/opensta.tcl ${SDC_FILE} 
+	env FOUNDRY=${FOUNDRY} SYNTH=${SYNTH_V} SDC_FILE=${SDC_FILE} TOP=${TOP} LOG_DIR=${SYNTH_LOG} sta -exit -threads 4 scripts/opensta.tcl > ${SYNTH_LOG}/sta.log
 
-flow:
+flow: build/v/Soc.v
 	make -C utils/flow DESIGN_CONFIG=${DESIGN_CONFIG}
 
 floorplan: 

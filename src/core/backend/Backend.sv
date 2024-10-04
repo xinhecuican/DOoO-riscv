@@ -12,7 +12,7 @@ module Backend(
     CsrTlbIO.csr csr_itlb_io,
     CsrL2IO.csr csr_l2_io,
     TlbL2IO.tlb dtlb_io,
-    PTWRequest.cache ptw_request,
+    NativeSnoopIO.master dcache_snoop_io,
     ClintIO.cpu clint_io,
     FenceBus.backend fenceBus_o
 );
@@ -122,7 +122,8 @@ module Backend(
 `endif
     LSU lsu(
         .*,
-        .redirect_io(backendRedirect)
+        .redirect_io(backendRedirect),
+        .snoop_io(dcache_snoop_io)
     );
     RegfileWrapper regfile_wrapper(.*);
     Wakeup wakeup(.*);

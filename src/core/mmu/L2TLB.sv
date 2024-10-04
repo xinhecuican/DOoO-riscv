@@ -7,7 +7,7 @@ module L2TLB(
     TlbL2IO.l2 itlb_io,
     TlbL2IO.l2 dtlb_io,
     CsrL2IO.tlb csr_io,
-    PTWRequest.ptw ptw_request,
+    AxiIO.masterr axi_io,
     FenceBus.l2tlb fenceBus
 );
     TLBCacheIO tlbCache_io();

@@ -55,7 +55,8 @@ module ROB(
     logic `ARRAY(`COMMIT_WIDTH, `EXC_WIDTH) rexccode;
     logic `N($clog2(`FETCH_WIDTH)) tail_shift;
     logic `N(`FETCH_WIDTH) data_we;
-    logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) data_we_shift;
+    logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) data_we_shift, shift_idx_decode, shift_idx_reverse;
+    logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) shift_ridx_decode, shift_ridx_reverse;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE / `FETCH_WIDTH)) data_widx, data_ridx;
     logic `ARRAY(`FETCH_WIDTH, $clog2(`ROB_SIZE)) dataWIdx;
     logic `ARRAY(`COMMIT_WIDTH, $clog2(`ROB_SIZE)) dataRIdx;
@@ -69,7 +70,7 @@ module ROB(
     logic `N(`FETCH_WIDTH * 2) dis_en_shift;
     localparam ROB_ADD_WIDTH = $clog2(`FETCH_WIDTH) + 1; 
     logic `N(ROB_ADD_WIDTH) dis_validNum, addNum, subNum;
-    logic initReady;
+    logic `N(`FETCH_WIDTH) initReady;
     logic `N(`COMMIT_WIDTH) commit_store, commit_mem;
 
     logic `N(`ROB_WIDTH + 1) walk_remainCount_n, ext_tail, walk_remain_count;
@@ -99,16 +100,22 @@ generate
         assign rob_wdata_pre[i].trapCode = dis_io.op[i].di.imm;
 `endif
 
-        logic `N($clog2(`FETCH_WIDTH)) shift_idx, shift_ridx;
-        logic `N(`FETCH_WIDTH) shift_idx_decode;
+        logic `N($clog2(`FETCH_WIDTH)) shift_idx, shift_ridx, shift_widx_in, shift_ridx_in;
         assign shift_idx = dataWIdx[i][$clog2(`FETCH_WIDTH)-1: 0];
         assign shift_ridx = dataRIdx[i][$clog2(`FETCH_WIDTH)-1: 0];
-        assign data_ridx[shift_ridx] = dataRIdx[i][`ROB_WIDTH-1: $clog2(`FETCH_WIDTH)];
-        assign data_widx[shift_idx] = dataWIdx[i][`ROB_WIDTH-1: $clog2(`FETCH_WIDTH)];
-        Decoder #(`FETCH_WIDTH) decoder_shift (shift_idx, shift_idx_decode);
-        assign data_we_shift[i] = shift_idx_decode & {`FETCH_WIDTH{dis_en[i]}};
+        assign data_ridx[i] = dataRIdx[shift_ridx_in][`ROB_WIDTH-1: $clog2(`FETCH_WIDTH)];
+        assign data_widx[i] = dataWIdx[shift_widx_in][`ROB_WIDTH-1: $clog2(`FETCH_WIDTH)];
+        Decoder #(`FETCH_WIDTH) decoder_shift (shift_idx, shift_idx_decode[i]);
+        Decoder #(`FETCH_WIDTH) decoder_shift_r (shift_ridx, shift_ridx_decode[i]);
+        Encoder #(`FETCH_WIDTH) encoder_shift (shift_idx_reverse[i], shift_widx_in);
+        Encoder #(`FETCH_WIDTH) encoder_shift_r (shift_ridx_reverse[i], shift_ridx_in);
+        for(genvar j=0; j<`FETCH_WIDTH; j++)begin
+            assign shift_idx_reverse[i][j] = shift_idx_decode[j][i];
+            assign shift_ridx_reverse[i][j] = shift_ridx_decode[j][i];
+        end
+        assign data_we_shift[i] = shift_idx_decode[i] & {`FETCH_WIDTH{dis_en[i]}};
         `SIG_N(robData_pre[shift_ridx], robData[i])
-        assign rob_wdata[shift_idx] = rob_wdata_pre[i];
+        assign rob_wdata[i] = rob_wdata_pre[shift_widx_in];
         MPRAM #(
             .WIDTH($bits(RobData)),
             .DEPTH(`ROB_SIZE / `FETCH_WIDTH),
@@ -125,7 +132,7 @@ generate
             .we(data_we[i]),
             .waddr(data_widx[i]),
             .wdata(rob_wdata[i]),
-            .ready(initReady)
+            .ready(initReady[i])
         );
     end
     ParallelOR #(`FETCH_WIDTH, `FETCH_WIDTH) or_data_we (data_we_shift, data_we);
@@ -238,7 +245,7 @@ generate
 
     always_ff @(posedge clk)begin
         exc_en_n <= exc_en;
-        if(!walk_state && initReady && !exc_exist_n)begin
+        if(!walk_state && initReady[0] && !exc_exist_n)begin
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 commitBus.en[i] <= commit_en[i];
             end
@@ -252,7 +259,7 @@ generate
             commitBus.num <= 0;
             commit_en_n <= 0;
         end
-        if(initReady)begin
+        if(initReady[0])begin
             commitBus.loadNum <= commitLoadNum;
             commitBus.storeNum <= commitStoreNum;
         end
@@ -267,7 +274,7 @@ endgenerate
 // exception
 
     always_ff @(posedge clk)begin
-        exc_exist_n <= exc_exist && !walk_state && initReady & ~exc_exist_n;
+        exc_exist_n <= exc_exist && !walk_state && initReady[0] & ~exc_exist_n;
         irq_n <= irqInfo.irq;
         irq_deleg_n <= irqInfo.deleg;
         excIdx_n <= excIdx;

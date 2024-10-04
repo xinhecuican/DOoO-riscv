@@ -19,114 +19,107 @@ module SPRAM#(
     output logic ready
 );
 `ifdef SYNTH_VIVADO
-generate
-    if(1)begin
-        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
-        localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
-        localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
-        localparam DELTA = BYTES_LOCAL / BYTES;
-        logic [BYTES_LOCAL-1: 0] we_local;
-        logic [BYTES_LOCAL-1: 0][BYTE_WRITE_WIDTH-1: 0] wdata_local;
-        for(genvar i=0; i<BYTES; i++)begin
-            assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
-            assign wdata_local[i*DELTA +: DELTA] = wdata[i];
-        end
-        assign ready = 1'b1;
-        
-        wire sbiterra;
-        wire dbiterra;
-        xpm_memory_spram #(
-            .ADDR_WIDTH_A(ADDR_WIDTH),
-            .AUTO_SLEEP_TIME(0),
-            .BYTE_WRITE_WIDTH_A(BYTE_WRITE_WIDTH),
-            .CASCADE_HEIGHT(0),
-            .ECC_MODE("no_ecc"),
-            .MEMORY_INIT_FILE("none"),
-            .MEMORY_INIT_PARAM("0"),
-            .MEMORY_OPTIMIZATION("true"),
-            .MEMORY_PRIMITIVE("auto"),
-            .MEMORY_SIZE(WIDTH_LOCAL * DEPTH),
-            .MESSAGE_CONTROL(0),
-            .READ_DATA_WIDTH_A(WIDTH_LOCAL),
-            .READ_LATENCY_A(READ_LATENCY),
-            .READ_RESET_VALUE_A("0"),
-            .RST_MODE_A("SYNC"),
-            .SIM_ASSERT_CHK(0),
-            .USE_MEM_INIT(1),
-            .WAKEUP_TIME("disable_sleep"),
-            .WRITE_DATA_WIDTH_A(WIDTH_LOCAL),
-            .WRITE_MODE_A("read_first")
-        ) xpm_memory_spram_inst (
-            .douta(rdata),
-            .addra(addr),
-            .clka(clk),
-            .dina(wdata_local),
-            .ena(en),
-            .injectdbiterra(1'b0),
-            .injectsbiterra(1'b0),
-            .sbiterra(sbiterra),
-            .dbiterra(dbiterra), 
-            .regcea(1'b0),
-            .rsta(1'b0),
-            .sleep(1'b0),
-            .wea(we_local)
-        );
+    localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
+    localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
+    localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
+    localparam DELTA = BYTES_LOCAL / BYTES;
+    logic [BYTES_LOCAL-1: 0] we_local;
+    logic [BYTES_LOCAL-1: 0][BYTE_WRITE_WIDTH-1: 0] wdata_local;
+    for(genvar i=0; i<BYTES; i++)begin
+        assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
+        assign wdata_local[i*DELTA +: DELTA] = wdata[i];
     end
-    else begin
-`endif
-        logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
+    assign ready = 1'b1;
+    
+    wire sbiterra;
+    wire dbiterra;
+    xpm_memory_spram #(
+        .ADDR_WIDTH_A(ADDR_WIDTH),
+        .AUTO_SLEEP_TIME(0),
+        .BYTE_WRITE_WIDTH_A(BYTE_WRITE_WIDTH),
+        .CASCADE_HEIGHT(0),
+        .ECC_MODE("no_ecc"),
+        .MEMORY_INIT_FILE("none"),
+        .MEMORY_INIT_PARAM("0"),
+        .MEMORY_OPTIMIZATION("true"),
+        .MEMORY_PRIMITIVE("auto"),
+        .MEMORY_SIZE(WIDTH_LOCAL * DEPTH),
+        .MESSAGE_CONTROL(0),
+        .READ_DATA_WIDTH_A(WIDTH_LOCAL),
+        .READ_LATENCY_A(READ_LATENCY),
+        .READ_RESET_VALUE_A("0"),
+        .RST_MODE_A("SYNC"),
+        .SIM_ASSERT_CHK(0),
+        .USE_MEM_INIT(1),
+        .WAKEUP_TIME("disable_sleep"),
+        .WRITE_DATA_WIDTH_A(WIDTH_LOCAL),
+        .WRITE_MODE_A("read_first")
+    ) xpm_memory_spram_inst (
+        .douta(rdata),
+        .addra(addr),
+        .clka(clk),
+        .dina(wdata_local),
+        .ena(en),
+        .injectdbiterra(1'b0),
+        .injectsbiterra(1'b0),
+        .sbiterra(sbiterra),
+        .dbiterra(dbiterra), 
+        .regcea(1'b0),
+        .rsta(1'b0),
+        .sleep(1'b0),
+        .wea(we_local)
+    );
+`else
+    logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
 
-        logic `N(ADDR_WIDTH) resetAddr;
-        logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
-        logic `N(ADDR_WIDTH+1) counter;
-        logic resetState;
-        if(RESET)begin
-            assign resetAddr = resetState ? counter : addr;
-            assign resetData = resetState ? 0 : wdata;
-            always_ff @(posedge clk or posedge rst)begin
-                if(rst == `RST)begin
-                    counter <= 0;
-                    resetState <= 1'b1;
-                    ready <= 1'b0;
-                end
-                else begin
-                    if(resetState)begin
-                        counter <= counter + 1;
-                        if(counter == DEPTH)begin
-                            resetState <= 1'b0;
-                            ready <= 1'b1;
-                        end
+    logic `N(ADDR_WIDTH) resetAddr;
+    logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
+    logic `N(ADDR_WIDTH+1) counter;
+    logic resetState;
+    if(RESET)begin
+        assign resetAddr = resetState ? counter : addr;
+        assign resetData = resetState ? 0 : wdata;
+        always_ff @(posedge clk or posedge rst)begin
+            if(rst == `RST)begin
+                counter <= 0;
+                resetState <= 1'b1;
+                ready <= 1'b0;
+            end
+            else begin
+                if(resetState)begin
+                    counter <= counter + 1;
+                    if(counter == DEPTH)begin
+                        resetState <= 1'b0;
+                        ready <= 1'b1;
                     end
                 end
             end
         end
-        else begin
-            assign resetAddr = addr;
-            assign resetData = wdata;
-            assign resetState = 0;
-            assign ready = 1'b1;
-        end
-        if(READ_LATENCY == 0)begin
-            assign rdata = data[addr];
-        end
-        else if(READ_LATENCY == 1)begin
-            always_ff @(posedge clk)begin
-                if(en)begin
-                    rdata <= data[addr];
-                end
-            end
-        end
-
-        for(genvar j=0; j<BYTES; j++)begin
-            always_ff @(posedge clk)begin
-                if(we[j] | resetState)begin
-                    data[resetAddr][j] <= resetData[j];
-                end
-            end
-        end
-`ifdef SYNTH_VIVADO
     end
-endgenerate
+    else begin
+        assign resetAddr = addr;
+        assign resetData = wdata;
+        assign resetState = 0;
+        assign ready = 1'b1;
+    end
+    if(READ_LATENCY == 0)begin
+        assign rdata = data[addr];
+    end
+    else if(READ_LATENCY == 1)begin
+        always_ff @(posedge clk)begin
+            if(en)begin
+                rdata <= data[addr];
+            end
+        end
+    end
+
+    for(genvar j=0; j<BYTES; j++)begin
+        always_ff @(posedge clk)begin
+            if(we[j] | resetState)begin
+                data[resetAddr][j] <= resetData[j];
+            end
+        end
+    end
 `endif
 
 `ifdef REPORT_RAM
@@ -157,123 +150,116 @@ module SDPRAM#(
     output logic ready
 );
 
-generate
 `ifdef SYNTH_VIVADO
-    if(1)begin
-        localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
-        localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
-        localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
-        localparam DELTA = BYTES_LOCAL / BYTES;
-        logic [BYTES_LOCAL-1: 0] we_local;
-        logic [BYTES_LOCAL-1: 0][BYTE_WRITE_WIDTH-1: 0] wdata_local;
-        for(genvar i=0; i<BYTES; i++)begin
-            assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
-            assign wdata_local[i*DELTA +: DELTA] = wdata[i];
-        end
-        assign ready = 1'b1;
-        
-        wire dbiterrb, sbiterrb;
-        xpm_memory_sdpram #(
-            .ADDR_WIDTH_A(ADDR_WIDTH),
-            .ADDR_WIDTH_B(ADDR_WIDTH),
-            .AUTO_SLEEP_TIME(0),
-            .BYTE_WRITE_WIDTH_A(BYTE_WRITE_WIDTH),
-            .CASCADE_HEIGHT(0),
-            .ECC_MODE("no_ecc"),
-            .MEMORY_INIT_FILE("none"),
-            .MEMORY_INIT_PARAM("0"),
-            .MEMORY_OPTIMIZATION("true"),
-            .MEMORY_PRIMITIVE("auto"),
-            .MEMORY_SIZE(WIDTH_LOCAL * DEPTH),
-            .MESSAGE_CONTROL(0),
-            .READ_DATA_WIDTH_B(WIDTH_LOCAL),
-            .READ_LATENCY_B(READ_LATENCY),
-            .READ_RESET_VALUE_B("0"),
-            .RST_MODE_A("SYNC"),
-            .RST_MODE_B("SYNC"),
-            .SIM_ASSERT_CHK(0),
-            .USE_MEM_INIT(1),
-            .WAKEUP_TIME("disable_sleep"),
-            .WRITE_DATA_WIDTH_A(WIDTH_LOCAL),
-            .WRITE_MODE_B("read_first")
-        )
-        xpm_memory_sdpram_inst (
-            .doutb(rdata1),
-            .addra(addr0),
-            .addrb(addr1),
-            .clka(clk),
-            .clkb(clk),
-            .dina(wdata_local),
-            .ena(|we_local),
-            .enb(en),
-            .injectdbiterra(1'b0),
-            .injectsbiterra(1'b0),
-            .sbiterrb(sbiterrb),
-            .dbiterrb(dbiterrb), 
-            .regceb(1'b0),
-            .rstb(1'b0),
-            .sleep(1'b0),
-            .wea(we_local)
-        );
+    localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
+    localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
+    localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
+    localparam DELTA = BYTES_LOCAL / BYTES;
+    logic [BYTES_LOCAL-1: 0] we_local;
+    logic [BYTES_LOCAL-1: 0][BYTE_WRITE_WIDTH-1: 0] wdata_local;
+    for(genvar i=0; i<BYTES; i++)begin
+        assign we_local[i*DELTA +: DELTA] = {DELTA{we[i]}};
+        assign wdata_local[i*DELTA +: DELTA] = wdata[i];
     end
-    else begin
-`endif
-        logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
+    assign ready = 1'b1;
+    
+    wire dbiterrb, sbiterrb;
+    xpm_memory_sdpram #(
+        .ADDR_WIDTH_A(ADDR_WIDTH),
+        .ADDR_WIDTH_B(ADDR_WIDTH),
+        .AUTO_SLEEP_TIME(0),
+        .BYTE_WRITE_WIDTH_A(BYTE_WRITE_WIDTH),
+        .CASCADE_HEIGHT(0),
+        .ECC_MODE("no_ecc"),
+        .MEMORY_INIT_FILE("none"),
+        .MEMORY_INIT_PARAM("0"),
+        .MEMORY_OPTIMIZATION("true"),
+        .MEMORY_PRIMITIVE("auto"),
+        .MEMORY_SIZE(WIDTH_LOCAL * DEPTH),
+        .MESSAGE_CONTROL(0),
+        .READ_DATA_WIDTH_B(WIDTH_LOCAL),
+        .READ_LATENCY_B(READ_LATENCY),
+        .READ_RESET_VALUE_B("0"),
+        .RST_MODE_A("SYNC"),
+        .RST_MODE_B("SYNC"),
+        .SIM_ASSERT_CHK(0),
+        .USE_MEM_INIT(1),
+        .WAKEUP_TIME("disable_sleep"),
+        .WRITE_DATA_WIDTH_A(WIDTH_LOCAL),
+        .WRITE_MODE_B("read_first")
+    )
+    xpm_memory_sdpram_inst (
+        .doutb(rdata1),
+        .addra(addr0),
+        .addrb(addr1),
+        .clka(clk),
+        .clkb(clk),
+        .dina(wdata_local),
+        .ena(|we_local),
+        .enb(en),
+        .injectdbiterra(1'b0),
+        .injectsbiterra(1'b0),
+        .sbiterrb(sbiterrb),
+        .dbiterrb(dbiterrb), 
+        .regceb(1'b0),
+        .rstb(1'b0),
+        .sleep(1'b0),
+        .wea(we_local)
+    );
+`else
+    logic `ARRAY(BYTES, WIDTH / BYTES) data `N(DEPTH);
 
-        logic `N(ADDR_WIDTH) resetAddr;
-        logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
-        logic `N(ADDR_WIDTH+1) counter;
-        logic resetState;
-        if(RESET)begin
-            assign resetAddr = resetState ? counter : addr0;
-            assign resetData = resetState ? 0 : wdata;
-            always_ff @(posedge clk or posedge rst)begin
-                if(rst == `RST)begin
-                    counter <= 0;
-                    resetState <= 1'b1;
-                    ready <= 1'b0;
-                end
-                else begin
-                    if(resetState)begin
-                        counter <= counter + 1;
-                        if(counter == DEPTH)begin
-                            resetState <= 1'b0;
-                            ready <= 1'b1;
-                        end
+    logic `N(ADDR_WIDTH) resetAddr;
+    logic [BYTES-1: 0][WIDTH/BYTES-1: 0] resetData;
+    logic `N(ADDR_WIDTH+1) counter;
+    logic resetState;
+    if(RESET)begin
+        assign resetAddr = resetState ? counter : addr0;
+        assign resetData = resetState ? 0 : wdata;
+        always_ff @(posedge clk or posedge rst)begin
+            if(rst == `RST)begin
+                counter <= 0;
+                resetState <= 1'b1;
+                ready <= 1'b0;
+            end
+            else begin
+                if(resetState)begin
+                    counter <= counter + 1;
+                    if(counter == DEPTH)begin
+                        resetState <= 1'b0;
+                        ready <= 1'b1;
                     end
                 end
             end
         end
-        else begin
-            assign resetAddr = addr0;
-            assign resetData = wdata;
-            assign resetState = 0;
-            assign ready = 1'b1;
-        end
+    end
+    else begin
+        assign resetAddr = addr0;
+        assign resetData = wdata;
+        assign resetState = 0;
+        assign ready = 1'b1;
+    end
 
-        if(READ_LATENCY == 0)begin
-            assign rdata1 = data[addr1];
-        end
-        else if(READ_LATENCY == 1)begin
-            always_ff @(posedge clk)begin
-                if(en)begin
-                    rdata1 <= data[addr1];
-                end
+    if(READ_LATENCY == 0)begin
+        assign rdata1 = data[addr1];
+    end
+    else if(READ_LATENCY == 1)begin
+        always_ff @(posedge clk)begin
+            if(en)begin
+                rdata1 <= data[addr1];
+            end
 
+        end
+    end
+
+    always_ff @(posedge clk)begin
+        for(int i=0; i<BYTES; i++)begin
+            if(we[i] | resetState)begin
+                data[resetAddr][i] <= resetData[i];
             end
         end
-
-        always_ff @(posedge clk or posedge rst)begin
-            for(int i=0; i<BYTES; i++)begin
-                if(we[i] | resetState)begin
-                    data[resetAddr][i] <= resetData[i];
-                end
-            end
-        end
-`ifdef SYNTH_VIVADO
     end
 `endif
-endgenerate
 endmodule
 
 // rw port use waddr to read
@@ -632,8 +618,12 @@ generate
         end
         else if(READ_LATENCY == 1)begin
             logic `ARRAY(READ_PORT+RW_PORT, $clog2(BANK_ALL)) bank_idx_n;
-            always_ff @(posedge clk)begin
-                bank_idx_n <= bank_idx;
+            for(genvar i=0; i<READ_PORT+RW_PORT; i++)begin
+                always_ff @(posedge clk)begin
+                    if(en[i])begin
+                        bank_idx_n[i] <= bank_idx[i];
+                    end
+                end
             end
             assign ridx = bank_idx_n;
         end

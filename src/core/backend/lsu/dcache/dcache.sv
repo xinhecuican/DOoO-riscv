@@ -6,7 +6,7 @@ module DCache(
     DCacheLoadIO.dcache rio,
     DCacheStoreIO.dcache wio,
     AxiIO.master axi_io,
-    PTWRequest.cache ptw_io,
+    NativeSnoopIO.master snoop_io,
     input BackendCtrl backendCtrl
 );
 
@@ -40,14 +40,14 @@ module DCache(
     logic `N(`PADDR_SIZE) refill_addr_n;
     logic `N(`DCACHE_BLOCK_SIZE) replace_addr;
 
-    logic ptw_req, ptw_req_n;
-    logic `N(`PADDR_SIZE) ptw_addr;
+    logic snoop_req;
+    logic `N(`PADDR_SIZE) snoop_addr;
     logic `N(`DCACHE_WAY) way_dirty;
 
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, `DCACHE_WAY_WIDTH
     ) dcache_axi_io();
     ReplaceIO #(
         .DEPTH(`DCACHE_SET),
@@ -92,9 +92,8 @@ endgenerate
 generate
     
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign tagv_en[i] = rio.req[i] | ptw_io.req;
+        assign tagv_en[i] = rio.req[i];
         assign tagvIdx[i] = miss_io.refill_en ? miss_io.refillAddr`DCACHE_SET_BUS :
-                            ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
                             loadIdx[i];
     end
     assign tagv_en[`LOAD_PIPELINE] = wreq | miss_io.refill_en;
@@ -106,8 +105,9 @@ generate
                                    {`DCACHE_BYTE{miss_io.refill_valid & miss_io.refill_en & refill_way[j]}};
             assign rdata[j][i] = data_rdata[i][j];
         end
-        assign data_index[i] = ptw_io.req ? ptw_io.paddr`DCACHE_SET_BUS :
-                            {`DCACHE_SET_WIDTH{loadBankDecode[0][i] & rio.req[0] & ~req_cancel[0]}} & loadIdx[0] |
+        assign data_index[i] = snoop_req ? snoop_addr`DCACHE_SET_BUS : 
+                               |data_we[i] ? refillIdx : 
+                               {`DCACHE_SET_WIDTH{loadBankDecode[0][i] & rio.req[0] & ~req_cancel[0]}} & loadIdx[0] |
                             {`DCACHE_SET_WIDTH{loadBankDecode[1][i] & rio.req[1] & ~req_cancel[1]}} & loadIdx[1];
     end
 endgenerate
@@ -128,10 +128,9 @@ endgenerate
         .tagv_index(tagvIdx),
         .tagv_wdata({miss_io.refillAddr`DCACHE_TAG_BUS, 1'b1}),
         .tagv,
-        .en((loadBank | {`DCACHE_BANK{miss_io.refill_en | ptw_io.req}})),
+        .en((loadBank | {`DCACHE_BANK{miss_io.refill_en | snoop_req}})),
         .we(data_we),
         .index(data_index),
-        .windex({`DCACHE_BANK{refillIdx}}),
         .wdata(refillData),
         .data(data_rdata),
         .dirty_en(miss_io.refill_en),
@@ -160,7 +159,7 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign write_valid[i] = miss_io.refill_en |
-                                ptw_io.req |
+                                snoop_req |
                                 wreq_n & whit & (|wmask_n[rio.vaddr[i]`DCACHE_BANK_BUS]);
     end
 endgenerate
@@ -185,7 +184,7 @@ endgenerate
         robIdx <= rio.robIdx;
         rhit <= rio.hit;
         for(int i=0; i<`LOAD_PIPELINE; i++)begin
-            miss_addr[i] <= ptw_req ? ptw_addr : {rio.ptag[i], rvaddr[i][11: 0]};
+            miss_addr[i] <= {rio.ptag[i], rvaddr[i][11: 0]};
             load_refill_conflict[i] <= miss_io.refill_en & miss_io.refill_valid &
                                        ({rio.ptag[i], rvaddr[i]`DCACHE_SET_BUS} == miss_io.refillAddr`DCACHE_BLOCK_BUS);
         end
@@ -193,7 +192,7 @@ endgenerate
     end
     assign rio.full = miss_io.rfull | load_refill_reply;
 
-    assign miss_io.ren = r_req_s3 & ~rhit & ~rio.req_cancel_s3 & ~load_refill_conflict | ptw_req_n;
+    assign miss_io.ren = r_req_s3 & ~rhit & ~rio.req_cancel_s3 & ~load_refill_conflict;
     assign miss_io.lqIdx = lqIdx;
     assign miss_io.robIdx = robIdx;
     assign miss_io.raddr = miss_addr;
@@ -217,8 +216,8 @@ endgenerate
 
 // write
     logic write_invalid;
-    assign wreq = wio.req;
-    assign waddr = wio.paddr;
+    assign wreq = wio.req | replace_queue_io.snoop_en;
+    assign waddr = replace_queue_io.snoop_en ? replace_queue_io.snoop_addr : wio.paddr;
     assign wdata = wio.data;
     assign wmask = wio.mask;
     assign widx = waddr`DCACHE_SET_BUS;
@@ -234,7 +233,7 @@ generate
 endgenerate
     logic `N(`STORE_COMMIT_WIDTH) scIdx_n;
     always_ff @(posedge clk)begin
-        wreq_n <= wio.req;
+        wreq_n <= wio.req & ~replace_queue_io.snoop_en;
         miss_req_n <= miss_io.req;
         waddr_n <= waddr;
         wdata_n <= wdata;
@@ -254,7 +253,8 @@ endgenerate
     assign miss_io.waddr = waddr_n;
     assign miss_io.wdata = wdata_n;
     assign miss_io.wmask = wmask_n;
-    assign miss_io.req_success = miss_req_n & ~replace_queue_io.full & ~replace_queue_io.whit;
+    assign miss_io.req_success = ~snoop_req & miss_req_n & 
+                                 ~replace_queue_io.full & ~replace_queue_io.whit;
     assign miss_io.replaceWay = missWay_encode;
     assign miss_io.scIdx = scIdx_n;
     assign wio.conflict = miss_io.wfull;
@@ -269,7 +269,7 @@ endgenerate
     Decoder #(`DCACHE_WAY) decoder_refill_way (miss_io.refillWay, refill_way);
 
     // refill
-    assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit))) & ~wio.req;
+    assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit))) & ~wio.req & ~snoop_req & ~replace_queue_io.snoop_en;
     always_ff @(posedge clk)begin
         wio.refill <= miss_io.refill_en & miss_io.refill_valid & miss_io.refill_dirty;
         wio.refillIdx <= miss_io.refill_scIdx;
@@ -279,7 +279,7 @@ endgenerate
     assign replace_addr = {wtagv[refill_way_n][`DCACHE_TAG: 1], refill_addr_n`DCACHE_SET_BUS};
     always_ff @(posedge clk)begin
         refill_en_n <= miss_io.refill_en & miss_io.refill_valid;
-        refill_way_n <= miss_io.refillWay;
+        refill_way_n <= snoop_req ? w_wayIdx : miss_io.refillWay;
         refill_addr_n <= miss_io.refillAddr;
     end
     assign replace_queue_io.refill_en = refill_en_n;
@@ -287,31 +287,11 @@ endgenerate
     assign replace_queue_io.addr = replace_addr;
     assign replace_queue_io.data = rdata[refill_way_n];
 
-// ptw
-    logic `N(`DCACHE_TAG) ptw_tag;
-    logic `N(`DCACHE_WAY) ptw_way_hit;
-    logic `N(`DCACHE_WAY_WIDTH) ptw_hit_way;
-
+    // BUG: rlast但是没有refill进dcache时snoop访问不到该项
+    assign replace_queue_io.snoop_data = rdata[refill_way_n];
     always_ff @(posedge clk)begin
-        ptw_tag <= ptw_io.paddr`DCACHE_TAG_BUS;
-        ptw_req <= ptw_io.req & ~backendCtrl.redirect;
-        ptw_addr <= ptw_io.paddr;
-        ptw_req_n <= ptw_req & ~(|ptw_way_hit) & ~backendCtrl.redirect;
-    end
-
-    assign miss_io.ptw_req = ptw_req_n;
-
-generate
-    for(genvar j=0; j<`DCACHE_WAY; j++)begin
-        assign ptw_way_hit[j] = tagv[0][j] & (tagv[0][j][`DCACHE_TAG: 1] == ptw_tag);
-    end
-endgenerate
-    Encoder #(`DCACHE_WAY) encoder_ptw_hit (ptw_way_hit, ptw_hit_way);
-    assign ptw_io.ready = 1'b1;
-    assign ptw_io.full = ptw_req_n & miss_io.rfull[0];
-    always_ff @(posedge clk)begin
-        ptw_io.data_valid <= miss_io.ptw_refill | (ptw_req & (|ptw_way_hit));
-        ptw_io.rdata <= miss_io.ptw_refill ? miss_io.ptw_refill_data : rdata[ptw_hit_way];
+        snoop_req <= replace_queue_io.snoop_en;
+        snoop_addr <= replace_queue_io.snoop_addr;
     end
 
 `ifdef DIFFTEST

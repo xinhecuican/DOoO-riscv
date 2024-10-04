@@ -116,7 +116,11 @@ module ICache(
     logic `ARRAY(`ICACHE_BANK, `ICACHE_BITS) data_wdata;
     logic `TENSOR(`ICACHE_BANK, `ICACHE_WAY, `ICACHE_BITS) data_rdata;
 
-    assign tagv_we = replace_way & {`ICACHE_BANK{refill_en}};
+    assign tagv_we = replace_way & {`ICACHE_WAY{refill_en}}
+`ifdef EXT_FENCEI
+    | {`ICACHE_WAY{fenceValid}}
+`endif
+    ;
     assign tagv_index = index;
     assign tagv_windex = 
 `ifdef EXT_FENCEI

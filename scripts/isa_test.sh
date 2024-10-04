@@ -5,7 +5,7 @@ rv32i=(
     "bgeu" "blt" "bltu" "bne" "jal" "jalr" "lb" "lbu"
     "lh" "lhu" "lui" "lw" "or" "ori" "sb" "sh" "sll"
     "slli" "slt" "slti" "sltiu" "sltu" "sra" "srai"
-    "srl" "srli" "sub" "sw" "xor" "xori"
+    "srl" "srli" "sub" "sw" "xor" "xori" "fence_i"
 )
 rv32i_prefix="utils/riscv-tests/isa/rv32ui-p-"
 
