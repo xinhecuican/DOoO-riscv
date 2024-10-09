@@ -44,6 +44,12 @@ module DCache(
     logic `N(`PADDR_SIZE) snoop_addr;
     logic `N(`DCACHE_WAY) way_dirty;
 
+    logic miss_rst, replace_rst, cache_rst;
+    SyncRst rst_miss(clk, rst, miss_rst);
+    SyncRst rst_replace(clk, rst, replace_rst);
+    SyncRst rst_cache(clk, rst, cache_rst);
+
+
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
     AxiIO #(
@@ -54,13 +60,13 @@ module DCache(
         .WAY_NUM(`DCACHE_WAY),
         .READ_PORT(`LOAD_PIPELINE)
     ) replace_io();
-    DCacheMiss dcache_miss(.*, .io(miss_io), .r_axi_io(dcache_axi_io.masterr));
+    DCacheMiss dcache_miss(.*, .rst(miss_rst), .io(miss_io), .r_axi_io(dcache_axi_io.masterr));
     PLRU #(
         .DEPTH(`DCACHE_SET),
         .WAY_NUM(`DCACHE_WAY),
         .READ_PORT(`LOAD_PIPELINE)
-    ) plru(.*);
-    ReplaceQueue replace_queue(.*, .io(replace_queue_io), .w_axi_io(dcache_axi_io.masterw));
+    ) plru(.*, .rst(cache_rst));
+    ReplaceQueue replace_queue(.*, .rst(replace_rst), .io(replace_queue_io), .w_axi_io(dcache_axi_io.masterw));
     `AXI_ASSIGN_REQ_INTF(axi_io, dcache_axi_io)
     `AXI_ASSIGN_RESP_INTF(dcache_axi_io, axi_io)
 
@@ -122,7 +128,7 @@ endgenerate
 
     DCacheData cache_data (
         .clk,
-        .rst,
+        .rst(cache_rst),
         .tagv_en,
         .tagv_we,
         .tagv_index(tagvIdx),

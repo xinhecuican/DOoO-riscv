@@ -374,11 +374,9 @@ typedef struct packed {
 } LoadFwdData;
 
 typedef struct packed {
-    logic dir;
     logic we;
     logic `N(`PREG_WIDTH) rd;
     RobIdx robIdx;
-    FsqIdxInfo fsqInfo;
 } LoadQueueData;
 
 typedef struct packed {

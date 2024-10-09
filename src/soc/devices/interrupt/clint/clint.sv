@@ -13,7 +13,7 @@
 module apb4_clint (
     input logic clk,
     input logic rtc_clk,
-    input logic rst,
+    input logic rst_n_i,
     ApbIO.slave apb4,
     ClintIO.clint clint
 );
@@ -36,7 +36,7 @@ module apb4_clint (
 
   edge_det_re #(2, 1) u_edge_det_re (
       .clk_i  (clk),
-      .rst(rst),
+      .rst_n_i,
       .dat_i  (rtc_clk),
       .re_o   (s_rtc_rise_edge)
   );
@@ -45,7 +45,7 @@ module apb4_clint (
   assign s_msip_d  = apb4.pwdata[`CLINT_MSIP_WIDTH-1:0];
   dffer #(`CLINT_MSIP_WIDTH) u_msip_dffer (
       clk,
-      rst,
+      rst_n_i,
       s_msip_en,
       s_msip_d,
       s_msip_q
@@ -55,7 +55,7 @@ module apb4_clint (
   assign s_mtime_d  = s_mtime_q + 1'b1;
   dffer #(`CLINT_MTIME_WIDTH) u_mtime_dffer (
       clk,
-      rst,
+      rst_n_i,
       s_mtime_en,
       s_mtime_d,
       s_mtime_q
@@ -74,14 +74,17 @@ module apb4_clint (
   end
   dfferh #(`CLINT_MTIMECMP_WIDTH) u_mtimecmp_dfferh (
       clk,
-      rst,
+      rst_n_i,
       s_mtimecmp_en,
       s_mtimecmp_d,
       s_mtimecmp_q
   );
 
-  assign clint.timer_irq = s_mtime_q >= s_mtimecmp_q;
-  assign clint.soft_irq = s_msip_q[0];
+  always_ff @(posedge clk)begin
+    clint.timer_irq <= s_mtime_q >= s_mtimecmp_q;
+    clint.soft_irq <= s_msip_q[0];
+  end
+  
 
   always_comb begin
     apb4.prdata = '0;

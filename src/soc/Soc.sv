@@ -26,16 +26,16 @@ module Soc(
 
     logic sync_rst_peri, sync_rst_core, core_rst, peri_rst;
     logic peri_rst_s1, core_rst_s1;
-    SyncRst rst_core (clk, rst, sync_rst_core);
-    SyncRst rst_peri (clk, rst, sync_rst_peri);
-    always_ff @(posedge clk)begin
-        core_rst_s1 <= sync_rst_core;
-        core_rst <= core_rst_s1;
-    end
-    always_ff @(posedge clk)begin
-        peri_rst_s1 <= sync_rst_peri;
-        peri_rst <= peri_rst_s1;
-    end
+    logic sync_rst_clint, clint_rst_s1, clint_rst;
+    SyncRst rst_core_sync (clk, rst, sync_rst_core);
+    SyncRst rst_core_s1 (clk, sync_rst_core, core_rst_s1);
+    SyncRst rst_core (clk, core_rst_s1, core_rst);
+    SyncRst rst_peri_sync (clk, rst, sync_rst_peri);
+    SyncRst rst_peri_s1(clk, sync_rst_peri, peri_rst_s1);
+    SyncRst rst_peri (clk, peri_rst_s1, peri_rst);
+    SyncRst rst_clint_sync (clk, rst, sync_rst_clint);
+    SyncRst rst_clint_s1 (clk, sync_rst_clint, clint_rst_s1);
+    SyncRst rst_clint (clk, clint_rst_s1, clint_rst);
 
     CPUCore core(
         .clk(clk),
@@ -50,12 +50,12 @@ module Soc(
     localparam xbar_cfg_t crossbar_cfg = '{
         NoSlvPorts: 1,
         NoMstPorts: AXI_SLAVE_NUM,
-        MaxMstTrans: 1,
+        MaxMstTrans: `PERIPHERAL_SIZE + 2,
         MaxSlvTrans: 1,
         FallThrough: 0,
-        LatencyMode: 0,
+        LatencyMode: 10'b11111_11111,
         PipelineStages: 1,
-        AxiIdWidthSlvPorts: `AXI_ID_W,
+        AxiIdWidthSlvPorts: `CORE_WIDTH+2,
         UniqueIds: 1,
         AxiAddrWidth: `PADDR_SIZE,
         AxiDataWidth: `XLEN,
@@ -161,6 +161,8 @@ module Soc(
         .AxiDataWidth(`XLEN),
         .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
+        .PipelineRequest(1),
+        .PipelineResponse(1),
         .AxiMaxWriteTxns(32'd16),
         .AxiMaxReadTxns(32'd16),
         .full_req_t(AxiReq),
@@ -172,7 +174,7 @@ module Soc(
         .rule_t(addr_rule_t)
     ) irq_axi_to_apb (
         .clk_i(clk),
-        .rst_ni(~peri_rst),
+        .rst_ni(~clint_rst),
         .test_i(1'b0),
         .axi_req_i(irq_req),
         .axi_resp_o(irq_resp),
@@ -188,7 +190,7 @@ module Soc(
     apb4_clint clint(
         .clk(clk),
         .rtc_clk(rtc_clk),
-        .rst(peri_rst),
+        .rst_n_i(~clint_rst),
         .apb4(clint_apb_io.slave),
         .clint(clint_io.clint)
     );
@@ -203,7 +205,7 @@ module Soc(
         .SOURCES(`IRQ_NUM),
         .TARGETS(`NUM_CORE)
     ) plic (
-        .PRESETn(~peri_rst),
+        .PRESETn(~clint_rst),
         .PCLK(clk),
         .apb(plic_apb_io),
         .src(irq_source),
@@ -226,30 +228,13 @@ module Soc(
     `AXI_ASSIGN_TO_REQ(peri_req, peri_axi)
     `AXI_ASSIGN_FROM_RESP(peri_axi, peri_resp)
 
-    axi_cdc #(
-        .aw_chan_t(AxiAW),
-        .w_chan_t(AxiW),
-        .b_chan_t(AxiB),
-        .ar_chan_t(AxiAR),
-        .r_chan_t(AxiR),
-        .axi_req_t(AxiReq),
-        .axi_resp_t(AxiResp)
-    ) uart_axi_cdc(
-        .src_clk_i(clk),
-        .src_rst_ni(~core_rst),
-        .src_req_i(peri_req),
-        .src_resp_o(peri_resp),
-        .dst_clk_i(clk),
-        .dst_rst_ni(~peri_rst),
-        .dst_req_o(peri_req_cdc),
-        .dst_resp_i(peri_resp_cdc)
-    );
-
     axi_to_apb #(
         .NoApbSlaves(`PERIPHERAL_SIZE),
         .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
+        .PipelineRequest(1),
+        .PipelineResponse(1),
         .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
         .AxiMaxWriteTxns(32'd16),
@@ -265,8 +250,8 @@ module Soc(
         .clk_i(clk),
         .rst_ni(~peri_rst),
         .test_i(1'b0),
-        .axi_req_i(peri_req_cdc),
-        .axi_resp_o(peri_resp_cdc),
+        .axi_req_i(peri_req),
+        .axi_resp_o(peri_resp),
         .apb_req_o(uart_req),
         .apb_resp_i(uart_resp),
         .addr_map_i(map_rules)

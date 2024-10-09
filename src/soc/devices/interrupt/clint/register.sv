@@ -11,9 +11,6 @@
 `ifndef INC_REGISTER_SV
 `define INC_REGISTER_SV
 
-`define REGISTER_DELAY 0.1
-
-
 module dff #(
     parameter int DATA_WIDTH = 1
 ) (
@@ -23,7 +20,7 @@ module dff #(
 );
 
   always_ff @(posedge clk_i) begin
-    dat_o <= #`REGISTER_DELAY dat_i;
+    dat_o <= dat_i;
   end
 endmodule
 
@@ -31,16 +28,16 @@ module dffr #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] dat_o
 );
 
-  always_ff @(posedge clk_i, posedge rst) begin
-    if (rst) begin
+  always_ff @(posedge clk_i, negedge rst_n_i) begin
+    if (~rst_n_i) begin
       dat_o <= '0;
     end else begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -58,7 +55,7 @@ module ndffr #(
     if (~rst_n_i) begin
       dat_o <= '0;
     end else begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -76,7 +73,7 @@ module dffrh #(
     if (~rst_n_i) begin
       dat_o <= '1;
     end else begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -95,7 +92,7 @@ module dffrc #(
     if (~rst_n_i) begin
       dat_o <= RESET_VAL;
     end else begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -113,7 +110,7 @@ module dffsr #(
     if (~rst_n_i) begin
       dat_o <= '0;
     end else begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -129,7 +126,7 @@ module dffl #(
 
   always_ff @(posedge clk_i) begin
     if (en_i) begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -138,17 +135,17 @@ module dffer #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic                  en_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] dat_o
 );
 
-  always_ff @(posedge clk_i, posedge rst) begin
-    if (rst) begin
+  always_ff @(posedge clk_i, negedge rst_n_i) begin
+    if (~rst_n_i) begin
       dat_o <= '0;
     end else if (en_i) begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -157,17 +154,17 @@ module dfferh #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic                  en_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] dat_o
 );
 
-  always_ff @(posedge clk_i, posedge rst) begin
-    if (rst) begin
+  always_ff @(posedge clk_i, negedge rst_n_i) begin
+    if (~rst_n_i) begin
       dat_o <= '1;
     end else if (en_i) begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -187,7 +184,7 @@ module dfferc #(
     if (~rst_n_i) begin
       dat_o <= RESET_VAL;
     end else if (en_i) begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule
@@ -206,7 +203,7 @@ module dffesr #(
     if (~rst_n_i) begin
       dat_o <= '0;
     end else if (en_i) begin
-      dat_o <= #`REGISTER_DELAY dat_i;
+      dat_o <= dat_i;
     end
   end
 endmodule

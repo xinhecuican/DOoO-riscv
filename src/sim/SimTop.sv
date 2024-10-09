@@ -100,9 +100,9 @@ module SimTop(
         MaxMstTrans: 1,
         MaxSlvTrans: 1,
         FallThrough: 0,
-        LatencyMode: 0,
+        LatencyMode: 10'b11111_11111,
         PipelineStages: 1,
-        AxiIdWidthSlvPorts: `AXI_ID_W,
+        AxiIdWidthSlvPorts: `CORE_WIDTH+2,
         UniqueIds: 1,
         AxiAddrWidth: `PADDR_SIZE,
         AxiDataWidth: `XLEN,
@@ -215,6 +215,8 @@ module SimTop(
         .AxiDataWidth(`XLEN),
         .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
+        .PipelineRequest(1),
+        .PipelineResponse(1),
         .AxiMaxWriteTxns(32'd16),
         .AxiMaxReadTxns(32'd16),
         .full_req_t(AxiReq),
@@ -242,7 +244,7 @@ module SimTop(
     apb4_clint clint(
         .clk(clock),
         .rtc_clk(clock),
-        .rst(peri_rst),
+        .rst_n_i(~peri_rst),
         .apb4(clint_apb_io.slave),
         .clint(clint_io.clint)
     );
@@ -287,6 +289,8 @@ module SimTop(
         .AxiDataWidth(`XLEN),
         .AxiIdWidth(`CORE_WIDTH+2),
         .AxiUserWidth(1),
+        .PipelineRequest(1),
+        .PipelineResponse(1),
         .AxiMaxWriteTxns(32'd16),
         .AxiMaxReadTxns(32'd16),
         .full_req_t(AxiReq),

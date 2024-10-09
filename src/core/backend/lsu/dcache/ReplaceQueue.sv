@@ -237,6 +237,7 @@ endgenerate
         snoop_free_idx_s2 <= snoop_free_idx_s1;
         snoop_free_idx_s3 <= snoop_free_idx_s2;
         snoop_replace_hit <= io.whit;
+        snoop_replace_data <= entrys[io.idx].data;
     end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin

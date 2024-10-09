@@ -58,8 +58,13 @@ module ICache(
     logic `N(`ICACHE_SET_WIDTH) fenceIdx;
 `endif
 
+    logic cache_rst, tlb_rst;
+    SyncRst rst_cache(clk, rst, cache_rst);
+    SyncRst rst_tlb(clk, rst, tlb_rst);
+
     ITLBCacheIO itlb_cache_io();
-    ITLB itlb(.*, .tlb_l2_io(itlb_io));
+    ITLB itlb(.*, .rst(tlb_rst), .tlb_l2_io(itlb_io));
+
     logic `N(`ICACHE_BANK * 2) expand_en, expand_exception;
     logic `N(`BLOCK_INST_SIZE) expand_en_shift;
     logic `N(`ICACHE_BANK_WIDTH+1) end_addr, start_addr;
@@ -137,7 +142,7 @@ module ICache(
     assign data_we = {`ICACHE_BANK{replace_way & {`ICACHE_WAY{refill_en}}}};
     ICacheData icache_data(
         .clk,
-        .rst,
+        .rst(cache_rst),
         .tagv_en((fsq_cache_io.en & ~fsq_cache_io.stall)),
         .tagv_we,
         .tagv_index,
@@ -262,8 +267,8 @@ module ICache(
     request_buffer.stream.target <= fsq_cache_io.stream.target; \
     request_buffer.shiftIdx <= fsq_cache_io.shiftIdx; \
 
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
+    always_ff @(posedge clk or posedge cache_rst)begin
+        if(cache_rst == `RST)begin
             request_buffer <= '{default: 0};
             main_state <= IDLE;
             miss_buffer <= '{default: 0};
@@ -367,8 +372,8 @@ module ICache(
 `ifdef EXT_FENCEI
     logic `N(`ICACHE_SET_WIDTH) fenceIdx_n;
     assign fenceIdx_n = fenceIdx + 1;
-    always_ff @(posedge clk, posedge rst)begin
-        if(rst == `RST)begin
+    always_ff @(posedge clk, posedge cache_rst)begin
+        if(cache_rst == `RST)begin
             fenceValid <= 1'b0;
             fenceIdx <= 0;
             fenceEnd <= 1'b0;

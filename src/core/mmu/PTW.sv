@@ -102,6 +102,7 @@ module PTW(
             end
         end
     end
+    assign axi_io.ar_id = 0;
     assign axi_io.ar_valid = ar_valid;
     assign axi_io.ar_addr = req_buf.paddr;
     assign axi_io.ar_len = `DCACHE_LINE / `DATA_BYTE - 1;

@@ -16,6 +16,14 @@ module BranchPredictor(
     BpuUBtbIO ubtb_io(.*);
     BpuRASIO ras_io(.*);
 
+    logic btb_rst, tage_rst, ubtb_rst, ras_rst, history_rst, control_rst;
+    SyncRst rst_btb (clk, rst, btb_rst);
+    SyncRst rst_tage (clk, rst, tage_rst);
+    SyncRst rst_ubtb (clk, rst, ubtb_rst);
+    SyncRst rst_ras (clk, rst, ras_rst);
+    SyncRst rst_history (clk, rst, history_rst);
+    SyncRst rst_control (clk, rst, control_rst);
+
     PredictionResult s1_result;
     PredictionResult s2_result_in, s2_result_out;
     PredictionResult redirect_result;
@@ -29,12 +37,13 @@ module BranchPredictor(
     assign updateInfo = bpu_fsq_io.updateInfo;
     assign btb_io.pc = pc;
     assign btb_io.request = 1'b1;
-    BTB btb(.*);
+    BTB btb(.*, .rst(btb_rst));
     assign tage_io.pc = pc;
-    Tage tage(.*);
+    Tage tage(.*, .rst(tage_rst));
 
     HistoryControl history_control(
         .*,
+        .rst(history_rst),
         .result(redirect_result),
         .redirect(redirect),
         .history(history)
@@ -44,9 +53,9 @@ module BranchPredictor(
     assign ubtb_io.pc = pc;
     assign ubtb_io.fsqIdx = bpu_fsq_io.stream_idx;
     assign ubtb_io.fsqDir = bpu_fsq_io.stream_dir;
-    UBTB ubtb(.*);
+    UBTB ubtb(.*, .rst(ubtb_rst));
 
-    RAS ras(.*);
+    RAS ras(.*, .rst(ras_rst));
     
     assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect[0];
     assign redirect.tage_ready = tage_io.ready;
@@ -54,7 +63,7 @@ module BranchPredictor(
     assign redirect.stall = bpu_fsq_io.stall | ~tage_io.ready;
     assign redirect_result = s2_result_out;
     always_ff @(posedge clk)begin
-        if(rst == `RST)begin
+        if(control_rst == `RST)begin
             pc <= `RESET_PC;
         end
         else if(redirect.flush)begin
@@ -69,7 +78,7 @@ module BranchPredictor(
             end
         end
 
-        if(rst == `RST)begin
+        if(control_rst == `RST)begin
             s2_result_in <= 0;
             s2_meta_in <= 0;
         end

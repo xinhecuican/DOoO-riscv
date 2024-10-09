@@ -9,6 +9,7 @@ module RAM_``WIDTH``x``DEPTH``_1R1W ( \
     input [``ADDR_WIDTH``-1: 0] B1ADDR, \
     output reg [``WIDTH``-1: 0] B1DATA \
 ); \
+wire [``WIDTH``-1: 0] dout1; \
 sky130_sram_1r1w0rw_``WIDTH``x``DEPTH`` ram( \
 	.clk0(CLK1), \
 	.csb0(!A1EN), \
@@ -17,8 +18,11 @@ sky130_sram_1r1w0rw_``WIDTH``x``DEPTH`` ram( \
 	.clk1(CLK1), \
 	.csb1(!B1EN), \
 	.addr1(B1ADDR), \
-	.dout1(B1DATA) \
+	.dout1(dout1) \
 ); \
+always @(posedge CLK1)begin \
+	B1DATA <= dout1; \
+end \
 endmodule
 
 `define RW_BYTE_MODULE_GEN(WIDTH, DEPTH, ADDR_WIDTH, BYTE) \
@@ -31,6 +35,7 @@ module RAM_``WIDTH``x``DEPTH``_1R1W_``BYTE`` ( \
     input [``ADDR_WIDTH``-1: 0] B1ADDR, \
     output reg [``WIDTH``-1: 0] B1DATA \
 ); \
+wire [``WIDTH``-1: 0] dout1; \
 sky130_sram_1r1w0rw_``WIDTH``x``DEPTH``_``BYTE`` ram( \
 	.clk0(CLK1), \
 	.csb0(!(|A1EN)), \
@@ -42,6 +47,9 @@ sky130_sram_1r1w0rw_``WIDTH``x``DEPTH``_``BYTE`` ram( \
 	.addr1(B1ADDR), \
 	.dout1(B1DATA) \
 ); \
+always @(posedge CLK1)begin \
+	B1DATA <= dout1; \
+end \
 endmodule
 
 `RW_MODULE_GEN(11, 512, 9)

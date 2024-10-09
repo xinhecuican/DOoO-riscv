@@ -18,6 +18,10 @@ module L2TLB(
     logic fence, fence_end;
     logic dtlb_ready, itlb_ready;
 
+    logic cache_rst, ptw_rst;
+    SyncRst rst_cache (clk, rst, cache_rst);
+    SyncRst rst_ptw (clk, rst, ptw_rst);
+
     Arbiter #(2, `VADDR_SIZE+$bits(TLBInfo)) arbiter_l1tlb (
         .valid({dtlb_io.req, itlb_io.req}),
         .data({{dtlb_io.info, dtlb_io.req_addr}, {itlb_io.info, itlb_io.req_addr}}),
@@ -25,8 +29,8 @@ module L2TLB(
         .valid_o(tlbCache_io.req),
         .data_o({tlbCache_io.info, tlbCache_io.req_addr})
     );
-    TLBCache tlb_cache (.*, .io(tlbCache_io), .fenceBus(fenceBus_i.mmu));
-    PTW ptw(.*, .flush((ptw_flush | fenceBus.mmu_flush[2])));
+    TLBCache tlb_cache (.*, .rst(cache_rst), .io(tlbCache_io), .fenceBus(fenceBus_i.mmu));
+    PTW ptw(.*, .rst(ptw_rst), .flush((ptw_flush | fenceBus.mmu_flush[2])));
 
     assign dtlb_io.ready = dtlb_ready & ~fence;
     assign itlb_io.ready = itlb_ready & ~fence;

@@ -21,7 +21,7 @@ module edge_det #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] dat_o,
     output logic [DATA_WIDTH-1:0] re_o,
@@ -32,14 +32,14 @@ module edge_det #(
   assign dat_o = s_dat_q;
   cdc_sync #(STAGE, DATA_WIDTH) u_cdc_sync (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (dat_i),
       .dat_o  (s_dat_d)
   );
 
   dffr #(DATA_WIDTH) u_dffr (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (s_dat_d),
       .dat_o  (s_dat_q)
   );
@@ -53,7 +53,7 @@ module edge_det_re #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] re_o
 );
@@ -61,14 +61,14 @@ module edge_det_re #(
   logic [DATA_WIDTH-1:0] s_dat_d, s_dat_q;
   cdc_sync #(STAGE, DATA_WIDTH) u_cdc_sync (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (dat_i),
       .dat_o  (s_dat_d)
   );
 
   dffr #(DATA_WIDTH) u_dffr (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (s_dat_d),
       .dat_o  (s_dat_q)
   );
@@ -80,7 +80,7 @@ module edge_det_sync #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] re_o,
     output logic [DATA_WIDTH-1:0] fe_o
@@ -90,7 +90,7 @@ module edge_det_sync #(
   assign s_dat_d = dat_i;
   dffr #(DATA_WIDTH) u_dffr (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (s_dat_d),
       .dat_o  (s_dat_q)
   );
@@ -103,7 +103,7 @@ module edge_det_sync_re #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] re_o
 );
@@ -112,7 +112,7 @@ module edge_det_sync_re #(
   assign s_dat_d = dat_i;
   dffr #(DATA_WIDTH) u_dffr (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (s_dat_d),
       .dat_o  (s_dat_q)
   );
@@ -125,7 +125,7 @@ module edge_det_fe #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] fe_o
 );
@@ -133,14 +133,14 @@ module edge_det_fe #(
   logic [DATA_WIDTH-1:0] s_dat_d, s_dat_q;
   cdc_sync #(STAGE, DATA_WIDTH) u_cdc_sync (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (dat_i),
       .dat_o  (s_dat_d)
   );
 
   dffr #(DATA_WIDTH) u_dffr (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (s_dat_d),
       .dat_o  (s_dat_q)
   );
@@ -152,7 +152,7 @@ module edge_det_sync_fe #(
     parameter int DATA_WIDTH = 1
 ) (
     input  logic                  clk_i,
-    input  logic                  rst,
+    input  logic                  rst_n_i,
     input  logic [DATA_WIDTH-1:0] dat_i,
     output logic [DATA_WIDTH-1:0] fe_o
 );
@@ -161,7 +161,7 @@ module edge_det_sync_fe #(
   assign s_dat_d = dat_i;
   dffr #(DATA_WIDTH) u_dffr (
       .clk_i  (clk_i),
-      .rst(rst),
+      .rst_n_i(rst_n_i),
       .dat_i  (s_dat_d),
       .dat_o  (s_dat_q)
   );

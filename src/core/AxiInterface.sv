@@ -10,6 +10,11 @@ module AxiInterface(
     AxiIO.master axi,
     NativeSnoopIO.slave dcache_snoop_io
 );
+
+    logic mux_rst, coherence_rst;
+    SyncRst rst_mux (clk, rst, mux_rst);
+    SyncRst rst_coherence (clk, rst, coherence_rst);
+
     typedef logic [`PADDR_SIZE-1: 0] addr_t;
     typedef logic [`CORE_WIDTH-1: 0] id_t;
     typedef logic user_t;
@@ -53,6 +58,7 @@ module AxiInterface(
     assign tlb_req.aw = 0;
     assign tlb_req.w = 0;
     assign tlb_req.aw_valid = 0;
+    assign tlb_req.w_valid = 0;
     assign tlb_req.b_ready = 0;
     `AXI_ASSIGN_FROM_R(tlb_io, tlb_resp.r)
     assign tlb_io.ar_ready = tlb_resp.ar_ready;
@@ -86,7 +92,7 @@ module AxiInterface(
         .NoSlvPorts(4)
     ) axi_mux_inst(
         .clk_i(clk),
-        .rst_ni(~rst),
+        .rst_ni(~mux_rst),
         .test_i(1'b0),
         .slv_reqs_i({dreq, du_req, tlb_req, ireq}),
         .slv_resps_o({dresp, du_resp, tlb_resp, iresp}),
@@ -109,7 +115,7 @@ module AxiInterface(
         .axi_resp_t(AxiMResp)
     ) dcache_coherence (
         .clk,
-        .rst,
+        .rst(coherence_rst),
         .wway_i(wway),
         .slv_req_i(req_o),
         .slv_resp_o(resp_i),
