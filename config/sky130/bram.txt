@@ -101,6 +101,24 @@ match RAM_156x32_1R1W
 	or_next_if_better
 endmatch
 
+bram RAM_184x64_1R1W_23
+	init 0
+	abits 6
+	dbits 184
+	groups 2
+	ports 1 1
+	wrmode 1 0
+	enable 8 1
+	transp 0 0
+	clocks 1 1
+	clkpol 1 1
+endbram
+match RAM_156x32_1R1W
+	min efficiency 80
+	or_next_if_better
+endmatch
+
+
 bram RAM_4x512_1R1W
     init 0
     abits 9

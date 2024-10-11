@@ -292,10 +292,11 @@ interface IntIssueExuIO;
     ExStatusBundle `N(`ALU_SIZE) status;
     IntIssueBundle `N(`ALU_SIZE) bundle;
     FetchStream `N(`ALU_SIZE) streams;
+    logic `ARRAY(`ALU_SIZE, `VADDR_SIZE) vaddrs;
     logic `N(`ALU_SIZE) directions; // fsq dir
 
-    modport exu (input en, rs1_data, rs2_data, status, bundle, streams, directions, output valid);
-    modport issue (output en, rs1_data, rs2_data, status, bundle, streams, directions, input valid);
+    modport exu (input en, rs1_data, rs2_data, status, bundle, streams, vaddrs, directions, output valid);
+    modport issue (output en, rs1_data, rs2_data, status, bundle, streams, vaddrs, directions, input valid);
 endinterface
 
 interface IssueAluIO;
@@ -306,11 +307,12 @@ interface IssueAluIO;
     ExStatusBundle status;
     IntIssueBundle bundle;
     FetchStream stream;
+    logic `N(`VADDR_SIZE) vaddr;
     logic direction;
     RasType ras_type;
     BranchType br_type;
 
-    modport alu (input en, rs1_data, rs2_data, status, bundle, stream, direction, ras_type, br_type, output valid);
+    modport alu (input en, rs1_data, rs2_data, status, bundle, stream, vaddr, direction, ras_type, br_type, output valid);
 endinterface
 
 interface IssueCSRIO;
@@ -458,13 +460,14 @@ interface ITLBCacheIO;
     logic `N(2) req;
     logic `ARRAY(2, `VADDR_SIZE) vaddr;
     logic flush;
+    logic ready;
 
     logic miss;
     logic `N(2) exception;
     logic `ARRAY(2, `PADDR_SIZE) paddr;
 
-    modport tlb(input req, vaddr, flush, output miss, exception, paddr);
-    modport cache(output req, vaddr, flush, input miss, exception, paddr);
+    modport tlb(input req, vaddr, flush, ready, output miss, exception, paddr);
+    modport cache(output req, vaddr, flush, ready, input miss, exception, paddr);
 endinterface
 
 interface DTLBLsuIO;

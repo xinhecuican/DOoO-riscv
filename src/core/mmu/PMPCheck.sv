@@ -3,6 +3,7 @@
 module PMPCheck (
     input logic `N(`PADDR_SIZE-`TLB_OFFSET) paddr,
     input logic `ARRAY(`PMPCFG_SIZE, `MXL) pmpcfg,
+    input logic `N(`PADDR_SIZE-`TLB_OFFSET) paddr_pma,
     input logic `ARRAY(`PMP_SIZE, `MXL) pmpaddr,
     input logic `ARRAY(`PMACFG_SIZE, `MXL) pmacfg,
     input logic `ARRAY(`PMA_SIZE, `MXL) pmaaddr,
@@ -73,7 +74,7 @@ endgenerate
         .WIDTH(`PADDR_SIZE-`TLB_OFFSET),
         .DEPTH(`PMA_SIZE)
     ) pma_tor_cmp(
-        .paddr(paddr_cmp),
+        .paddr(paddr_pma),
         .cmpaddr(pma_cmp),
         .tor(pma_tor)
     );

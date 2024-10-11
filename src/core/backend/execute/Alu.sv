@@ -18,6 +18,7 @@ module ALU(
         .rs2_data(io.rs2_data),
         .op(io.bundle.intop),
         .stream(io.stream),
+        .vaddr(io.vaddr),
         .offset(io.bundle.fsqInfo.offset),
         .result(result)
     );
@@ -29,6 +30,7 @@ module ALU(
         .rs2_data(io.rs2_data),
         .op(io.bundle.branchop),
         .stream(io.stream),
+        .vaddr(io.vaddr),
         .offset(io.bundle.fsqInfo.offset),
         .br_type(io.br_type),
         .ras_type(io.ras_type),
@@ -53,6 +55,7 @@ module BranchModel(
     input logic `N(`XLEN) rs2_data,
     input logic `N(`BRANCHOP_WIDTH) op,
     input FetchStream stream,
+    input logic `N(`VADDR_SIZE) vaddr,
     input logic `N(`PREDICTION_WIDTH) offset,
     input BranchType br_type,
     input RasType ras_type,
@@ -96,12 +99,12 @@ module BranchModel(
     logic `N(`VADDR_SIZE) jalr_target, br_target;
     assign s_imm = {{`XLEN-12{imm[11]}}, imm[11: 1], 1'b0};
     assign jalr_target = rs1_data + s_imm;
-    assign br_target = stream.start_addr + {offset, 2'b00} + s_imm;
+    assign br_target = vaddr + s_imm;
     assign branchRes.target = op == `BRANCH_JALR ? jalr_target : 
                               dir ? br_target : result;
     logic `N(`PREDICTION_WIDTH+1) addrOffset;
     assign addrOffset = offset + 1;
-    assign result = {stream.start_addr[`VADDR_SIZE-1: 2] + addrOffset, 2'b00};
+    assign result = vaddr + 4;
 
     // predict error
     // cal stream taken offset
@@ -124,6 +127,7 @@ module ALUModel(
     input logic `N(`XLEN) rs2_data,
     input logic `N(`INTOP_WIDTH) op,
     input FetchStream stream,
+    input logic `N(`VADDR_SIZE) vaddr,
     input logic `N(`PREDICTION_WIDTH) offset,
     output logic `N(`XLEN) result
 );
@@ -152,8 +156,6 @@ module ALUModel(
         endcase
     end
 
-    logic `N(`PREDICTION_WIDTH+2) br_offset;
-    assign br_offset = {offset, 2'b00};
 
     logic padding;
     logic `N(`XLEN) sr_data;
@@ -201,7 +203,7 @@ module ALUModel(
             result = sr_data;
         end
         `INT_AUIPC: begin
-            result = stream.start_addr + br_offset + lui_imm;
+            result = vaddr + lui_imm;
         end
         default: result = 0;
         endcase

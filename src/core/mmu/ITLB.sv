@@ -133,7 +133,7 @@ endgenerate
             if(req_buf.req)begin
                 req_buf.req <= 1'b0;
             end
-            if(miss_end)begin
+            if(miss_end & itlb_cache_io.ready)begin
                 miss_end <= 1'b0;
             end
             req_buf.req_s2 <= req_buf.req;

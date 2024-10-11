@@ -1,546 +1,238 @@
-`include "../../../defines/devices.svh"
+// Copyright 2017 ETH Zurich and University of Bologna.
+// Copyright and related rights are licensed under the Solderpad Hardware
+// License, Version 0.51 (the “License”); you may not use this file except in
+// compliance with the License.  You may obtain a copy of the License at
+// http://solderpad.org/licenses/SHL-0.51. Unless required by applicable law
+// or agreed to in writing, software, hardware and materials distributed under
+// this License is distributed on an “AS IS” BASIS, WITHOUT WARRANTIES OR
+// CONDITIONS OF ANY KIND, either express or implied. See the License for the
+// specific language governing permissions and limitations under the License.
+//
+// -- Adaptable modifications are redistributed under compatible License --
+//
+// Copyright (c) 2023 Beijing Institute of Open Source Chip
+// uart is licensed under Mulan PSL v2.
+// You can use this software according to the terms and conditions of the Mulan PSL v2.
+// You may obtain a copy of Mulan PSL v2 at:
+//             http://license.coscl.org.cn/MulanPSL2
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+// See the Mulan PSL v2 for more details.
 `include "../../../defines/defines.svh"
-
-module uart (
-    input                 clk,
-    input                 rstn,
-    ApbIO.slave           s_apb_intf,
-
-    output logic          irq_out,
-    input                 uart_rx,
-    output logic          uart_tx
+module apb4_uart #(
+    parameter int FIFO_DEPTH     = 32,
+    parameter int LOG_FIFO_DEPTH = $clog2(FIFO_DEPTH)
+) (
+    input logic clk,
+    input logic rst,
+    ApbIO.slave apb4,
+    input logic rxd,
+    output logic txd,
+    output logic irq_out
 );
 
-logic [                31:0] prdata_t;
-logic                        txen;
-logic                        nstop;
-logic [                 2:0] txcnt;
-logic                        rxen;
-logic [                 2:0] rxcnt;
-logic [                15:0] div;
-logic                        apb_wr;
-logic                        apb_rd;
+  logic [3:0] s_apb4_addr;
+  logic s_apb4_wr_hdshk, s_apb4_rd_hdshk;
+  logic [`UART_LCR_WIDTH-1:0] s_uart_lcr_d, s_uart_lcr_q;
+  logic s_uart_lcr_en;
+  logic [`UART_DIV_WIDTH-1:0] s_uart_div_d, s_uart_div_q;
+  logic s_uart_div_en;
+  logic [`UART_FCR_WIDTH-1:0] s_uart_fcr_d, s_uart_fcr_q;
+  logic s_uart_fcr_en;
+  logic [`UART_LSR_WIDTH-1:0] s_uart_lsr_d, s_uart_lsr_q;
+  logic s_bit_stb, s_bit_pen, s_bit_rf_clr, s_bit_tf_clr;
+  logic s_bit_pe, s_bit_thre;
+  logic [1:0] s_bit_wls, s_bit_ps, s_bit_rx_trg_levl;
+  logic [2:0] s_bit_ie;
+  logic s_clr_int, s_parity_err;
+  logic s_tx_push_valid, s_tx_push_ready, s_tx_empty, s_tx_full;
+  logic s_tx_pop_valid, s_tx_pop_ready;
+  logic s_rx_push_valid, s_rx_push_ready, s_rx_empty, s_rx_full;
+  logic s_rx_pop_valid, s_rx_pop_ready;
+  logic [2:0] s_lsr_ip;
+  logic [7:0] s_tx_push_data, s_tx_pop_data, s_rx_push_data;
+  logic [8:0] s_rx_pop_data;
+  logic [LOG_FIFO_DEPTH:0] s_tx_elem, s_rx_elem;
 
-logic                        tx_fifo_wr;
-logic [`UART_DATA_WIDTH-1:0] tx_fifo_wdata;
-logic                        tx_fifo_rd;
-logic [`UART_DATA_WIDTH-1:0] tx_fifo_rdata;
-logic                        tx_fifo_full;
-logic                        tx_fifo_empty;
+  assign s_apb4_addr       = apb4.paddr[5:2];
+  assign s_apb4_wr_hdshk   = apb4.psel && apb4.penable && apb4.pwrite;
+  assign s_apb4_rd_hdshk   = apb4.psel && apb4.penable && (~apb4.pwrite);
+  assign apb4.pready       = 1'b1;
+  assign apb4.pslverr      = 1'b0;
 
-logic                        rx_fifo_wr;
-logic [`UART_DATA_WIDTH-1:0] rx_fifo_wdata;
-logic                        rx_fifo_rd;
-logic [`UART_DATA_WIDTH-1:0] rx_fifo_rdata;
-logic                        rx_fifo_full;
-logic                        rx_fifo_empty;
+  assign s_bit_ie          = s_uart_lcr_q[2:0];
+  assign s_bit_wls         = s_uart_lcr_q[4:3];
+  assign s_bit_stb         = s_uart_lcr_q[5];
+  assign s_bit_pen         = s_uart_lcr_q[6];
+  assign s_bit_ps          = s_uart_lcr_q[8:7];
 
-logic                        txwm_ie;
-logic                        rxwm_ie;
-logic                        perror_ie;
-logic                        txwm_ip;
-logic                        rxwm_ip;
-logic                        perror_ip;
-logic                        txwm_ip_tmp;
-logic                        rxwm_ip_tmp;
-logic                        perror_ip_tmp;
+  assign s_bit_rf_clr      = s_uart_fcr_q[0];
+  assign s_bit_tf_clr      = s_uart_fcr_q[1];
+  assign s_bit_rx_trg_levl = s_uart_fcr_q[3:2];
 
-logic [                 2:0] lcr;
+  assign s_bit_pe          = s_uart_lsr_q[4];
+  assign s_bit_thre        = s_uart_lsr_q[5];
 
-assign irq_out    = (txwm_ip   && txwm_ie  ) ||
-                    (rxwm_ip   && rxwm_ie  ) ||
-                    (perror_ip && perror_ie);
+  assign s_uart_lcr_en     = s_apb4_wr_hdshk && s_apb4_addr == `UART_LCR;
+  assign s_uart_lcr_d      = apb4.pwdata[`UART_LCR_WIDTH-1:0];
+  dffer #(`UART_LCR_WIDTH) u_uart_lcr_dffer (
+      clk,
+      ~rst,
+      s_uart_lcr_en,
+      s_uart_lcr_d,
+      s_uart_lcr_q
+  );
 
-assign apb_wr     = ~s_apb_intf.penable && s_apb_intf.psel &&  s_apb_intf.pwrite;
-assign apb_rd     = ~s_apb_intf.penable && s_apb_intf.psel && ~s_apb_intf.pwrite;
+  assign s_uart_div_en = s_apb4_wr_hdshk && s_apb4_addr == `UART_DIV;
+  assign s_uart_div_d  = apb4.pwdata[`UART_DIV_WIDTH-1:0];
+  dfferc #(`UART_DIV_WIDTH, `UART_DIV_MIN_VAL) u_uart_div_dfferc (
+      clk,
+      ~rst,
+      s_uart_div_en,
+      s_uart_div_d,
+      s_uart_div_q
+  );
 
-`ifndef FAKE_UART
-assign tx_fifo_wr    = apb_wr && s_apb_intf.paddr[11:0] == `UART_TXFIFO && ~tx_fifo_full && ~s_apb_intf.pwdata[31];
-assign tx_fifo_wdata = s_apb_intf.pwdata[`UART_DATA_WIDTH-1:0];
-`else
-assign tx_fifo_wr    = 1'b0;
-assign tx_fifo_wdata = s_apb_intf.pwdata[`UART_DATA_WIDTH-1:0];
-always @(posedge clk or negedge rstn) begin: fake_uart_tx
-    if (~rstn) begin
+  always_comb begin
+    s_tx_push_valid = 1'b0;
+    s_tx_push_data  = '0;
+    if (s_apb4_wr_hdshk && s_apb4_addr == `UART_TRX) begin
+      s_tx_push_valid = 1'b1;
+      s_tx_push_data  = apb4.pwdata[`UART_TRX_WIDTH-1:0];
     end
-    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_TXFIFO && ~s_apb_intf.pwdata[31]) begin
-        $write("%c", tx_fifo_wdata[7:0]);
-    end
-end
-`endif
+  end
 
-uart_fifo u_tx_fifo(
-    .clk          ( clk              ),
-    .rstn         ( rstn             ),
-    .wr           ( tx_fifo_wr       ),
-    .wdata        ( tx_fifo_wdata    ),
-    .rd           ( tx_fifo_rd       ),
-    .rdata        ( tx_fifo_rdata    ),
-    .full         ( tx_fifo_full     ),
-    .empty        ( tx_fifo_empty    ),
-    .full_th      ( 3'b0             ),
-    .empty_th     ( txcnt            ),
-    .almost_empty ( txwm_ip_tmp      ),
-    .almost_full  ()
-);
+  assign s_uart_fcr_en = s_apb4_wr_hdshk && s_apb4_addr == `UART_FCR;
+  assign s_uart_fcr_d  = apb4.pwdata[`UART_FCR_WIDTH-1:0];
+  dffer #(`UART_FCR_WIDTH) u_uart_fcr_dffer (
+      clk,
+      ~rst,
+      s_uart_fcr_en,
+      s_uart_fcr_d,
+      s_uart_fcr_q
+  );
 
-tx_ctrl u_tx_ctrl(
-    .clk      ( clk              ),
-    .rstn     ( rstn             ),
-    .enable   ( txen             ),
-    .lcr      ( lcr              ),
-    .nstop    ( nstop            ),
-    .div      ( div              ),
-    .data_vld ( ~tx_fifo_empty   ),
-    .data_in  ( tx_fifo_rdata    ),
-    .pop      ( tx_fifo_rd       ),
-    .uart_tx  ( uart_tx          )
-);
+  always_comb begin
+    s_uart_lsr_d[2:0] = s_lsr_ip;
+    s_uart_lsr_d[3]   = s_rx_pop_valid;
+    s_uart_lsr_d[4]   = s_rx_pop_data[8];
+    s_uart_lsr_d[5]   = ~(|s_tx_elem);
+    s_uart_lsr_d[6]   = s_tx_pop_ready & ~(|s_tx_elem);
+    s_uart_lsr_d[7]   = s_rx_empty;
+    s_uart_lsr_d[8]   = s_tx_full;
+  end
+  dffrc #(`UART_LSR_WIDTH, `UART_LSR_RESET_VAL) u_uart_lsr_dffrc (
+      clk,
+      ~rst,
+      s_uart_lsr_d,
+      s_uart_lsr_q
+  );
 
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        txen  <= 1'b0;
-        nstop <= 1'b0;
-        txcnt <= 3'b0;
-    end
-    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_TXCTRL) begin
-        txen  <= s_apb_intf.pwdata[0];
-        nstop <= s_apb_intf.pwdata[1];
-        txcnt <= s_apb_intf.pwdata[18:16];
-    end
-end
-
-assign rx_fifo_rd = apb_rd && s_apb_intf.paddr[11:0] == `UART_RXFIFO;
-
-uart_fifo u_rx_fifo(
-    .clk          ( clk              ),
-    .rstn         ( rstn             ),
-    .wr           ( rx_fifo_wr       ),
-    .wdata        ( rx_fifo_wdata    ),
-    .rd           ( rx_fifo_rd       ),
-    .rdata        ( rx_fifo_rdata    ),
-    .full         ( rx_fifo_full     ),
-    .empty        ( rx_fifo_empty    ),
-    .full_th      ( rxcnt            ),
-    .almost_full  ( rxwm_ip_tmp      ),
-    .empty_th     ( 3'b0             ),
-    .almost_empty ()
-);
-
-rx_ctrl u_rx_ctrl (
-    .clk      ( clk              ),
-    .rstn     ( rstn             ),
-    .enable   ( rxen             ),
-    .lcr      ( lcr              ),
-    .div      ( div              ),
-    .push     ( rx_fifo_wr       ),
-    .data_out ( rx_fifo_wdata    ),
-    .perror   ( perror_ip_tmp    ),
-    .uart_rx  ( uart_rx          )
-);
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        rxen  <= 1'b0;
-        rxcnt <= 3'b0;
-    end
-    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_RXCTRL) begin
-        rxen  <= s_apb_intf.pwdata[0];
-        rxcnt <= s_apb_intf.pwdata[18:16];
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        txwm_ie   <= 1'b0;
-        rxwm_ie   <= 1'b0;
-        perror_ie <= 1'b0;
-    end
-    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_IE) begin
-        txwm_ie   <= s_apb_intf.pwdata[0];
-        rxwm_ie   <= s_apb_intf.pwdata[1];
-        perror_ie <= s_apb_intf.pwdata[2];
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        txwm_ip   <= 1'b0;
-        rxwm_ip   <= 1'b0;
-        perror_ip <= 1'b0;
-    end
-    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_IC) begin
-        txwm_ip   <= txwm_ip   && ~s_apb_intf.pwdata[0];
-        rxwm_ip   <= rxwm_ip   && ~s_apb_intf.pwdata[1];
-        perror_ip <= perror_ip && ~s_apb_intf.pwdata[2];
-    end
-    else begin
-        txwm_ip   <= txwm_ip_tmp;
-        rxwm_ip   <= rxwm_ip_tmp;
-        perror_ip <= perror_ip_tmp;
-        // txwm_ip   <= txwm_ip_tmp   || txwm_ip;
-        // rxwm_ip   <= rxwm_ip_tmp   || rxwm_ip;
-        // perror_ip <= perror_ip_tmp || perror_ip;
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        div <= 1000000000/`CLK_PERIOD/115200; // baurd rate = 115200
-    end
-    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_DIV) begin
-        div <= s_apb_intf.pwdata[15:0];
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        lcr <= 3'b0;
-    end
-    else if (apb_wr && s_apb_intf.paddr[11:0] == `UART_LCR) begin
-        lcr <= s_apb_intf.pwdata[5:3];
-    end
-end
-
-always_comb begin
-    prdata_t = 32'b0;
-    case (s_apb_intf.paddr[11:0])
-        `UART_TXFIFO: prdata_t = {tx_fifo_full,  31'b0};
-        `UART_RXFIFO: prdata_t = {rx_fifo_empty, 23'b0, rx_fifo_rdata & {8{~rx_fifo_empty}}};
-        `UART_TXCTRL: prdata_t = {13'b0, txcnt, 14'b0, nstop, txen};
-        `UART_RXCTRL: prdata_t = {13'b0, rxcnt, 14'b0,  1'b0, rxen};
-        `UART_IE    : prdata_t = {29'b0, perror_ie, rxwm_ie, txwm_ie};
-        `UART_IP    : prdata_t = {29'b0, perror_ip, rxwm_ip, txwm_ip};
-        `UART_IC    : prdata_t = {29'b0, perror_ip, rxwm_ip, txwm_ip};
-        `UART_DIV   : prdata_t = {16'b0, div};
-        `UART_LCR   : prdata_t = {26'b0, lcr, 3'b0};
-    endcase
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        s_apb_intf.prdata <= 32'b0;
-    end
-    else begin
-        s_apb_intf.prdata <= prdata_t;
-    end
-end
-
-assign s_apb_intf.pslverr = 1'b0;
-assign s_apb_intf.pready  = 1'b1;
-
-endmodule
-
-module uart_fifo (
-    input                               clk,
-    input                               rstn,
-    input                               wr,
-    input        [`UART_DATA_WIDTH-1:0] wdata,
-    input                               rd,
-    output logic [`UART_DATA_WIDTH-1:0] rdata,
-    output logic                        full,
-    output logic                        empty,
-    input        [                 2:0] full_th,
-    output logic                        almost_full,
-    input        [                 2:0] empty_th,
-    output logic                        almost_empty
-);
-
-localparam PTR_WIDTH = $clog2(`UART_FIFO_DEPTH);
-
-logic [`UART_DATA_WIDTH-1:0] fifo [`UART_FIFO_DEPTH];
-logic [       PTR_WIDTH-1:0] wptr;
-logic [       PTR_WIDTH-1:0] rptr;
-logic [       PTR_WIDTH  :0] ndata;
-
-assign rdata        = fifo[rptr];
-assign full         = ndata[PTR_WIDTH];
-assign almost_full  = ndata >  {1'b0, full_th, {PTR_WIDTH-3{1'b0}}};
-assign empty        = ~|ndata;
-assign almost_empty = ndata <= {1'b0, empty_th, {PTR_WIDTH-3{1'b0}}};
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        wptr  <= {PTR_WIDTH  {1'b0}};
-        rptr  <= {PTR_WIDTH  {1'b0}};
-        ndata <= {PTR_WIDTH+1{1'b0}};
-    end
-    else begin
-        wptr  <= wptr  + {{PTR_WIDTH-1{1'b0}}, (wr && ~full)};
-        rptr  <= rptr  + {{PTR_WIDTH-1{1'b0}}, (rd && ~empty)};
-        ndata <= ndata + {{PTR_WIDTH  {1'b0}}, (wr && ~full)} - {{PTR_WIDTH  {1'b0}}, (rd && ~empty)};
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    integer i;
-    if (~rstn) begin
-        for (i = 0; i < `UART_FIFO_DEPTH; i = i + 1) begin
-            fifo[i] <= `UART_DATA_WIDTH'b0;
+  always_comb begin
+    apb4.prdata    = '0;
+    s_rx_pop_ready = 1'b0;
+    s_clr_int      = 1'b0;
+    if (s_apb4_rd_hdshk) begin
+      unique case (s_apb4_addr)
+        `UART_LCR: apb4.prdata[`UART_LCR_WIDTH-1:0] = s_uart_lcr_q;
+        `UART_DIV: apb4.prdata[`UART_DIV_WIDTH-1:0] = s_uart_div_q;
+        `UART_TRX: begin
+          s_rx_pop_ready                   = 1'b1;
+          apb4.prdata[`UART_TRX_WIDTH-1:0] = s_rx_pop_data[7:0];
         end
+        `UART_LSR: begin
+          s_clr_int                        = 1'b1;
+          apb4.prdata[`UART_LSR_WIDTH-1:0] = s_uart_lsr_q;
+        end
+        default:   apb4.prdata = '0;
+      endcase
     end
-    else begin
-        if (wr && ~ full) begin
-            fifo[wptr] <= wdata;
-        end
-    end
-end
+  end
 
-endmodule
+  assign s_tx_push_ready = ~s_tx_full;
+  assign s_tx_pop_valid  = ~s_tx_empty;
+  fifo #(
+      .DATA_WIDTH  (8),
+      .BUFFER_DEPTH(FIFO_DEPTH)
+  ) u_tx_fifo (
+      .clk_i  (clk),
+      .rst_n_i(~rst),
+      .flush_i(s_bit_tf_clr),
+      .cnt_o  (s_tx_elem),
+      .push_i (s_tx_push_valid),
+      .full_o (s_tx_full),
+      .dat_i  (s_tx_push_data),
+      .pop_i  (s_tx_pop_ready),
+      .empty_o(s_tx_empty),
+      .dat_o  (s_tx_pop_data)
+  );
 
-module tx_ctrl (
-    input               clk,
-    input               rstn,
-    input               enable,
-    input        [ 2:0] lcr,
-    input               nstop,
-    input        [15:0] div,
-    input               data_vld,
-    input        [ 7:0] data_in,
-    output logic        pop,
-    output logic        uart_tx
-);
+  uart_tx u_uart_tx (
+      .clk_i           (clk),
+      .rst_n_i         (~rst),
+      .tx_o            (txd),
+      .busy_o          (),
+      .cfg_en_i        (1'b1),
+      .cfg_div_i       (s_uart_div_q[`UART_DIV_WIDTH-1:0]),
+      .cfg_parity_en_i (s_bit_pen),
+      .cfg_parity_sel_i(s_bit_ps),
+      .cfg_bits_i      (s_bit_wls),
+      .cfg_stop_bits_i (s_bit_stb),
+      .tx_data_i       (s_tx_pop_data),
+      .tx_valid_i      (s_tx_pop_valid),
+      .tx_ready_o      (s_tx_pop_ready)
+  );
 
-localparam STATE_IDLE   = 3'b000;
-localparam STATE_START  = 3'b001;
-localparam STATE_DATA   = 3'b010;
-localparam STATE_PARITY = 3'b011;
-localparam STATE_STOP   = 3'b100;
+  assign s_rx_push_ready = ~s_rx_full;
+  assign s_rx_pop_valid  = ~s_rx_empty;
+  fifo #(
+      .DATA_WIDTH  (9),
+      .BUFFER_DEPTH(FIFO_DEPTH)
+  ) u_rx_fifo (
+      .clk_i  (clk),
+      .rst_n_i(~rst),
+      .flush_i(s_bit_rf_clr),
+      .cnt_o  (s_rx_elem),
+      .push_i (s_rx_push_valid),
+      .full_o (s_rx_full),
+      .dat_i  ({s_parity_err, s_rx_push_data}),
+      .pop_i  (s_rx_pop_ready),
+      .empty_o(s_rx_empty),
+      .dat_o  (s_rx_pop_data)
+  );
 
-logic [ 2:0] cur_state;
-logic [ 2:0] nxt_state;
+  uart_rx u_uart_rx (
+      .clk_i           (clk),
+      .rst_n_i         (~rst),
+      .rx_i            (rxd),
+      .busy_o          (),
+      .cfg_en_i        (1'b1),
+      .cfg_div_i       (s_uart_div_q[`UART_DIV_WIDTH-1:0]),
+      .cfg_parity_en_i (s_bit_pen),
+      .cfg_parity_sel_i(s_bit_ps),
+      .cfg_bits_i      (s_bit_wls),
+      .err_o           (s_parity_err),
+      .err_clr_i       (1'b1),
+      .rx_data_o       (s_rx_push_data),
+      .rx_valid_o      (s_rx_push_valid),
+      .rx_ready_i      (s_rx_push_ready)
+  );
 
-logic [15:0] cnt;
-logic [15:0] rept;
-logic [15:0] nxt_rept;
-logic        uart_tx_tmp;
-logic [ 7:0] data_sft;
-logic        data_par;
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) cur_state <= STATE_IDLE;
-    else       cur_state <= nxt_state;
-end
-
-always_comb begin
-    nxt_state = cur_state;
-    case (cur_state)
-        STATE_IDLE  : nxt_state = enable && data_vld ? STATE_START : STATE_IDLE;
-        STATE_START : nxt_state = ~|cnt ? STATE_DATA : STATE_START;
-        STATE_DATA  : nxt_state = ~|cnt && ~|rept ? lcr[0] ? STATE_PARITY : STATE_STOP : STATE_DATA;
-        STATE_PARITY: nxt_state = ~|cnt ? STATE_STOP : STATE_PARITY;
-        STATE_STOP  : nxt_state = ~|cnt && ~|rept ? STATE_IDLE : STATE_STOP;
-    endcase
-end
-
-always_comb begin
-    nxt_rept    = 16'b0;
-    uart_tx_tmp = 1'b1;
-    pop         = 1'b0;
-    case (cur_state)
-        STATE_IDLE  : begin
-            nxt_rept    = 16'b0;
-            uart_tx_tmp = 1'b1;
-            pop         = enable && data_vld;
-        end
-        STATE_START : begin
-            nxt_rept    = 16'h7;
-            uart_tx_tmp = 1'b0;
-        end
-        STATE_DATA  : begin
-            nxt_rept    = nxt_state == STATE_PARITY ? 16'b0 : {15'b0, nstop};
-            uart_tx_tmp = data_sft[0];
-        end
-        STATE_PARITY: begin
-            nxt_rept    = {15'b0, nstop};
-            uart_tx_tmp = data_par;
-        end
-        STATE_STOP  : begin
-            uart_tx_tmp = 1'b1;
-        end
-    endcase
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) uart_tx <= 1'b1;
-    else       uart_tx <= uart_tx_tmp;
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        data_sft <= 8'b0;
-        data_par <= 1'b0;
-    end
-    else begin
-        if (pop) begin
-            data_sft <=  data_in;
-            data_par <= ^data_in;
-        end
-        else if (cur_state == STATE_DATA && ~|cnt) begin
-            data_sft <= {1'b0, data_sft[7:1]};
-        end
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        cnt <= 16'b0;
-    end
-    else begin
-        if (cur_state == STATE_IDLE) begin
-            cnt <= div;
-        end
-        else begin
-            cnt <= |cnt ? cnt - 16'b1 : div;
-        end
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        rept <= 16'b0;
-    end
-    else begin
-        if (~|cnt) begin
-            rept <= |rept ? rept - 16'b1 : nxt_rept;
-        end
-    end
-end
-
-endmodule
-
-module rx_ctrl (
-    input               clk,
-    input               rstn,
-    input               enable,
-    input        [ 2:0] lcr,
-    input        [15:0] div,
-    output logic        push,
-    output logic [ 7:0] data_out,
-    output logic        perror,
-    input               uart_rx
-);
-
-localparam STATE_IDLE   = 3'b000;
-localparam STATE_START  = 3'b001;
-localparam STATE_DATA   = 3'b010;
-localparam STATE_PARITY = 3'b011;
-localparam STATE_STOP   = 3'b100;
-localparam STATE_ERROR  = 3'b101;
-
-logic [             2:0] cur_state;
-logic [             2:0] nxt_state;
-
-logic [`UART_N_SYNC-1:0] uart_tx_dly;
-logic                    uart_tx_sync;
-
-logic [            15:0] cnt;
-logic [            15:0] rept;
-logic [            15:0] nxt_rept;
-logic                    data_par;
-logic                    perror_tmp;
-logic                    err_detect;
-logic                    sample_data;
-logic                    sample_parity;
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) uart_tx_dly <= `UART_N_SYNC'b0;
-    else       uart_tx_dly <= {uart_rx, uart_tx_dly[`UART_N_SYNC-1:1]};
-end
-
-assign uart_tx_sync = uart_tx_dly[0];
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) cur_state <= STATE_IDLE;
-    else       cur_state <= nxt_state;
-end
-
-always_comb begin
-    nxt_state = cur_state;
-    if (err_detect) begin
-        nxt_state = STATE_ERROR;
-    end
-    else begin
-        case (cur_state)
-            STATE_IDLE  : nxt_state = enable && ~uart_tx_sync ? STATE_START : STATE_IDLE;
-            STATE_START : nxt_state = ~|cnt ? STATE_DATA : STATE_START;
-            STATE_DATA  : nxt_state = ~|cnt && ~|rept ? lcr[0] ? STATE_PARITY : STATE_STOP : STATE_DATA;
-            STATE_PARITY: nxt_state = ~|cnt ? STATE_STOP : STATE_PARITY;
-            STATE_STOP  : nxt_state = ~|cnt && ~|rept ? STATE_IDLE : STATE_STOP;
-            STATE_ERROR : nxt_state = STATE_IDLE;
-        endcase
-    end
-end
-
-always_comb begin
-    push          = 1'b0;
-    perror        = 1'b0;
-    nxt_rept      = 16'b0;
-    err_detect    = 1'b0;
-    sample_data   = 1'b0;
-    sample_parity = 1'b0;
-    case (cur_state)
-        STATE_IDLE  : begin
-        end
-        STATE_START : begin
-            err_detect    = (cnt == {1'b0, div[15:1]}) && uart_tx_sync;
-            nxt_rept      = 16'h7;
-        end
-        STATE_DATA  : begin
-            sample_data   = cnt == {1'b0, div[15:1]};
-        end
-        STATE_PARITY: begin
-            sample_parity = cnt == {1'b0, div[15:1]};
-        end
-        STATE_STOP  : begin
-            err_detect    = (cnt == {1'b0, div[15:1]}) && ~uart_tx_sync;
-            push          = (cnt == {1'b0, div[15:1]}) &&  uart_tx_sync && ~perror_tmp;
-            perror        = (cnt == {1'b0, div[15:1]}) &&  perror_tmp;
-        end
-    endcase
-end
-
-assign perror_tmp = lcr[0] && (^data_out ^ data_par);
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        data_out <= 8'b0;
-        data_par <= 1'b0;
-    end
-    else begin
-        if (sample_data) begin
-            data_out <= {uart_tx_sync, data_out[7:1]};
-        end
-        if (sample_parity) begin
-            data_par <= uart_tx_sync;
-        end
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        cnt <= 16'b0;
-    end
-    else begin
-        if (cur_state == STATE_IDLE) begin
-            cnt <= div;
-        end
-        else begin
-            cnt <= |cnt ? cnt - 16'b1 : div;
-        end
-    end
-end
-
-always_ff @(posedge clk or negedge rstn) begin
-    if (~rstn) begin
-        rept <= 16'b0;
-    end
-    else begin
-        if (~|cnt) begin
-            rept <= |rept ? rept - 16'b1 : nxt_rept;
-        end
-    end
-end
-
-
+  uart_irq #(
+      .FIFO_DEPTH(FIFO_DEPTH)
+  ) u_uart_irq (
+      .clk_i      (clk),
+      .rst_n_i    (~rst),
+      .clr_int_i  (s_clr_int),
+      .irq_en_i   (s_bit_ie),
+      .thre_i     (s_bit_thre),
+      .cti_i      (1'b0),
+      .pe_i       (s_bit_pe),
+      .rx_elem_i  (s_rx_elem),
+      .tx_elem_i  (s_tx_elem),
+      .trg_level_i(s_bit_rx_trg_levl),
+      .ip_o       (s_lsr_ip),
+      .irq_o      (irq_out)
+  );
 endmodule

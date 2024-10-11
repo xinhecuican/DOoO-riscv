@@ -196,6 +196,51 @@ generate
 endgenerate
 endmodule
 
+module FairSelect #(
+	parameter RADIX = 2,
+	parameter DATA_WIDTH = 4
+)(
+	input logic [RADIX-1: 0] en,
+	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
+	output logic en_o,
+	output logic [DATA_WIDTH-1: 0] data_o
+);
+	if(RADIX == 1)begin
+		assign en_o = en;
+		assign data_o = data_i;
+	end
+	else if(RADIX == 2)begin
+		assign en_o = en[0] | en[1];
+		assign data_o = {DATA_WIDTH{en[0]}} & data_i[0] |
+						{DATA_WIDTH{en[1]}} & data_i[1];
+	end
+	else begin
+		logic [DATA_WIDTH-1: 0] data1, data2;
+		logic en1, en2;
+		FairSelect #(
+			.RADIX(RADIX/2),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select1 (
+			.en(en[RADIX/2-1: 0]),
+			.data_i(data_i[RADIX/2-1: 0]),
+			.en_o(en1),
+			.data_o(data1)
+		);
+		FairSelect #(
+			.RADIX(RADIX-RADIX/2),
+			.DATA_WIDTH(DATA_WIDTH)
+		) select2 (
+			.en(en[RADIX-1: RADIX/2]),
+			.data_i(data_i[RADIX-1: RADIX/2]),
+			.en_o(en2),
+			.data_o(data2)
+		);
+		assign en_o = en1 | en2;
+		assign data_o = {DATA_WIDTH{en1}} & data1 |
+						{DATA_WIDTH{en2}} & data2;
+	end
+endmodule
+
 module OldestSelect #(
 	parameter RADIX = 2,
 	parameter WIDTH = 4,

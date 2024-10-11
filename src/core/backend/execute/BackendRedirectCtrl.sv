@@ -34,7 +34,7 @@ module BackendRedirectCtrl (
         end
     end
     assign io.out = rob_redirect_io.fence ? 0 : 
-                    rob_redirect_io.csrRedirect.en ? rob_redirect_io.csrRedirect : preRedirect;;
+                    rob_redirect_io.csrRedirect.en ? rob_redirect_io.csrRedirect : preRedirect;
     assign io.branchOut.en = branchValid_n & ~rob_redirect_io.csrRedirect.en & ~rob_redirect_io.fence;
     assign io.branchOut.taken = preBranch.taken;
     assign io.branchOut.target = preBranch.target;

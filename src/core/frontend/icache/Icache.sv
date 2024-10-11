@@ -108,6 +108,7 @@ module ICache(
     assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
     assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};
     assign itlb_cache_io.flush = fsq_cache_io.flush;
+    assign itlb_cache_io.ready = ~fsq_cache_io.stall;
     assign ptag1 = itlb_cache_io.paddr[0][`PADDR_SIZE-1: `TLB_OFFSET];
     assign ptag2 = itlb_cache_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET];
 

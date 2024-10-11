@@ -20,10 +20,35 @@ module DTLB(
     logic `N(`STORE_PIPELINE) swb_pipeline;
     Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], swb_pipeline);
 
+    logic `N(`DTLB_SIZE) replace_en, replace_hit;
+    logic `N(`VADDR_SIZE-`TLB_OFFSET) replace_vpn `N(`DTLB_SIZE);
+    logic `N($clog2(`DTLB_SIZE)) tlb_widx, replace_widx;
     ReplaceD1IO #(.WAY_NUM(`DTLB_SIZE)) replace_io();
     RandomReplaceD1 #(1, `DTLB_SIZE) replace (.*);
     assign replace_io.hit_en = 0;
     assign replace_io.hit_way = 0;
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            replace_vpn <= '{default: 0};
+            replace_en <= 0;
+        end
+        else if(tlb_lsu_io.flush)begin
+            replace_en <= 0;
+        end
+        else begin
+            if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception)begin
+                replace_vpn[tlb_widx] <= tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+                replace_en[tlb_widx] <= 1'b1;
+            end
+        end
+    end
+generate
+    for(genvar i=0; i<`DTLB_SIZE; i++)begin
+        assign replace_hit[i] = replace_en[i] & (replace_vpn[i] == tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET]);
+    end
+endgenerate
+    Encoder #(`DTLB_SIZE) encoder_replace_idx (replace_hit, replace_widx);
+    assign tlb_widx = |replace_hit ? replace_widx : replace_io.miss_way;
 
     always_ff @(posedge clk)begin
         flush0 <= tlb_lsu_io.flush;
@@ -43,7 +68,7 @@ generate
         assign ltlb_io[i].flush = tlb_lsu_io.flush;
         
         assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
-        assign ltlb_io[i].widx = replace_io.miss_way;
+        assign ltlb_io[i].widx = tlb_widx;
         assign ltlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign ltlb_io[i].wentry = tlb_l2_io0.entry;
         assign ltlb_io[i].wpn = tlb_l2_io0.wpn;
@@ -65,7 +90,7 @@ generate
         assign stlb_io[i].flush = tlb_lsu_io.flush;
 
         assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
-        assign stlb_io[i].widx = replace_io.miss_way;
+        assign stlb_io[i].widx = tlb_widx;
         assign stlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign stlb_io[i].wentry = tlb_l2_io0.entry;
         assign stlb_io[i].wpn = tlb_l2_io0.wpn;
