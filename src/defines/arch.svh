@@ -3,6 +3,7 @@
 
 `define RV32I
 `define RVM
+`define RVA
 `define DIFFTEST
 
 `define EXT_FENCEI

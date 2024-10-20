@@ -184,6 +184,9 @@ typedef struct packed {
 `ifdef RVM
     logic multv;
 `endif
+`ifdef RVA
+    logic amov;
+`endif
     logic [11: 0] csrid;
     logic uext;
     logic we;
@@ -194,6 +197,9 @@ typedef struct packed {
     logic `N(`CSROP_WIDTH) csrop;
 `ifdef RVM
     logic `N(`MULTOP_WIDTH) multop;
+`endif
+`ifdef RVA
+    logic `N(`AMOOP_WIDTH) amoop;
 `endif
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
@@ -277,6 +283,10 @@ typedef struct packed {
 } MultIssueBundle;
 
 typedef struct packed {
+    logic `N(`AMOOP_WIDTH) amoop;
+} AmoIssueBundle;
+
+typedef struct packed {
     logic we;
     logic `N(`PREG_WIDTH) rd;
     RobIdx robIdx;
@@ -320,7 +330,6 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
-    logic fsqDir;
     FsqIdxInfo fsqInfo;
     RobIdx robIdx;
     BranchUnitRes res;

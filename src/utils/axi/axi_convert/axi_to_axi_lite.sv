@@ -44,19 +44,19 @@ module axi_to_axi_lite #(
   full_resp_t filtered_resp, splitted_resp;
 
   // atomics adapter so that atomics can be resolved
-  axi_atop_filter #(
-    .AxiIdWidth      ( AxiIdWidth      ),
-    .AxiMaxWriteTxns ( AxiMaxWriteTxns ),
-    .axi_req_t       ( full_req_t      ),
-    .axi_resp_t      ( full_resp_t     )
-  ) i_axi_atop_filter(
-    .clk_i      ( clk_i         ),
-    .rst_ni     ( rst_ni        ),
-    .slv_req_i  ( slv_req_i     ),
-    .slv_resp_o ( slv_resp_o    ),
-    .mst_req_o  ( filtered_req  ),
-    .mst_resp_i ( filtered_resp )
-  );
+  // axi_atop_filter #(
+  //   .AxiIdWidth      ( AxiIdWidth      ),
+  //   .AxiMaxWriteTxns ( AxiMaxWriteTxns ),
+  //   .axi_req_t       ( full_req_t      ),
+  //   .axi_resp_t      ( full_resp_t     )
+  // ) i_axi_atop_filter(
+  //   .clk_i      ( clk_i         ),
+  //   .rst_ni     ( rst_ni        ),
+  //   .slv_req_i  ( slv_req_i     ),
+  //   .slv_resp_o ( slv_resp_o    ),
+  //   .mst_req_o  ( filtered_req  ),
+  //   .mst_resp_i ( filtered_resp )
+  // );
 
   // burst splitter so that the id reflect module has no burst accessing it
   axi_burst_splitter #(
@@ -72,8 +72,8 @@ module axi_to_axi_lite #(
   ) i_axi_burst_splitter (
     .clk_i      ( clk_i         ),
     .rst_ni     ( rst_ni        ),
-    .slv_req_i  ( filtered_req  ),
-    .slv_resp_o ( filtered_resp ),
+    .slv_req_i  ( slv_req_i  ),
+    .slv_resp_o ( slv_resp_o ),
     .mst_req_o  ( splitted_req  ),
     .mst_resp_i ( splitted_resp )
   );

@@ -63,10 +63,20 @@ generate
             .io(ltlb_io[i]),
             .csr_tlb_io(csr_ltlb_io)
         );
+`ifdef RVA
+        if(i == 0)begin
+            assign ltlb_io[i].req = tlb_lsu_io.lreq[i] | tlb_lsu_io.amo_req;
+            assign ltlb_io[i].vaddr = tlb_lsu_io.amo_req ? tlb_lsu_io.amo_addr : tlb_lsu_io.laddr[i];
+        end
+        else begin
+`endif
         assign ltlb_io[i].req = tlb_lsu_io.lreq[i];
         assign ltlb_io[i].vaddr = tlb_lsu_io.laddr[i];
         assign ltlb_io[i].flush = tlb_lsu_io.flush;
-        
+`ifdef RVA
+        end
+`endif
+
         assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
         assign ltlb_io[i].widx = tlb_widx;
         assign ltlb_io[i].wbInfo = tlb_l2_io0.info_o;
@@ -106,6 +116,15 @@ endgenerate
     TLBRepeater repeater0(.*, .flush(flush0), .in(tlb_l2_io0), .out(tlb_l2_io1));
     TLBRepeater repeater1(.*, .flush(flush1), .in(tlb_l2_io1), .out(tlb_l2_io));
 
+`ifdef RVA
+    logic amo_req, amo_req_s2, amo_vaddr;
+    always_ff @(posedge clk)begin
+        amo_req <= tlb_lsu_io.amo_req;
+        amo_vaddr <= tlb_lsu_io.amo_addr;
+        amo_req_s2 <= amo_req & ltlb_io[0].miss & ~ltlb_io[0].exception;
+    end
+`endif
+
     logic `N(`LOAD_PIPELINE) lreq, lreq_all_s2, lreq_cancel_s2;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lvaddr;
     logic `N($clog2(`LOAD_PIPELINE)) lreq_idx;
@@ -118,13 +137,22 @@ generate
     assign lreq_cancel_s2[0] = 0;
     assign lreq_cancel_s2[1] = (ltlb_io[0].miss & ~ltlb_io[0].exception);
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+`ifdef RVA
+        if(i == 0)begin
+            assign lreq[i] = ltlb_io[i].miss & ~ltlb_io[i].exception & ~amo_req;
+        end
+        else begin
+`endif
         assign lreq[i] = ltlb_io[i].miss & ~ltlb_io[i].exception;
+`ifdef RVA
+        end
+`endif
         always_ff @(posedge clk)begin
             lvaddr[i] <= tlb_lsu_io.laddr[i];
             lidx[i] <= tlb_lsu_io.lidx[i];
         end
     end
-    PREncoder #(`LOAD_PIPELINE) encoder_lreq (lreq, lreq_idx);
+    PREncoder #(`LOAD_PIPELINE) encoder_lreq (lreq, lreq_idx); 
     always_ff @(posedge clk)begin
         lreq_s2 <= |lreq;
         lreq_addr_s2 <= lvaddr[lreq_idx];
@@ -164,14 +192,26 @@ endgenerate
     always_ff @(posedge clk)begin
         lreq_cancel_s3 <= lreq_cancel_s2 & {`LOAD_PIPELINE{~flush0}};
         sreq_cancel_s3 <= sreq_cancel_s2 & {`STORE_PIPELINE{~flush1}};
+`ifdef RVA
+        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | amo_req_s2}}) & {`LOAD_PIPELINE{~flush0}};
+        sreq_cancel_s4 <= sreq_all_s3 & (sreq_cancel_s3 | {`STORE_PIPELINE{amo_req_s2}}) & {`STORE_PIPELINE{~flush1}};
+`else
         lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2}}) & {`LOAD_PIPELINE{~flush0}};
-        sreq_cancel_s4 <= sreq_all_s3 & sreq_cancel_s3 & {`LOAD_PIPELINE{~flush1}};
+        sreq_cancel_s4 <= sreq_all_s3 & sreq_cancel_s3 & {``STORE_PIPELINE{~flush1}};
+`endif
         lreq_all_s3 <= lreq_all_s2 & {`LOAD_PIPELINE{~flush0}};
-        sreq_all_s3 <= sreq_all_s2 & {`LOAD_PIPELINE{~flush1}};
+        sreq_all_s3 <= sreq_all_s2 & {`STORE_PIPELINE{~flush1}};
+`ifdef RVA
+        tlb_l2_io.req <= (sreq_s2 | lreq_s2 | amo_req_s2) & ~flush2;
+        tlb_l2_io.info.source <= amo_req_s2 ? 2'b11 : sreq_s2 ? 2'b10 : 2'b01;
+        tlb_l2_io.info.idx <= sreq_s2 ? sidx_s2 : lidx_s2;
+        tlb_l2_io.req_addr <= amo_req_s2 ? amo_vaddr : sreq_s2 ? sreq_addr_s2 : lreq_addr_s2;
+`else
         tlb_l2_io.req <= (sreq_s2 | lreq_s2) & ~flush2;
         tlb_l2_io.info.source <= sreq_s2 ? 2'b10 : 2'b01;
         tlb_l2_io.info.idx <= sreq_s2 ? sidx_s2 : lidx_s2;
         tlb_l2_io.req_addr <= sreq_s2 ? sreq_addr_s2 : lreq_addr_s2;
+`endif
     end
     assign tlb_lsu_io.lcancel = lreq_cancel_s4 & ~tlb_lsu_io.flush & ~flush2;
     assign tlb_lsu_io.scancel = sreq_cancel_s4 & ~tlb_lsu_io.flush & ~flush2;
@@ -185,5 +225,12 @@ endgenerate
         tlb_lsu_io.swb_exception <= {`STORE_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.swb_error <= {`STORE_PIPELINE{tlb_l2_io0.error}};
         tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx}};
+`ifdef RVA
+        tlb_lsu_io.amo_valid <= amo_req & ~ltlb_io[0].miss | 
+                                (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid;
+        tlb_lsu_io.amo_exception <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid ? tlb_l2_io0.exception : ltlb_io[0].exception;
+        tlb_lsu_io.amo_error <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid;
+        tlb_lsu_io.amo_paddr <= ltlb_io[0].paddr;
+`endif
     end
 endmodule

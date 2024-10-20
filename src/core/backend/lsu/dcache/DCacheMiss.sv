@@ -14,6 +14,11 @@ interface DCacheMissIO;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask;
     logic wfull;
 
+`ifdef RVA
+    logic amo_en;
+    logic amo_refill;
+`endif
+
     logic req;
     logic `N(`PADDR_SIZE) req_addr;
     logic req_success;
@@ -33,6 +38,9 @@ interface DCacheMissIO;
 
     modport miss (input ren, raddr, lqIdx, robIdx, req_success, replaceWay, refill_valid,
                         wen, waddr, scIdx, wdata, wmask,
+`ifdef RVA
+                  input amo_en, output amo_refill,
+`endif
                   output rfull, req, req_addr, wfull, 
                         refill_en, refill_dirty, refillWay, refillAddr, refillData, refill_scIdx,
                         lq_en, lqData, lqIdx_o);
@@ -128,10 +136,17 @@ endgenerate
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) read_mask, combine_mask;
     logic `N(`LOAD_PIPELINE) rwfree_eq;
     logic `N($clog2(`LOAD_PIPELINE)) rwfree_idx;
+    logic wen;
+
+`ifdef RVA
+    assign wen = io.wen | io.amo_en;
+`else
+    assign wen = io.wen;
+`endif
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign rwfree_eq[i] = io.ren[i] && io.wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS);
+        assign rwfree_eq[i] = io.ren[i] && wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS);
     end
 endgenerate
     assign write_req_order = req_order[`LOAD_PIPELINE];
@@ -150,7 +165,7 @@ endgenerate
         io.wfull <= io.wen & (req_last | rlast | (~write_remain_valid & ~whit_combine));
     end
 
-    assign free_en[`LOAD_PIPELINE] = io.wen & ~req_last & ~rlast & (write_remain_valid & ~whit_combine);
+    assign free_en[`LOAD_PIPELINE] = wen & ~req_last & ~rlast & (write_remain_valid & ~whit_combine);
 
     assign read_data = data[widx];
     assign read_mask = mask[widx];
@@ -287,7 +302,7 @@ endgenerate
                 end
             end
 
-            if(io.wen & ~rlast & ~req_last & (write_remain_valid & ~whit_combine))begin
+            if(wen & ~rlast & ~req_last & (write_remain_valid & ~whit_combine))begin
                 en[freeIdx[`LOAD_PIPELINE]] <= 1'b1;
                 addr[freeIdx[`LOAD_PIPELINE]] <= io.waddr`DCACHE_BLOCK_BUS;
                 dataValid[freeIdx[`LOAD_PIPELINE]] <= 1'b0;
@@ -310,6 +325,28 @@ endgenerate
             end
         end
     end
+
+`ifdef RVA
+    logic `N(`DCACHE_MSHR_SIZE) amo;
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            amo <= 0;
+        end
+        else begin
+            if(io.amo_en & ~rlast & ~req_last & (write_remain_valid | whit_combine))begin
+                amo[widx] <= 1'b1;
+            end
+            if(io.refill_en & io.refill_valid)begin
+                amo[head] <= 1'b0;
+            end
+        end
+    end
+
+    always_ff @(posedge clk)begin
+        io.amo_refill <= io.amo_en & (rlast | req_last | (~write_remain_valid & ~whit_combine)) |
+                      io.refill_en & io.refill_valid & amo[head];
+    end
+`endif
 
 // req
     logic req_cache;

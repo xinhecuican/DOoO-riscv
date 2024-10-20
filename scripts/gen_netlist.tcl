@@ -86,4 +86,3 @@ opt_clean -purge
 tee -o $LOG_DIR/synth_check.txt check
 tee -o $LOG_DIR/synth_stat.txt stat -liberty $lib_file
 write_verilog -noattr -noexpr -nohex -nodec -norename $SYNTH_V
-write_json $LOG_DIR/netlist.json

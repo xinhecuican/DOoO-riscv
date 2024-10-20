@@ -87,4 +87,6 @@ endpackage
     end \
 `endif
 
+`define CRITICAL(from, to) /* critical path ``from`` to ``to`` */
+
 `endif

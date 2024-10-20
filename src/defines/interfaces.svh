@@ -106,7 +106,6 @@ endinterface
 interface FsqBackendIO;
     FetchStream `N(`FETCH_WIDTH) streams;
     logic `ARRAY(`FETCH_WIDTH, `FSQ_WIDTH) fsqIdx;
-    logic `N(`FETCH_WIDTH) directions;
     logic `N(`VADDR_SIZE) exc_pc;
 
     BackendRedirectInfo redirect;
@@ -118,13 +117,13 @@ interface FsqBackendIO;
     logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) diff_pc;
 `endif
     
-    modport fsq (input fsqIdx, redirect, redirectBr, redirectCsr, output streams, directions, exc_pc
+    modport fsq (input fsqIdx, redirect, redirectBr, redirectCsr, output streams, exc_pc
 `ifdef DIFFTEST
     ,input diff_fsqInfo,
     output diff_pc
 `endif
     );
-    modport backend (output fsqIdx, redirect, redirectBr, redirectCsr, input streams, directions, exc_pc
+    modport backend (output fsqIdx, redirect, redirectBr, redirectCsr, input streams, exc_pc
 `ifdef DIFFTEST
     ,output diff_fsqInfo,
     input diff_pc
@@ -293,10 +292,9 @@ interface IntIssueExuIO;
     IntIssueBundle `N(`ALU_SIZE) bundle;
     FetchStream `N(`ALU_SIZE) streams;
     logic `ARRAY(`ALU_SIZE, `VADDR_SIZE) vaddrs;
-    logic `N(`ALU_SIZE) directions; // fsq dir
 
-    modport exu (input en, rs1_data, rs2_data, status, bundle, streams, vaddrs, directions, output valid);
-    modport issue (output en, rs1_data, rs2_data, status, bundle, streams, vaddrs, directions, input valid);
+    modport exu (input en, rs1_data, rs2_data, status, bundle, streams, vaddrs, output valid);
+    modport issue (output en, rs1_data, rs2_data, status, bundle, streams, vaddrs, input valid);
 endinterface
 
 interface IssueAluIO;
@@ -308,11 +306,10 @@ interface IssueAluIO;
     IntIssueBundle bundle;
     FetchStream stream;
     logic `N(`VADDR_SIZE) vaddr;
-    logic direction;
     RasType ras_type;
     BranchType br_type;
 
-    modport alu (input en, rs1_data, rs2_data, status, bundle, stream, vaddr, direction, ras_type, br_type, output valid);
+    modport alu (input en, rs1_data, rs2_data, status, bundle, stream, vaddr, ras_type, br_type, output valid);
 endinterface
 
 interface IssueCSRIO;
@@ -435,6 +432,22 @@ interface DCacheStoreIO;
     modport buffer (output req, scIdx, paddr, data, mask, input valid, success, conflict, conflictIdx, refill, refillIdx);
 endinterface
 
+interface DCacheAmoIO;
+    logic req;
+    logic `N(`PADDR_SIZE) paddr;
+    logic `N(`DCACHE_BYTE) mask;
+    logic `N(`XLEN) data;
+    logic `N(`AMOOP_WIDTH) op;
+
+    logic ready;
+    logic success;
+    logic `N(`DCACHE_BITS) rdata;
+    logic refill;
+
+    modport dcache (input req, paddr, data, op, mask, output ready, success, rdata, refill);
+    modport buffer (output req, paddr, data, op, mask, input ready, success, rdata, refill);
+endinterface
+
 interface LoadForwardIO;
     LoadFwdData `N(`LOAD_PIPELINE) fwdData;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) mask;
@@ -505,7 +518,19 @@ interface DTLBLsuIO;
     logic `N(`STORE_PIPELINE) swb_error;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) swb_idx;
 
+`ifdef RVA
+    logic amo_req;
+    logic `N(`VADDR_SIZE) amo_addr;
+    logic amo_valid;
+    logic amo_exception;
+    logic amo_error;
+    logic `N(`PADDR_SIZE) amo_paddr;
+`endif
     modport tlb(input flush, lreq, lidx, laddr, sreq, sidx, saddr,  lreq_cancel, sreq_cancel,
+`ifdef RVA
+                input amo_req, amo_addr,
+                output amo_valid, amo_exception, amo_error, amo_paddr,
+`endif
                 output lmiss, luncache, lexception, lcancel, lpaddr, smiss, suncache, sexception, scancel, spaddr,
                 lwb, lwb_exception, lwb_error, lwb_idx, swb, swb_exception, swb_error, swb_idx);
     modport lq (input lwb, lwb_exception, lwb_error, lwb_idx);

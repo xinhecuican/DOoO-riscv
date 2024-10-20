@@ -33,6 +33,10 @@ module LSU(
     input logic rst,
     DisIssueIO.issue dis_load_io,
     DisIssueIO.issue dis_store_io,
+`ifdef RVA
+    DisIssueIO.issue dis_amo_io,
+    IssueRegIO.issue amo_reg_io,
+`endif
     IssueRegIO.issue load_reg_io,
     IssueRegIO.issue store_reg_io,
     IssueWakeupIO.issue load_wakeup_io,
@@ -59,6 +63,8 @@ module LSU(
     logic `N(`LOAD_PIPELINE) load_en, fwd_data_invalid; // fwd_data_invalid from StoreQueue
     logic sc_buffer_empty;
     logic sc_queue_empty;
+    
+    logic `N(`LOAD_PIPELINE) from_issue;
 
     logic load_issue_rst, load_queue_rst, store_issue_rst, store_queue_rst;
     logic store_commit_rst, violation_rst, tlb_rst, exc_rst;
@@ -91,6 +97,29 @@ module LSU(
     DTLBLsuIO tlb_lsu_io();
     FenceBus fenceBus_tlb();
 
+`ifdef RVA
+    DCacheAmoIO amo_io();
+    logic amo_valid;
+    RobIdx amo_idx;
+    logic `N(`LOAD_PIPELINE) amo_conflict;
+    logic amo_flush, amo_flush_end, amo_ready;
+    WBData amo_wdata;
+    assign amo_flush_end = sc_buffer_empty & sc_queue_empty;
+    assign amo_ready = ~from_issue[0] & ~load_queue_io.wbData[0].en;
+    AmoQueue amo_queue(
+        .*,
+        .tlb_req(tlb_lsu_io.amo_req),
+        .amo_vaddr(tlb_lsu_io.amo_addr),
+        .tlb_valid(tlb_lsu_io.amo_valid),
+        .tlb_error(tlb_lsu_io.amo_error),
+        .tlb_exception(tlb_lsu_io.amo_exception),
+        .amo_paddr(tlb_lsu_io.amo_paddr),
+        .store_flush(amo_flush),
+        .flush_end(amo_flush_end),
+        .wb_ready(amo_ready),
+        .wbData(amo_wdata)
+    );
+`endif
     LoadIssueQueue load_issue_queue(
         .*,
         .rst(load_issue_rst)
@@ -114,7 +143,11 @@ module LSU(
     StoreCommitBuffer store_commit_buffer (
         .*,
         .rst(store_commit_rst),
+`ifdef RVA
+        .flush(fenceBus.store_flush | amo_flush),
+`else
         .flush(fenceBus.store_flush),
+`endif
         .io(store_commit_io),
         .loadFwd(commit_queue_fwd),
         .empty(sc_buffer_empty)
@@ -182,6 +215,12 @@ endgenerate
     logic `N(`LOAD_PIPELINE) tlb_exception_s2, tlb_exception_s2_pre;
     logic `N(`LOAD_PIPELINE) luncache_s2, luncache_s3;
     logic `N(`LOAD_PIPELINE) uncache_full_s3, uncache_full_s4;
+`ifdef RVA
+    logic amo_req;
+    always_ff @(posedge clk)begin
+        amo_req <= tlb_lsu_io.amo_req;
+    end
+`endif
 
     assign tlb_lsu_io.lreq = load_io.en & ~load_io.exception;
     assign tlb_lsu_io.lidx = load_io.issue_idx;
@@ -221,9 +260,27 @@ endgenerate
     // reply fast
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+`ifdef RVA
+        logic amo_older;
+        LoopCompare #(`ROB_WIDTH) cmp_amo_bigger (amo_idx, load_io.loadIssueData[i].robIdx, amo_older);
+        always_ff @(posedge clk)begin
+            amo_conflict[i] <= amo_older & amo_valid;
+        end
+        if(i == 0)begin
+            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | tlb_lsu_io.lmiss[i] | amo_req | amo_conflict[i]);
+            assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
+            assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] & ~amo_req ? 2'b11 : 2'b00;
+        end
+        else begin
+            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | tlb_lsu_io.lmiss[i] | amo_conflict[i]);
+            assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
+            assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] ? 2'b11 : 2'b00;
+        end
+`else
         assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | tlb_lsu_io.lmiss[i]);
         assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
         assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] ? 2'b11 : 2'b00;
+`endif
     end
 endgenerate
 
@@ -265,13 +322,21 @@ generate
         assign redirect_clear_s3[i] = backendCtrl.redirect & older;
     end
 endgenerate
-    assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2 | tlb_exception_s2 | luncache_s2;
+    assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2 | tlb_exception_s2 | luncache_s2
+`ifdef RVA
+    | {{`LOAD_PIPELINE-1{1'b0}}, amo_req} | amo_conflict;
+`endif
+    ;
     assign rio.req_cancel_s3 = redirect_clear_s3 | rdata_valid;
 
     always_ff @(posedge clk)begin
         lpaddrNext <= lpaddr;
         leq_data <= load_issue_data;
-        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2 & ~tlb_lsu_io.lmiss;
+        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2 & ~tlb_lsu_io.lmiss
+`ifdef RVA
+        & ~{{`LOAD_PIPELINE-1{1'b0}}, amo_req} & ~amo_conflict;
+`endif
+        ;
         lmaskNext <= lmask;
         issue_idx_next <= load_issue_idx;
         lmisalign_s3 <= lmisalign_s2;
@@ -289,7 +354,7 @@ endgenerate
     assign load_queue_io.rmask = (store_queue_fwd.mask | commit_queue_fwd.mask);
     assign load_queue_io.rdata = rdata;
     assign load_queue_io.miss = ~rhit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
-    assign load_queue_io.wb_valid = ~leq_valid;
+    assign load_queue_io.wb_ready = ~leq_valid;
     assign load_queue_io.uncache = luncache_s3;
 
     // reply slow
@@ -326,7 +391,6 @@ generate
 endgenerate
     
     // wb
-    logic `N(`LOAD_PIPELINE) from_issue;
     logic `N(`LOAD_PIPELINE) wb_pipeline_en;
     RobIdx `N(`LOAD_PIPELINE) lrobIdx_n;
     logic `N(`LOAD_PIPELINE) lwe_n;
@@ -335,28 +399,34 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `EXC_WIDTH) lexccode;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
-        logic wb_data_en;
+        WBData pipe_data;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
         assign wb_pipeline_en[i] = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3[i] | 
                                 ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i] & ~luncache_s3[i])) &
                                 ~redirect_clear_s3[i];
         always_ff @(posedge clk)begin
-            wb_data_en <= wb_pipeline_en[i] | load_queue_io.wbData[i].en;
-            from_issue[i] <= wb_pipeline_en[i];
-            lrobIdx_n[i] <= leq_data[i].robIdx;
-            lrd_n[i] <= leq_data[i].rd;
-            lwe_n[i] <= leq_data[i].we;
-            ldata_n[i] <= ldata_shift[i];
-            lexccode[i] <= tlb_exception_s3[i] ? `EXC_LPF : 
+            pipe_data.en <= wb_pipeline_en[i];
+            pipe_data.robIdx <= leq_data[i].robIdx;
+            pipe_data.rd <= leq_data[i].rd;
+            pipe_data.we <= leq_data[i].we;
+            pipe_data.exccode <= tlb_exception_s3[i] ? `EXC_LPF : 
                            lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
+            pipe_data.res <= ldata_shift[i];
+            from_issue[i] <= wb_pipeline_en[i];
         end
-        assign lsu_wb_io.datas[i].en = wb_data_en;
-        assign lsu_wb_io.datas[i].we = from_issue[i] ? lwe_n[i] : load_queue_io.wbData[i].we;
-        assign lsu_wb_io.datas[i].robIdx = from_issue[i] ? lrobIdx_n[i] : load_queue_io.wbData[i].robIdx;
-        assign lsu_wb_io.datas[i].rd = from_issue[i] ? lrd_n[i] : load_queue_io.wbData[i].rd;
-        assign lsu_wb_io.datas[i].res = from_issue[i] ? ldata_n[i] : load_queue_io.wbData[i].res;
-        assign lsu_wb_io.datas[i].exccode = from_issue[i] ? lexccode[i] : `EXC_NONE;
-        assign load_wakeup_io.en[i] = wb_data_en;
+`ifdef RVA
+        if(i == 0)begin
+            assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : 
+                                        load_queue_io.wbData[i].en ? load_queue_io.wbData[i] :
+                                        amo_wdata;
+        end
+        else begin
+            assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : load_queue_io.wbData[i];
+        end
+`else
+        assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : load_queue_io.wbData[i];
+`endif
+        assign load_wakeup_io.en[i] = lsu_wb_io.datas[i].en;
         assign load_wakeup_io.we[i] = lsu_wb_io.datas[i].we;
         assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].rd;
     end

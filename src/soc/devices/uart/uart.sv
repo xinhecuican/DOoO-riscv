@@ -36,15 +36,19 @@ module apb4_uart #(
   logic s_apb4_wr_hdshk, s_apb4_rd_hdshk;
   logic [`UART_LCR_WIDTH-1:0] s_uart_lcr_d, s_uart_lcr_q;
   logic s_uart_lcr_en;
-  logic [`UART_DIV_WIDTH-1:0] s_uart_div_d, s_uart_div_q;
-  logic s_uart_div_en;
+  logic [7: 0] s_uart_dll_d, s_uart_dll_q, s_uart_dlm_d, s_uart_dlm_q;
+  logic div_en;
+  logic s_uart_dll_en, s_uart_dlm_en;
+  logic [`UART_IER_WIDTH-1: 0] s_uart_ier_d, s_uart_ier_q;
+  logic s_uart_ier_en;
   logic [`UART_FCR_WIDTH-1:0] s_uart_fcr_d, s_uart_fcr_q;
   logic s_uart_fcr_en;
   logic [`UART_LSR_WIDTH-1:0] s_uart_lsr_d, s_uart_lsr_q;
+  logic [`UART_IIR_WIDTH-1: 0] s_uart_iir_d, s_uart_iir_q;
   logic s_bit_stb, s_bit_pen, s_bit_rf_clr, s_bit_tf_clr;
   logic s_bit_pe, s_bit_thre;
   logic [1:0] s_bit_wls, s_bit_ps, s_bit_rx_trg_levl;
-  logic [2:0] s_bit_ie;
+  logic [`UART_IER_WIDTH-1:0] s_bit_ie;
   logic s_clr_int, s_parity_err;
   logic s_tx_push_valid, s_tx_push_ready, s_tx_empty, s_tx_full;
   logic s_tx_pop_valid, s_tx_pop_ready;
@@ -61,15 +65,15 @@ module apb4_uart #(
   assign apb4.pready       = 1'b1;
   assign apb4.pslverr      = 1'b0;
 
-  assign s_bit_ie          = s_uart_lcr_q[2:0];
-  assign s_bit_wls         = s_uart_lcr_q[4:3];
-  assign s_bit_stb         = s_uart_lcr_q[5];
-  assign s_bit_pen         = s_uart_lcr_q[6];
-  assign s_bit_ps          = s_uart_lcr_q[8:7];
+  assign s_bit_ie          = s_uart_ier_q;
+  assign s_bit_wls         = s_uart_lcr_q[1:0];
+  assign s_bit_stb         = s_uart_lcr_q[2];
+  assign s_bit_pen         = s_uart_lcr_q[3];
+  assign s_bit_ps          = s_uart_lcr_q[5:4];
 
-  assign s_bit_rf_clr      = s_uart_fcr_q[0];
-  assign s_bit_tf_clr      = s_uart_fcr_q[1];
-  assign s_bit_rx_trg_levl = s_uart_fcr_q[3:2];
+  assign s_bit_rf_clr      = s_uart_fcr_q[1];
+  assign s_bit_tf_clr      = s_uart_fcr_q[2];
+  assign s_bit_rx_trg_levl = s_uart_fcr_q[7:6];
 
   assign s_bit_pe          = s_uart_lsr_q[4];
   assign s_bit_thre        = s_uart_lsr_q[5];
@@ -84,20 +88,42 @@ module apb4_uart #(
       s_uart_lcr_q
   );
 
-  assign s_uart_div_en = s_apb4_wr_hdshk && s_apb4_addr == `UART_DIV;
-  assign s_uart_div_d  = apb4.pwdata[`UART_DIV_WIDTH-1:0];
-  dfferc #(`UART_DIV_WIDTH, `UART_DIV_MIN_VAL) u_uart_div_dfferc (
+  assign div_en = s_uart_lcr_q[7];
+
+  assign s_uart_dll_en = s_apb4_wr_hdshk && s_apb4_addr == `UART_DLL && div_en;
+  assign s_uart_dll_d  = apb4.pwdata[7:0];
+  dfferc #(8, `UART_DLL_MIN_VAL) u_uart_dll_dfferc (
       clk,
       ~rst,
-      s_uart_div_en,
-      s_uart_div_d,
-      s_uart_div_q
+      s_uart_dll_en,
+      s_uart_dll_d,
+      s_uart_dll_q
+  );
+
+  assign s_uart_dlm_en = s_apb4_wr_hdshk && s_apb4_addr == `UART_DLM && div_en;
+  assign s_uart_dlm_d = apb4.pwdata[7: 0];
+  dfferc #(8, 0) u_uart_dlm_dfferc (
+    clk,
+    ~rst,
+    s_uart_dlm_en,
+    s_uart_dlm_d,
+    s_uart_dlm_q
+  );
+
+  assign s_uart_ier_en = s_apb4_wr_hdshk && s_apb4_addr == `UART_IER && !div_en;
+  assign s_uart_ier_d = apb4.pwdata[2: 0];
+  dffer #(`UART_IER_WIDTH) s_uart_ier_dffer (
+    clk,
+    ~rst,
+    s_uart_ier_en,
+    s_uart_ier_d,
+    s_uart_ier_q
   );
 
   always_comb begin
     s_tx_push_valid = 1'b0;
     s_tx_push_data  = '0;
-    if (s_apb4_wr_hdshk && s_apb4_addr == `UART_TRX) begin
+    if (s_apb4_wr_hdshk && s_apb4_addr == `UART_THR && !div_en) begin
       s_tx_push_valid = 1'b1;
       s_tx_push_data  = apb4.pwdata[`UART_TRX_WIDTH-1:0];
     end
@@ -114,19 +140,28 @@ module apb4_uart #(
   );
 
   always_comb begin
-    s_uart_lsr_d[2:0] = s_lsr_ip;
-    s_uart_lsr_d[3]   = s_rx_pop_valid;
-    s_uart_lsr_d[4]   = s_rx_pop_data[8];
+    s_uart_iir_d[0] = ~(|s_lsr_ip);
+    s_uart_iir_d[3:1] = s_lsr_ip;
+    s_uart_lsr_d[0]   = s_rx_pop_valid;
+    s_uart_lsr_d[1]   = 0; // overrun error
+    s_uart_lsr_d[2]   = s_rx_pop_data[8];
+    s_uart_lsr_d[3]   = 0; // frame error
     s_uart_lsr_d[5]   = ~(|s_tx_elem);
     s_uart_lsr_d[6]   = s_tx_pop_ready & ~(|s_tx_elem);
-    s_uart_lsr_d[7]   = s_rx_empty;
-    s_uart_lsr_d[8]   = s_tx_full;
+    s_uart_lsr_d[7]   = s_rx_pop_data[8]; // 发生了错误
   end
   dffrc #(`UART_LSR_WIDTH, `UART_LSR_RESET_VAL) u_uart_lsr_dffrc (
       clk,
       ~rst,
       s_uart_lsr_d,
       s_uart_lsr_q
+  );
+
+  dffr #(`UART_IIR_WIDTH) u_uart_iir_dffr (
+    clk,
+    ~rst,
+    s_uart_iir_d,
+    s_uart_iir_q
   );
 
   always_comb begin
@@ -136,10 +171,25 @@ module apb4_uart #(
     if (s_apb4_rd_hdshk) begin
       unique case (s_apb4_addr)
         `UART_LCR: apb4.prdata[`UART_LCR_WIDTH-1:0] = s_uart_lcr_q;
-        `UART_DIV: apb4.prdata[`UART_DIV_WIDTH-1:0] = s_uart_div_q;
-        `UART_TRX: begin
-          s_rx_pop_ready                   = 1'b1;
-          apb4.prdata[`UART_TRX_WIDTH-1:0] = s_rx_pop_data[7:0];
+        `UART_RBR: begin
+          if(div_en)begin
+            apb4.prdata[7: 0] = s_uart_dll_q;
+          end
+          else begin
+            s_rx_pop_ready                   = 1'b1;
+            apb4.prdata[`UART_TRX_WIDTH-1:0] = s_rx_pop_data[7:0];
+          end
+        end
+        `UART_IER: begin
+          if(div_en)begin
+            apb4.prdata[7: 0] = s_uart_dlm_q;
+          end
+          else begin
+            apb4.prdata[`UART_IER_WIDTH-1: 0] = s_uart_ier_q;
+          end
+        end
+        `UART_IIR: begin
+          apb4.prdata[`UART_IIR_WIDTH-1: 0] = s_uart_iir_q;
         end
         `UART_LSR: begin
           s_clr_int                        = 1'b1;
@@ -174,7 +224,7 @@ module apb4_uart #(
       .tx_o            (txd),
       .busy_o          (),
       .cfg_en_i        (1'b1),
-      .cfg_div_i       (s_uart_div_q[`UART_DIV_WIDTH-1:0]),
+      .cfg_div_i       ({s_uart_dlm_q, s_uart_dll_q}),
       .cfg_parity_en_i (s_bit_pen),
       .cfg_parity_sel_i(s_bit_ps),
       .cfg_bits_i      (s_bit_wls),
@@ -208,7 +258,7 @@ module apb4_uart #(
       .rx_i            (rxd),
       .busy_o          (),
       .cfg_en_i        (1'b1),
-      .cfg_div_i       (s_uart_div_q[`UART_DIV_WIDTH-1:0]),
+      .cfg_div_i       ({s_uart_dlm_q, s_uart_dll_q}),
       .cfg_parity_en_i (s_bit_pen),
       .cfg_parity_sel_i(s_bit_ps),
       .cfg_bits_i      (s_bit_wls),

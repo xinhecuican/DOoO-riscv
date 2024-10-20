@@ -67,7 +67,6 @@ endgenerate
     always_ff @(posedge clk)begin
         issue_exu_io.en <= enNext & ({BANK_NUM{~backendCtrl.redirect}} | bigger);
         issue_exu_io.streams <= fsq_back_io.streams;
-        issue_exu_io.directions <= fsq_back_io.directions;
     end
 
 endmodule

@@ -58,24 +58,27 @@ typedef struct packed {
 */
 
 // verilog_format: off
-`define UART_LCR 4'b0000 // BASEADDR + 0x00
-`define UART_DIV 4'b0001 // BASEADDR + 0x04
-`define UART_TRX 4'b0010 // BASEADDR + 0x08
-`define UART_FCR 4'b0011 // BASEADDR + 0x0C
-`define UART_LSR 4'b0100 // BASEADDR + 0x10
+`define UART_RBR 4'b0000
+`define UART_THR 4'b0000
+`define UART_DLL 4'b0000
+`define UART_DLM 4'b0001
+`define UART_IER 4'b0001
+`define UART_IIR 4'b0010
+`define UART_FCR 4'b0010
+`define UART_LCR 4'b0011
+`define UART_MCR 4'b0100
+`define UART_LSR 4'b0101
+`define UART_MSR 4'b0110
+`define UART_SCR 4'b0111
 
-`define UART_LCR_ADDR {26'b0, `UART_LCR, 2'b00}
-`define UART_DIV_ADDR {26'b0, `UART_DIV, 2'b00}
-`define UART_TRX_ADDR {26'b0, `UART_TRX, 2'b00}
-`define UART_FCR_ADDR {26'b0, `UART_FCR, 2'b00}
-`define UART_LSR_ADDR {26'b0, `UART_LSR, 2'b00}
-
-`define UART_LCR_WIDTH 9
+`define UART_LCR_WIDTH 8
 `define UART_DIV_WIDTH 16
 `define UART_TRX_WIDTH 8
-`define UART_FCR_WIDTH 4
-`define UART_LSR_WIDTH 9
+`define UART_FCR_WIDTH 8
+`define UART_LSR_WIDTH 8
+`define UART_IER_WIDTH 3
+`define UART_IIR_WIDTH 4
 
-`define UART_DIV_MIN_VAL  {{(`UART_DIV_WIDTH-2){1'b0}}, 2'd2}
+`define UART_DLL_MIN_VAL  8'd2
 `define UART_LSR_RESET_VAL 9'h0E0
 `endif

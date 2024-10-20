@@ -28,6 +28,8 @@ SRC += $(shell find src/soc -name "*.v" -or -name "*.sv" -or -name "*.svh")
 WITH_DRAMSIM3 := 1
 EMU_TRACE := 1
 TRACE_ARGS := 
+ENABLE_DIFF := 1
+DIFF_ARGS :=
 
 
 ifeq ($(WITH_DRAMSIM3),1)
@@ -38,6 +40,12 @@ ifeq ($(EMU_TRACE), 1)
 	export EMU_TRACE
 	TRACE_ARGS = --dump-wave
 endif
+ifeq ($(ENABLE_DIFF), 1)
+	DIFF_ARGS := --diff=utils/NEMU/build/riscv64-nemu-interpreter-so
+else
+	DIFF_ARGS := --no-diff
+endif
+
 DEFINES += CLK_FREQ=${CLK_FREQ_MHZ};CLK_PERIOD=${CLK_PERIOD};
 
 emu:
@@ -46,7 +54,7 @@ emu:
 
 emu-run: emu
 	mkdir -p $(LOG_PATH)
-	build/emu -i "${I}" --diff=utils/NEMU/build/riscv64-nemu-interpreter-so -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH}
+	build/emu -i "${I}" ${DIFF_ARGS} -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH}
 
 convert: build/${TOP}/${TOP}.v
 build/${TOP}/${TOP}.v: ${SRC}

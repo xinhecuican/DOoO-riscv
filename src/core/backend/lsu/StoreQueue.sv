@@ -331,9 +331,10 @@ generate
         end
         logic `N(`STORE_QUEUE_SIZE) store_mask;
         MaskGen #(`STORE_QUEUE_SIZE) maskgen_store (loadFwd.fwdData[i].sqIdx.idx, store_mask);
-        logic span, overflow;
+        logic span, overflow_pre, overflow;
         assign span = hdir ^ loadFwd.fwdData[i].sqIdx.dir;
-        LoopCompare #(`STORE_QUEUE_WIDTH) cmp_overflow({tail, tdir}, loadFwd.fwdData[i].sqIdx, overflow);
+        LoopCompare #(`STORE_QUEUE_WIDTH) cmp_overflow({tail, tdir}, loadFwd.fwdData[i].sqIdx, overflow_pre);
+        assign overflow = overflow_pre & (tail != loadFwd.fwdData[i].sqIdx.idx);
         assign valid_vec[i] = overflow ? mask_vec : {`STORE_QUEUE_SIZE{span}} ^ (head_mask ^ store_mask);
         always_ff @(posedge clk)begin
             load_voffset[i] <= loadFwd.fwdData[i].vaddrOffset[`TLB_OFFSET-1: `DCACHE_BYTE_WIDTH];

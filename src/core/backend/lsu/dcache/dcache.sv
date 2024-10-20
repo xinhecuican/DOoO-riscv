@@ -5,6 +5,9 @@ module DCache(
     input logic rst,
     DCacheLoadIO.dcache rio,
     DCacheStoreIO.dcache wio,
+`ifdef RVA
+    DCacheAmoIO.dcache amo_io,
+`endif
     AxiIO.master axi_io,
     NativeSnoopIO.master snoop_io,
     input BackendCtrl backendCtrl
@@ -22,7 +25,8 @@ module DCache(
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_WAY_WIDTH) hitWay_encode;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) rvaddr;
 
-    logic wreq, wreq_n, wreq_n2;
+    logic wreq, wreq_n, wreq_n2, cache_wreq;
+    logic `N(`DCACHE_WAY) cache_wway;
     logic miss_req, miss_req_n;
     logic `N(`DCACHE_SET_WIDTH) widx;
     logic `ARRAY(`DCACHE_WAY, `DCACHE_TAG+1) wtagv;
@@ -43,6 +47,23 @@ module DCache(
     logic snoop_req;
     logic `N(`PADDR_SIZE) snoop_addr;
     logic `N(`DCACHE_WAY) way_dirty;
+
+`ifdef RVA
+    logic amo_req, islr, issc, amo_req_n;
+    logic `N(`PADDR_SIZE) amo_addr;
+    logic `N(`DCACHE_BYTE) amo_mask;
+    logic `N(`DCACHE_BANK) amo_en, amo_bank, amo_bank_n;
+    logic `N(`XLEN) amo_data;
+    logic `N(`AMOOP_WIDTH) amoop;
+    logic `N(`DCACHE_BITS) amo_rdata, amo_res, amo_wdata;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) amo_wmask;
+    logic `N(`DCACHE_WAY) amo_wway;
+
+    logic reservation_set;
+    logic `N(`PADDR_SIZE-`DCACHE_BYTE) reservation_addr;
+    logic `N(`DCACHE_BYTE) reservation_mask;
+    logic sc_match;
+`endif
 
     logic miss_rst, replace_rst, cache_rst;
     SyncRst rst_miss(clk, rst, miss_rst);
@@ -107,23 +128,26 @@ generate
     assign tagv_we = {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way;
     for(genvar i=0; i<`DCACHE_BANK; i++)begin
         for(genvar j=0; j<`DCACHE_WAY; j++)begin
-            assign data_we[i][j] = {`DCACHE_BYTE{wreq_n & w_wayhit[j]}} & wmask_n[i] |
+            assign data_we[i][j] = {`DCACHE_BYTE{cache_wreq & cache_wway[j]}} & wmask_n[i] |
                                    {`DCACHE_BYTE{miss_io.refill_valid & miss_io.refill_en & refill_way[j]}};
             assign rdata[j][i] = data_rdata[i][j];
         end
         assign data_index[i] = snoop_req ? snoop_addr`DCACHE_SET_BUS : 
                                |data_we[i] ? refillIdx : 
+`ifdef RVA
+                               amo_en[i] ? amo_io.paddr`DCACHE_SET_BUS :
+`endif
                                {`DCACHE_SET_WIDTH{loadBankDecode[0][i] & rio.req[0] & ~req_cancel[0]}} & loadIdx[0] |
                             {`DCACHE_SET_WIDTH{loadBankDecode[1][i] & rio.req[1] & ~req_cancel[1]}} & loadIdx[1];
     end
 endgenerate
 
-    assign refillIdx = wreq_n & (|w_wayhit) ? waddr_n`DCACHE_SET_BUS :
+    assign refillIdx = cache_wreq & (|cache_wway) ? waddr_n`DCACHE_SET_BUS :
                                                 miss_io.refillAddr`DCACHE_SET_BUS;
-    assign refillData = wreq_n & (|w_wayhit) ? wdata_n : miss_io.refillData;
-    assign dirty_we = {`DCACHE_WAY{wreq_n}} & w_wayhit | 
+    assign refillData = cache_wreq & (|cache_wway) ? wdata_n : miss_io.refillData;
+    assign dirty_we = {`DCACHE_WAY{cache_wreq}} & cache_wway | 
                       {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way;
-    assign dirty_wdata = ({`DCACHE_WAY{wreq_n}} & w_wayhit) |
+    assign dirty_wdata = ({`DCACHE_WAY{cache_wreq}} & cache_wway) |
                          ({`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en & miss_io.refill_dirty}} & refill_way);
 
     DCacheData cache_data (
@@ -134,7 +158,11 @@ endgenerate
         .tagv_index(tagvIdx),
         .tagv_wdata({miss_io.refillAddr`DCACHE_TAG_BUS, 1'b1}),
         .tagv,
+`ifdef RVA
+        .en((loadBank | amo_en | {`DCACHE_BANK{miss_io.refill_en | snoop_req}})),
+`else
         .en((loadBank | {`DCACHE_BANK{miss_io.refill_en | snoop_req}})),
+`endif
         .we(data_we),
         .index(data_index),
         .wdata(refillData),
@@ -166,7 +194,11 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign write_valid[i] = miss_io.refill_en |
                                 snoop_req |
-                                wreq_n & whit & (|wmask_n[rio.vaddr[i]`DCACHE_BANK_BUS]);
+                                cache_wreq & (|w_wayhit) & (|wmask_n[rio.vaddr[i]`DCACHE_BANK_BUS])
+`ifdef RVA
+                                | amo_en[rio.vaddr[i]`DCACHE_BANK_BUS];
+`endif
+                                ;
     end
 endgenerate
 
@@ -208,11 +240,11 @@ endgenerate
     logic `N(`DCACHE_SET_WIDTH) replace_idx;
     always_ff @(posedge clk)begin
         `UNPARAM(LOAD_PIPELINE, 2, "replace reuse hit port")
-        replace_io.hit_en[0] <= r_req_s3[0] & rio.hit[0] | wreq_n;
+        replace_io.hit_en[0] <= r_req_s3[0] & rio.hit[0] | cache_wreq;
         replace_io.hit_en[1] <= r_req_s3[1] & rio.hit[1] | refill_en_n;
-        replace_io.hit_way[0] <= wreq_n ? w_wayhit : wayHit[0];
+        replace_io.hit_way[0] <= cache_wreq ? cache_wway : wayHit[0];
         replace_io.hit_way[1] <= refill_en_n ? refill_way_n : wayHit[1];
-        replace_io.hit_index[0] <= wreq_n ? waddr_n`DCACHE_SET_BUS : miss_io.raddr[0]`DCACHE_SET_BUS;
+        replace_io.hit_index[0] <= cache_wreq ? waddr_n`DCACHE_SET_BUS : miss_io.raddr[0]`DCACHE_SET_BUS;
         replace_io.hit_index[1] <= refill_en_n ? refill_addr_n`DCACHE_SET_BUS : miss_io.raddr[1]`DCACHE_SET_BUS;
     end
 
@@ -222,14 +254,24 @@ endgenerate
 
 // write
     logic write_invalid;
+`ifdef RVA
+    assign wreq = (wio.req | replace_queue_io.snoop_en | amo_io.req) & ~amo_req;
+    assign waddr = replace_queue_io.snoop_en ? replace_queue_io.snoop_addr : 
+                   wio.req ? wio.paddr : amo_io.paddr;
+`else
     assign wreq = wio.req | replace_queue_io.snoop_en;
     assign waddr = replace_queue_io.snoop_en ? replace_queue_io.snoop_addr : wio.paddr;
+`endif
     assign wdata = wio.data;
     assign wmask = wio.mask;
     assign widx = waddr`DCACHE_SET_BUS;
     
     assign replace_io.miss_index = miss_io.req_addr`DCACHE_SET_BUS;
-    assign wio.valid = 1'b1;
+`ifdef RVA
+    assign wio.valid = ~replace_queue_io.snoop_en & ~amo_req;
+`else
+    assign wio.valid = ~replace_queue_io.snoop_en;
+`endif
 
 generate
     for(genvar i=0; i<`DCACHE_WAY; i++)begin
@@ -239,14 +281,31 @@ generate
 endgenerate
     logic `N(`STORE_COMMIT_WIDTH) scIdx_n;
     always_ff @(posedge clk)begin
-        wreq_n <= wio.req & ~replace_queue_io.snoop_en;
+        wreq_n <= wio.req & ~replace_queue_io.snoop_en & ~amo_req;
         miss_req_n <= miss_io.req;
         waddr_n <= waddr;
+`ifdef RVA
+        if(amo_req)begin
+            wdata_n <= {`DCACHE_BANK{amo_wdata}};
+            wmask_n <= amo_wmask;
+        end
+        else begin
+`endif
         wdata_n <= wdata;
         wmask_n <= wmask;
+`ifdef RVA
+        end
+`endif
         scIdx_n <= wio.scIdx;
         // write_invalid <= miss_req_n && (waddr_n`DCACHE_BLOCK_BUS == waddr`DCACHE_BLOCK_BUS);
     end
+`ifdef RVA
+    assign cache_wreq = wreq_n | amo_req_n;
+    assign cache_wway = amo_req_n ? amo_wway : w_wayhit;
+`else
+    assign cache_wreq = wreq_n & whit;
+    assign cache_wbank = w_wayhit;
+`endif
 
     // 如果该项在replace queue中，那么需要等它写回miss queue才能进行读取
     assign replace_queue_io.waddr = miss_io.req_addr;
@@ -275,7 +334,11 @@ endgenerate
     Decoder #(`DCACHE_WAY) decoder_refill_way (miss_io.refillWay, refill_way);
 
     // refill
-    assign miss_io.refill_valid = ~(wreq_n & (|(w_wayhit))) & ~wio.req & ~snoop_req & ~replace_queue_io.snoop_en;
+    assign miss_io.refill_valid = ~(cache_wreq & (|cache_wway)) & ~wio.req & ~snoop_req & ~replace_queue_io.snoop_en
+`ifdef RVA
+    & ~amo_io.req
+`endif
+    ;
     always_ff @(posedge clk)begin
         wio.refill <= miss_io.refill_en & miss_io.refill_valid & miss_io.refill_dirty;
         wio.refillIdx <= miss_io.refill_scIdx;
@@ -295,10 +358,71 @@ endgenerate
 
     // BUG: rlast但是没有refill进dcache时snoop访问不到该项
     assign replace_queue_io.snoop_data = rdata[refill_way_n];
+`ifdef RVA
+    assign replace_queue_io.snoop_ready = ~amo_req;
+`else
+    assign replace_queue_io.snoop_ready = 1'b1;
+`endif
     always_ff @(posedge clk)begin
         snoop_req <= replace_queue_io.snoop_en;
         snoop_addr <= replace_queue_io.snoop_addr;
     end
+
+    // amo
+`ifdef RVA
+    // TODO: currently only one core, not implement lr/sc
+    Decoder #(`DCACHE_BANK) decoder_amo_bank(amo_io.paddr`DCACHE_BANK_BUS, amo_bank);
+    assign amo_en = {`DCACHE_BANK{amo_io.req}} & amo_bank;
+    always_ff @(posedge clk)begin
+        amo_req <= amo_io.req & ~wio.req & ~replace_queue_io.snoop_en;
+        amo_addr <= amo_io.paddr;
+        amo_mask <= amo_io.mask;
+        amo_data <= amo_io.data;
+        amo_bank_n <= amo_bank;
+        amoop <= amo_io.op;
+        islr <= amo_io.op == `AMO_LR;
+        issc <= amo_io.op == `AMO_SC;
+        sc_match <= reservation_set & (reservation_addr == amo_io.paddr[`PADDR_SIZE-1: `DCACHE_BYTE]) & (reservation_mask == amo_io.mask);
+    end
+    assign amo_rdata = rdata[w_wayIdx][amo_addr`DCACHE_BANK_BUS];
+
+    assign amo_io.ready = ~wio.req & ~replace_queue_io.snoop_en;
+    assign amo_io.success = amo_req & whit;
+    assign amo_io.rdata = issc ? !sc_match : amo_rdata;
+    assign miss_io.amo_en = amo_req & ~whit;
+    assign amo_io.refill = miss_io.amo_refill;
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            reservation_set <= 0;
+            reservation_addr <= 0;
+            reservation_mask <= 0;
+        end
+        else begin
+            if(amo_req & islr & whit)begin
+                reservation_set <= 1'b1;
+                reservation_addr <= amo_addr[`PADDR_SIZE-1: `DCACHE_BYTE];
+                reservation_mask <= amo_mask;
+            end
+
+            if(amo_req & issc & whit)begin
+                reservation_set <= 1'b0;
+            end
+        end
+    end
+
+    AmoALU amo_alu (amo_rdata, amo_data, amoop, amo_res);
+    assign amo_wdata = issc & sc_match ? amo_data : amo_res;
+generate
+    for(genvar i=0; i<`DCACHE_BANK; i++)begin
+        assign amo_wmask[i] = {`DCACHE_BYTE{~islr & (~issc | sc_match) & amo_bank_n[i]}} & amo_mask;
+    end
+endgenerate
+    always_ff @(posedge clk)begin
+        amo_req_n <= amo_req & whit & (~islr & (~issc | sc_match));
+        amo_wway <= w_wayhit;
+    end
+`endif
 
 `ifdef DIFFTEST
 

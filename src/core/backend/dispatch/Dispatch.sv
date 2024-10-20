@@ -13,6 +13,9 @@ module Dispatch(
 `ifdef RVM
     DisIssueIO.dis dis_mult_io,
 `endif
+`ifdef RVA
+    DisIssueIO.dis dis_amo_io,
+`endif
     input WakeupBus wakeupBus,
     CommitBus.in commitBus,
     input CommitWalk commitWalk,
@@ -238,15 +241,41 @@ endgenerate
     end
 `endif
 
+`ifdef RVA
+    DispatchQueueIO #($bits(AmoIssueBundle), `AMO_DIS_PORT) amo_io(.*);
+    DispatchQueue #(
+        .DATA_WIDTH($bits(AmoIssueBundle)),
+        .DEPTH(`AMO_DIS_SIZE),
+        .OUT_WIDTH(`AMO_DIS_PORT)
+    ) amo_dispatch_queue (
+        .*,
+        .io(amo_io)
+    );
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin : amo_in
+        DecodeInfo di;
+        AmoIssueBundle data;
+        assign di = rename_dis_io.op[i].di;
+        assign data.amoop = di.amoop;
+        assign amo_io.en[i] = rename_dis_io.op[i].en & di.amov & ~backendCtrl.redirect;
+        assign amo_io.data[i] = data;
+    end
+`endif
+
     assign full = int_io.full | load_io.full | store_io.full | csr_io.full
 `ifdef RVM
                   | mult_io.full
+`endif
+`ifdef RVA
+                  | amo_io.full
 `endif
     ;
 
     assign busytable_io.dis_en = rename_dis_io.wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
     assign busytable_io.dis_rd = rename_dis_io.prd;
     assign busytable_io.preg = {
+`ifdef RVA
+                                amo_io.rs2_o, amo_io.rs1_o,
+`endif
 `ifdef RVM
                                 mult_io.rs2_o, mult_io.rs1_o,
 `endif
@@ -255,8 +284,8 @@ endgenerate
     BusyTable busy_table(.*, .io(busytable_io.busytable));
 
 // dequeue
-
-`define DEQ_TEMPLATE(name, PORT_BASE, PORT_SIZE, RS1V, RS2V) \
+    
+`define DEF_TEMPLATE(name, PORT_BASE, PORT_SIZE, RS1V, RS2V) \
     assign dis_``name``_io.en = ``name``_io.en_o; \
     assign dis_``name``_io.data = ``name``_io.data_o; \
     assign ``name``_io.issue_full = dis_``name``_io.full; \
@@ -281,11 +310,11 @@ generate \
     end \
 endgenerate
 
-    `DEQ_TEMPLATE(int, 0, `INT_DIS_PORT, 1, 1)
+    `DEF_TEMPLATE(int, 0, `INT_DIS_PORT, 1, 1)
     localparam LOAD_BASE = `INT_DIS_PORT * 2;
-    `DEQ_TEMPLATE(load, LOAD_BASE, `LOAD_DIS_PORT, 1, 0)
+    `DEF_TEMPLATE(load, LOAD_BASE, `LOAD_DIS_PORT, 1, 0)
     localparam STORE_BASE = `INT_DIS_PORT * 2 + `LOAD_DIS_PORT;
-    `DEQ_TEMPLATE(store, STORE_BASE, `STORE_DIS_PORT, 1, 1)
+    `DEF_TEMPLATE(store, STORE_BASE, `STORE_DIS_PORT, 1, 1)
 
     IssueStatusBundle csr_status;
     CsrIssueBundle csr_issue_bundle;
@@ -304,7 +333,11 @@ endgenerate
 
 `ifdef RVM
     localparam MULT_BASE = `INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT * 2;
-    `DEQ_TEMPLATE(mult, MULT_BASE, `MULT_DIS_PORT, 1, 1)
+    `DEF_TEMPLATE(mult, MULT_BASE, `MULT_DIS_PORT, 1, 1)
+`endif
+`ifdef RVA
+    localparam AMO_BASE = `INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT * 2 + `MULT_DIS_PORT * 2;
+    `DEF_TEMPLATE(amo, AMO_BASE, `AMO_DIS_PORT, 1, 1)
 `endif
 endmodule
 

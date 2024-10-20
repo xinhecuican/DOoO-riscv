@@ -41,21 +41,11 @@ generate
         assign bundle_o = bundles[0];
     end
     else if(WIDTH == 2)begin
-        logic bigger, sameLine;
-        assign sameLine = ((bundles[0].fsqDir == bundles[1].fsqDir)) &
-                          (bundles[0].fsqInfo.idx == bundles[1].fsqInfo.idx);
-        assign bigger = (bundles[0].fsqDir ^ bundles[1].fsqDir) ^
-                        (bundles[0].fsqInfo.idx < bundles[1].fsqInfo.idx);
-        always_comb begin
-            case({bundles[1].en & bundles[1].res.error, bundles[0].en & bundles[0].res.error})
-            2'b00: bundle_o = bundles[0];
-            2'b01: bundle_o = bundles[0];
-            2'b10: bundle_o = bundles[1];
-            2'b11: bundle_o = sameLine && bundles[0].fsqInfo.offset < bundles[1].fsqInfo.offset || 
-                                    !sameLine && bigger ? bundles[0] : bundles[1];
-            endcase
-        end
-
+        logic bigger, valid0, valid1;
+        LoopCompare #(`ROB_WIDTH) cmp_bigger (bundles[0].robIdx, bundles[1].robIdx, bigger);
+        assign valid0 = bundles[0].en & bundles[0].res.error;
+        assign valid1 = bundles[1].en & bundles[1].res.error;
+        assign bundle_o = valid0 & (~valid1 | bigger) ? bundles[0] : bundles[1];
     end
     else begin
         localparam HALF = WIDTH / 2;

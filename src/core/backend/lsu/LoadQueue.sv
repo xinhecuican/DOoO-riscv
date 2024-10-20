@@ -14,11 +14,11 @@ interface LoadQueueIO;
     ViolationData lq_violation;
 
     WBData `N(`LOAD_PIPELINE) wbData;
-    logic `N(`LOAD_PIPELINE) wb_valid;
+    logic `N(`LOAD_PIPELINE) wb_ready;
     logic `N(`LOAD_PIPELINE) uncache_full;
 
 
-    modport queue(input en, miss, uncache, data, paddr, rdata, rmask, mask, write_violation, wb_valid,
+    modport queue(input en, miss, uncache, data, paddr, rdata, rmask, mask, write_violation, wb_ready,
                   output lqIdx, lq_violation, wbData, uncache_full);
 endinterface
 
@@ -111,7 +111,7 @@ generate
             .commit_en(commit_en),
             .commit_idx(bank_commit_idx),
             .commitIdx(commitBus.robIdx),
-            .wb_valid(io.wb_valid[i]),
+            .wb_ready(io.wb_ready[i]),
             .wbData(io.wbData[i]),
             .tail_valid(bank_tail_valid[i]),
             .tail_full(bank_tail_full[i]),
@@ -279,7 +279,7 @@ module LoadQueueBank #(
     input logic `ARRAY(`COMMIT_WIDTH, BANK_WIDTH) commit_idx,
     input RobIdx commitIdx,
 
-    input logic wb_valid,
+    input logic wb_ready,
     output WBData wbData,
 
     output logic tail_valid,
@@ -314,6 +314,7 @@ module LoadQueueBank #(
     LoadMaskData mask_data;
     logic `N(`DCACHE_BITS) refillData, expand_mask, refillDataCombine, refillDataShift;
     logic `N(`DCACHE_BYTE) refillMask;
+    logic wb_valid, wb_valid_n;
     logic `N(`XLEN) wb_data;
     logic `N(BANK_WIDTH) wbIdx_pre, wbIdx;
     logic `ARRAY(`COMMIT_WIDTH, BANK_SIZE) commit_invalid;
@@ -361,7 +362,7 @@ module LoadQueueBank #(
                 uncache[eqIdx] <= uncache_i;
                 uncache_idx[eqIdx] <= uncache_idx_o;
             end
-            if(wbData.en & wb_valid)begin
+            if(wb_valid & wb_ready)begin
                 writeback[wbIdx] <= 1'b1;
             end
             if(cache_en)begin
@@ -433,12 +434,15 @@ module LoadQueueBank #(
         .ready()
     );
 
-    assign wbData.en = (|waiting_wb) & ~redirect & ~redirect_n;
+    assign wb_valid = (|waiting_wb) & ~redirect & ~redirect_n;
+    `SIG_N(wb_valid, wb_valid_n)
+    assign wbData.en = wb_valid_n;
 
     assign wbData.we = wb_queue_data.we;
     assign wbData.robIdx = wb_queue_data.robIdx;
     assign wbData.rd = wb_queue_data.rd;
     assign wbData.res = uncache_wb_valid ? uncache_wb_data : wb_data;
+    assign wbData.exccode = `EXC_NONE;
 
 // redirect
     always_ff @(posedge clk)begin

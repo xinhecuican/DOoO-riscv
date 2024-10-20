@@ -10,6 +10,9 @@ module RegfileWrapper(
 `ifdef RVM
     IssueRegIO.regfile mult_reg_io,
 `endif
+`ifdef RVA
+    IssueRegIO.regfile amo_reg_io,
+`endif
     input WriteBackBus wbBus
 `ifdef DIFFTEST
     ,DiffRAT.regfile diff_rat
@@ -84,11 +87,28 @@ endgenerate
     localparam STORE_BASE = `ALU_SIZE * 2 + `LOAD_PIPELINE;
     logic `N(`STORE_PIPELINE * 2) store_en;
     logic `ARRAY(`STORE_PIPELINE * 2, `PREG_WIDTH) store_preg;
-    assign store_reg_io.ready = {`STORE_PIPELINE*2{1'b1}};
+    always_comb begin
+        store_reg_io.ready = {`STORE_PIPELINE*2{1'b1}};
+        en[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_en;
+`ifdef RVA
+        store_reg_io.ready[`STORE_PIPELINE] = ~amo_reg_io.en[0];
+        store_reg_io.ready[`STORE_PIPELINE+1] = ~amo_reg_io.en[0];
+`endif
+    end
     assign store_reg_io.data = rdata[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE];
+`ifdef RVA
+    assign amo_reg_io.data[0] = rdata[`STORE_PIPELINE+STORE_BASE];
+    assign amo_reg_io.data[1] = rdata[`STORE_PIPELINE+STORE_BASE+1];
+`endif
     always_ff @(posedge clk)begin
         store_en <= store_reg_io.en;
         store_preg <= store_reg_io.preg;
+`ifdef RVA
+        store_en[`STORE_PIPELINE] <= amo_reg_io.en[0] | store_reg_io.en[`STORE_PIPELINE];
+        store_en[`STORE_PIPELINE+1] <= amo_reg_io.en[0] | store_reg_io.en[`STORE_PIPELINE+1];
+        store_preg[`STORE_PIPELINE] <= amo_reg_io.en[0] ? amo_reg_io.preg[0] : store_reg_io.preg[`STORE_PIPELINE];
+        store_preg[`STORE_PIPELINE+1] <= amo_reg_io.en[0] ? amo_reg_io.preg[1] : store_reg_io.preg[`STORE_PIPELINE+1];
+`endif
     end
     assign en[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_en;
     assign raddr[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_preg;

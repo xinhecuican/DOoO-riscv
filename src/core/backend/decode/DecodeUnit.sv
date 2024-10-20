@@ -163,6 +163,27 @@ module DecodeUnit(
     assign info.multop = funct3;
 `endif
 
+`ifdef RVA
+    logic lr, sc, amoswap, amoadd, amoxor, amoand, amoor, amomin, amomax, amominu, amomaxu, amo;
+    assign amo = ~op[4] & op[3] & ~op[2] & op[1] & op[0] & inst[1] & inst[0];
+    assign lr = amo & funct3_2 & ~inst[31] & ~inst[30] & ~inst[29] & inst[28] & ~inst[27];
+    assign sc = amo & funct3_2 & ~inst[31] & ~inst[30] & ~inst[29] & inst[28] & inst[27];
+    assign amoswap = amo & funct3_2 & ~inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & inst[27];
+    assign amoadd = amo & funct3_2 & ~inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amoxor = amo & funct3_2 & ~inst[31] & ~inst[30] & inst[29] & ~inst[28] & ~inst[27];
+    assign amoand = amo & funct3_2 & ~inst[31] & inst[30] & inst[29] & ~inst[28] & ~inst[27];
+    assign amoor = amo & funct3_2 & ~inst[31] & inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amomin = amo & funct3_2 & inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amomax = amo & funct3_2 & inst[31] & ~inst[30] & inst[29] & ~inst[28] & ~inst[27];
+    assign amominu = amo & funct3_2 & inst[31] & inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amomaxu = amo & funct3_2 & inst[31] & inst[30] & inst[29] & ~inst[28] & ~inst[27];
+
+    assign info.amoop[3] = amomin | amomax | amominu | amomaxu;
+    assign info.amoop[2] = amoadd | amoxor | amoand | amomaxu;
+    assign info.amoop[1] = amoswap | amoxor | amoor | amominu;
+    assign info.amoop[0] = sc | amoand | amoor | amomax;
+`endif
+
     assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & ~jal & ~jalr &
                      ~lb & ~lh & ~lw & ~lbu & ~lhu & ~sb & ~sh & ~sw & ~auipc & ~lui &
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
@@ -174,6 +195,10 @@ module DecodeUnit(
 `endif
 `ifdef RVM
                      & ~mult
+`endif
+`ifdef RVA
+                     & ~lr & ~sc & ~amoswap & ~amoadd & ~amoxor & ~amoand & ~amoor & ~amomin
+                     & ~amomax & ~amominu & ~amomaxu
 `endif
 `ifdef EXT_FENCEI
                      & ~fencei
@@ -219,9 +244,32 @@ module DecodeUnit(
 `ifdef RVM
     assign info.multv = mult & ~ipf & ~iam;
 `endif
-    assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw | sfence_vma}} & inst[19: 15];
-    assign info.rs2 = {5{branch | store | opreg | sfence_vma}} & inst[24: 20];
-    assign rd = {5{lui | auipc | jalr | jal | load | opimm | opreg | csr}} & inst[11: 7];
+`ifdef RVA
+    assign info.amov = amo & ~ipf & ~iam;
+`endif
+
+
+    assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw | sfence_vma
+`ifdef RVA
+    | amo
+`endif
+    }} & inst[19: 15];
+
+
+    assign info.rs2 = {5{branch | store | opreg | sfence_vma
+`ifdef RVA
+    | amo
+`endif
+    }} & inst[24: 20];
+
+    
+    assign rd = {5{lui | auipc | jalr | jal | load | opimm | opreg | csr
+`ifdef RVA
+    | amo
+`endif
+    }} & inst[11: 7];
+
+
     assign info.rd = rd;
     assign info.we = rd != 0;
     // exception from frontend and illegal inst

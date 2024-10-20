@@ -15,11 +15,12 @@ interface ReplaceQueueIO;
     logic `N(`DCACHE_REPLACE_WIDTH) replace_idx;
 
     logic snoop_en;
+    logic snoop_ready;
     logic snoop_hit;
     logic `N(`PADDR_SIZE) snoop_addr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) snoop_data;
 
-    modport queue (input en, refill_en, refill_dirty, addr, data, replace_idx, waddr, snoop_data, output idx, whit,  full, snoop_en, snoop_addr);
+    modport queue (input en, refill_en, refill_dirty, addr, data, replace_idx, waddr, snoop_data, snoop_ready, output idx, whit,  full, snoop_en, snoop_addr);
     modport miss (input full, idx, output replace_idx);
 endinterface
 
@@ -207,14 +208,14 @@ endgenerate
         logic `N(`DCACHE_SNOOP_ID_WIDTH) id;
         logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data;
     } SnoopEntry;
-    logic `N(`DCACHE_SNOOP_SIZE) snoop_en, snoop_data_valid, snoop_valid;
+    logic `N(`DCACHE_SNOOP_SIZE) snoop_en, snoop_data_valid, snoop_valid, snoop_issue;
+    logic `N(`PADDR_SIZE) snoop_addr `N(`DCACHE_SNOOP_SIZE);
     SnoopEntry `N(`DCACHE_SNOOP_SIZE) snoopEntrys;
     logic snoop_en_s2, snoop_en_s3;
     logic snoop_replace_hit;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) snoop_replace_data;
-    logic `N(`DCACHE_SNOOP_ID_WIDTH) snoop_id_s1, snoop_id_s2, snoop_id_s3;
-    logic `N(`DCACHE_SNOOP_WIDTH) snoop_busy_idx, snoop_process_idx, snoop_free_idx;
-    logic `N(`DCACHE_SNOOP_WIDTH) snoop_free_idx_s1, snoop_free_idx_s2, snoop_free_idx_s3;
+    logic `N(`DCACHE_SNOOP_WIDTH) snoop_valid_idx, snoop_process_idx, snoop_free_idx, snoop_busy_idx;
+    logic `N(`DCACHE_SNOOP_WIDTH) snoop_busy_idx_s2, snoop_busy_idx_s3;
     logic snoop_process;
     logic cd_valid, cd_last;
     logic `N(`DCACHE_SNOOP_ID_WIDTH) cd_user;
@@ -222,20 +223,17 @@ endgenerate
     logic `N($clog2(TRANSFER_BANK)) snoopIdx;
 
     assign snoop_valid = snoop_en & snoop_data_valid;
-    PEncoder #(`DCACHE_SNOOP_SIZE) encoder_snoop_idx (snoop_valid, snoop_busy_idx);
+    PEncoder #(`DCACHE_SNOOP_SIZE) encoder_snoop_idx (snoop_valid, snoop_valid_idx);
     PEncoder #(`DCACHE_SNOOP_SIZE) encoder_snoop_free_idx (~snoop_en, snoop_free_idx);
+    PEncoder #(`DCACHE_SNOOP_SIZE) encoder_snoop_busy_idx (snoop_en & ~snoop_issue, snoop_busy_idx);
+    assign io.snoop_en = |(snoop_en & ~snoop_issue);
+    assign io.snoop_addr = snoop_addr[snoop_busy_idx];
 
     always_ff @(posedge clk)begin
-        io.snoop_en <= snoop_io.ac_valid & snoop_io.ac_ready;
-        snoop_en_s2 <= io.snoop_en;
+        snoop_en_s2 <= io.snoop_en & io.snoop_ready;
         snoop_en_s3 <= snoop_en_s2;
-        io.snoop_addr <= snoop_io.ac_addr;
-        snoop_id_s1 <= snoop_io.ac_user;
-        snoop_id_s2 <= snoop_id_s1;
-        snoop_id_s3 <= snoop_id_s2;
-        snoop_free_idx_s1 <= snoop_free_idx;
-        snoop_free_idx_s2 <= snoop_free_idx_s1;
-        snoop_free_idx_s3 <= snoop_free_idx_s2;
+        snoop_busy_idx_s2 <= snoop_busy_idx;
+        snoop_busy_idx_s3 <= snoop_busy_idx_s2;
         snoop_replace_hit <= io.whit;
         snoop_replace_data <= entrys[io.idx].data;
     end
@@ -243,15 +241,21 @@ endgenerate
         if(rst == `RST)begin
             snoop_en <= 0;
             snoop_data_valid <= 0;
+            snoop_issue <= 0;
         end
         else begin
             if(snoop_io.ac_valid & snoop_io.ac_ready)begin
                 snoop_en[snoop_free_idx] <= 1'b1;
+                snoopEntrys[snoop_free_idx].id <= snoop_io.ac_user;
+                snoop_issue[snoop_free_idx] <= 1'b0;
+                snoop_addr[snoop_free_idx] <= snoop_io.ac_addr;
             end
             if(snoop_en_s3)begin
-                snoop_data_valid[snoop_free_idx_s3] <= 1'b1;
-                snoopEntrys[snoop_free_idx_s3].id <= snoop_id_s3;
-                snoopEntrys[snoop_free_idx_s3].data <= snoop_replace_hit ? snoop_replace_data : io.snoop_data;
+                snoop_data_valid[snoop_busy_idx_s3] <= 1'b1;
+                snoopEntrys[snoop_busy_idx_s3].data <= snoop_replace_hit ? snoop_replace_data : io.snoop_data;
+            end
+            if(io.snoop_en & io.snoop_ready)begin
+                snoop_issue[snoop_busy_idx] <= 1'b1;
             end
             if(cd_last)begin
                 snoop_en[snoop_process_idx] <= 1'b0;
@@ -271,10 +275,10 @@ endgenerate
         end
         else begin
             if(!snoop_process && (|snoop_valid))begin
-                snoop_data <= snoopEntrys[snoop_busy_idx].data;
-                snoop_process_idx <= snoop_busy_idx;
+                snoop_data <= snoopEntrys[snoop_valid_idx].data;
+                snoop_process_idx <= snoop_valid_idx;
                 cd_valid <= 1'b1;
-                cd_user <= snoopEntrys[snoop_busy_idx].id;
+                cd_user <= snoopEntrys[snoop_valid_idx].id;
             end
             if(snoop_io.cd_valid & snoop_io.cd_ready)begin
                 snoopIdx <= snoopIdx + 1;

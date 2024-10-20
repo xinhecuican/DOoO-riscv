@@ -331,11 +331,6 @@ endgenerate
     logic `N(`FSQ_WIDTH) redirect_dir_idx, redirect_dir_idx_n1;
     assign redirect_dir_idx = fsq_back_io.redirect.fsqInfo.idx;
 
-    always_ff @(posedge clk)begin
-        for(int i=0; i<`ALU_SIZE; i++)begin
-            fsq_back_io.directions[i] <= directionTable[fsq_back_io.fsqIdx[i]];
-        end
-    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             tdir <= 0;

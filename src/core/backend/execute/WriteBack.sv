@@ -12,58 +12,32 @@ module WriteBack(
 `endif
     output WriteBackBus wbBus
 );
-    WBData csrData;
-`ifdef RVM
-    WBData `N(`MULT_SIZE) multData, divData;
-`endif
-    always_ff @(posedge clk)begin
-        csrData <= csr_wb_io.datas[0];
-`ifdef RVM
-        multData <= mult_wb_io.datas;
-        divData <= div_wb_io.datas;
-`endif
-    end
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
         assign alu_wb_io.valid[i] = 1'b1;
         WBData wbData;
         always_ff @(posedge clk)begin
-            wbData <= alu_wb_io.datas[i];
-        end
-        if(i == 0)begin
-            assign wbBus.en[i] = csrData.en | wbData.en;
-            assign wbBus.we[i] = csrData.en ? csrData.we : wbData.we;
-            assign wbBus.robIdx[i] = csrData.en ? csrData.robIdx : wbData.robIdx;
-            assign wbBus.rd[i] = csrData.en ? csrData.rd : wbData.rd;
-            assign wbBus.res[i] = csrData.en ? csrData.res : wbData.res;
-            assign wbBus.exccode[i] = csrData.en ? csrData.exccode : wbData.exccode;
-        end
+            if(i == 0)begin
+                wbData <= csr_wb_io.datas[0].en ? csr_wb_io.datas[0] : alu_wb_io.datas[0];
+            end
 `ifdef RVM
-        else if(i == 2)begin
-            assign wbBus.en[i] = multData[0].en | wbData.en;
-            assign wbBus.we[i] = multData[0].en ? multData[0].we : wbData.we;
-            assign wbBus.robIdx[i] = multData[0].en ? multData[0].robIdx : wbData.robIdx;
-            assign wbBus.rd[i] = multData[0].en ? multData[0].rd : wbData.rd;
-            assign wbBus.res[i] = multData[0].en ? multData[0].res : wbData.res;
-            assign wbBus.exccode[i] = multData[0].en ? multData[0].exccode : wbData.exccode;
-        end
-        else if(i == 3)begin
-            assign wbBus.en[i] = divData[0].en | wbData.en;
-            assign wbBus.we[i] = divData[0].en ? divData[0].we : wbData.we;
-            assign wbBus.robIdx[i] = divData[0].en ? divData[0].robIdx : wbData.robIdx;
-            assign wbBus.rd[i] = divData[0].en ? divData[0].rd : wbData.rd;
-            assign wbBus.res[i] = divData[0].en ? divData[0].res : wbData.res;
-            assign wbBus.exccode[i] = divData[0].en ? divData[0].exccode : wbData.exccode;
-        end
+            else if(i == 2)begin
+                wbData <= mult_wb_io.datas[0].en ? mult_wb_io.datas[0] : alu_wb_io.datas[2];
+            end
+            else if(i == 3)begin
+                wbData <= div_wb_io.datas[0].en ? div_wb_io.datas[0] : alu_wb_io.datas[3];
+            end
 `endif
-        else begin
-            assign wbBus.en[i] = wbData.en;
-            assign wbBus.we[i] = wbData.we;
-            assign wbBus.robIdx[i] = wbData.robIdx;
-            assign wbBus.rd[i] = wbData.rd;
-            assign wbBus.res[i] = wbData.res;
-            assign wbBus.exccode[i] = wbData.exccode;
+            else begin
+                wbData <= alu_wb_io.datas[i];
+            end
         end
+        assign wbBus.en[i] = wbData.en;
+        assign wbBus.we[i] = wbData.we;
+        assign wbBus.robIdx[i] = wbData.robIdx;
+        assign wbBus.rd[i] = wbData.rd;
+        assign wbBus.res[i] = wbData.res;
+        assign wbBus.exccode[i] = wbData.exccode;
 
     end
 endgenerate

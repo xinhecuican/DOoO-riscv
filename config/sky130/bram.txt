@@ -113,7 +113,41 @@ bram RAM_184x64_1R1W_23
 	clocks 1 1
 	clkpol 1 1
 endbram
-match RAM_156x32_1R1W
+match RAM_184x64_1R1W_23
+	min efficiency 80
+	or_next_if_better
+endmatch
+
+bram RAM_256x64_1R1W_8
+	init 0
+	abits 6
+	dbits 256
+	groups 2
+	ports 1 1
+	wrmode 1 0
+	enable 32 1
+	transp 0 0
+	clocks 1 1
+	clkpol 1 1
+endbram
+match RAM_256x64_1R1W_8
+	min efficiency 80
+	or_next_if_better
+endmatch
+
+bram RAM_256x64_1R1W_32
+	init 0
+	abits 6
+	dbits 256
+	groups 2
+	ports 1 1
+	wrmode 1 0
+	enable 8 1
+	transp 0 0
+	clocks 1 1
+	clkpol 1 1
+endbram
+match RAM_256x64_1R1W_32
 	min efficiency 80
 	or_next_if_better
 endmatch

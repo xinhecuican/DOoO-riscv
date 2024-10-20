@@ -98,7 +98,8 @@ module BranchModel(
 
     logic `N(`VADDR_SIZE) jalr_target, br_target;
     assign s_imm = {{`XLEN-12{imm[11]}}, imm[11: 1], 1'b0};
-    assign jalr_target = rs1_data + s_imm;
+    `CRITICAL(jalr_target, branchRedirect)
+    KSA #(`VADDR_SIZE) ksa_jalr(rs1_data, s_imm, jalr_target);
     assign br_target = vaddr + s_imm;
     assign branchRes.target = op == `BRANCH_JALR ? jalr_target : 
                               dir ? br_target : result;

@@ -1,17 +1,8 @@
 # 架构
 
-- [x] rv32
-- [ ] rv64
-- [x] I
-- [x] M
-- [ ] A
-- [ ] F
-- [ ] D
-- [ ] C
-
-
-- [x] zicsr
-- [x] zifencei
+| isa |
+| - |
+| rv32ima |
 
 # 鸣谢
 

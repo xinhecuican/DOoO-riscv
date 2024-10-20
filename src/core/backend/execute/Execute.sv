@@ -29,7 +29,6 @@ generate
         assign issue_alu_io.bundle = int_exu_io.bundle[i];
         assign issue_alu_io.stream = int_exu_io.streams[i];
         assign issue_alu_io.vaddr = int_exu_io.vaddrs[i];
-        assign issue_alu_io.direction = int_exu_io.directions[i];
         assign issue_alu_io.ras_type = int_exu_io.bundle[i].ras_type;
         assign issue_alu_io.br_type = int_exu_io.bundle[i].br_type;
         assign int_exu_io.valid[i] = issue_alu_io.valid;
@@ -48,7 +47,6 @@ generate
         assign branch_ctrl_io.bundles[i].en = int_exu_io.en[i] & int_exu_io.bundle[i].branchv & int_exu_io.valid[i] & (~backendCtrl.redirect | older[i]);
         assign branch_ctrl_io.bundles[i].fsqInfo = int_exu_io.bundle[i].fsqInfo;
         assign branch_ctrl_io.bundles[i].robIdx = int_exu_io.status[i].robIdx;
-        assign branch_ctrl_io.bundles[i].fsqDir = int_exu_io.directions[i];
     end
 endgenerate
 

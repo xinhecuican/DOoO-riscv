@@ -20,8 +20,8 @@ module SimUart(
     assign apb_wr = ~apb.penable && apb.psel &&  apb.pwrite;
     assign apb_rd = ~apb.penable && apb.psel && ~apb.pwrite;
 
-    assign tx_fifo_wr = apb_wr && apb.paddr[5: 2] == `UART_TRX;
-    assign rx_fifo_rd = apb_rd && apb.paddr[5: 2] == `UART_TRX;
+    assign tx_fifo_wr = apb_wr && apb.paddr[5: 2] == `UART_THR;
+    assign rx_fifo_rd = apb_rd && apb.paddr[5: 2] == `UART_RBR;
 
     assign io_uart_out_valid = tx_fifo_wr;
     assign io_uart_out_ch = apb.pwdata[7:0];

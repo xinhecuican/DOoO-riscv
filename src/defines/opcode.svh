@@ -6,6 +6,7 @@
 `define BRANCHOP_WIDTH 3
 `define CSROP_WIDTH 4
 `define MULTOP_WIDTH 4
+`define AMOOP_WIDTH 4
 
 // intop
 `define INT_ADD     `INTOP_WIDTH'b00000
@@ -58,6 +59,19 @@
 `define MULT_DIVU      `MULTOP_WIDTH'b101
 `define MULT_REM       `MULTOP_WIDTH'b110
 `define MULT_REMU      `MULTOP_WIDTH'b111
+
+// amoop
+`define AMO_LR          `AMOOP_WIDTH'b0000
+`define AMO_SC          `AMOOP_WIDTH'b0001
+`define AMO_SWAP        `AMOOP_WIDTH'b0010
+`define AMO_ADD         `AMOOP_WIDTH'b0100
+`define AMO_XOR         `AMOOP_WIDTH'b0110
+`define AMO_AND         `AMOOP_WIDTH'b0101
+`define AMO_OR          `AMOOP_WIDTH'b0011
+`define AMO_MIN         `AMOOP_WIDTH'b1000
+`define AMO_MAX         `AMOOP_WIDTH'b1001
+`define AMO_MINU        `AMOOP_WIDTH'b1010
+`define AMO_MAXU        `AMOOP_WIDTH'b1100
 
 // opcode
 

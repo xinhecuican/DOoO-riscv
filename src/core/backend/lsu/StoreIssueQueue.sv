@@ -76,6 +76,7 @@ generate
         assign data_io[i].en = addr_io[i].en;
         assign data_io[i].status = addr_io[i].status;
         assign data_io[i].data = addr_io[i].data;
+        assign data_io[i].reg_ready = store_reg_io.ready[i];
         
         assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en;
         assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
@@ -297,13 +298,14 @@ interface StoreDataBankIO;
     IssueStatusBundle status;
     MemIssueBundle data;
     logic reg_en;
+    logic reg_ready;
     logic `N(`PREG_WIDTH) rs2;
     StoreIdx sqIdx_o;
     logic full;
     RobIdx robIdx_o;
     logic [1: 0] size_o;
 
-    modport bank(input en, status, data, output reg_en, rs2, sqIdx_o, full, robIdx_o, size_o);
+    modport bank(input en, status, data, output reg_en, reg_ready, rs2, sqIdx_o, full, robIdx_o, size_o);
 endinterface
 
 module StoreDataBank(
@@ -394,7 +396,7 @@ endgenerate
             end
             else begin
                 en <= (en | ({`STORE_ISSUE_BANK_SIZE{io.en}} & free_en)) &
-                      ~(select_en);
+                      ~(select_en & {`STORE_ISSUE_BANK_SIZE{io.reg_ready}});
             end
             
             if(io.en)begin

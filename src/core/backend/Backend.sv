@@ -27,12 +27,18 @@ module Backend(
 `ifdef RVM
     DisIssueIO #(.PORT_NUM(`MULT_DIS_PORT), .DATA_SIZE($bits(MultIssueBundle))) dis_mult_io();
 `endif
+`ifdef RVA
+    DisIssueIO #(.PORT_NUM(`AMO_DIS_PORT), .DATA_SIZE($bits(AmoIssueBundle))) dis_amo_io();
+`endif
     IssueRegIO #(`ALU_SIZE, `ALU_SIZE * 2) int_reg_io();
     IssueRegIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_reg_io();
     IssueRegIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_reg_io();
     IssueRegIO #(1, 2) csr_reg_io();
 `ifdef RVM
     IssueRegIO #(`MULT_SIZE, `MULT_SIZE * 2) mult_reg_io();
+`endif
+`ifdef RVA
+    IssueRegIO #(1, 2) amo_reg_io();
 `endif
     WakeupBus wakeupBus;
     IssueWakeupIO #(`ALU_SIZE) int_wakeup_io();
