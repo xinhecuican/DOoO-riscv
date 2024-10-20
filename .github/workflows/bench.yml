@@ -23,4 +23,4 @@ jobs:
     - name: Run Tests
       run: |
         cd scripts
-        ./isa_test.sh
+        ./isa_test.sh all
