@@ -21,6 +21,17 @@ sudo make install
 popd
 sudo rm -rf riscv-isa-sim
 
+sudo apt-get install git help2man perl python3 make
+sudo apt-get install g++  # Alternatively, clang
+sudo apt-get install libgz
+sudo apt-get install libfl2
+sudo apt-get install libfl-dev
+sudo apt-get install zlibc zlib1g zlib1g-dev
+sudo apt-get install ccache
+sudo apt-get install mold
+sudo apt-get install libgoogle-perftools-dev numactl
+sudo apt-get install perl-doc
+sudo apt-get install git autoconf flex bison
 git clone https://github.com/verilator/verilator
 pushd verilator
 git checkout v5.024-61-gee130cb20
