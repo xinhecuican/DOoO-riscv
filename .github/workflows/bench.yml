@@ -33,7 +33,7 @@ jobs:
         ./install_depend.sh --all
         cd ../utils/NEMU  
         export NEMU_HOME=/home/runner/work/DOoO-riscv/DOoO-riscv/utils/NEMU
-        make defconfig
+        touch .config
         make riscv64-do-ref_defconfig CPT_CROSS_COMPILE=riscv64-unknown-elf-
         cd ../riscv-tests/isa
         make XLEN=32 -j8
