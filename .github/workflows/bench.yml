@@ -20,17 +20,21 @@ jobs:
       id: cache
       with:
         path: |
-          /usr/local/riscv64-unknown-elf/
-          /usr/local/bin/riscv64-unknown-elf*
+          /opt/riscv
           /usr/local/share/verilator
           /usr/local/bin/verilator*
         key: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
         restore-keys: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
-        
-    - name: Install Dependency
+
+    - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
       run: |
         cd scripts
-        ./install_depend.sh --all
+        ./install_depend.sh --riscv-gnu-toolchain --verilator
+    - name: Install Dependency
+      run: |
+        echo "/opt/riscv/bin" >> $GITHUB_PATH
+        cd scripts
+        ./install_depend.sh --dramsim3 --riscv-isa-sim
         cd ../utils/NEMU  
         export NEMU_HOME=/home/runner/work/DOoO-riscv/DOoO-riscv/utils/NEMU
         touch .config

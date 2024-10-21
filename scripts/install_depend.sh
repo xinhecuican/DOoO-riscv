@@ -24,7 +24,7 @@ install_riscv_gnu_toolchain() {
     sed -i '10arv32imaf \\' gcc/gcc/config/riscv/t-elf-multilib
     sed -i '24amarch=rv32ima/mabi=ilp32 \\' gcc/gcc/config/riscv/t-elf-multilib
     sed -i '25amarch=rv32imaf/mabi=ilp32f \\' gcc/gcc/config/riscv/t-elf-multilib
-    ./configure --with-arch=rv64gc --with-abi=lp64d --enable-multilib --prefix=/usr/local
+    ./configure --with-arch=rv64gc --with-abi=lp64d --enable-multilib --prefix=/opt/riscv
     sudo make -j`nproc`
     sudo make install
     popd
