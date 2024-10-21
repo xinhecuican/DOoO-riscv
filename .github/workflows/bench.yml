@@ -15,11 +15,23 @@ jobs:
       with:
         fetch-depth: 3
         submodules: "recursive"
+    - name: Cache Dependency
+      uses: actions/cache@v4
+      id: cache
+      with:
+        path: |
+          /usr/local/riscv64-unknown-elf/
+          /usr/local/bin/riscv64-unknown-elf*
+          /usr/local/share/verilator
+          /usr/local/bin/verilator*
+        key: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
+        restore-keys: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
+        
     - name: Install Dependency
       run: |
         cd scripts
-        ./install_depend.sh all
-    
+        ./install_depend.sh --all
+
     - name: Run Tests
       run: |
         scripts/isa_test.sh all
