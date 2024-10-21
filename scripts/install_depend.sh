@@ -24,7 +24,7 @@ install_riscv_gnu_toolchain() {
     sed -i '24amarch=rv32ima/mabi=ilp32 \\' gcc/gcc/config/riscv/t-elf-multilib
     sed -i '25amarch=rv32imaf/mabi=ilp32f \\' gcc/gcc/config/riscv/t-elf-multilib
     ./configure --with-arch=rv64gc --with-abi=lp64d --enable-multilib
-    sudo make -j8
+    sudo make install -j`nproc`
     popd
     sudo rm -rf riscv-gnu-toolchain
 }
@@ -33,8 +33,8 @@ install_riscv_isa_sim() {
     git clone https://github.com/riscv/riscv-isa-sim.git
     pushd riscv-isa-sim
     mkdir build && cd build
-    ./configure
-    make -j8
+    ../configure
+    make -j`nproc`
     sudo make install
     popd
     sudo rm -rf riscv-isa-sim
