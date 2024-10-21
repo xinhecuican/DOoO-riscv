@@ -4,7 +4,6 @@ install_dependencies() {
     sudo apt-get install -y gcc-11 g++-11 build-essential cmake tclsh ant default-jre swig google-perftools libgoogle-perftools-dev python3 python3-dev python3-pip uuid uuid-dev tcl-dev flex libfl-dev git pkg-config libreadline-dev bison libffi-dev wget python3-orderedmultidict
     sudo apt-get install git help2man perl python3 make
     sudo apt-get install g++  # Alternatively, clang
-    sudo apt-get install libgz
     sudo apt-get install libfl2
     sudo apt-get install libfl-dev
     sudo apt-get install zlibc zlib1g zlib1g-dev
