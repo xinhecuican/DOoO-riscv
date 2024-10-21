@@ -30,7 +30,14 @@ jobs:
     - name: Install Dependency
       run: |
         cd scripts
-        ./install_depend.sh --verilator --dramsim3
+        ./install_depend.sh --all
+        cd ../utils/NEMU  
+        export NEMU_HOME=/home/runner/work/DOoO-riscv/DOoO-riscv/utils/NEMU
+        make riscv64-do-ref_defconfig CPT_CROSS_COMPILE=riscv64-unknown-elf-
+        cd ../riscv-tests/isa
+        make XLEN=32 -j8
+        cd ../benchmarks
+        make XLEN=32 -j8
 
     - name: Run Tests
       run: |
