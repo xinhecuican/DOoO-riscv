@@ -12,6 +12,7 @@ install_dependencies() {
     sudo apt-get install libgoogle-perftools-dev numactl
     sudo apt-get install perl-doc
     sudo apt-get install git autoconf flex bison
+    sudo apt-get install libsdl2-dev
 }
 
 install_riscv_gnu_toolchain() {
