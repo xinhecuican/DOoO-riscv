@@ -1,6 +1,7 @@
 #!/bin/bash
 
 install_dependencies() {
+    sudo apt-get install autoconf automake autotools-dev curl python3 python3-pip libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build git cmake libglib2.0-dev libslirp-dev
     sudo apt-get install -y gcc-11 g++-11 build-essential cmake tclsh ant default-jre swig google-perftools libgoogle-perftools-dev python3 python3-dev python3-pip uuid uuid-dev tcl-dev flex libfl-dev git pkg-config libreadline-dev bison libffi-dev wget python3-orderedmultidict
     sudo apt-get install git help2man perl python3 make
     sudo apt-get install g++  # Alternatively, clang
@@ -23,7 +24,7 @@ install_riscv_gnu_toolchain() {
     sed -i '10arv32imaf \\' gcc/gcc/config/riscv/t-elf-multilib
     sed -i '24amarch=rv32ima/mabi=ilp32 \\' gcc/gcc/config/riscv/t-elf-multilib
     sed -i '25amarch=rv32imaf/mabi=ilp32f \\' gcc/gcc/config/riscv/t-elf-multilib
-    ./configure --with-arch=rv64gc --with-abi=lp64d --enable-multilib
+    ./configure --with-arch=rv64gc --with-abi=lp64d --enable-multilib --prefix=/usr/local
     sudo make -j`nproc`
     sudo make install
     popd
