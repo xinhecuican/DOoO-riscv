@@ -74,31 +74,28 @@ install_yosys() {
     rm -rf synlig
 }
 
-main() {
-    while [[ "$#" -gt 0 ]]; do
-        case $1 in
-            --riscv-gnu-toolchain) install_riscv_gnu_toolchain ;;
-            --riscv-isa-sim) install_riscv_isa_sim ;;
-            --verilator) install_verilator ;;
-            --dramsim3) install_dramsim3 ;;
-            --yosys) install_yosys ;;
-            --all) 
-                install_dependencies
-                install_riscv_gnu_toolchain
-                install_riscv_isa_sim
-                install_verilator
-                install_dramsim3
-                install_yosys
-                ;;
-            *) 
-                echo "Unknown option: $1"
-                echo "Usage: $0 [--dependencies] [--riscv-gnu-toolchain] [--riscv-isa-sim] [--verilator] [--dramsim3] [--synlig] [--all]"
-                exit 1
-                ;;
-        esac
-        shift
-    done
-}
-
 install_dependencies
-main
+args=("$@")
+for arg in "${args[@]}"; do
+    case $arg in
+        --riscv-gnu-toolchain) install_riscv_gnu_toolchain ;;
+        --riscv-isa-sim) install_riscv_isa_sim ;;
+        --verilator) install_verilator ;;
+        --dramsim3) install_dramsim3 ;;
+        --yosys) install_yosys ;;
+        --all) 
+            install_dependencies
+            install_riscv_gnu_toolchain
+            install_riscv_isa_sim
+            install_verilator
+            install_dramsim3
+            install_yosys
+            ;;
+        *) 
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--riscv-gnu-toolchain] [--riscv-isa-sim] [--verilator] [--dramsim3] [--synlig] [--all]"
+            exit 1
+            ;;
+    esac
+    shift
+done
