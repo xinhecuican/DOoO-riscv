@@ -30,7 +30,7 @@ jobs:
     - name: Install Dependency
       run: |
         cd scripts
-        ./install_depend.sh --all
+        ./install_depend.sh --verilator --dramsim3
 
     - name: Run Tests
       run: |
