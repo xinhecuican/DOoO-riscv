@@ -33,14 +33,12 @@ jobs:
         tar -xzf riscv.tar.gz -C $HOME
         echo "export PATH=\$PATH:\$HOME/riscv/bin" >> $GITHUB_ENV
         echo $PATH
-        export PATH=$PATH:$HOME/riscv/bin
-        $HOME/riscv/bin/riscv64-unknown-elf-gcc --version
-        riscv64-unknown-elf-gcc --version
+        echo $GITHUB_ENV
         cd scripts
         ./install_depend.sh --verilator
     - name: Install Dependency
       run: |
-        echo "$HOME/riscv/bin" >> $GITHUB_PATH
+        export PATH=$PATH:$HOME/riscv/bin
         cd scripts
         ./install_depend.sh --dramsim3 --riscv-isa-sim
         cd ../utils/NEMU  
@@ -54,4 +52,5 @@ jobs:
 
     - name: Run Tests
       run: |
+        export PATH=$PATH:$HOME/riscv/bin
         scripts/isa_test.sh all
