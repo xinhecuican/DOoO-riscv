@@ -46,6 +46,7 @@ jobs:
         touch .config
         make riscv64-do-ref_defconfig CPT_CROSS_COMPILE=riscv64-unknown-elf-
         cd ../riscv-tests
+        git submodule init && git submodule update
         autoconf
         ./configure
         make XLEN=32 all -j8
