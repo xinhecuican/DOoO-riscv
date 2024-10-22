@@ -28,8 +28,11 @@ jobs:
 
     - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
       run: |
+        sudo apt install wget
+        wget https://github.com/xinhecuican/DOoO-riscv/releases/download/toolchain/riscv.tar.gz
+        tar -xzf riscv.tar.gz -C /opt
         cd scripts
-        ./install_depend.sh --riscv-gnu-toolchain --verilator
+        ./install_depend.sh --verilator
     - name: Install Dependency
       run: |
         echo "/opt/riscv/bin" >> $GITHUB_PATH
