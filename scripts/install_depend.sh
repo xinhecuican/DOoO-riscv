@@ -14,6 +14,7 @@ install_dependencies() {
     sudo apt-get install perl-doc
     sudo apt-get install git autoconf flex bison
     sudo apt-get install libsdl2-dev
+    sudo apt-get install device-tree-compiler
 }
 
 install_riscv_gnu_toolchain() {

@@ -46,7 +46,7 @@ jobs:
         touch .config
         make riscv64-do-ref_defconfig CPT_CROSS_COMPILE=riscv64-unknown-elf-
         cd ../riscv-tests/isa
-        make XLEN=32 -j8
+        make XLEN=32 all -j8
         cd ../benchmarks
         make XLEN=32 -j8
 
