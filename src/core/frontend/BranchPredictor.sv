@@ -6,11 +6,13 @@ module BranchPredictor(
 );
     logic `VADDR_BUS pc;
     BranchHistory history;
+    /* verilator lint_off UNOPTFLAT */
     RedirectCtrl redirect;
     SquashInfo squashInfo;
     BranchUpdateInfo updateInfo;
     logic squash;
     logic update;
+    logic stall_normal;
     BpuBtbIO btb_io(.*);
     BpuTageIO tage_io(.*);
     BpuUBtbIO ubtb_io(.*);
@@ -60,7 +62,8 @@ module BranchPredictor(
     assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect[0];
     assign redirect.tage_ready = tage_io.ready;
     assign redirect.flush = bpu_fsq_io.squash;
-    assign redirect.stall = bpu_fsq_io.stall | ~tage_io.ready;
+    assign redirect.stall = bpu_fsq_io.stall & ~redirect.s2_redirect | ~tage_io.ready;
+    assign stall_normal = bpu_fsq_io.stall | ~tage_io.ready;
     assign redirect_result = s2_result_out;
     always_ff @(posedge clk)begin
         if(control_rst == `RST)begin
@@ -69,13 +72,11 @@ module BranchPredictor(
         else if(redirect.flush)begin
             pc <= squashInfo.target_pc;
         end
-        else if(!redirect.stall)begin // TODO: s2_redirect priority higher than stall
-            if(redirect.s2_redirect)begin
-                pc <= s2_result_out.stream.target;
-            end
-            else begin
-                pc <= s1_result.stream.target;
-            end
+        else if(redirect.s2_redirect)begin
+            pc <= s2_result_out.stream.target;
+        end
+        else if(!stall_normal)begin
+            pc <= s1_result.stream.target;
         end
 
         if(control_rst == `RST)begin
@@ -85,15 +86,9 @@ module BranchPredictor(
         else if(redirect.flush)begin
             s2_result_in.en <= 1'b0;
         end
-        else if(!redirect.stall)begin
-            if(redirect.s2_redirect)begin
-                s2_result_in.en <= 1'b0;
-            end
-            else begin
-                s2_result_in <= s1_result;
-                s2_meta_in <= s1_meta;
-            end
-
+        else if(~stall_normal | redirect.s2_redirect)begin
+            s2_result_in <= s1_result;
+            s2_meta_in <= s1_meta;
         end
 
         // if(rst == `RST || redirect.flush)begin
@@ -106,7 +101,7 @@ module BranchPredictor(
 
     assign bpu_fsq_io.en = bpu_fsq_io.prediction.en & ~redirect.flush;
     assign bpu_fsq_io.prediction = redirect.s2_redirect ? s2_result_out : s1_result;
-    assign bpu_fsq_io.redirect = redirect.s2_redirect & ~redirect.flush & ~redirect.stall;
+    assign bpu_fsq_io.redirect = redirect.s2_redirect & ~redirect.flush;
     assign bpu_fsq_io.lastStage = s2_result_out.en  & ~redirect.flush;
     assign bpu_fsq_io.lastStageIdx = s2_result_out.stream_idx;
     assign bpu_fsq_io.lastStageMeta = s2_meta_out;

@@ -68,7 +68,7 @@ generate
         end
         PEncoder #(`FETCH_WIDTH) encoder_rs1_idx (raw_rs1[i], raw_rs1_idx[i]);
         PEncoder #(`FETCH_WIDTH) encoder_rs2_idx (raw_rs2[i], raw_rs2_idx[i]);
-        PREncoder #(`FETCH_WIDTH) encoder_waw_idx (waw_old[i], waw_idx[i]);
+        PEncoder #(`FETCH_WIDTH) encoder_waw_idx (waw_old[i], waw_idx[i]);
     end
 endgenerate
 

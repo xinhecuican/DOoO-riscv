@@ -82,9 +82,27 @@ typedef struct packed {
 } ISA;
 `define ISA_MASK {2'b11, {`MXL-28{1'b0}}, {4'h0, 2'h3, 1'b0, 1'b1, 1'b0, 2'h3, 1'b0, 2'h3, 3'b000, 2'h3, 1'b0, 6'h3f}}
 
-`ifdef RV32I
-`define MISA_INIT {2'b1, {`MXL-28{1'b0}}, 26'h80}
-`endif
+`define MISA_INIT '{ \
+`ifdef RV32I \
+    mxl: 2'b1,  \
+`endif \
+`ifdef RV64I \
+    mxl: 2'b2, \
+`endif \
+    ext: '{ \
+`ifdef RVM \
+        m: 1'b1, \
+`endif \
+`ifdef RVA \
+        a: 1'b1, \
+`endif \
+        i: 1'b1, \
+        s: 1'b1, \
+        u: 1'b1, \
+        default: 0 \
+    }, \
+    default: 0 \
+}
 
 typedef struct packed {
     logic `N(25) bank;

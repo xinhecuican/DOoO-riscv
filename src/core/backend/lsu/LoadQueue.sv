@@ -142,14 +142,20 @@ endgenerate
         if(&bank_tail_full)begin
             redirect_tail = tail;
         end
+        else if(~(|bank_tail_valid))begin
+            redirect_tail = head_n;
+        end
+        else if(~bank_tail_valid[0])begin
+            redirect_tail = bank_tail[1] - 1;
+        end
+        else if(~bank_tail_valid[1])begin
+            redirect_tail = bank_tail[0] - 1;
+        end
         else if(bank_tail_full[0] | ~bank_tail_full[1] & bank_tail_valid[1] & ~bank_tail_equal)begin
             redirect_tail = bank_tail[1];
         end
-        else if(bank_tail_valid[0])begin
-            redirect_tail = bank_tail[0];
-        end
         else begin
-            redirect_tail = head_n;
+            redirect_tail = bank_tail[0];
         end
     end
     assign bank_tail_dir = &bank_tail_full ? tdir : 

@@ -34,8 +34,8 @@ module FSQ (
     assign tail_n1 = tail + 1;
     assign search_head_n1 = search_head + 1;
     assign write_tail = bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
-    assign queue_we = bpu_fsq_io.en & ~full;
-    assign last_stage_we = bpu_fsq_io.lastStage & ~full;
+    assign queue_we = bpu_fsq_io.en & (~full | bpu_fsq_io.redirect);
+    assign last_stage_we = bpu_fsq_io.lastStage & (~full | bpu_fsq_io.redirect);
     assign write_index = pd_redirect.en ? pd_redirect.fsqIdx.idx :
                          bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
     assign searchIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : search_head;
@@ -304,7 +304,7 @@ endgenerate
             else if(pd_redirect.en)begin
                 search_head <= pd_redirect_n1;
             end
-            else if(bpu_fsq_io.redirect & ~full & search_abandon)begin
+            else if(bpu_fsq_io.redirect & search_abandon)begin
                 search_head <= bpu_fsq_io.prediction.stream_idx;
             end
             else if(cache_req_ok & cache_req) begin
@@ -317,7 +317,7 @@ endgenerate
             else if(pd_redirect.en)begin
                 tail <= pd_redirect_n1;
             end
-            else if(bpu_fsq_io.redirect & ~full)begin
+            else if(bpu_fsq_io.redirect)begin
                 tail <= bpu_fsq_redirect_n1;
             end
             else if(bpu_fsq_io.en & ~full)begin
@@ -345,7 +345,7 @@ endgenerate
             else if(pd_redirect.en)begin
                 tdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
             end
-            else if(bpu_fsq_io.redirect & ~full)begin
+            else if(bpu_fsq_io.redirect)begin
                 tdir <= bpu_fsq_io.prediction.stream_idx[`FSQ_WIDTH-1] & ~bpu_fsq_redirect_n1[`FSQ_WIDTH-1] ? ~bpu_fsq_io.prediction.stream_dir : bpu_fsq_io.prediction.stream_dir;
             end
             else if(bpu_fsq_io.en & ~full)begin
@@ -361,7 +361,7 @@ endgenerate
             else if(pd_redirect.en)begin
                 shdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
             end
-            else if(bpu_fsq_io.redirect & ~full & search_abandon)begin
+            else if(bpu_fsq_io.redirect & search_abandon)begin
                 shdir <= bpu_fsq_io.prediction.stream_dir;
             end
             else if(cache_req_ok & cache_req)begin
