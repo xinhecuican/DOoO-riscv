@@ -45,10 +45,9 @@ jobs:
         export NEMU_HOME=/home/runner/work/DOoO-riscv/DOoO-riscv/utils/NEMU
         touch .config
         make riscv64-do-ref_defconfig CPT_CROSS_COMPILE=riscv64-unknown-elf-
-        cd ../riscv-tests/isa
+        cd ../riscv-tests
+        ./configure
         make XLEN=32 all -j8
-        cd ../benchmarks
-        make XLEN=32 -j8
 
     - name: Run Tests
       run: |
