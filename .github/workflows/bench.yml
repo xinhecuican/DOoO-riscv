@@ -45,6 +45,7 @@ jobs:
         export NEMU_HOME=/home/runner/work/DOoO-riscv/DOoO-riscv/utils/NEMU
         touch .config
         make riscv64-do-ref_defconfig CPT_CROSS_COMPILE=riscv64-unknown-elf-
+        make -j8
         cd ../riscv-tests
         git submodule init && git submodule update
         autoconf
