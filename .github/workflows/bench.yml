@@ -55,4 +55,4 @@ jobs:
     - name: Run Tests
       run: |
         export PATH=$PATH:$HOME/riscv/bin
-        scripts/isa_test.sh all
+        scripts/isa_test.sh benchmarks
