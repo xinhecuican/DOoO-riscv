@@ -31,6 +31,8 @@ jobs:
         sudo apt install wget
         wget https://github.com/xinhecuican/DOoO-riscv/releases/download/toolchain/riscv.tar.gz
         tar -xzf riscv.tar.gz -C $HOME
+        echo "$HOME/riscv/bin" >> $GITHUB_PATH
+        $HOME/riscv/bin/riscv64-unknown-elf-gcc --version
         riscv64-unknown-elf-gcc --version
         cd scripts
         ./install_depend.sh --verilator
