@@ -32,6 +32,8 @@ jobs:
         wget https://github.com/xinhecuican/DOoO-riscv/releases/download/toolchain/riscv.tar.gz
         tar -xzf riscv.tar.gz -C $HOME
         echo "$HOME/riscv/bin" >> "$GITHUB_PATH"
+        echo $PATH
+        export PATH=$PATH:$HOME/riscv/bin
         $HOME/riscv/bin/riscv64-unknown-elf-gcc --version
         riscv64-unknown-elf-gcc --version
         cd scripts
