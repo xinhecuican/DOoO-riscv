@@ -30,7 +30,7 @@ jobs:
       run: |
         sudo apt install wget
         wget https://github.com/xinhecuican/DOoO-riscv/releases/download/toolchain/riscv.tar.gz
-        tar -xzf riscv.tar.gz -C /opt
+        tar -xvzf riscv.tar.gz -C /opt
         cd scripts
         ./install_depend.sh --verilator
     - name: Install Dependency
