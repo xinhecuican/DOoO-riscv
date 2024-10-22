@@ -1,0 +1,59 @@
+name: bench
+
+on:
+  push:
+    branches: ["master", "ci"]
+  pull_request: 
+    branches: ["master"]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 3
+        submodules: "recursive"
+    - name: Cache Dependency
+      uses: actions/cache@v4
+      id: cache
+      with:
+        path: |
+          $HOME/riscv
+          /usr/local/share/verilator
+          /usr/local/bin/verilator*
+        key: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
+        restore-keys: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
+
+    - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+      run: |
+        sudo apt install wget
+        wget https://github.com/xinhecuican/DOoO-riscv/releases/download/toolchain/riscv.tar.gz
+        tar -xzf riscv.tar.gz -C $HOME
+        echo "export PATH=\$PATH:\$HOME/riscv/bin" >> $GITHUB_ENV
+        echo $PATH
+        echo $GITHUB_ENV
+        cd scripts
+        ./install_depend.sh --verilator
+    - name: Install Dependency
+      run: |
+        export PATH=$PATH:$HOME/riscv/bin
+        cd scripts
+        ./install_depend.sh --dramsim3 --riscv-isa-sim
+        cd ../utils/NEMU  
+        export NEMU_HOME=/home/runner/work/DOoO-riscv/DOoO-riscv/utils/NEMU
+        touch .config
+        make riscv64-do-ref_defconfig CPT_CROSS_COMPILE=riscv64-unknown-elf-
+        make -j8
+        cd ../riscv-tests
+        git submodule init && git submodule update
+        autoconf
+        ./configure
+        make XLEN=32 clean
+        make XLEN=32 -j8
+
+    - name: Run Tests
+      run: |
+        export PATH=$PATH:$HOME/riscv/bin
+        scripts/isa_test.sh benchmarks
