@@ -58,6 +58,7 @@ install_verilator() {
 install_dramsim3() {
     git clone https://github.com/OpenXiangShan/DRAMsim3.git ../utils/difftest/DRAMsim3
     cd ../utils/difftest/DRAMsim3
+    git checkout fca1245acfff01a4f18830cd15675e904564aa2a
     mkdir build && cd build
     cmake -D COSIM=1 ..
     make -j`nproc`
