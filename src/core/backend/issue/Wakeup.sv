@@ -9,15 +9,17 @@
 module Wakeup(
     input logic clk,
     input logic rst,
-    IssueWakeupIO.wakeup int_wakeup_io,
-    IssueWakeupIO.wakeup load_wakeup_io,
-    IssueWakeupIO.wakeup csr_wakeup_io,
 `ifdef RVM
     IssueWakeupIO.wakeup mult_wakeup_io,
     IssueWakeupIO.wakeup div_wakeup_io,
 `endif
-    output WakeupBus wakeupBus,
-    input WriteBackBus wbBus
+    output WakeupBus int_wakeupBus,
+`ifdef RVF
+    output WakeupBus fp_wakeupBus,
+`endif
+    IssueWakeupIO.wakeup int_wakeup_io,
+    IssueWakeupIO.wakeup load_wakeup_io,
+    IssueWakeupIO.wakeup csr_wakeup_io
 );
 
     logic `N(`ALU_SIZE) int_en, int_we;
@@ -54,14 +56,20 @@ generate
         end
     end
 endgenerate
-    assign wakeupBus.en[`ALU_SIZE-1: 0] = int_en;
-    assign wakeupBus.we[`ALU_SIZE-1: 0] = int_we;
-    assign wakeupBus.rd[`ALU_SIZE-1: 0] = int_rd;
+    assign int_wakeupBus.en[`ALU_SIZE-1: 0] = int_en;
+    assign int_wakeupBus.we[`ALU_SIZE-1: 0] = int_we;
+    assign int_wakeupBus.rd[`ALU_SIZE-1: 0] = int_rd;
 
 
     localparam LOAD_BASE = `ALU_SIZE * 2;
     assign load_wakeup_io.ready = {`LOAD_PIPELINE{1'b1}};
-    assign wakeupBus.en[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.en;
-    assign wakeupBus.we[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.we;
-    assign wakeupBus.rd[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.rd;
+    assign int_wakeupBus.en[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.en[`LOAD_PIPELINE-1: 0];
+    assign int_wakeupBus.we[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.we[`LOAD_PIPELINE-1: 0];
+    assign int_wakeupBus.rd[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.rd[`LOAD_PIPELINE-1: 0];
+
+`ifdef RVF
+    assign fp_wakeupBus.en[`LOAD_PIPELINE-1: 0] = load_wakeup_io.en[`LOAD_PIPELINE +: `LOAD_PIPELINE];
+    assign fp_wakeupBus.we[`LOAD_PIPELINE-1: 0] = load_wakeup_io.we[`LOAD_PIPELINE +: `LOAD_PIPELINE];
+    assign fp_wakeupBus.rd[`LOAD_PIPELINE-1: 0] = load_wakeup_io.rd[`LOAD_PIPELINE +: `LOAD_PIPELINE];
+`endif
 endmodule

@@ -11,6 +11,9 @@ interface StoreUnitIO;
     logic `N(`STORE_ISSUE_BANK_NUM) data_en;
     StoreIdx `N(`STORE_ISSUE_BANK_NUM) data_sqIdx;
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, 2) data_size;
+`ifdef RVF
+    logic `N(`STORE_ISSUE_BANK_NUM) data_fp_sel;
+`endif
     logic `N(`STORE_PIPELINE) success;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) success_idx;
     ReplyRequest `N(`STORE_PIPELINE) reply;
@@ -18,8 +21,16 @@ interface StoreUnitIO;
     logic full;
     logic dis_stall;
 
-    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size, issue_idx, exception, dis_stall, input reply, success, success_idx, full);
-    modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx, data_size, dis_stall, output full);
+    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size, issue_idx, exception, dis_stall, input reply, success, success_idx, full
+`ifdef RVF
+    ,output data_fp_sel
+`endif
+    );
+    modport queue (input data_en, dis_en, dis_rob_idx, dis_sq_idx, data_sqIdx, data_size, dis_stall, output full
+`ifdef RVF
+    ,input data_fp_sel
+`endif
+    );
 endinterface
 
 module StoreIssueQueue(
@@ -27,7 +38,10 @@ module StoreIssueQueue(
     input logic rst,
     DisIssueIO.issue dis_store_io,
     IssueRegIO.issue store_reg_io,
-    input WakeupBus wakeupBus,
+    input WakeupBus int_wakeupBus,
+`ifdef RVF
+    input WakeupBus fp_wakeupBus,
+`endif
     input BackendCtrl backendCtrl,
     StoreUnitIO.store store_io,
     DTLBLsuIO.sq tlb_lsu_io
@@ -44,7 +58,8 @@ generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_NUM; i++)begin
         StoreAddrBank addr_bank (
             .*,
-            .io(addr_io[i])
+            .io(addr_io[i]),
+            .wakeupBus(int_wakeupBus)
         );
         StoreDataBank data_bank (
             .*,
@@ -78,8 +93,17 @@ generate
         assign data_io[i].data = addr_io[i].data;
         assign data_io[i].reg_ready = store_reg_io.ready[i];
         
-        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en;
+        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en
+`ifdef RVF
+                                                          & ~data_io[i].fp_reg_en
+`endif
+        ;
         assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
+`ifdef RVF
+        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM*2+i] = data_io[i].reg_en & data_io[i].fp_reg_en;
+        assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM*2+i] = data_io[i].rs2;
+        assign store_io.data_fp_sel[i] = data_io[i].fp_sel_o;
+`endif
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
         assign store_io.dis_rob_idx[i] = dis_store_io.status[i].robIdx;
         assign store_io.dis_sq_idx[i] = mem_issue_bundle.sqIdx;
@@ -152,7 +176,7 @@ module StoreAddrBank(
     logic `N(`STORE_ISSUE_BANK_SIZE) select_en;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
     StoreIssueData data_o;
-    logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `WB_SIZE) rs1_cmp;
+    logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `INT_WAKEUP_PORT) rs1_cmp;
     logic [1: 0] size;
     RobIdx select_robIdx;
 
@@ -199,7 +223,7 @@ endgenerate
     ParallelAdder #(.DEPTH(`STORE_ISSUE_BANK_SIZE)) adder_bankNum(en, io.bankNum);
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
-        for(genvar j=0; j<`WB_SIZE; j++)begin
+        for(genvar j=0; j<`INT_WAKEUP_PORT; j++)begin
             assign rs1_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs1);
         end
     end
@@ -298,6 +322,10 @@ interface StoreDataBankIO;
     IssueStatusBundle status;
     MemIssueBundle data;
     logic reg_en;
+`ifdef RVF
+    logic fp_reg_en;
+    logic fp_sel_o;
+`endif
     logic reg_ready;
     logic `N(`PREG_WIDTH) rs2;
     StoreIdx sqIdx_o;
@@ -305,17 +333,27 @@ interface StoreDataBankIO;
     RobIdx robIdx_o;
     logic [1: 0] size_o;
 
-    modport bank(input en, status, data, output reg_en, reg_ready, rs2, sqIdx_o, full, robIdx_o, size_o);
+    modport bank(input en, status, data, output reg_en, reg_ready, rs2, sqIdx_o, full, robIdx_o, size_o
+`ifdef RVF
+    ,output fp_reg_en, fp_sel_o
+`endif
+    );
 endinterface
 
 module StoreDataBank(
     input logic clk,
     input logic rst,
     StoreDataBankIO.bank io,
-    input WakeupBus wakeupBus,
+    input WakeupBus int_wakeupBus,
+`ifdef RVF
+    input WakeupBus fp_wakeupBus,
+`endif
     input BackendCtrl backendCtrl
 );
     typedef struct packed {
+`ifdef RVF
+        logic frs2_sel;
+`endif
         logic rs2v;
         logic `N(`PREG_WIDTH) rs2;
         RobIdx robIdx;
@@ -330,7 +368,12 @@ module StoreDataBank(
     logic `N(`STORE_ISSUE_BANK_SIZE) ready;
     logic `N(`STORE_ISSUE_BANK_SIZE) select_en;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
-    logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `WB_SIZE) rs2_cmp;
+    logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `INT_WAKEUP_PORT) int_rs2_cmp;
+`ifdef RVF
+    logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `FP_WAKEUP_PORT) fp_rs2_cmp;
+    logic fp_sel;
+`endif
+    logic `N(`STORE_ISSUE_BANK_SIZE) rs2_cmp;
     logic [1: 0] size;
     RobIdx select_robIdx;
 
@@ -350,7 +393,12 @@ endgenerate
         .select(select_en)
     );
     assign io.full = &en;
+`ifdef RVF
+    assign io.reg_en = (|(ready)) & ~backendCtrl.redirect;
+    assign io.fp_reg_en = status_ram[selectIdx].frs2_sel;
+`else
     assign io.reg_en = (|ready) & ~backendCtrl.redirect;
+`endif
     assign io.rs2 = status_ram[selectIdx].rs2;
     always_ff @(posedge clk)begin
         select_robIdx <= status_ram[selectIdx].robIdx;
@@ -361,9 +409,17 @@ endgenerate
     Encoder #(`STORE_ISSUE_BANK_SIZE) encoder_select_idx (select_en, selectIdx);
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
-        for(genvar j=0; j<`WB_SIZE; j++)begin
-            assign rs2_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs2);
+        for(genvar j=0; j<`INT_WAKEUP_PORT; j++)begin
+            assign int_rs2_cmp[i][j] = int_wakeupBus.en[j] & int_wakeupBus.we[j] & (int_wakeupBus.rd[j] == status_ram[i].rs2);
         end
+`ifdef RVF
+        for(genvar j=0; j<`FP_WAKEUP_PORT; j++)begin
+            assign fp_rs2_cmp[i][j] = fp_wakeupBus.en[j] & fp_wakeupBus.we[j] & (fp_wakeupBus.rd[j] == status_ram[i].rs2);
+        end
+        assign rs2_cmp[i] = status_ram[i].frs2_sel ? |fp_rs2_cmp[i] : |int_rs2_cmp[i];
+`else
+        assign rs2_cmp[i] = |int_rs2_cmp[i];
+`endif
     end
 endgenerate
 
@@ -384,6 +440,10 @@ endgenerate
         selectIdxNext <= selectIdx;
         io.sqIdx_o <= sqIdxs[selectIdxNext];
         io.size_o <= sqSize[selectIdxNext];
+`ifdef RVF
+        fp_sel <= io.fp_reg_en;
+        io.fp_sel_o <= fp_sel;
+`endif
     end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -400,6 +460,9 @@ endgenerate
             end
             
             if(io.en)begin
+`ifdef RVF
+                status_ram[freeIdx].frs2_sel <= io.status.frs2_sel;
+`endif
                 status_ram[freeIdx].rs2v <= io.status.rs2v;
                 status_ram[freeIdx].rs2 <= io.status.rs2;
                 status_ram[freeIdx].robIdx <= io.status.robIdx;
@@ -410,7 +473,7 @@ endgenerate
                     status_ram[i].rs2v <= io.status.rs2v;
                 end
                 else begin
-                    status_ram[i].rs2v <= (status_ram[i].rs2v | (|rs2_cmp[i]));
+                    status_ram[i].rs2v <= (status_ram[i].rs2v | (rs2_cmp[i]));
                 end
             end
             

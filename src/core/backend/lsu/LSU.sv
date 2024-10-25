@@ -40,9 +40,11 @@ module LSU(
     IssueRegIO.issue load_reg_io,
     IssueRegIO.issue store_reg_io,
     IssueWakeupIO.issue load_wakeup_io,
-    input WakeupBus wakeupBus,
+    input WakeupBus int_wakeupBus,
+`ifdef RVF
+    input WakeupBus fp_wakeupBus,
+`endif
     WriteBackIO.fu lsu_wb_io,
-    input WriteBackBus wbBus,
     CommitBus.mem commitBus,
     input BackendCtrl backendCtrl,
     AxiIO.master axi_io,
@@ -105,7 +107,7 @@ module LSU(
     logic amo_flush, amo_flush_end, amo_ready;
     WBData amo_wdata;
     assign amo_flush_end = sc_buffer_empty & sc_queue_empty;
-    assign amo_ready = ~from_issue[0] & ~load_queue_io.wbData[0].en;
+    assign amo_ready = ~from_issue[0] & ~load_queue_io.int_wbData[0].en;
     AmoQueue amo_queue(
         .*,
         .tlb_req(tlb_lsu_io.amo_req),
@@ -122,7 +124,8 @@ module LSU(
 `endif
     LoadIssueQueue load_issue_queue(
         .*,
-        .rst(load_issue_rst)
+        .rst(load_issue_rst),
+        .wakeupBus(int_wakeupBus)
     );
     DCache dcache(.*);
     LoadQueue load_queue(.*, .rst(load_queue_rst), .io(load_queue_io));
@@ -137,7 +140,11 @@ module LSU(
         .issue_queue_io(store_io),
         .queue_commit_io(store_commit_io),
         .loadFwd(store_queue_fwd),
+`ifdef RVF
+        .store_data(store_reg_io.data[`STORE_PIPELINE +: `STORE_PIPELINE * 2]),
+`else
         .store_data(store_reg_io.data[`STORE_PIPELINE*2-1: `STORE_PIPELINE]),
+`endif
         .commit_empty(sc_queue_empty)
     );
     StoreCommitBuffer store_commit_buffer (
@@ -400,36 +407,61 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
         WBData pipe_data;
+        logic from_pipe;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
         assign wb_pipeline_en[i] = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3[i] | 
-                                ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i] & ~luncache_s3[i])) &
-                                ~redirect_clear_s3[i];
+                                ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i] & ~luncache_s3[i])) & ~redirect_clear_s3[i];
+        assign from_pipe = wb_pipeline_en[i] 
+`ifdef RVF
+                          & ~leq_data[i].frd_en;
+`endif
+        ;
         always_ff @(posedge clk)begin
-            pipe_data.en <= wb_pipeline_en[i];
+            pipe_data.en <= from_pipe;
             pipe_data.robIdx <= leq_data[i].robIdx;
             pipe_data.rd <= leq_data[i].rd;
             pipe_data.we <= leq_data[i].we;
             pipe_data.exccode <= tlb_exception_s3[i] ? `EXC_LPF : 
                            lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
             pipe_data.res <= ldata_shift[i];
-            from_issue[i] <= wb_pipeline_en[i];
+            from_issue[i] <= from_pipe;
         end
 `ifdef RVA
         if(i == 0)begin
             assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : 
-                                        load_queue_io.wbData[i].en ? load_queue_io.wbData[i] :
+                                        load_queue_io.int_wbData[i].en ? load_queue_io.int_wbData[i] :
                                         amo_wdata;
         end
         else begin
-            assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : load_queue_io.wbData[i];
+            assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : load_queue_io.int_wbData[i];
         end
 `else
-        assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : load_queue_io.wbData[i];
+        assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : load_queue_io.int_wbData[i];
 `endif
         assign load_wakeup_io.en[i] = lsu_wb_io.datas[i].en;
         assign load_wakeup_io.we[i] = lsu_wb_io.datas[i].we;
         assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].rd;
     end
+`ifdef RVF
+    for(genvar i=0; i<`LOAD_PIPELINE; i++) begin : rdata_fwb
+        WBData pipe_data;
+        logic from_pipe;
+        always_ff @(posedge clk)begin
+            pipe_data.en <= wb_pipeline_en[i] & leq_data[i].frd_en;
+            pipe_data.robIdx <= leq_data[i].robIdx;
+            pipe_data.rd <= leq_data[i].rd;
+            pipe_data.we <= 1'b1;
+            pipe_data.exccode <= tlb_exception_s3[i] ? `EXC_LPF :
+                                lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
+            pipe_data.res <= ldata_shift[i];
+            from_pipe <= wb_pipeline_en[i] & leq_data[i].frd_en;
+        end
+        assign lsu_wb_io.datas[i+`LOAD_PIPELINE] = from_pipe ? pipe_data : load_queue_io.fp_wbData[i];
+        assign load_wakeup_io.en[i+`LOAD_PIPELINE] = lsu_wb_io.datas[i+`LOAD_PIPELINE].en;
+        assign load_wakeup_io.we[i+`LOAD_PIPELINE] = lsu_wb_io.datas[i+`LOAD_PIPELINE].we;
+        assign load_wakeup_io.rd[i+`LOAD_PIPELINE] = lsu_wb_io.datas[i+`LOAD_PIPELINE].rd;
+    end
+`endif
 endgenerate
 
 // store

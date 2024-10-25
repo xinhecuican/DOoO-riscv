@@ -1,41 +1,46 @@
 `include "../../../defines/defines.svh"
 
-interface BusyTableIO;
+interface BusyTableIO #(
+    parameter PORT_NUM = 4
+);
     logic `N(`FETCH_WIDTH) dis_en;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) dis_rd;
-    logic `ARRAY(`BUSYTABLE_PORT, `PREG_WIDTH) preg;
-    logic `N(`BUSYTABLE_PORT) reg_en;
+    logic `ARRAY(PORT_NUM, `PREG_WIDTH) preg;
+    logic `N(PORT_NUM) reg_en;
 
     modport busytable(input dis_en, dis_rd, preg, output reg_en);
 endinterface
 
-module BusyTable(
+module BusyTable #(
+    parameter WAKEUP_NUM = 4,
+    parameter PORT_NUM = 4,
+    parameter FPV = 0
+)(
     input logic clk,
     input logic rst,
     BusyTableIO.busytable io,
     input WakeupBus wakeupBus,
-    CommitBus.in commitBus,
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl
 );
     logic `N(`PREG_SIZE) valid;
 
-    logic `ARRAY(`WB_SIZE, `PREG_SIZE) wb_valids;
+    logic `ARRAY(WAKEUP_NUM, `PREG_SIZE) wb_valids;
     logic `N(`PREG_SIZE) wb_valid, wb_valid_combine;
 generate
-    for(genvar i=0; i<`WB_SIZE; i++)begin
+    for(genvar i=0; i<WAKEUP_NUM; i++)begin
         logic `N(`PREG_SIZE) rd_decode;
         Decoder #(`PREG_SIZE) decoder_rd (wakeupBus.rd[i], rd_decode);
         assign wb_valids[i] = (rd_decode & {`PREG_SIZE{wakeupBus.en[i] & (wakeupBus.we[i])}});
     end
-    ParallelOR #(`PREG_SIZE, `WB_SIZE) or_wb_valid (wb_valids, wb_valid);
+    ParallelOR #(`PREG_SIZE, WAKEUP_NUM) or_wb_valid (wb_valids, wb_valid);
     assign wb_valid_combine = valid | wb_valid;
 endgenerate
 
     logic `ARRAY(`FETCH_WIDTH, `PREG_SIZE) dis_valids;
     logic `N(`PREG_SIZE) dis_valid;
 generate
-    for(genvar i=0; i<`BUSYTABLE_PORT; i++)begin
+    for(genvar i=0; i<PORT_NUM; i++)begin
         assign io.reg_en[i] = wb_valid_combine[io.preg[i]];
     end
 
@@ -53,7 +58,14 @@ generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         logic `N(`PREG_SIZE) rd_decode;
         Decoder #(`PREG_SIZE) decoder_rd (commitWalk.prd[i], rd_decode);
-        assign walk_valids[i] = (rd_decode & {`PREG_SIZE{commitWalk.walk & commitWalk.en[i] & commitWalk.we[i]}});
+        if(FPV)begin
+            assign walk_valids[i] = rd_decode & {`PREG_SIZE{commitWalk.walk & commitWalk.en[i]
+                                    & commitWalk.we[i] & commitWalk.fp_we[i]}};
+        end
+        else begin
+            assign walk_valids[i] = (rd_decode & {`PREG_SIZE{commitWalk.walk & commitWalk.en[i]
+                                    & commitWalk.we[i] & ~commitWalk.fp_we[i]}});
+        end
     end
     ParallelOR #(`PREG_SIZE, `COMMIT_WIDTH) or_walk_valid (walk_valids, walk_valid);
 endgenerate

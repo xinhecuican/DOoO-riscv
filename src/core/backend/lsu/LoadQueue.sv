@@ -13,13 +13,21 @@ interface LoadQueueIO;
     ViolationData `N(`STORE_PIPELINE) write_violation;
     ViolationData lq_violation;
 
-    WBData `N(`LOAD_PIPELINE) wbData;
+    WBData `N(`LOAD_PIPELINE) int_wbData;
+`ifdef RVF
+    logic `N(`LOAD_PIPELINE) frd_en;
+    WBData `N(`LOAD_PIPELINE) fp_wbData;
+`endif
     logic `N(`LOAD_PIPELINE) wb_ready;
     logic `N(`LOAD_PIPELINE) uncache_full;
 
 
     modport queue(input en, miss, uncache, data, paddr, rdata, rmask, mask, write_violation, wb_ready,
-                  output lqIdx, lq_violation, wbData, uncache_full);
+                  output lqIdx, lq_violation, int_wbData, uncache_full
+`ifdef RVF
+                , output frd_en, fp_wbData
+`endif
+    );
 endinterface
 
 module LoadQueue(
@@ -112,7 +120,10 @@ generate
             .commit_idx(bank_commit_idx),
             .commitIdx(commitBus.robIdx),
             .wb_ready(io.wb_ready[i]),
-            .wbData(io.wbData[i]),
+            .int_wbData(io.int_wbData[i]),
+`ifdef RVF
+            .fp_wbData(io.fp_wbData[i]),
+`endif
             .tail_valid(bank_tail_valid[i]),
             .tail_full(bank_tail_full[i]),
             .tail(bank_tail_idx[i]),
@@ -286,7 +297,10 @@ module LoadQueueBank #(
     input RobIdx commitIdx,
 
     input logic wb_ready,
-    output WBData wbData,
+    output WBData int_wbData,
+`ifdef RVF
+    output WBData fp_wbData,
+`endif
 
     output logic tail_valid,
     output logic tail_full,
@@ -382,6 +396,7 @@ module LoadQueueBank #(
     PEncoder #(BANK_SIZE) pencoder_wb_idx (waiting_wb, wbIdx_pre);
     assign wbIdx = uncache_wb_valid ? head : wbIdx_pre;
     assign writeData.we = data.we;
+    assign writeData.frd_en = data.frd_en;
     assign writeData.rd = data.rd;
     assign writeData.robIdx = data.robIdx;
     MPRAM #(
@@ -442,13 +457,25 @@ module LoadQueueBank #(
 
     assign wb_valid = (|waiting_wb) & ~redirect & ~redirect_n;
     `SIG_N(wb_valid, wb_valid_n)
-    assign wbData.en = wb_valid_n;
+`ifdef RVF
+    assign fp_wbData.en = wb_valid_n & wb_queue_data.frd_en;
+    assign fp_wbData.we = 1'b1;
+    assign fp_wbData.robIdx = wb_queue_data.robIdx;
+    assign fp_wbData.rd = wb_queue_data.rd;
+    assign fp_wbData.res = uncache_wb_valid ? uncache_wb_data : wb_data;
+    assign fp_wbData.exccode = `EXC_NONE;
+`endif
+    assign int_wbData.en = wb_valid_n
+`ifdef RVF
+                            & ~wb_queue_data.frd_en
+`endif
+    ;
 
-    assign wbData.we = wb_queue_data.we;
-    assign wbData.robIdx = wb_queue_data.robIdx;
-    assign wbData.rd = wb_queue_data.rd;
-    assign wbData.res = uncache_wb_valid ? uncache_wb_data : wb_data;
-    assign wbData.exccode = `EXC_NONE;
+    assign int_wbData.we = wb_queue_data.we;
+    assign int_wbData.robIdx = wb_queue_data.robIdx;
+    assign int_wbData.rd = wb_queue_data.rd;
+    assign int_wbData.res = uncache_wb_valid ? uncache_wb_data : wb_data;
+    assign int_wbData.exccode = `EXC_NONE;
 
 // redirect
     always_ff @(posedge clk)begin
@@ -487,7 +514,7 @@ endgenerate
         .redirectIdx,
         .data,
         .uncache_valid(valid[head] & addrValid[head] & uncache[head]),
-        .wb_en(wbData.en & wb_valid),
+        .wb_en(wb_valid_n & wb_valid),
         .commit_valid(|commit_en),
         .commitIdx,
         .uncache_idx_i(uncache_idx[head]),

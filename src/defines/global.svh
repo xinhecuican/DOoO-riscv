@@ -132,8 +132,10 @@ typedef enum logic [1:0] {
 `define COMMIT_WIDTH 4
 
 // regfile
-`define REGFILE_READ_PORT (`ALU_SIZE * 2 + `LOAD_PIPELINE + `STORE_PIPELINE * 2)
-`define REGFILE_WRITE_PORT `WB_SIZE
+`define INT_REG_READ_PORT (`ALU_SIZE * 2 + `LOAD_PIPELINE + `STORE_PIPELINE * 2)
+`define INT_REG_WRITE_PORT `WB_SIZE
+`define FP_REG_READ_PORT `STORE_PIPELINE
+`define FP_REG_WRITE_PORT `LOAD_PIPELINE
 
 // dispatch
 `define INT_DIS_SIZE 16
@@ -148,7 +150,7 @@ typedef enum logic [1:0] {
 `define MULT_DIS_PORT 1
 `define AMO_DIS_SIZE 4
 `define AMO_DIS_PORT 1
-`define BUSYTABLE_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 \
+`define INT_BUSY_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 \
 `ifdef RVM \
     + `MULT_DIS_PORT * 2 \
 `endif \
@@ -156,9 +158,9 @@ typedef enum logic [1:0] {
     + `AMO_DIS_PORT * 2 \
 `endif \
 )
+`define FP_BUSY_PORT (`STORE_DIS_PORT)
 
 // issue
-`define WAKEUP_DELAY_WIDTH 5
 `define INT_ISSUE_SIZE 32
 `define ALU_SIZE 4
 `define LOAD_ISSUE_BANK_SIZE 8
@@ -172,6 +174,8 @@ typedef enum logic [1:0] {
 `define MULT_SIZE 1
 `define MULT_ISSUE_SIZE 8
 `define MULT_ISSUE_WIDTH $clog2(`MULT_ISSUE_SIZE)
+`define INT_WAKEUP_PORT `WB_SIZE
+`define FP_WAKEUP_PORT `LOAD_PIPELINE
 
 // lsu
 `define LOAD_QUEUE_SIZE 32
@@ -190,8 +194,8 @@ typedef enum logic [1:0] {
 `define LOAD_REFILL_SIZE 2
 
 // wb
-`define WAKEUP_SIZE (`ALU_SIZE+`LSU_SIZE)
 `define WB_SIZE (`ALU_SIZE+`LSU_SIZE)
+`define FP_WB_SIZE (`LSU_SIZE)
 
 // dcache
 `define DCACHE_ID 4'b1

@@ -7,6 +7,7 @@
 `define CSROP_WIDTH 4
 `define MULTOP_WIDTH 4
 `define AMOOP_WIDTH 4
+`define FLTOP_WIDTH 5
 
 // intop
 `define INT_ADD     `INTOP_WIDTH'b00000
@@ -73,6 +74,32 @@
 `define AMO_MINU        `AMOOP_WIDTH'b1010
 `define AMO_MAXU        `AMOOP_WIDTH'b1100
 
+// float op
+`define FLT_ADD         `FLTOP_WIDTH'b00000
+`define FLT_SUB         `FLTOP_WIDTH'b00001
+`define FLT_MUL         `FLTOP_WIDTH'b00010
+`define FLT_DIV         `FLTOP_WIDTH'b00011
+`define FLT_SQRT        `FLTOP_WIDTH'b01000
+`define FLT_MADD        `FLTOP_WIDTH'b00100
+`define FLT_MSUB        `FLTOP_WIDTH'b00101
+`define FLT_NMSUB       `FLTOP_WIDTH'b00110
+`define FLT_NMADD       `FLTOP_WIDTH'b00111
+`define FLT_SGNJ        `FLTOP_WIDTH'b01001
+`define FLT_SGNJN       `FLTOP_WIDTH'b01010
+`define FLT_SGNJX       `FLTOP_WIDTH'b01011
+`define FLT_FMIN        `FLTOP_WIDTH'b01100
+`define FLT_FMAX        `FLTOP_WIDTH'b01101
+`define FLT_CVT         `FLTOP_WIDTH'b01110
+`define FLT_CVTU        `FLTOP_WIDTH'b01111
+`define FLT_MVX         `FLTOP_WIDTH'b10000
+`define FLT_EQ          `FLTOP_WIDTH'b10001
+`define FLT_LT          `FLTOP_WIDTH'b10010
+`define FLT_LE          `FLTOP_WIDTH'b10100
+`define FLT_CLASS       `FLTOP_WIDTH'b11000
+`define FLT_CVTS        `FLTOP_WIDTH'b11100
+`define FLT_CVTSU       `FLTOP_WIDTH'b10011
+`define FLT_MV          `FLTOP_WIDTH'b11110
+
 // opcode
 
 `define OPCODE_LUI      7'b0110111
@@ -81,11 +108,18 @@
 `define OPCODE_JALR     7'b1100111
 `define OPCODE_BRANCH   7'b1100011
 `define OPCODE_LOAD     7'b0000011
+`define OPCODE_LOADFP   7'b0000111
 `define OPCODE_STORE    7'b0100011
+`define OPCODE_STOREFP  7'b0100111
 `define OPCODE_IMM      7'b0010011
 `define OPCODE_OP       7'b0110011
 `define OPCODE_FENCE    7'b0001111
 `define OPCODE_SYSTEM   7'b1110011
+`define OPCODE_FP       7'b1010011
+`define OPCODE_MADD     7'b1000011
+`define OPCDOE_MSUB     7'b1000111
+`define OPCODE_NMSUB    7'b1001011
+`define OPCODE_NMADD    7'b1001111
 `define OPCODE_CUSTOM0  7'b0001011
 
 // funct3

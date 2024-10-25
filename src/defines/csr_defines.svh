@@ -12,7 +12,14 @@
 `ifdef SV32
 `define PMP_SIZE 8
 `define PMPCFG_SIZE (`PMP_SIZE / 4)
-`define CSR_NUM 31
+`define CSR_NUM (27 \
+`ifdef RV32I \
+    + 4 \
+`endif \
+`ifdef RVF \
+    +1 \
+`endif \
+)
 `endif
 `define CSRID_mstatus   12'h300
 `define CSRID_misa      12'h301
@@ -50,6 +57,8 @@
 `define CSRID_scause    12'h142
 `define CSRID_stval     12'h143
 `define CSRID_satp      12'h180
+
+`define CSRID_fcsr      12'h003
 
 typedef struct packed {
     logic `N(4) reserve0;

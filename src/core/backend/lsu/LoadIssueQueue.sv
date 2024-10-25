@@ -141,7 +141,7 @@ module LoadIssueBank(
     logic `N(`LOAD_ISSUE_BANK_SIZE) select_en;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
     LoadIssueData data_o;
-    logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, `WB_SIZE) rs1_cmp;
+    logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, `INT_WAKEUP_PORT) rs1_cmp;
     logic [1: 0] size;
     logic reg_en;
     RobIdx select_robIdx;
@@ -158,7 +158,11 @@ module LoadIssueBank(
         .addr0(freeIdx),
         .addr1(selectIdxNext),
         .we(io.en),
-        .wdata({io.status.we, io.data.uext, size, io.data.imm, io.status.rd, io.data.lqIdx, io.data.sqIdx, io.status.robIdx, io.data.fsqInfo}),
+        .wdata({io.status.we, io.data.uext, 
+`ifdef RVF
+        io.data.fp_en,
+`endif
+        size, io.data.imm, io.status.rd, io.data.lqIdx, io.data.sqIdx, io.status.robIdx, io.data.fsqInfo}),
         .rdata1(data_o),
         .ready()
     );
@@ -189,7 +193,7 @@ endgenerate
     ParallelAdder #(.DEPTH(`LOAD_ISSUE_BANK_SIZE)) adder_bankNum(en, io.bankNum);
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-        for(genvar j=0; j<`WB_SIZE; j++)begin
+        for(genvar j=0; j<`INT_WAKEUP_PORT; j++)begin
             assign rs1_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == status_ram[i].rs1);
         end
     end

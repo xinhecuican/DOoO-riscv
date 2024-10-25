@@ -10,7 +10,10 @@ module WriteBack(
     WriteBackIO.wb mult_wb_io,
     WriteBackIO.wb div_wb_io,
 `endif
-    output WriteBackBus wbBus
+    output WriteBackBus int_wbBus
+`ifdef RVF
+    ,output WriteBackBus fp_wbBus
+`endif
 );
 generate
     for(genvar i=0; i<`ALU_SIZE; i++)begin
@@ -32,12 +35,12 @@ generate
                 wbData <= alu_wb_io.datas[i];
             end
         end
-        assign wbBus.en[i] = wbData.en;
-        assign wbBus.we[i] = wbData.we;
-        assign wbBus.robIdx[i] = wbData.robIdx;
-        assign wbBus.rd[i] = wbData.rd;
-        assign wbBus.res[i] = wbData.res;
-        assign wbBus.exccode[i] = wbData.exccode;
+        assign int_wbBus.en[i] = wbData.en;
+        assign int_wbBus.we[i] = wbData.we;
+        assign int_wbBus.robIdx[i] = wbData.robIdx;
+        assign int_wbBus.rd[i] = wbData.rd;
+        assign int_wbBus.res[i] = wbData.res;
+        assign int_wbBus.exccode[i] = wbData.exccode;
 
     end
 endgenerate
@@ -48,14 +51,26 @@ generate
         assign lsu_wb_io.valid[i] = 1'b1;
         // always_ff @(posedge clk)begin
             // control by lsu
-            assign wbBus.en[`ALU_SIZE+i] = lsu_wb_io.datas[i].en;
-            assign wbBus.we[`ALU_SIZE+i] = lsu_wb_io.datas[i].rd != 0;
-            assign wbBus.robIdx[`ALU_SIZE+i] = lsu_wb_io.datas[i].robIdx;
-            assign wbBus.rd[`ALU_SIZE+i] = lsu_wb_io.datas[i].rd;
-            assign wbBus.res[`ALU_SIZE+i] = lsu_wb_io.datas[i].res;
-            assign wbBus.exccode[`ALU_SIZE+i] = lsu_wb_io.datas[i].exccode;
+            assign int_wbBus.en[`ALU_SIZE+i] = lsu_wb_io.datas[i].en;
+            assign int_wbBus.we[`ALU_SIZE+i] = lsu_wb_io.datas[i].we;
+            assign int_wbBus.robIdx[`ALU_SIZE+i] = lsu_wb_io.datas[i].robIdx;
+            assign int_wbBus.rd[`ALU_SIZE+i] = lsu_wb_io.datas[i].rd;
+            assign int_wbBus.res[`ALU_SIZE+i] = lsu_wb_io.datas[i].res;
+            assign int_wbBus.exccode[`ALU_SIZE+i] = lsu_wb_io.datas[i].exccode;
         // end
     end
 endgenerate
 
+`ifdef RVF
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign fp_wbBus.en[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].en;
+        assign fp_wbBus.we[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].we;
+        assign fp_wbBus.robIdx[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].robIdx;
+        assign fp_wbBus.rd[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].rd;
+        assign fp_wbBus.res[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].res;
+        assign fp_wbBus.exccode[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].exccode;
+    end
+endgenerate
+`endif
 endmodule

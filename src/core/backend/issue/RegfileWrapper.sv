@@ -13,18 +13,32 @@ module RegfileWrapper(
 `ifdef RVA
     IssueRegIO.regfile amo_reg_io,
 `endif
-    input WriteBackBus wbBus
+`ifdef RVF
+    input WriteBackBus fp_wbBus,
+`endif
+    input WriteBackBus int_wbBus
 `ifdef DIFFTEST
-    ,DiffRAT.regfile diff_rat
+    ,DiffRAT.regfile diff_int_rat
+`ifdef RVF
+    ,DiffRAT.regfile diff_fp_rat
+`endif
 `endif
 );
-    logic `N(`REGFILE_READ_PORT) en;
-    logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr;
-    logic `ARRAY(`REGFILE_READ_PORT, `XLEN) reg_rdata;
-    logic `N(`REGFILE_WRITE_PORT) we;
-    logic `ARRAY(`REGFILE_WRITE_PORT, `PREG_WIDTH) waddr;
-    logic `ARRAY(`REGFILE_WRITE_PORT, `XLEN) wdata;
-    logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata;
+    logic `N(`INT_REG_READ_PORT) en;
+    logic `ARRAY(`INT_REG_READ_PORT, `PREG_WIDTH) raddr;
+    logic `ARRAY(`INT_REG_READ_PORT, `XLEN) reg_rdata;
+`ifdef RVF
+    logic `N(`FP_REG_READ_PORT) fp_en;
+    logic `ARRAY(`FP_REG_READ_PORT, `PREG_WIDTH) fp_raddr;
+    logic `ARRAY(`FP_REG_READ_PORT, `XLEN) fp_reg_rdata;
+    logic `N(`FP_REG_WRITE_PORT) fp_we;
+    logic `ARRAY(`FP_REG_WRITE_PORT, `PREG_WIDTH) fp_waddr;
+    logic `ARRAY(`FP_REG_WRITE_PORT, `XLEN) fp_wdata;
+`endif
+    logic `N(`INT_REG_WRITE_PORT) we;
+    logic `ARRAY(`INT_REG_WRITE_PORT, `PREG_WIDTH) waddr;
+    logic `ARRAY(`INT_REG_WRITE_PORT, `XLEN) wdata;
+    logic `ARRAY(`INT_REG_READ_PORT, `XLEN) rdata;
 
 
     logic `N(`ALU_SIZE) int_en;
@@ -95,14 +109,14 @@ endgenerate
         store_reg_io.ready[`STORE_PIPELINE+1] = ~amo_reg_io.en[0];
 `endif
     end
-    assign store_reg_io.data = rdata[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE];
+    assign store_reg_io.data[0 +: `STORE_PIPELINE * 2] = rdata[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE];
 `ifdef RVA
     assign amo_reg_io.data[0] = rdata[`STORE_PIPELINE+STORE_BASE];
     assign amo_reg_io.data[1] = rdata[`STORE_PIPELINE+STORE_BASE+1];
 `endif
     always_ff @(posedge clk)begin
-        store_en <= store_reg_io.en;
-        store_preg <= store_reg_io.preg;
+        store_en <= store_reg_io.en[`STORE_PIPELINE * 2-1: 0];
+        store_preg <= store_reg_io.preg[`STORE_PIPELINE * 2-1: 0];
 `ifdef RVA
         store_en[`STORE_PIPELINE] <= amo_reg_io.en[0] | store_reg_io.en[`STORE_PIPELINE];
         store_en[`STORE_PIPELINE+1] <= amo_reg_io.en[0] | store_reg_io.en[`STORE_PIPELINE+1];
@@ -115,15 +129,57 @@ endgenerate
 
 generate
     for(genvar i=0; i<`WB_SIZE; i++)begin
-        assign we[i] = wbBus.en[i] & wbBus.we[i];
-        assign waddr[i] = wbBus.rd[i];
-        assign wdata[i] = wbBus.res[i];
+        assign we[i] = int_wbBus.en[i] & int_wbBus.we[i];
+        assign waddr[i] = int_wbBus.rd[i];
+        assign wdata[i] = int_wbBus.res[i];
     end
 endgenerate
 
-    Regfile regfile(
+    Regfile #(
+        `INT_REG_READ_PORT,
+        `INT_REG_WRITE_PORT
+    ) int_regfile(
         .*,
         .rdata(reg_rdata)
+`ifdef DIFFTEST
+        ,.diff_rat(diff_int_rat)
+`endif
     );
-    Bypass bypass(.*);
+    Bypass bypass(.*, .wbBus(int_wbBus));
+
+`ifdef RVF
+    logic `N(`STORE_PIPELINE) fp_store_en;
+    logic `ARRAY(`STORE_PIPELINE, `PREG_WIDTH) fp_store_preg;
+    always_ff @(posedge clk)begin
+        fp_store_en <= store_reg_io.en[`STORE_PIPELINE * 2 +: `STORE_PIPELINE];
+        fp_store_preg <= store_reg_io.preg[`STORE_PIPELINE * 2 +: `STORE_PIPELINE];
+    end
+    assign fp_en[0 +: `STORE_PIPELINE] = fp_store_en;
+    assign fp_raddr[0 +: `STORE_PIPELINE] = fp_store_preg;
+    assign store_reg_io.data[`STORE_PIPELINE*2 +: `STORE_PIPELINE] = fp_reg_rdata[0 +: `STORE_PIPELINE];
+
+generate
+    for(genvar i=0; i<`FP_WB_SIZE; i++)begin
+        assign fp_we[i] = fp_wbBus.en[i] & fp_wbBus.we[i];
+        assign fp_waddr[i] = fp_wbBus.rd[i];
+        assign fp_wdata[i] = fp_wbBus.res[i];
+    end
+endgenerate
+    Regfile #(
+        .READ_PORT(`FP_REG_READ_PORT),
+        .WRITE_PORT(`FP_REG_WRITE_PORT),
+        .FP(1)
+    ) fp_regfile(
+        .*,
+        .en(fp_en),
+        .raddr(fp_raddr),
+        .rdata(fp_reg_rdata),
+        .we(fp_we),
+        .waddr(fp_waddr),
+        .wdata(fp_wdata)
+`ifdef DIFFTEST
+        ,.diff_rat(diff_fp_rat)
+`endif
+    );
+`endif
 endmodule

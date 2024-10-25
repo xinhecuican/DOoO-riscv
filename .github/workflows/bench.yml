@@ -23,17 +23,14 @@ jobs:
           $HOME/riscv
           /usr/local/share/verilator
           /usr/local/bin/verilator*
-        key: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
-        restore-keys: ${{ runner.os }}-${{ hashFiles('scripts/intall_depend.sh') }}
+        key: ${{ runner.os }}-${{ hashFiles('**/intall_depend.sh') }}
+        restore-keys: ${{ runner.os }}-${{ hashFiles('**/intall_depend.sh') }}
 
     - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
       run: |
         sudo apt install wget
         wget https://github.com/xinhecuican/DOoO-riscv/releases/download/toolchain/riscv.tar.gz
         tar -xzf riscv.tar.gz -C $HOME
-        echo "export PATH=\$PATH:\$HOME/riscv/bin" >> $GITHUB_ENV
-        echo $PATH
-        echo $GITHUB_ENV
         cd scripts
         ./install_depend.sh --verilator
     - name: Install Dependency
@@ -50,7 +47,6 @@ jobs:
         git submodule init && git submodule update
         autoconf
         ./configure
-        make XLEN=32 clean
         make XLEN=32 -j8
 
     - name: Run Tests

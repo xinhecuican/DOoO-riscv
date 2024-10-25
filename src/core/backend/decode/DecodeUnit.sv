@@ -16,11 +16,25 @@ module DecodeUnit(
     assign funct3 = inst[14: 12];
     assign funct7 = inst[31: 25];
 
-    logic funct7_0, funct7_5, funct7_1, rs2_0, rs2_1, rs2_2, rs2_5;
+    logic funct7_0, funct7_32, funct7_4, funct7_2, funct7_1, funct7_8, funct7_12, funct7_44,
+    funct7_16, funct7_20, funct7_80, funct7_96, funct7_104, funct7_112, funct7_120;
+    logic rs2_0, rs2_1, rs2_2, rs2_5;
     logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
     assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_1 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
-    assign funct7_5 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_2 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & funct7[1] & ~funct7[0];
+    assign funct7_4 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_8 = ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_12 = ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_16 = ~funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_20 = ~funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_32 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_44 = ~funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_80 = funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_96 = funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_104 = funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_112 = funct7[6] & funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_120 = funct7[6] & funct7[5] & funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct3_0 = ~funct3[2] & ~funct3[1] & ~funct3[0];
     assign funct3_1 = ~funct3[2] & ~funct3[1] & funct3[0];
     assign funct3_2 = ~funct3[2] & funct3[1] & ~funct3[0];
@@ -69,10 +83,7 @@ module DecodeUnit(
     assign sh = store & funct3_1;
     assign sw = store & funct3_2;
 
-    assign info.memop[3] = store;
-    assign info.memop[2] = sh;
-    assign info.memop[1] = lw | sw;
-    assign info.memop[0] = lh | lhu;
+
 
     logic addi, slti, sltiu, xori, ori, andi, slli, srli, srai;
     assign addi = opimm & funct3_0;
@@ -83,17 +94,17 @@ module DecodeUnit(
     assign andi = opimm & funct3_7;
     assign slli = opimm & funct3_1 & funct7_0;
     assign srli = opimm & funct3_5 & funct7_0;
-    assign srai = opimm & funct3_5 & funct7_5;
+    assign srai = opimm & funct3_5 & funct7_32;
 
     logic add, sub, sll, slt, sltu, _xor, srl, sra, _or, _and;
     assign add = opreg & funct3_0 & funct7_0;
-    assign sub = opreg & funct3_0 & funct7_5;
+    assign sub = opreg & funct3_0 & funct7_32;
     assign sll = opreg & funct3_1 & funct7_0;
     assign slt = opreg & funct3_2 & funct7_0;
     assign sltu = opreg & funct3_3 & funct7_0;
     assign _xor = opreg & funct3_4 & funct7_0;
     assign srl = opreg & funct3_5 & funct7_0;
-    assign sra = opreg & funct3_5 & funct7_5;
+    assign sra = opreg & funct3_5 & funct7_32;
     assign _or = opreg & funct3_6 & funct7_0;
     assign _and = opreg & funct3_7 & funct7_0;
 
@@ -104,12 +115,6 @@ module DecodeUnit(
     assign sim_trap = custom0 & funct3_0;
     assign info.sim_trap = sim_trap;
 `endif
-
-    assign info.intop[4] = 1'b0;
-    assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
-    assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc | sub;
-    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or;
-    assign info.intop[0] = lui | andi | _and | srl | srli | sub | sra | srai;
 
     // TODO: impl wfi, current treat as nop
     logic fence, sfence_vma, wfi;
@@ -135,18 +140,7 @@ module DecodeUnit(
     assign csrrwi = opsystem & funct3_5;
     assign csrrsi = opsystem & funct3_6;
     assign csrrci = opsystem & funct3_7;
-    assign info.csrop[3] = sfence_vma | fence
-`ifdef EXT_FENCEI
-    | fencei
-`endif
-    ;
-    assign info.csrop[2] = csrrwi | csrrsi | csrrci | fence;
-    assign info.csrop[1] = csrrs | csrrc | csrrsi | csrrci;
-    assign info.csrop[0] = csrrw | csrrc | csrrwi | csrrci
-`ifdef EXT_FENCEI
-    | fencei
-`endif
-;
+
     assign info.csrid = inst[31: 20];
 
 `ifdef RVM
@@ -184,6 +178,61 @@ module DecodeUnit(
     assign info.amoop[0] = sc | amoand | amoor | amomax;
 `endif
 
+`ifdef RVF
+    logic flw, fsw, fmadd, fmsub, fnmsub, fnmadd, fadd, fsub, fmul, fdiv,
+    fsqrt, fsgnj, fsgnjn, fsgnjx, fmin, fmax, fcvt, fcvtu, fmvx, feq, flt,
+    fle, fclass, fcvts, fcvtsu, fmv;
+    logic loadfp, storefp, fp, madd, msub, nmsub, nmadd;
+    assign loadfp = ~op[4] & ~op[3] & ~op[2] & ~op[1] & op[0] & inst[1] & inst[0];
+    assign storefp = ~op[4] & op[3] & ~op[2] & ~op[1] & op[0] & inst[1] & inst[0];
+    assign fp = op[4] & ~op[3] & op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    assign madd = op[4] & ~op[3] & ~op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    assign msub = op[4] & ~op[3] & ~op[2] & ~op[1] & op[0] & inst[1] & inst[0];
+    assign nmadd = op[4] & ~op[3] & ~op[2] & op[1] & op[0] & inst[1] & inst[0];
+    assign nmsub = op[4] & ~op[3] & ~op[2] & op[1] & ~op[0] & inst[1] & inst[0];
+    
+    assign flw = loadfp & funct3_2;
+    assign fsw = storefp & funct3_2;
+    assign fmadd = madd;
+    assign fmsub = msub;
+    assign fnmadd = nmadd;
+    assign fnmsub = nmsub;
+    assign fadd = fp & funct7_0;
+    assign fsub = fp & funct7_4;
+    assign fmul = fp & funct7_8;
+    assign fdiv = fp & funct7_12;
+    assign fsqrt = fp & funct7_44;
+    assign fsgnj = fp & funct7_16 & funct3_0;
+    assign fsgnjn = fp & funct7_16 & funct3_1;
+    assign fsgnjx = fp & funct7_16 & funct3_2;
+    assign fmin = fp & funct7_20 & funct3_0;
+    assign fmax = fp & funct7_20 & funct3_1;
+    assign fcvt = fp & funct7_96 & rs2_0;
+    assign fcvtu = fp & funct7_96 & rs2_1;
+    assign fmvx = fp & funct7_112 & funct3_0;
+    assign feq = fp & funct7_80 & funct3_2;
+    assign flt = fp & funct7_80 & funct3_1;
+    assign fle = fp & funct7_80 & funct3_0;
+    assign fclass = fp & funct7_112 & funct3_1;
+    assign fcvts = fp & funct7_104 & rs2_0;
+    assign fcvtsu = fp & funct7_104 & rs2_1;
+    assign fmv = fp & funct7_120 & funct3_0;
+
+    assign info.flt_mem = loadfp | storefp;
+    assign info.flt_we = loadfp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+                        fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvts | fcvtsu | fmv;
+    assign info.frs1_sel = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+                            fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu |
+                            fmvx | feq | flt | fle;
+    assign info.frs2_sel = storefp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+                           fsgnj | fsgnjn | fsgnjx | fmin | fmax | feq | flt | fle;
+    assign info.fltop[4] = fmvx | feq | flt | fle | fclass | fcvts | fcvtsu | fmv;
+    assign info.fltop[3] = fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu | fclass | fcvts | fmv;
+    assign info.fltop[2] = fmadd | fmsub | fnmsub | fnmadd | fmin | fmax | fcvt | fcvtu | fle | fcvts | fmv;
+    assign info.fltop[1] = fmul | fdiv | fnmsub | fnmadd | fsgnjn | fsgnjx | fcvt | fcvtu | flt | fcvtsu | fmv;
+    assign info.fltop[0] = fsub | fdiv | fmsub | fnmadd | fsgnj | fsgnjx | fmax | fcvtu | feq | fcvtsu;
+`endif
+
     assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & ~jal & ~jalr &
                      ~lb & ~lh & ~lw & ~lbu & ~lhu & ~sb & ~sh & ~sw & ~auipc & ~lui &
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
@@ -200,11 +249,48 @@ module DecodeUnit(
                      & ~lr & ~sc & ~amoswap & ~amoadd & ~amoxor & ~amoand & ~amoor & ~amomin
                      & ~amomax & ~amominu & ~amomaxu
 `endif
+`ifdef RVF
+                     & ~flw & ~fsw & ~fmadd & ~fmsub & ~fnmsub & ~fnmadd & ~fadd & ~fsub
+                     & ~fmul & ~fdiv & ~fsqrt & ~fsgnj & ~fsgnjn & ~fsgnjx & ~fmin & ~fmax
+                     & ~fcvt & ~fcvtu & ~fmvx & ~feq & ~flt & ~fle & ~fclass & ~fcvts
+                     & ~fcvtsu & ~fmv
+`endif
 `ifdef EXT_FENCEI
                      & ~fencei
 `endif
                      ;
 
+    assign info.intop[4] = 1'b0;
+    assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
+    assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc | sub;
+    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or;
+    assign info.intop[0] = lui | andi | _and | srl | srli | sub | sra | srai;
+
+    assign info.memop[3] = store
+`ifdef RVF
+                           | fsw
+`endif
+    ;
+    assign info.memop[2] = sh;
+    assign info.memop[1] = lw | sw
+`ifdef RVF
+                           | flw | fsw
+`endif
+    ;
+    assign info.memop[0] = lh | lhu;
+
+    assign info.csrop[3] = sfence_vma | fence
+`ifdef EXT_FENCEI
+    | fencei
+`endif
+    ;
+    assign info.csrop[2] = csrrwi | csrrsi | csrrci | fence;
+    assign info.csrop[1] = csrrs | csrrc | csrrsi | csrrci;
+    assign info.csrop[0] = csrrw | csrrc | csrrwi | csrrci
+`ifdef EXT_FENCEI
+    | fencei
+`endif
+;
 
     assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu | srl | srli;
     logic [11: 0] imm, store_imm;
@@ -220,10 +306,17 @@ module DecodeUnit(
                       {`DEC_IMM_WIDTH{lui | auipc}} & lui_imm |
                       {`DEC_IMM_WIDTH{csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci
                       }} & inst[19: 15] |
-                      {`DEC_IMM_WIDTH{store}} & store_imm |
+                      {`DEC_IMM_WIDTH{store
+`ifdef RVF
+                                     | storefp
+`endif
+                      }} & store_imm |
                       {`DEC_IMM_WIDTH{load | opimm | jalr
 `ifdef DIFFTEST
                         | sim_trap
+`endif
+`ifdef RVF
+                        | loadfp
 `endif
                       }} & imm;
 
@@ -235,7 +328,11 @@ module DecodeUnit(
 `endif
     ) & ~ipf & ~iam;
     assign info.branchv = (branch | jal | jalr) & ~ipf & ~iam;
-    assign info.memv = (load | store) & ~ipf & ~iam;
+    assign info.memv = (load | store
+`ifdef RVF
+                        | loadfp | storefp
+`endif
+    ) & ~ipf & ~iam;
     assign info.csrv = csr | ecall | ebreak | mret | sret | unknown | iam | sfence_vma | ipf | fence | wfi
 `ifdef EXT_FENCEI
     | fencei
@@ -247,11 +344,17 @@ module DecodeUnit(
 `ifdef RVA
     assign info.amov = amo & ~ipf & ~iam;
 `endif
+`ifdef RVF
+    assign info.fltv = (fp | madd | msub | nmsub | nmadd) & ~ipf & ~iam;
+`endif
 
 
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw | sfence_vma
 `ifdef RVA
     | amo
+`endif
+`ifdef RVF
+    | fp | madd | msub | nmsub | nmadd | flw | fsw
 `endif
     }} & inst[19: 15];
 
@@ -260,12 +363,22 @@ module DecodeUnit(
 `ifdef RVA
     | amo
 `endif
+`ifdef RVF
+    |((fp | madd | msub | nmsub | nmadd | fsw) & ~fcvtsu & ~fcvtu)
+`endif
     }} & inst[24: 20];
+
+`ifdef RVF
+    assign info.rs3 = {5{fmadd | fnmadd | fmsub | fnmsub}} & inst[31: 27];
+`endif
 
     
     assign rd = {5{lui | auipc | jalr | jal | load | opimm | opreg | csr
 `ifdef RVA
     | amo
+`endif
+`ifdef RVF
+    | fp | madd | msub | nmsub | nmadd | flw
 `endif
     }} & inst[11: 7];
 

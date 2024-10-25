@@ -19,7 +19,7 @@ module Backend(
     DecodeRenameIO dec_rename_io();
     RenameDisIO rename_dis_io();
     ROBRenameIO rob_rename_io();
-    WriteBackBus wbBus;
+    WriteBackBus #(`WB_SIZE) int_wbBus();
     DisIssueIO #(.PORT_NUM(`INT_DIS_PORT), .DATA_SIZE($bits(IntIssueBundle))) dis_int_io();
     DisIssueIO #(.PORT_NUM(`LOAD_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_load_io();
     DisIssueIO #(.PORT_NUM(`STORE_DIS_PORT), .DATA_SIZE($bits(MemIssueBundle))) dis_store_io();
@@ -32,7 +32,11 @@ module Backend(
 `endif
     IssueRegIO #(`ALU_SIZE, `ALU_SIZE * 2) int_reg_io();
     IssueRegIO #(`LOAD_PIPELINE, `LOAD_PIPELINE) load_reg_io();
+`ifdef RVF
+    IssueRegIO #(`STORE_PIPELINE * 3, `STORE_PIPELINE * 3) store_reg_io();
+`else
     IssueRegIO #(`STORE_PIPELINE * 2, `STORE_PIPELINE * 2) store_reg_io();
+`endif
     IssueRegIO #(1, 2) csr_reg_io();
 `ifdef RVM
     IssueRegIO #(`MULT_SIZE, `MULT_SIZE * 2) mult_reg_io();
@@ -40,9 +44,19 @@ module Backend(
 `ifdef RVA
     IssueRegIO #(1, 2) amo_reg_io();
 `endif
-    WakeupBus wakeupBus;
+    WakeupBus #(`INT_WAKEUP_PORT) int_wakeupBus();
+`ifdef RVF
+    WakeupBus #(`FP_WAKEUP_PORT) fp_wakeupBus();
+    WriteBackBus #(`FP_WB_SIZE) fp_wbBus();
+`endif
     IssueWakeupIO #(`ALU_SIZE) int_wakeup_io();
-    IssueWakeupIO #(`LOAD_PIPELINE) load_wakeup_io();
+    IssueWakeupIO #(
+`ifdef RVF
+        `LOAD_PIPELINE * 2
+`else
+        `LOAD_PIPELINE
+`endif
+    ) load_wakeup_io();
     IssueWakeupIO #(1) csr_wakeup_io();
 `ifdef RVM
     IssueWakeupIO #(`MULT_SIZE) mult_wakeup_io();
@@ -60,7 +74,13 @@ module Backend(
     BackendRedirectIO backendRedirect();
     RobRedirectIO rob_redirect_io();
     WriteBackIO #(`ALU_SIZE) alu_wb_io();
-    WriteBackIO #(`LSU_SIZE) lsu_wb_io();
+    WriteBackIO #(
+`ifdef RVF
+        `LSU_SIZE * 2
+`else
+        `LSU_SIZE
+`endif
+    ) lsu_wb_io();
 `ifdef RVM
     WriteBackIO #(`MULT_SIZE) mult_wb_io();
     WriteBackIO #(`MULT_SIZE) div_wb_io();
@@ -80,7 +100,10 @@ module Backend(
     FenceReq fence_req;
 
 `ifdef DIFFTEST
-    DiffRAT diff_rat();
+    DiffRAT diff_int_rat();
+`ifdef RVF
+    DiffRAT diff_fp_rat();
+`endif
 `endif
 
     logic decode_rst, rename_rst, dispatch_rst, intissue_rst, csr_rst, mult_rst, lsu_rst, 
@@ -105,7 +128,6 @@ module Backend(
     assign commitBus_out.vrd = commitBus.vrd;
     assign commitBus_out.prd = commitBus.prd;
     assign commitBus_out.num = commitBus.num;
-    assign commitBus_out.wenum = commitBus.wenum;
     assign backendCtrl.redirect = fsq_back_io.redirect.en;
     // assign backendCtrl.redirectIdx = fsq_back_io.redirect.robIdx;
     assign backendCtrl.rename_full = rename_full | rob_full;
@@ -141,11 +163,12 @@ module Backend(
         .*,
         .rst(intissue_rst),
         .dis_issue_io(dis_int_io),
-        .issue_exu_io(int_exu_io)
+        .issue_exu_io(int_exu_io),
+        .wakeupBus(int_wakeupBus)
     );
     CsrIssueQueue csr_issue_queue(.*, .rst(csrissue_rst));
 `ifdef RVM
-    MultIssueQueue mult_issue_queue(.*, .rst(mult_rst));
+    MultIssueQueue mult_issue_queue(.*, .rst(mult_rst), .wakeupBus(int_wakeupBus));
 `endif
     LSU lsu(
         .*,

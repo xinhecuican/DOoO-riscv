@@ -48,7 +48,7 @@ module IssueBank #(
     logic `N(DEPTH) select_en;
     logic `N(ADDR_WIDTH) selectIdx, selectIdxNext;
     logic `N(DATA_WIDTH) data_o;
-    logic `ARRAY(DEPTH, `WB_SIZE) rs1_cmp;
+    logic `ARRAY(DEPTH, `INT_WAKEUP_PORT) rs1_cmp;
 
     SDPRAM #(
         .WIDTH(DATA_WIDTH),
@@ -69,10 +69,10 @@ generate
     if(RS2V)begin
         logic `N(DEPTH) rs2v;
         logic `N(`PREG_WIDTH) rs2 `N(DEPTH);
-        logic `ARRAY(DEPTH, `WB_SIZE) rs2_cmp;
+        logic `ARRAY(DEPTH, `INT_WAKEUP_PORT) rs2_cmp;
         for(genvar i=0; i<DEPTH; i++)begin
             assign ready[i] = en[i] & rs1v[i] & rs2v[i];
-            for(genvar j=0; j<`WB_SIZE; j++)begin
+            for(genvar j=0; j<`INT_WAKEUP_PORT; j++)begin
                 assign rs2_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == rs2[i]);
             end
         end
@@ -135,7 +135,7 @@ endgenerate
     ParallelAdder #(.DEPTH(DEPTH)) adder_bankNum(en, io.bankNum);
 generate
     for(genvar i=0; i<DEPTH; i++)begin
-        for(genvar j=0; j<`WB_SIZE; j++)begin
+        for(genvar j=0; j<`INT_WAKEUP_PORT; j++)begin
             assign rs1_cmp[i][j] = wakeupBus.en[j] & wakeupBus.we[j] & (wakeupBus.rd[j] == rs1[i]);
         end
     end

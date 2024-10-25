@@ -1,21 +1,24 @@
 `include "../../../defines/defines.svh"
 
-interface RenameTableIO;
-    logic `ARRAY(`FETCH_WIDTH, 5) vrs1;
-    logic `ARRAY(`FETCH_WIDTH, 5) vrs2;
+interface RenameTableIO #(
+    parameter SRC_NUM=2
+);
+    logic `TENSOR(SRC_NUM, `FETCH_WIDTH, 5) vsrc;
     logic `ARRAY(`FETCH_WIDTH, 5) vrd;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1;
-    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs2;
+    logic `TENSOR(SRC_NUM, `FETCH_WIDTH, `PREG_WIDTH) psrc;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) commit_prd;
     logic `N(`FETCH_WIDTH) rename_we;
     logic `ARRAY(`FETCH_WIDTH, 5) rename_vrd;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) rename_prd;
 
-    modport rename (input vrs1, vrs2, vrd, rename_we, rename_vrd, rename_prd, output prs1, prs2, prd, commit_prd);
+    modport rename (input vsrc, vrd, rename_we, rename_vrd, rename_prd, output psrc, prd, commit_prd);
 endinterface
 
-module RenameTable(
+module RenameTable #(
+    parameter SRC_NUM=2,
+    parameter FPV=0
+)(
     input logic clk,
     input logic rst,
     RenameTableIO.rename rename_io,
@@ -38,26 +41,35 @@ module RenameTable(
     logic `ARRAY(`COMMIT_WIDTH, `COMMIT_WIDTH) waw;
     logic `N(`COMMIT_WIDTH) commit_cancel_waw;
     // logic `ARRAY(`COMMIT_WIDTH, $clog2(`COMMIT_WIDTH)) waw_replaceIdx;
-    logic `N(`COMMIT_WIDTH) commit_we;
-
-    assign rs1_io.vreg = rename_io.vrs1;
-    assign rename_io.prs1 = rs1_io.preg;
-    assign rs2_io.vreg = rename_io.vrs2;
-    assign rename_io.prs2 = rs2_io.preg;
+    logic `N(`COMMIT_WIDTH) commit_we, walk_we;
+generate
+    for(genvar i=0; i<SRC_NUM; i++)begin
+        RATIO #(`FETCH_WIDTH, `WB_SIZE) src_io();
+        RAT #(`FETCH_WIDTH, `WB_SIZE) rat (.*, .rat_io(src_io));
+        assign src_io.vreg = rename_io.vsrc[i];
+        assign rename_io.psrc[i] = src_io.preg;
+        assign src_io.we = commitWalk.walk ? walk_we  & ~commit_cancel_waw : rename_io.rename_we;
+        assign src_io.waddr = commitWalk.walk ? commitWalk.vrd : rename_io.rename_vrd;
+        assign src_io.wdata = commitWalk.walk ? commitWalk.old_prd : rename_io.rename_prd;
+    end
+endgenerate
     assign rd_io.vreg = rename_io.vrd;
     assign rename_io.prd = rd_io.preg;
-
-    assign rs1_io.we = commitWalk.walk ? commitWalk.en & commitWalk.we  & ~commit_cancel_waw : rename_io.rename_we;
-    assign rs2_io.we = commitWalk.walk ? commitWalk.en & commitWalk.we  & ~commit_cancel_waw : rename_io.rename_we;
-    assign rd_io.we = commitWalk.walk ? commitWalk.en & commitWalk.we  & ~commit_cancel_waw : rename_io.rename_we;
-    assign rs1_io.waddr = commitWalk.walk ? commitWalk.vrd : rename_io.rename_vrd;
-    assign rs2_io.waddr = commitWalk.walk ? commitWalk.vrd : rename_io.rename_vrd;
+    assign rd_io.we = commitWalk.walk ? walk_we  & ~commit_cancel_waw : rename_io.rename_we;
     assign rd_io.waddr = commitWalk.walk ? commitWalk.vrd : rename_io.rename_vrd;
-    assign rs1_io.wdata = commitWalk.walk ? commitWalk.old_prd : rename_io.rename_prd;
-    assign rs2_io.wdata = commitWalk.walk ? commitWalk.old_prd : rename_io.rename_prd;
     assign rd_io.wdata = commitWalk.walk ? commitWalk.old_prd : rename_io.rename_prd;
     
-    assign commit_we = commitBus.en & commitBus.we;
+generate
+    if(FPV)begin
+        assign commit_we = commitBus.en & commitBus.we & commitBus.fp_we;
+        assign walk_we = commitWalk.en & commitWalk.we & commitWalk.fp_we;
+    end
+    else begin
+        assign commit_we = commitBus.en & commitBus.we & ~commitBus.fp_we;
+        assign walk_we = commitWalk.en & commitWalk.we & ~commitWalk.fp_we;
+    end
+endgenerate
+    
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         for(genvar j=0; j<`COMMIT_WIDTH; j++)begin
@@ -93,7 +105,7 @@ endgenerate
         end
         else begin
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
-                if(commit_io.we[i])begin
+                if(commit_we[i])begin
                     diff_map[commit_io.waddr[i]] <= commit_io.wdata[i];
                 end
             end

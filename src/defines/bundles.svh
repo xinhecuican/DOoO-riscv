@@ -201,6 +201,15 @@ typedef struct packed {
 `ifdef RVA
     logic `N(`AMOOP_WIDTH) amoop;
 `endif
+`ifdef RVF
+    logic `N(`FLTOP_WIDTH) fltop;
+    logic fltv;
+    logic flt_mem;
+    logic [4: 0] rs3;
+    logic frs1_sel;
+    logic frs2_sel;
+    logic flt_we;
+`endif
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
     logic `N(`EXC_WIDTH) exccode;
@@ -222,17 +231,22 @@ typedef struct packed {
 } RobIdx;
 
 typedef struct packed {
-    logic we;
+    logic frs1_sel, frs2_sel;
+    logic `N(`PREG_WIDTH) rs3;
     logic `N(`PREG_WIDTH) rs1, rs2;
     logic `N(`PREG_WIDTH) rd;
+    logic we;
     RobIdx robIdx;
 } DisStatusBundle;
 
 typedef struct packed {
     logic rs1v, rs2v;
-    logic we;
+    logic rs3v;
+    logic frs1_sel, frs2_sel;
+    logic `N(`PREG_WIDTH) rs3;
     logic `N(`PREG_WIDTH) rs1, rs2;
     logic `N(`PREG_WIDTH) rd;
+    logic we;
     RobIdx robIdx;
 } IssueStatusBundle;
 
@@ -261,6 +275,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic uext;
+    logic fp_en;
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(12) imm;
     LoadIdx lqIdx;
@@ -347,6 +362,9 @@ typedef struct packed {
 typedef struct packed {
     logic we;
     logic uext;
+`ifdef RVF
+    logic frd_en;
+`endif
     logic [1: 0] size;
     logic [11: 0] imm;
     logic `N(`PREG_WIDTH) rd;
@@ -384,6 +402,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic we;
+    logic frd_en;
     logic `N(`PREG_WIDTH) rd;
     RobIdx robIdx;
 } LoadQueueData;
@@ -481,27 +500,12 @@ typedef struct packed {
 
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
+    logic `N(`COMMIT_WIDTH) fp_we;
     logic `N($clog2(`COMMIT_WIDTH) + 1) num;
-    logic `N($clog2(`COMMIT_WIDTH) + 1) weNum;
     logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) old_prd;
 } CommitWalk;
-
-typedef struct packed {
-    logic `N(`WAKEUP_SIZE) en;
-    logic `N(`WAKEUP_SIZE) we;
-    logic `ARRAY(`WAKEUP_SIZE, `PREG_WIDTH) rd;
-} WakeupBus;
-
-typedef struct packed {
-    logic `N(`WB_SIZE) en;
-    logic `N(`WB_SIZE) we;
-    RobIdx `N(`WB_SIZE) robIdx;
-    logic `ARRAY(`WB_SIZE, `PREG_WIDTH) rd;
-    logic `ARRAY(`WB_SIZE, `XLEN) res;
-    logic `ARRAY(`WB_SIZE, `EXC_WIDTH) exccode;
-} WriteBackBus;
 
 `define DIRECTORY_ENTRY_DEF(NUM_ENTRY)  \
 typedef struct packed { \

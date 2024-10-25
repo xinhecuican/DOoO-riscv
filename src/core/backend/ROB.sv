@@ -11,7 +11,10 @@ module ROB(
     RenameDisIO.rob dis_io,
     ROBRenameIO.rob rob_rename_io,
     RobRedirectIO.rob rob_redirect_io,
-    input WriteBackBus wbBus,
+    input WriteBackBus int_wbBus,
+`ifdef RVF
+    input WriteBackBus fp_wbBus,
+`endif
     CommitBus.rob commitBus,
     output CommitWalk commitWalk,
     FenceBus.rob fenceBus,
@@ -31,6 +34,9 @@ module ROB(
         logic we;
         logic mem;
         logic store;
+`ifdef RVF
+        logic fp_we;
+`endif
         FsqIdxInfo fsqInfo;
         logic `N(5) vrd;
         logic `N(`PREG_WIDTH) prd;
@@ -63,6 +69,9 @@ module ROB(
     logic `N(`FETCH_WIDTH) data_en;
     logic `N(`ROB_WIDTH) head, tail, tail_n, head_n;
     logic `N(`COMMIT_WIDTH) commit_we;
+`ifdef RVF
+    logic `N(`COMMIT_WIDTH) commit_fp_we;
+`endif
     logic hdir, tdir; // tail direction
     logic `N(`ROB_WIDTH+1) remainCount, remainCount_n, validCount, validCount_n;
 
@@ -75,7 +84,7 @@ module ROB(
 
     logic `N(`ROB_WIDTH + 1) walk_remainCount_n, ext_tail, walk_remain_count;
     logic `N(`FETCH_WIDTH) walk_en;
-    logic `N($clog2(`COMMIT_WIDTH)+1) walk_num, walk_normal_num, redirect_num, walk_we_num;
+    logic `N($clog2(`COMMIT_WIDTH)+1) walk_num, walk_normal_num, redirect_num;
 
     logic exc_exist_n;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx_n;
@@ -89,6 +98,9 @@ module ROB(
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         assign rob_wdata_pre[i].we = dis_io.op[i].di.we;
+`ifdef RVF
+        assign rob_wdata_pre[i].fp_we = dis_io.op[i].di.flt_we;
+`endif
         assign rob_wdata_pre[i].mem = dis_io.op[i].di.memv;
         assign rob_wdata_pre[i].store = dis_io.op[i].di.memop[`MEMOP_WIDTH-1];
         assign rob_wdata_pre[i].fsqInfo = dis_io.op[i].fsqInfo;
@@ -178,8 +190,8 @@ endgenerate
         end
         else begin
             // en[0] is csr issue queue idx and it's in order
-            if(wbBus.en[0] & fence_req.req & (wbBus.robIdx[0] == fence_req.robIdx) & ~irqInfo.irq)begin
-                wb_sfence <= wbBus.en[0] & fence_req.req & (wbBus.robIdx[0] == fence_req.robIdx);
+            if(int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx) & ~irqInfo.irq)begin
+                wb_sfence <= int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx);
             end
             else if((|commit_en_n) | exc_exist_n)begin
                 wb_sfence <= 1'b0;
@@ -220,16 +232,15 @@ generate
             assign exc_mask[i] = ~(|exc_en[i-1: 0]);
         end
     end
-    PREncoder #(`COMMIT_WIDTH) prencoder_exc_idx (excValid, excIdx);
+    PREncoder #(`COMMIT_WIDTH) prencoder_exc_idx (exc_en, excIdx);
     assign commit_en = commit_en_unexc & exc_mask;
 endgenerate
 
-    logic `N($clog2(`COMMIT_WIDTH) + 1) commitNum, commitWeNum, commitLoadNum, commitStoreNum;
+    logic `N($clog2(`COMMIT_WIDTH) + 1) commitNum, commitLoadNum, commitStoreNum;
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_num (commit_en, commitNum);
-    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_we_num (commitBus.en & commit_we, commitWeNum);
+
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_load (commitBus.en & commit_mem & ~commit_store & ~exc_en_n, commitLoadNum);
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_commit_store (commitBus.en & commit_mem & commit_store & ~exc_en_n, commitStoreNum);
-    assign commitBus.wenum = commitWeNum;
     assign commitBus.we = commit_we;
     assign commitBus.robIdx.idx = head;
     assign commitBus.robIdx.dir = hdir;
@@ -241,6 +252,14 @@ generate
         assign commitWalk.vrd[i] = robData[i].vrd;
         assign commitWalk.prd[i] = robData[i].prd;
         assign commitWalk.old_prd[i] = robData[i].old_prd;
+        assign commitWalk.we[i] = robData[i].we;
+`ifdef RVF
+        assign commitBus.fp_we[i] = robData[i].fp_we;
+        assign commitWalk.fp_we[i] = robData[i].fp_we;
+`else
+        assign commitBus.fp_we[i] = 0;
+        assign commitWalk.fp_we[i] = 0;
+`endif
     end
 
     always_ff @(posedge clk)begin
@@ -341,11 +360,19 @@ endgenerate
                 hdir <= ~hdir;
             end
             for(int i=0; i<`WB_SIZE; i++)begin
-                if(wbBus.en[i])begin
-                    wb[wbBus.robIdx[i].idx] <= 1'b1;
-                    exccode[wbBus.robIdx[i].idx] <= wbBus.exccode[i];
+                if(int_wbBus.en[i])begin
+                    wb[int_wbBus.robIdx[i].idx] <= 1'b1;
+                    exccode[int_wbBus.robIdx[i].idx] <= int_wbBus.exccode[i];
                 end
             end
+`ifdef RVF
+            for(int i=0; i<`FP_WB_SIZE; i++)begin
+                if(fp_wbBus.en[i])begin
+                    wb[fp_wbBus.robIdx[i].idx] <= 1'b1;
+                    exccode[fp_wbBus.robIdx[i].idx] <= fp_wbBus.exccode[i];
+                end
+            end
+`endif
             for(int i=0; i<`STORE_PIPELINE; i++)begin
                 if(storeWBData[i].en)begin
                     wb[storeWBData[i].robIdx.idx] <= 1'b1;
@@ -368,13 +395,6 @@ endgenerate
     assign walk_normal_num =  (|walkInfo.remainCount[`ROB_WIDTH: $clog2(`COMMIT_WIDTH)]) ? `COMMIT_WIDTH : walkInfo.remainCount;
     assign walk_num = backendRedirect.en ? redirect_num : walk_normal_num;
     assign walk_en = backendRedirect.en ? (1 << redirect_num) - 1 : (1 << subNum) - 1;
-    ParallelAdder #(.DEPTH(`COMMIT_WIDTH)) adder_walk_we_num (commitWalk.en & commitWalk.we, walk_we_num);
-    assign commitWalk.weNum = walk_we_num;
-generate
-    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign commitWalk.we[i] = robData[i].we;
-    end
-endgenerate
     // TODO: dataWIdx改为rw port，walk使用widx，从而walk和commit同时进行
     logic `N(`COMMIT_WIDTH) commit_walk_en;
     logic walk;
@@ -477,8 +497,8 @@ endgenerate
             end
         end
         for(int i=0; i<`WB_SIZE; i++)begin
-            if(wbBus.en[i])begin
-                data[wbBus.robIdx[i].idx] <= wbBus.res[i];
+            if(int_wbBus.en[i])begin
+                data[int_wbBus.robIdx[i].idx] <= int_wbBus.res[i];
             end
         end
         for(int i=0; i<`COMMIT_WIDTH; i++)begin

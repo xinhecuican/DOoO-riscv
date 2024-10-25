@@ -17,7 +17,11 @@ endinterface
 module StoreQueue(
     input logic clk,
     input logic rst,
+`ifdef RVF
+    input logic `ARRAY(`STORE_PIPELINE*2, `XLEN) store_data,
+`else
     input logic `ARRAY(`STORE_PIPELINE, `XLEN) store_data,
+`endif
     StoreQueueIO.queue io,
     StoreUnitIO.queue issue_queue_io,
     StoreCommitIO.queue queue_commit_io,
@@ -64,7 +68,13 @@ generate
         assign addr_eqIdx[i] = io.data[i].sqIdx.idx;
         assign data_eqIdx[i] = issue_queue_io.data_sqIdx[i].idx;
         assign headCommitIdx[i] = head + i;
-        StoreDataGen gen_store_data(issue_queue_io.data_size[i], store_data[i], storeData[i]);
+        logic `N(`XLEN) reg_data;
+`ifdef RVF
+        assign reg_data = issue_queue_io.data_fp_sel[i] ? store_data[`STORE_PIPELINE+i] : store_data[i];
+`else
+        assign reg_data = store_data[i];
+`endif
+        StoreDataGen gen_store_data(issue_queue_io.data_size[i], reg_data, storeData[i]);
     end
     for(genvar i=0; i<`STORE_DIS_PORT; i++)begin
         assign disWIdx[i] = tail + i;

@@ -16,13 +16,19 @@ module Dispatch(
 `ifdef RVA
     DisIssueIO.dis dis_amo_io,
 `endif
-    input WakeupBus wakeupBus,
+    input WakeupBus int_wakeupBus,
+`ifdef RVF
+    input WakeupBus fp_wakeupBus,
+`endif
     CommitBus.in commitBus,
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl,
     output logic full
 );
-    BusyTableIO busytable_io();
+    BusyTableIO #(`INT_BUSY_PORT) int_busy_io();
+`ifdef RVF
+    BusyTableIO fp_busy_io();
+`endif
     DisStatusBundle `N(`FETCH_WIDTH) dis_status;
 
 generate
@@ -31,7 +37,13 @@ generate
         assign di = rename_dis_io.op[i].di;
         assign dis_status[i] = '{we: di.we, 
                                 rs1: rename_dis_io.prs1[i], rs2: rename_dis_io.prs2[i], rd: rename_dis_io.prd[i],
-                                robIdx: rename_dis_io.robIdx[i]};
+                                robIdx: rename_dis_io.robIdx[i],
+`ifdef RVF
+                                frs1_sel: di.frs1_sel,
+                                frs2_sel: di.frs2_sel,
+                                rs3: rename_dis_io.prs3[i],
+`endif
+                                default: 0};
     end
 endgenerate
 // enqueue
@@ -153,6 +165,9 @@ generate
         LoopAdder #(`STORE_QUEUE_WIDTH, $clog2(`FETCH_WIDTH)) adder_sqIdx (sq_add_num[i], sq_tail, sq_eq_tail[i]);
         DecodeInfo di;
         MemIssueBundle data;
+`ifdef RVF
+        assign data.fp_en = di.frs1_sel | di.flt_we;
+`endif
         assign data.uext = di.uext;
         assign data.memop = di.memop;
         assign data.imm = di.imm[11: 0];
@@ -185,7 +200,8 @@ endgenerate
         .DATA_WIDTH($bits(MemIssueBundle)),
         .IDX_WIDTH($bits(StoreIdx)),
         .DEPTH(`STORE_DIS_SIZE),
-        .OUT_WIDTH(`STORE_DIS_PORT)
+        .OUT_WIDTH(`STORE_DIS_PORT),
+        .FSELV(1)
     ) store_dispatch_queue(
         .*,
         .idx(sq_eq_tail),
@@ -270,9 +286,9 @@ endgenerate
 `endif
     ;
 
-    assign busytable_io.dis_en = rename_dis_io.wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
-    assign busytable_io.dis_rd = rename_dis_io.prd;
-    assign busytable_io.preg = {
+    assign int_busy_io.dis_en = rename_dis_io.int_wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
+    assign int_busy_io.dis_rd = rename_dis_io.prd;
+    assign int_busy_io.preg = {
 `ifdef RVA
                                 amo_io.rs2_o, amo_io.rs1_o,
 `endif
@@ -281,8 +297,21 @@ endgenerate
 `endif
                                 store_io.rs2_o, store_io.rs1_o, load_io.rs1_o,
                                 int_io.rs2_o, int_io.rs1_o};
-    BusyTable busy_table(.*, .io(busytable_io.busytable));
-
+    BusyTable #(`INT_WAKEUP_PORT, `INT_BUSY_PORT, 1) int_busy_table(
+        .*, 
+        .io(int_busy_io.busytable),
+        .wakeupBus(int_wakeupBus)
+    );
+`ifdef RVF
+    assign fp_busy_io.dis_en = rename_dis_io.fp_wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
+    assign fp_busy_io.dis_rd = rename_dis_io.prd;
+    assign fp_busy_io.preg = {store_io.rs2_o};
+    BusyTable #(`FP_WAKEUP_PORT, `FP_BUSY_PORT) fp_busy_table(
+        .*,
+        .io(fp_busy_io.busytable),
+        .wakeupBus(fp_wakeupBus)
+    );
+`endif
 // dequeue
     
 `define DEF_TEMPLATE(name, PORT_BASE, PORT_SIZE, RS1V, RS2V) \
@@ -294,13 +323,13 @@ generate \
         IssueStatusBundle bundle; \
         logic rs1v, rs2v; \
         if(RS1V)begin \
-            assign rs1v = busytable_io.reg_en[PORT_BASE+i]; \
+            assign rs1v = int_busy_io.reg_en[PORT_BASE+i]; \
         end \
         else begin \
             assign rs1v = 0; \
         end \
         if(RS2V)begin \
-            assign rs2v = busytable_io.reg_en[PORT_BASE+PORT_SIZE+i]; \
+            assign rs2v = int_busy_io.reg_en[PORT_BASE+PORT_SIZE+i]; \
         end \
         else begin \
             assign rs2v = 0; \
@@ -309,12 +338,50 @@ generate \
         assign dis_``name``_io.status[i] = bundle; \
     end \
 endgenerate
-
-    `DEF_TEMPLATE(int, 0, `INT_DIS_PORT, 1, 1)
+    DispatchDequeue #(
+        .PORT_SIZE(`INT_DIS_PORT)
+    ) int_dequeue (
+        .queue_io(int_io),
+        .dis_issue_io(dis_int_io),
+        .int_rs1_en(int_busy_io.reg_en[`INT_DIS_PORT-1: 0]),
+        .int_rs2_en(int_busy_io.reg_en[`INT_DIS_PORT*2-1: `INT_DIS_PORT]),
+        .fp_rs1_en(),
+        .fp_rs2_en(),
+        .fp_rs3_en()
+    );
     localparam LOAD_BASE = `INT_DIS_PORT * 2;
-    `DEF_TEMPLATE(load, LOAD_BASE, `LOAD_DIS_PORT, 1, 0)
     localparam STORE_BASE = `INT_DIS_PORT * 2 + `LOAD_DIS_PORT;
-    `DEF_TEMPLATE(store, STORE_BASE, `STORE_DIS_PORT, 1, 1)
+    DispatchDequeue #(
+        .PORT_SIZE(`LOAD_DIS_PORT),
+        .RS2I(0)
+    ) load_dequeue (
+        .queue_io(load_io),
+        .dis_issue_io(dis_load_io),
+        .int_rs1_en(int_busy_io.reg_en[`LOAD_DIS_PORT+LOAD_BASE-1: LOAD_BASE]),
+        .int_rs2_en(),
+        .fp_rs1_en(),
+        .fp_rs2_en(),
+        .fp_rs3_en()
+    );
+    DispatchDequeue #(
+        .PORT_SIZE(`STORE_DIS_PORT)
+`ifdef RVF
+        ,.RS2F(1)
+`endif
+    ) store_dequeue (
+        .queue_io(store_io),
+        .dis_issue_io(dis_store_io),
+        .int_rs1_en(int_busy_io.reg_en[`STORE_DIS_PORT+STORE_BASE-1: STORE_BASE]),
+        .int_rs2_en(int_busy_io.reg_en[`STORE_DIS_PORT+STORE_BASE +: `STORE_DIS_PORT]),
+        .fp_rs1_en(),
+`ifdef RVF
+        .fp_rs2_en(fp_busy_io.reg_en[`STORE_DIS_PORT-1: 0]),
+`else
+        .fp_rs2_en(),
+`endif
+        .fp_rs3_en()
+    );
+
 
     IssueStatusBundle csr_status;
     CsrIssueBundle csr_issue_bundle;
@@ -333,190 +400,78 @@ endgenerate
 
 `ifdef RVM
     localparam MULT_BASE = `INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT * 2;
-    `DEF_TEMPLATE(mult, MULT_BASE, `MULT_DIS_PORT, 1, 1)
+    DispatchDequeue #(
+        .PORT_SIZE(`MULT_DIS_PORT)
+    ) mult_dequeue (
+        .queue_io(mult_io),
+        .dis_issue_io(dis_mult_io),
+        .int_rs1_en(int_busy_io.reg_en[MULT_BASE +: `MULT_DIS_PORT]),
+        .int_rs2_en(int_busy_io.reg_en[`MULT_DIS_PORT + MULT_BASE +: `MULT_DIS_PORT]),
+        .fp_rs1_en(),
+        .fp_rs2_en(),
+        .fp_rs3_en()
+    );
 `endif
 `ifdef RVA
-    localparam AMO_BASE = `INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT * 2 + `MULT_DIS_PORT * 2;
-    `DEF_TEMPLATE(amo, AMO_BASE, `AMO_DIS_PORT, 1, 1)
+    localparam AMO_BASE = `INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT * 2
+`ifdef RVM
+    + `MULT_DIS_PORT * 2
+`endif
+    ;
+    DispatchDequeue #(
+        .PORT_SIZE(`AMO_DIS_PORT)
+    ) amo_dequeue (
+        .queue_io(amo_io),
+        .dis_issue_io(dis_amo_io),
+        .int_rs1_en(int_busy_io.reg_en[AMO_BASE +: `AMO_DIS_PORT]),
+        .int_rs2_en(int_busy_io.reg_en[AMO_BASE + `AMO_DIS_PORT +: `AMO_DIS_PORT]),
+        .fp_rs1_en(),
+        .fp_rs2_en(),
+        .fp_rs3_en()
+    );
 `endif
 endmodule
 
-interface DispatchQueueIO #(
-    parameter DATA_WIDTH = 1,
-    parameter OUT_WIDTH = 4,
-    parameter DEPTH = 16,
-    parameter ADDR_WIDTH = $clog2(DEPTH)
+module DispatchDequeue #(
+    parameter PORT_SIZE=1,
+    parameter RS1I=1,
+    parameter RS2I=1,
+
+    parameter RS1F=0,
+    parameter RS2F=0,
+    parameter RS3F=0
+
 )(
-    input DisStatusBundle `N(`FETCH_WIDTH) dis_status
+    DispatchQueueIO.dequeue queue_io,
+    DisIssueIO.dis dis_issue_io,
+    input logic `N(PORT_SIZE) int_rs1_en,
+    input logic `N(PORT_SIZE) int_rs2_en,
+
+    input logic `N(PORT_SIZE) fp_rs1_en,
+    input logic `N(PORT_SIZE) fp_rs2_en,
+    input logic `N(PORT_SIZE) fp_rs3_en
 );
-    logic `N(`FETCH_WIDTH) en;
-    logic `ARRAY(`FETCH_WIDTH, DATA_WIDTH) data;
-    logic `N(OUT_WIDTH) en_o;
-    DisStatusBundle `N(OUT_WIDTH) status_o;
-    logic `ARRAY(OUT_WIDTH, `PREG_WIDTH) rs1_o, rs2_o;
-    logic `ARRAY(OUT_WIDTH, DATA_WIDTH) data_o;
-    logic full;
-    logic issue_full;
-
-    // for mem
-    logic `ARRAY(`FETCH_WIDTH, ADDR_WIDTH) index;
-    logic valid_full;
-    logic valid_empty;
-    logic `N(ADDR_WIDTH) walk_tail;
-
-    modport dis_queue (input en, dis_status, data, issue_full, output en_o, status_o, rs1_o, rs2_o, data_o, full, index, valid_full, valid_empty, walk_tail);
-endinterface
-
-module DispatchQueue #(
-    parameter DATA_WIDTH = 1,
-    parameter DEPTH = 16,
-    parameter OUT_WIDTH = 4,
-    parameter ADDR_WIDTH = $clog2(DEPTH)
-)(
-    input logic clk,
-    input logic rst,
-    DispatchQueueIO.dis_queue io,
-    input CommitWalk commitWalk,
-    input BackendCtrl backendCtrl
-);
-
-    DisStatusBundle status_ram `N(DEPTH);
-    logic `N(DATA_WIDTH) entrys `N(DEPTH);
-    logic `N(ADDR_WIDTH) head, tail;
-    logic `N(ADDR_WIDTH+1) num;
-    logic `N($clog2(`FETCH_WIDTH)+1) addNum, eqNum;
-    logic `N($clog2(OUT_WIDTH)+1) subNum;
-    logic `ARRAY(`FETCH_WIDTH, $clog2(`FETCH_WIDTH)) eq_add_num;
-    logic `ARRAY(`FETCH_WIDTH, ADDR_WIDTH) index;
-
-    ParallelAdder #(1, `FETCH_WIDTH) adder (io.en, addNum);
-    assign eqNum = backendCtrl.dis_full ? 0 : addNum;
-    assign subNum = io.issue_full ? 0 : 
-                    num >= OUT_WIDTH ? OUT_WIDTH : num;
-    assign io.full = num + addNum > DEPTH;
-
-    CalValidNum #(`FETCH_WIDTH) cal_en (io.en, eq_add_num);
+    assign dis_issue_io.en = queue_io.en_o;
+    assign dis_issue_io.data = queue_io.data_o;
+    assign queue_io.issue_full = dis_issue_io.full;
 generate
-    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
-        assign index[i] = tail + eq_add_num[i];
-    end
+    for(genvar i=0; i<PORT_SIZE; i++)begin
+        IssueStatusBundle bundle;
+        logic rs1v, rs2v, rs3v;
+        if(RS1I & RS1F) assign rs1v = queue_io.status_o[i].frs1_sel ? fp_rs1_en[i] : int_rs1_en[i];
+        else if(RS1F) assign rs1v = fp_rs1_en[i];
+        else if(RS1I) assign rs1v = int_rs1_en[i];
+        else assign rs1v = 0;
 
-    for(genvar i=0; i<OUT_WIDTH; i++)begin
-        logic `N(ADDR_WIDTH) raddr;
-        logic bigger;
-        logic older;
-        assign raddr = head + i;
-        assign bigger = num > i;
-        // LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, robIdx[raddr], older);
-        assign io.en_o[i] = bigger & (~backendCtrl.redirect);
-        assign io.status_o[i] = status_ram[raddr];
-        assign io.rs1_o[i] = status_ram[raddr].rs1;
-        assign io.rs2_o[i] = status_ram[raddr].rs2;
-        assign io.data_o[i] = entrys[raddr];
+        if(RS2I & RS2F) assign rs2v = queue_io.status_o[i].frs2_sel ? fp_rs2_en[i] : int_rs2_en[i];
+        else if(RS2F) assign rs2v = fp_rs2_en[i];
+        else if(RS2I) assign rs2v = int_rs2_en[i];
+        else assign rs2v = 0;
+
+        if(RS3F) assign rs3v = fp_rs3_en[i];
+        else assign rs3v = 0;
+        assign bundle = {rs1v, rs2v, rs3v, queue_io.status_o[i]};
+        assign dis_issue_io.status[i] = bundle;
     end
 endgenerate
-
-// redirect
-    logic `N(DEPTH) valid, bigger, en, validStart, validEnd;
-    logic `N(DEPTH) headShift, tailShift;
-    logic `N(ADDR_WIDTH) validSelect1, validSelect2;
-    logic `N(ADDR_WIDTH) walk_tail;
-    logic `N(ADDR_WIDTH + 1) walkNum;
-    logic valid_full, valid_empty;
-    assign headShift = (1 << head) - 1;
-    assign tailShift = (1 << tail) - 1;
-    assign en = tail > head || num == 0 ? headShift ^ tailShift : ~(headShift ^ tailShift);
-    assign valid = en & bigger;
-    assign valid_full = &valid;
-    assign valid_empty = ~(|valid);
-    assign io.index = index;
-    assign io.valid_full = valid_full;
-    assign io.valid_empty = valid_empty;
-    assign io.walk_tail = walk_tail;
-
-    for(genvar i=0; i<DEPTH; i++)begin
-        assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
-        logic `N(ADDR_WIDTH) i_n, i_p;
-        assign i_n = i + 1;
-        assign i_p = i - 1;
-        assign validStart[i] = valid[i] & ~valid[i_n]; // valid[i] == 1 && valid[i + 1] == 0
-        assign validEnd[i] = valid[i] & ~valid[i_p];
-    end
-    Encoder #(DEPTH) encoder1 (validStart, validSelect1);
-    Encoder #(DEPTH) encoder2 (validEnd, validSelect2);
-    ParallelAdder #(.DEPTH(DEPTH)) adder_walk_num (valid, walkNum);
-    assign walk_tail = validSelect1 == head ? validSelect2 : validSelect1;
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            head <= 0;
-            tail <= 0;
-            num <= 0;
-        end
-        else begin
-        if(backendCtrl.redirect)begin
-            tail <= valid_full | valid_empty ? head : walk_tail + 1;
-            num <= walkNum;
-        end
-        else begin
-            head <= head + subNum;
-            tail <= tail + eqNum;
-            num <= num + eqNum - subNum;
-        end
-        end
-    end
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            entrys <= '{default: 0};
-            status_ram <= '{default: 0};
-        end
-        else begin
-            for(int i=0; i<`FETCH_WIDTH; i++)begin
-                if(io.en[i] & ~backendCtrl.dis_full)begin
-                    entrys[index[i]] <= io.data[i];
-                    status_ram[index[i]] <= io.dis_status[i];
-                end
-            end
-        end
-    end
-
-endmodule
-
-module MemDispatchQueue #(
-    parameter DATA_WIDTH = 1,
-    parameter IDX_WIDTH = 1,
-    parameter DEPTH = 16,
-    parameter OUT_WIDTH = 4,
-    parameter ADDR_WIDTH = $clog2(DEPTH)
-)(
-    input logic clk,
-    input logic rst,
-    input logic `ARRAY(`FETCH_WIDTH, IDX_WIDTH) idx,
-    DispatchQueueIO.dis_queue io,
-    input CommitWalk commitWalk,
-    input BackendCtrl backendCtrl,
-    output logic need_redirect,
-    output logic redirect_free,
-    output logic `N(IDX_WIDTH) redirect_idx
-);
-    logic `N(IDX_WIDTH) idxs `N(DEPTH);
-    always_ff @(posedge clk)begin
-        need_redirect <= ~(io.valid_full);
-        redirect_free <= io.valid_empty;
-        redirect_idx <= idxs[io.walk_tail];
-    end
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            idxs <= '{default: 0};
-        end
-        else begin
-            for(int i=0; i<`FETCH_WIDTH; i++)begin
-                if(io.en[i] & ~backendCtrl.dis_full)begin
-                    idxs[io.index[i]] <= idx[i];
-                end
-            end
-        end
-    end
-
-    DispatchQueue #(DATA_WIDTH, DEPTH, OUT_WIDTH) dispatch_queue (.*);
-
 endmodule

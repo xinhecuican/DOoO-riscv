@@ -224,13 +224,25 @@ interface RenameDisIO;
     OPBundle `N(`FETCH_WIDTH) op;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs1;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs2;
-    logic `N(`FETCH_WIDTH) wen;
+`ifdef RVF
+    logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prs3;
+    logic `N(`FETCH_WIDTH) fp_wen;
+`endif
+    logic `N(`FETCH_WIDTH) int_wen;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd;
     logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) old_prd;
     RobIdx `N(`FETCH_WIDTH) robIdx;
 
-    modport rename(output op, prs1, prs2, wen, prd, old_prd, robIdx);
-    modport dis(input op, prs1, prs2, wen, prd, robIdx);
+    modport rename(output op, prs1, prs2, int_wen, prd, old_prd, robIdx
+`ifdef RVF
+    , prs3, fp_wen
+`endif
+    );
+    modport dis(input op, prs1, prs2, int_wen, prd, robIdx
+`ifdef RVF
+    , prs3, fp_wen
+`endif
+    );
     modport rob(input op, prd, old_prd, robIdx);
 endinterface
 
@@ -345,24 +357,41 @@ interface WriteBackIO#(
     modport fu (output datas, input valid);
 endinterface
 
+interface WakeupBus #(
+    parameter PORT_NUM=4
+);
+    logic `N(PORT_NUM) en;
+    logic `N(PORT_NUM) we;
+    logic `ARRAY(PORT_NUM, `PREG_WIDTH) rd;
+endinterface
+
+interface WriteBackBus #(
+    parameter PORT_NUM=4
+);
+    logic `N(PORT_NUM) en;
+    logic `N(PORT_NUM) we;
+    RobIdx `N(PORT_NUM) robIdx;
+    logic `ARRAY(PORT_NUM, `PREG_WIDTH) rd;
+    logic `ARRAY(PORT_NUM, `XLEN) res;
+    logic `ARRAY(PORT_NUM, `EXC_WIDTH) exccode;
+endinterface
+
 interface CommitBus;
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
+    logic `N(`COMMIT_WIDTH) fp_we;
     logic fence_valid;
     FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
     logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
     logic `N($clog2(`COMMIT_WIDTH) + 1) num;
-    logic `N($clog2(`COMMIT_WIDTH) + 1) wenum;
 
     logic `N($clog2(`COMMIT_WIDTH)+1) loadNum;
     logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
     RobIdx robIdx;
 
-    modport rob(output en, we, fence_valid, fsqInfo, vrd, prd, num, wenum, loadNum, storeNum
-    , robIdx
-);
-    modport in(input en, we, fsqInfo, vrd, prd, num, wenum);
+    modport rob(output en, we, fence_valid, fsqInfo, vrd, prd, num, loadNum, storeNum, robIdx, output fp_we);
+    modport in(input en, we, fsqInfo, vrd, prd, num, input fp_we);
     modport mem(input loadNum, storeNum, robIdx);
     modport csr(input robIdx, fsqInfo, fence_valid, en);
 endinterface

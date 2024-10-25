@@ -53,6 +53,10 @@ module CSR(
     logic `ARRAY(`PMPCFG_SIZE, `MXL) pmpcfg;
     logic `ARRAY(`PMP_SIZE, `MXL) pmpaddr;
 
+`ifdef RVF
+    logic `N(`MXL) fcsr;
+`endif
+
     // superviser
     TVEC stvec;
     logic `N(`MXL) stval;
@@ -157,11 +161,14 @@ endgenerate                                                   \
     `CSR_CMP_DEF(sscratch, sscratch,    24,0, 0             )
     `CSR_CMP_DEF(mcycle, mcycle,        25,0, 0             )
     `CSR_CMP_DEF(minstret, minstret,    26,0, 0             )
+`ifdef RVF
+    `CSR_CMP_DEF(fcsr, fcsr,            27,0, 0             )
+`endif
 `ifdef RV32I
-    `CSR_CMP_DEF(mstatush, mstatush,    27,0, 0             )
-    `CSR_CMP_DEF(medelegh, medelegh,    28,0, 0             )
-    `CSR_CMP_DEF(mcycleh, mcycleh,      29,0, 0             )
-    `CSR_CMP_DEF(minstreth, minstreth,  30,0, 0             )
+    `CSR_CMP_DEF(mstatush, mstatush,    28,0, 0             )
+    `CSR_CMP_DEF(medelegh, medelegh,    29,0, 0             )
+    `CSR_CMP_DEF(mcycleh, mcycleh,      30,0, 0             )
+    `CSR_CMP_DEF(minstreth, minstreth,  31,0, 0             )
 `endif
 
     ParallelEQ #(
@@ -231,6 +238,9 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(mstatush,    0,              1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0)
 `endif
+`ifdef RVF
+    `CSR_WRITE_DEF(fcsr,        0,              1, 0, 0)
+`endif
 
     logic `N(`VADDR_SIZE-2) mvec_pc, svec_pc;
     logic `N(`VADDR_SIZE) mtarget_pc, starget_pc;
@@ -290,6 +300,15 @@ endgenerate                                                             \
                     mstatus <= wdata_s2 & `STATUS_MASK;
                 end
             end
+`ifdef RVF
+            if(wen_o[fcsr_id] & (mstatus.fs != 2'b00))begin
+                mstatus.fs <= 2'b11;
+                mstatus.sd <= 1'b1;
+            end
+            if(wen_o[mstatus_id] & wdata_s2[14: 12] == 2'b00)begin
+                mstatus.sd <= 1'b0;
+            end
+`endif
             if(wen_o[mepc_id])begin
                 mepc <= wdata_s2;
             end
@@ -371,7 +390,11 @@ endgenerate                                                             \
     assign csr_wb_io.datas[0].rd = issue_csr_io.status.rd;
     assign csr_wb_io.datas[0].res = rdata;
     assign csr_wb_io.datas[0].exccode = ((csrrw | csrrs | csrrc) & (~mode_valid | (~((|cmp_eq) | pmp_cmp)))) |
-                                        (wen[satp_id] & mstatus.tvm) ? `EXC_II :
+                                        (wen[satp_id] & mstatus.tvm)
+`ifdef RVF
+                                        | (wen[fcsr_id] & ~(|mstatus.fs)) 
+`endif
+                                        ? `EXC_II :
                                         issue_csr_io.bundle.exc_valid ? issue_csr_io.bundle.exccode : `EXC_NONE;
 
     always_ff @(posedge clk or posedge rst)begin

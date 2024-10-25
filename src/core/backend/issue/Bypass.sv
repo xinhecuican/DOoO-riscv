@@ -3,12 +3,12 @@
 module Bypass(
     input logic clk,
     input logic rst,
-    input logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr,
-    input logic `ARRAY(`REGFILE_READ_PORT, `XLEN) reg_rdata,
+    input logic `ARRAY(`INT_REG_READ_PORT, `PREG_WIDTH) raddr,
+    input logic `ARRAY(`INT_REG_READ_PORT, `XLEN) reg_rdata,
     input WriteBackBus wbBus,
-    output logic `ARRAY(`REGFILE_READ_PORT, `XLEN) rdata
+    output logic `ARRAY(`INT_REG_READ_PORT, `XLEN) rdata
 );
-    logic `ARRAY(`REGFILE_READ_PORT, `PREG_WIDTH) raddr_n;
+    logic `ARRAY(`INT_REG_READ_PORT, `PREG_WIDTH) raddr_n;
     always_ff @(posedge clk)begin
         raddr_n <= raddr;
     end
@@ -18,7 +18,7 @@ module Bypass(
     logic `N(`WB_SIZE) wb_en;
     assign wb_en = wbBus.en & wbBus.we;
 generate
-    for(genvar i=0; i<`REGFILE_READ_PORT; i++)begin
+    for(genvar i=0; i<`INT_REG_READ_PORT; i++)begin
         logic `N(`ALU_SIZE) eq, eq_pre, eq0;
         logic `N(`XLEN) data, data_pre, data0;
         ParallelEQ #(
