@@ -61,8 +61,8 @@ endgenerate
     
 generate
     if(FPV)begin
-        assign commit_we = commitBus.en & commitBus.we & commitBus.fp_we;
-        assign walk_we = commitWalk.en & commitWalk.we & commitWalk.fp_we;
+        assign commit_we = commitBus.en & commitBus.fp_we;
+        assign walk_we = commitWalk.en & commitWalk.fp_we;
     end
     else begin
         assign commit_we = commitBus.en & commitBus.we & ~commitBus.fp_we;

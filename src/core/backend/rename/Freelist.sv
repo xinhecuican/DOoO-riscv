@@ -11,7 +11,10 @@ interface FreelistIO;
 endinterface
 
 module Freelist #(
-    parameter FPV=0
+    parameter FPV=0,
+    parameter PREG_SIZE=128,
+    parameter PREG_WIDTH=$clog2(PREG_SIZE),
+    parameter FREELIST_DEPTH=PREG_SIZE-32
 )(
     input logic clk,
     input logic rst,
@@ -20,7 +23,7 @@ module Freelist #(
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl
 );
-    logic `N(`PREG_WIDTH) freelist `N(`PREG_SIZE);
+    logic `N(`PREG_WIDTH) freelist `N(PREG_SIZE);
     logic `N(`PREG_WIDTH) head, tail, tail_n;
     logic `N($clog2(`FETCH_WIDTH)+1) tail_add_num;
     logic `N(`PREG_WIDTH+1) remainCount;
@@ -31,15 +34,14 @@ module Freelist #(
 
 generate
     if(FPV)begin
-        assign we = commitBus.en & commitBus.we & commitBus.fp_we;
-        assign walk_we = commitWalk.en & commitWalk.we & commitWalk.fp_we;
+        assign we = commitBus.en & commitBus.fp_we;
+        assign walk_we = commitWalk.en & commitWalk.fp_we;
     end
     else begin
         assign we = commitBus.en & commitBus.we & ~commitBus.fp_we;
         assign walk_we = commitWalk.en & commitWalk.we & ~commitWalk.fp_we;
     end
 endgenerate
-    assign we = commitBus.en & commitBus.we;
     CalValidNum #(`FETCH_WIDTH) cal_rd_num (we, we_add_idx);
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH), .WIDTH(1)) adder_commit_we_num (we, commit_we_num);
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH), .WIDTH(1)) adder_walk_we_num (walk_we, walk_we_num);
@@ -57,15 +59,15 @@ endgenerate
     assign tail_n = commitWalk.walk ? tail - walk_we_num : tail + tail_add_num;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
-            for(int i=0; i<`FREELIST_DEPTH; i++)begin
+            for(int i=0; i<FREELIST_DEPTH; i++)begin
                 freelist[i] <= i + 32;
             end
-            for(int i=`FREELIST_DEPTH; i<`PREG_SIZE; i++)begin
+            for(int i=FREELIST_DEPTH; i<PREG_SIZE; i++)begin
                 freelist[i] <= 0;
             end
-            head <= `FREELIST_DEPTH;
+            head <= FREELIST_DEPTH;
             tail <= 0;
-            remainCount <= `FREELIST_DEPTH;
+            remainCount <= FREELIST_DEPTH;
         end
         else begin
             tail <= tail_n;

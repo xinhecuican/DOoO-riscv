@@ -90,15 +90,12 @@
 `define FLT_FMIN        `FLTOP_WIDTH'b01100
 `define FLT_FMAX        `FLTOP_WIDTH'b01101
 `define FLT_CVT         `FLTOP_WIDTH'b01110
-`define FLT_CVTU        `FLTOP_WIDTH'b01111
-`define FLT_MVX         `FLTOP_WIDTH'b10000
+`define FLT_MV         `FLTOP_WIDTH'b10000
 `define FLT_EQ          `FLTOP_WIDTH'b10001
 `define FLT_LT          `FLTOP_WIDTH'b10010
 `define FLT_LE          `FLTOP_WIDTH'b10100
 `define FLT_CLASS       `FLTOP_WIDTH'b11000
 `define FLT_CVTS        `FLTOP_WIDTH'b11100
-`define FLT_CVTSU       `FLTOP_WIDTH'b10011
-`define FLT_MV          `FLTOP_WIDTH'b11110
 
 // opcode
 

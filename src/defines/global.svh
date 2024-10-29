@@ -121,61 +121,15 @@ typedef enum logic [1:0] {
 `define DEC_IMM_WIDTH 20
 
 // rename
-`define PREG_SIZE 128
-`define PREG_WIDTH $clog2(`PREG_SIZE)
-`define FREELIST_DEPTH ((`PREG_SIZE-32))
+`define INT_PREG_SIZE 128
+`define FP_PREG_SIZE 128
+`define PREG_WIDTH $clog2(`INT_PREG_SIZE)
 
 // rob
 `define ROB_SIZE 128
 `define ROB_BANK 2
 `define ROB_WIDTH $clog2(`ROB_SIZE)
 `define COMMIT_WIDTH 4
-
-// regfile
-`define INT_REG_READ_PORT (`ALU_SIZE * 2 + `LOAD_PIPELINE + `STORE_PIPELINE * 2)
-`define INT_REG_WRITE_PORT `WB_SIZE
-`define FP_REG_READ_PORT `STORE_PIPELINE
-`define FP_REG_WRITE_PORT `LOAD_PIPELINE
-
-// dispatch
-`define INT_DIS_SIZE 16
-`define INT_DIS_PORT 4
-`define LOAD_DIS_SIZE 8
-`define STORE_DIS_SIZE 8
-`define LOAD_DIS_PORT 2
-`define STORE_DIS_PORT 2
-`define CSR_DIS_SIZE 8
-`define CSR_DIS_PORT 1
-`define MULT_DIS_SIZE 8
-`define MULT_DIS_PORT 1
-`define AMO_DIS_SIZE 4
-`define AMO_DIS_PORT 1
-`define INT_BUSY_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 \
-`ifdef RVM \
-    + `MULT_DIS_PORT * 2 \
-`endif \
-`ifdef RVA \
-    + `AMO_DIS_PORT * 2 \
-`endif \
-)
-`define FP_BUSY_PORT (`STORE_DIS_PORT)
-
-// issue
-`define INT_ISSUE_SIZE 32
-`define ALU_SIZE 4
-`define LOAD_ISSUE_BANK_SIZE 8
-`define LOAD_ISSUE_BANK_WIDTH $clog2(`LOAD_ISSUE_BANK_SIZE)
-`define LOAD_ISSUE_BANK_NUM `LOAD_DIS_PORT
-`define STORE_ISSUE_BANK_SIZE 8
-`define STORE_ISSUE_BANK_NUM `STORE_DIS_PORT
-`define STORE_ISSUE_BANK_WIDTH $clog2(`STORE_ISSUE_BANK_SIZE)
-`define CSR_ISSUE_SIZE 4
-`define CSR_ISSUE_WIDTH $clog2(`CSR_ISSUE_SIZE)
-`define MULT_SIZE 1
-`define MULT_ISSUE_SIZE 8
-`define MULT_ISSUE_WIDTH $clog2(`MULT_ISSUE_SIZE)
-`define INT_WAKEUP_PORT `WB_SIZE
-`define FP_WAKEUP_PORT `LOAD_PIPELINE
 
 // lsu
 `define LOAD_QUEUE_SIZE 32
@@ -192,6 +146,61 @@ typedef enum logic [1:0] {
 `define STORE_COMMIT_THRESH 5
 `define LSU_SIZE `LOAD_PIPELINE
 `define LOAD_REFILL_SIZE 2
+
+// regfile
+`define INT_REG_READ_PORT (`ALU_SIZE * 2 + `LOAD_PIPELINE + `STORE_PIPELINE * 2)
+`define INT_REG_WRITE_PORT `WB_SIZE
+`define FP_REG_READ_PORT `FMISC_SIZE * 2
+`define FP_REG_WRITE_PORT `LOAD_PIPELINE
+
+// issue
+`define INT_ISSUE_SIZE 32
+`define ALU_SIZE 4
+`define LOAD_ISSUE_BANK_SIZE 8
+`define LOAD_ISSUE_BANK_WIDTH $clog2(`LOAD_ISSUE_BANK_SIZE)
+`define LOAD_ISSUE_BANK_NUM `LOAD_DIS_PORT
+`define STORE_ISSUE_BANK_SIZE 8
+`define STORE_ISSUE_BANK_NUM `STORE_DIS_PORT
+`define STORE_ISSUE_BANK_WIDTH $clog2(`STORE_ISSUE_BANK_SIZE)
+`define CSR_ISSUE_SIZE 4
+`define CSR_ISSUE_WIDTH $clog2(`CSR_ISSUE_SIZE)
+`define MULT_SIZE 1
+`define MULT_ISSUE_SIZE 8
+`define MULT_ISSUE_WIDTH $clog2(`MULT_ISSUE_SIZE)
+`define FMISC_SIZE 2
+`define FMISC_ISSUE_SIZE 16
+`define INT_WAKEUP_PORT `WB_SIZE
+`define FP_WAKEUP_PORT `LOAD_PIPELINE
+
+// dispatch
+`define INT_DIS_SIZE 16
+`define INT_DIS_PORT `ALU_SIZE
+`define LOAD_DIS_SIZE 8
+`define STORE_DIS_SIZE 8
+`define LOAD_DIS_PORT `LOAD_PIPELINE
+`define STORE_DIS_PORT `STORE_PIPELINE
+`define CSR_DIS_SIZE 8
+`define CSR_DIS_PORT 1
+`define MULT_DIS_SIZE 8
+`define MULT_DIS_PORT `MULT_SIZE
+`define AMO_DIS_SIZE 4
+`define AMO_DIS_PORT 1
+`define FMISC_DIS_SIZE 8
+`define FMISC_DIS_PORT `FMISC_SIZE
+`define FCAL_DIS_SIZE 8
+`define FCAL_DIS_PORT 2
+`define INT_BUSY_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 \
+`ifdef RVM \
+    + `MULT_DIS_PORT * 2 \
+`endif \
+`ifdef RVA \
+    + `AMO_DIS_PORT * 2 \
+`endif \
+`ifdef RVF \
+    + `FMISC_DIS_PORT \
+`endif \
+)
+`define FP_BUSY_PORT (`STORE_DIS_PORT + `FMISC_DIS_PORT * 2 + `FCAL_DIS_PORT * 3)
 
 // wb
 `define WB_SIZE (`ALU_SIZE+`LSU_SIZE)
@@ -256,10 +265,9 @@ typedef enum logic [1:0] {
 `define EXC_DT `EXC_WIDTH'd16 // double trap
 `define EXC_SC `EXC_WIDTH'd18 // software check
 `define EXC_HE `EXC_WIDTH'd19 // hardware error
-`define EXC_SRET `EXC_WIDTH'd25 // user defined.sret 
-`define EXC_MRET `EXC_WIDTH'd27 // user defined.mret
-`define EXC_EC `EXC_WIDTH'd28 // user defined.environment call
-`define EXC_MMU `EXC_WIDTH'd30 // user defined csr fence
+`define EXC_SRET `EXC_WIDTH'd20 // user defined.sret 
+`define EXC_MRET `EXC_WIDTH'd21 // user defined.mret
+`define EXC_EC `EXC_WIDTH'd22 // user defined.environment call
 
 // tlb
 `define TLB_OFFSET 12

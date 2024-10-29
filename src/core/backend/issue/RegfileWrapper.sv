@@ -15,6 +15,7 @@ module RegfileWrapper(
 `endif
 `ifdef RVF
     input WriteBackBus fp_wbBus,
+    IssueRegIO.regfile fmisc_reg_io,
 `endif
     input WriteBackBus int_wbBus
 `ifdef DIFFTEST
@@ -91,12 +92,28 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) load_preg;
     assign load_reg_io.ready = {`LOAD_PIPELINE{1'b1}};
     assign load_reg_io.data = rdata[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE];
+`ifdef RVF
+    `CONSTRAINT(FMISC_SIZE, `LOAD_PIPELINE, "fmisc's read port must smaller than load")
+generate
+    for(genvar i=0; i<`FMISC_SIZE; i++)begin
+        always_ff @(posedge clk)begin
+            load_en[i] <= load_reg_io.en[i] | fmisc_reg_io.en[`FMISC_SIZE+i];
+            load_preg[i] <= load_reg_io.en[i] ? load_reg_io.preg[i] : fmisc_reg_io.preg[i+`FMISC_SIZE*2];
+        end
+        assign en[LOAD_BASE+i] = load_en[i];
+        assign raddr[LOAD_BASE+i] = load_preg[i];
+        assign fmisc_reg_io.ready[`FMISC_SIZE+i] = ~load_reg_io.en[i];
+        assign fmisc_reg_io.data[`FMISC_SIZE*2+i] = rdata[i+LOAD_BASE];
+    end
+endgenerate
+`else
     always_ff @(posedge clk)begin
         load_en <= load_reg_io.en;
         load_preg <= load_reg_io.preg;
     end
     assign en[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_en;
     assign raddr[`LOAD_PIPELINE+LOAD_BASE-1: LOAD_BASE] = load_preg;
+`endif
 
     localparam STORE_BASE = `ALU_SIZE * 2 + `LOAD_PIPELINE;
     logic `N(`STORE_PIPELINE * 2) store_en;
@@ -137,7 +154,8 @@ endgenerate
 
     Regfile #(
         `INT_REG_READ_PORT,
-        `INT_REG_WRITE_PORT
+        `INT_REG_WRITE_PORT,
+        `INT_PREG_SIZE
     ) int_regfile(
         .*,
         .rdata(reg_rdata)
@@ -154,9 +172,38 @@ endgenerate
         fp_store_en <= store_reg_io.en[`STORE_PIPELINE * 2 +: `STORE_PIPELINE];
         fp_store_preg <= store_reg_io.preg[`STORE_PIPELINE * 2 +: `STORE_PIPELINE];
     end
-    assign fp_en[0 +: `STORE_PIPELINE] = fp_store_en;
-    assign fp_raddr[0 +: `STORE_PIPELINE] = fp_store_preg;
+generate
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        always_ff @(posedge clk)begin
+            fp_store_en[i] <= store_reg_io.en[`STORE_PIPELINE+i] | fmisc_reg_io.en[i];
+            fp_store_preg[i] <= store_reg_io.en[`STORE_PIPELINE+i] ? store_reg_io.preg[`STORE_PIPELINE+i] : fmisc_reg_io.preg[i];
+        end
+        assign fp_en[i] = fp_store_en[i];
+        assign fp_raddr[i] = fp_store_preg[i];
+        assign fmisc_reg_io.ready[i] = ~store_reg_io.en[`STORE_PIPELINE+i];
+    end
+    for(genvar i=`STORE_PIPELINE; i<`FMISC_SIZE; i++)begin
+        logic fmisc_en;
+        logic `N(`PREG_WIDTH) fmisc_preg;
+        always_ff @(posedge clk)begin
+            fmisc_en <= fmisc_reg_io.en[i];
+            fmisc_preg <= fmisc_reg_io.preg[i];
+        end
+        assign fp_en[i] = fmisc_en;
+        assign fp_raddr[i] = fmisc_preg;
+        assign fmisc_reg_io.ready[i] = 1'b1;
+    end
+endgenerate
+    logic `N(`FMISC_SIZE) fmisc_rs2_en;
+    logic `ARRAY(`FMISC_SIZE, `PREG_WIDTH) fmisc_rs2;
+    always_ff @(posedge clk)begin
+        fmisc_rs2_en <= fmisc_reg_io.en[0 +: `FMISC_SIZE];
+        fmisc_rs2 <= fmisc_reg_io.preg[`FMISC_SIZE +: `FMISC_SIZE];
+    end
+    assign fp_en[`FMISC_SIZE +: `FMISC_SIZE] = fmisc_rs2_en;
+    assign fp_raddr[`FMISC_SIZE +: `FMISC_SIZE] = fmisc_rs2;
     assign store_reg_io.data[`STORE_PIPELINE*2 +: `STORE_PIPELINE] = fp_reg_rdata[0 +: `STORE_PIPELINE];
+    assign fmisc_reg_io.data[0 +: `FMISC_SIZE * 2] = fp_reg_rdata[0 +: `FMISC_SIZE * 2];
 
 generate
     for(genvar i=0; i<`FP_WB_SIZE; i++)begin
@@ -168,7 +215,8 @@ endgenerate
     Regfile #(
         .READ_PORT(`FP_REG_READ_PORT),
         .WRITE_PORT(`FP_REG_WRITE_PORT),
-        .FP(1)
+        .FP(1),
+        .PREG_SIZE(`FP_PREG_SIZE)
     ) fp_regfile(
         .*,
         .en(fp_en),

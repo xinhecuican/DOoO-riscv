@@ -9,7 +9,6 @@ module IntIssueQueue(
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
     input WakeupBus wakeupBus,
-    input CommitWalk commitWalk,
     input BackendCtrl backendCtrl
 );
 

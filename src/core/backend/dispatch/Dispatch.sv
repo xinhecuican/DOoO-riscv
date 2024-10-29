@@ -19,6 +19,8 @@ module Dispatch(
     input WakeupBus int_wakeupBus,
 `ifdef RVF
     input WakeupBus fp_wakeupBus,
+    DisIssueIO.dis dis_fmisc_io,
+    DisIssueIO.dis dis_fcal_io,
 `endif
     CommitBus.in commitBus,
     input CommitWalk commitWalk,
@@ -27,7 +29,7 @@ module Dispatch(
 );
     BusyTableIO #(`INT_BUSY_PORT) int_busy_io();
 `ifdef RVF
-    BusyTableIO fp_busy_io();
+    BusyTableIO #(`FP_BUSY_PORT) fp_busy_io();
 `endif
     DisStatusBundle `N(`FETCH_WIDTH) dis_status;
 
@@ -247,6 +249,7 @@ endgenerate
         .*,
         .io(mult_io)
     );
+generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : mult_in
         DecodeInfo di;
         MultIssueBundle data;
@@ -255,6 +258,7 @@ endgenerate
         assign mult_io.en[i] = rename_dis_io.op[i].en & di.multv & ~backendCtrl.redirect;
         assign mult_io.data[i] = data;
     end
+endgenerate
 `endif
 
 `ifdef RVA
@@ -267,6 +271,7 @@ endgenerate
         .*,
         .io(amo_io)
     );
+generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : amo_in
         DecodeInfo di;
         AmoIssueBundle data;
@@ -275,6 +280,47 @@ endgenerate
         assign amo_io.en[i] = rename_dis_io.op[i].en & di.amov & ~backendCtrl.redirect;
         assign amo_io.data[i] = data;
     end
+endgenerate
+`endif
+
+`ifdef RVF
+    DispatchQueueIO #($bits(FMiscIssueBundle), `FMISC_DIS_PORT) fmisc_io(.*);
+    DispatchQueueIO #($bits(FCalIssueBundle), `FCAL_DIS_PORT) fcal_io(.*);
+    DispatchQueue #(
+        .DATA_WIDTH($bits(FMiscIssueBundle)),
+        .DEPTH(`FMISC_DIS_SIZE),
+        .OUT_WIDTH(`FMISC_DIS_PORT),
+        .FSELV(1)
+    ) fmisc_dispatch_queue (
+        .*,
+        .io(fmisc_io)
+    );
+    DispatchQueue #(
+        .DATA_WIDTH($bits(FCalIssueBundle)),
+        .DEPTH(`FCAL_DIS_SIZE),
+        .OUT_WIDTH(`FCAL_DIS_PORT),
+        .RS3V(1)
+    ) fcal_dispatch_queue (
+        .*,
+        .io(fcal_io)
+    );
+generate
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin : fp_in
+        DecodeInfo di;
+        FMiscIssueBundle misc_bundle;
+        FCalIssueBundle cal_bundle;
+        assign di = rename_dis_io.op[i].di;
+        assign misc_bundle.fltop = di.fltop;
+        assign misc_bundle.flt_we = di.flt_we;
+        assign misc_bundle.uext = di.uext;
+        assign misc_bundle.rm = di.rm;
+        assign cal_bundle.fltop = di.fltop;
+        assign fmisc_io.en[i] = rename_dis_io.op[i].en & di.fmiscv & ~backendCtrl.redirect;
+        assign fcal_io.en[i] = rename_dis_io.op[i].en & di.fcalv & ~backendCtrl.redirect;
+        assign fmisc_io.data[i] = misc_bundle;
+        assign fcal_io.data[i] = cal_bundle;
+    end
+endgenerate
 `endif
 
     assign full = int_io.full | load_io.full | store_io.full | csr_io.full
@@ -284,11 +330,17 @@ endgenerate
 `ifdef RVA
                   | amo_io.full
 `endif
+`ifdef RVF
+                  | fmisc_io.full
+`endif
     ;
 
     assign int_busy_io.dis_en = rename_dis_io.int_wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
     assign int_busy_io.dis_rd = rename_dis_io.prd;
     assign int_busy_io.preg = {
+`ifdef RVF
+                                fmisc_io.rs1_o,
+`endif
 `ifdef RVA
                                 amo_io.rs2_o, amo_io.rs1_o,
 `endif
@@ -297,7 +349,7 @@ endgenerate
 `endif
                                 store_io.rs2_o, store_io.rs1_o, load_io.rs1_o,
                                 int_io.rs2_o, int_io.rs1_o};
-    BusyTable #(`INT_WAKEUP_PORT, `INT_BUSY_PORT, 1) int_busy_table(
+    BusyTable #(`INT_WAKEUP_PORT, `INT_BUSY_PORT, `INT_PREG_SIZE, 1) int_busy_table(
         .*, 
         .io(int_busy_io.busytable),
         .wakeupBus(int_wakeupBus)
@@ -305,8 +357,10 @@ endgenerate
 `ifdef RVF
     assign fp_busy_io.dis_en = rename_dis_io.fp_wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
     assign fp_busy_io.dis_rd = rename_dis_io.prd;
-    assign fp_busy_io.preg = {store_io.rs2_o};
-    BusyTable #(`FP_WAKEUP_PORT, `FP_BUSY_PORT) fp_busy_table(
+    assign fp_busy_io.preg = {fcal_io.rs3_o, fcal_io.rs2_o, fcal_io.rs1_o,
+                              fmisc_io.rs2_o, fmisc_io.rs1_o,
+                              store_io.rs2_o};
+    BusyTable #(`FP_WAKEUP_PORT, `FP_BUSY_PORT, `FP_PREG_SIZE) fp_busy_table(
         .*,
         .io(fp_busy_io.busytable),
         .wakeupBus(fp_wakeupBus)
@@ -428,6 +482,50 @@ endgenerate
         .fp_rs1_en(),
         .fp_rs2_en(),
         .fp_rs3_en()
+    );
+`endif
+
+`ifdef RVF
+    localparam FMISC_INT_BASE = `INT_DIS_PORT*2+`LOAD_DIS_PORT+`STORE_DIS_PORT * 2
+`ifdef RVA
+    + `AMO_DIS_PORT * 2
+`endif
+`ifdef RVM
+    + `MULT_DIS_PORT * 2
+`endif
+    ;
+    localparam FMISC_FP_BASE = `STORE_DIS_PORT;
+    localparam FCAL_FP_BASE = `STORE_DIS_PORT + `FMISC_DIS_PORT * 2;
+    DispatchDequeue #(
+        .PORT_SIZE(`FMISC_DIS_PORT),
+        .RS1I(1),
+        .RS2I(0),
+        .RS1F(1),
+        .RS2F(1)
+    ) fmisc_dequeue (
+        .queue_io(fmisc_io),
+        .dis_issue_io(dis_fmisc_io),
+        .int_rs1_en(int_busy_io.reg_en[FMISC_INT_BASE +: `FMISC_DIS_PORT]),
+        .int_rs2_en(),
+        .fp_rs1_en(fp_busy_io.reg_en[FMISC_FP_BASE +: `FMISC_DIS_PORT]),
+        .fp_rs2_en(fp_busy_io.reg_en[FMISC_FP_BASE + `FMISC_DIS_PORT +: `FMISC_DIS_PORT]),
+        .fp_rs3_en()
+    );
+    DispatchDequeue #(
+        .PORT_SIZE(`FCAL_DIS_PORT),
+        .RS1I(0),
+        .RS2I(0),
+        .RS1F(1),
+        .RS2F(1),
+        .RS3F(1)
+    ) fcal_dequeue (
+        .queue_io(fcal_io),
+        .dis_issue_io(dis_fcal_io),
+        .int_rs1_en(),
+        .int_rs2_en(),
+        .fp_rs1_en(fp_busy_io.reg_en[FCAL_FP_BASE +: `FCAL_DIS_PORT]),
+        .fp_rs2_en(fp_busy_io.reg_en[FCAL_FP_BASE + `FCAL_DIS_PORT +: `FCAL_DIS_PORT]),
+        .fp_rs3_en(fp_busy_io.reg_en[FCAL_FP_BASE + `FCAL_DIS_PORT * 2 +: `FCAL_DIS_PORT])
     );
 `endif
 endmodule

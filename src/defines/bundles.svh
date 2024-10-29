@@ -203,8 +203,11 @@ typedef struct packed {
 `endif
 `ifdef RVF
     logic `N(`FLTOP_WIDTH) fltop;
-    logic fltv;
+    logic fmiscv;
+    logic fcalv;
     logic flt_mem;
+    logic fflag_we;
+    logic [2: 0] rm;
     logic [4: 0] rs3;
     logic frs1_sel;
     logic frs2_sel;
@@ -300,6 +303,17 @@ typedef struct packed {
 typedef struct packed {
     logic `N(`AMOOP_WIDTH) amoop;
 } AmoIssueBundle;
+
+typedef struct packed {
+    logic `N(`FLTOP_WIDTH) fltop;
+    logic flt_we;
+    logic uext;
+    logic [2: 0] rm;
+} FMiscIssueBundle;
+
+typedef struct packed {
+    logic `N(`FLTOP_WIDTH) fltop;
+} FCalIssueBundle;
 
 typedef struct packed {
     logic we;

@@ -17,7 +17,7 @@
     + 4 \
 `endif \
 `ifdef RVF \
-    +1 \
+    +3 \
 `endif \
 )
 `endif
@@ -58,6 +58,8 @@
 `define CSRID_stval     12'h143
 `define CSRID_satp      12'h180
 
+`define CSRID_fflags    12'h001
+`define CSRID_frm       12'h002
 `define CSRID_fcsr      12'h003
 
 typedef struct packed {

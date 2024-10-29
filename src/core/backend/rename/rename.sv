@@ -41,7 +41,10 @@ module Rename(
     ;
     assign stall = backendCtrl.dis_full;
     
-    RenameImpl #(2) rename_int (
+    RenameImpl #(
+        .SRC_NUM(2), 
+        .PREG_SIZE(`INT_PREG_SIZE)
+    ) rename_int (
         .*,
         .rd_en(int_rd_en),
         .vsrc(vsrc),
@@ -56,7 +59,8 @@ module Rename(
 `ifdef RVF
     RenameImpl #(
         .SRC_NUM(3), 
-        .FPV(1)
+        .FPV(1),
+        .PREG_SIZE(`FP_PREG_SIZE)
     ) rename_fp (
         .*,
         .rd_en(fp_rd_en),
@@ -83,7 +87,7 @@ generate;
 `endif
         ;
 `ifdef RVF
-        assign fp_rd_en[i] = dec_rename_io.op[i].en & dec_rename_io.op[i].di.we & dec_rename_io.op[i].di.flt_we;
+        assign fp_rd_en[i] = dec_rename_io.op[i].en & dec_rename_io.op[i].di.flt_we;
         assign vrs3[i] = dec_rename_io.op[i].di.rs3;
 `endif
         assign robIdx[i] = rob_rename_io.robIdx.idx + i;
@@ -167,6 +171,7 @@ endmodule
 
 module RenameImpl #(
     parameter SRC_NUM=2,
+    parameter PREG_SIZE=128,
     parameter FPV=0
 )(
     input logic clk,
@@ -195,7 +200,7 @@ module RenameImpl #(
     assign fl_io.rdNum = rdNum;
     assign fl_io.commit_prd = rename_io.commit_prd;
     assign full = fl_io.full;
-    Freelist #(FPV) freelist (.*);
+    Freelist #(FPV, PREG_SIZE) freelist (.*);
 
 // conflict
     logic `TENSOR(SRC_NUM, `FETCH_WIDTH, `FETCH_WIDTH) raw;

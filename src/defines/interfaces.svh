@@ -347,6 +347,18 @@ interface IssueMultIO;
     modport mult (input en, rs1_data, rs2_data, status, bundle, output div_ready, div_end);
 endinterface
 
+interface IssueFMiscIO;
+    logic `N(`FMISC_SIZE) en;
+    logic `ARRAY(`FMISC_SIZE, `XLEN) rs1_data;
+    logic `ARRAY(`FMISC_SIZE, `XLEN) rs2_data;
+    ExStatusBundle `N(`FMISC_SIZE) status;
+    FMiscIssueBundle `N(`FMISC_SIZE) bundle;
+    logic `N(`FMISC_SIZE) stall;
+
+    modport issue (output en, rs1_data, rs2_data, status, bundle, input stall);
+    modport fmisc (input en, rs1_data, rs2_data, status, bundle, output stall);
+endinterface
+
 interface WriteBackIO#(
     parameter FU_SIZE = 4
 );
@@ -664,6 +676,16 @@ interface FenceBus;
     modport ifu (input inst_flush_end, output inst_flush);
 `endif
 endinterface //SFenceBus
+
+interface RobFCsrIO;
+    logic valid;
+    logic we;
+    logic flag_we;
+    logic [4: 0] flags;
+
+    modport csr(output valid, input we, flag_we, flags);
+    modport rob(input valid, output we, flag_we, flags);
+endinterface
 
 `ifdef DIFFTEST
 interface DiffRAT;

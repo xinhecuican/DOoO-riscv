@@ -25,6 +25,11 @@ rv32a=(
 )
 rv32a_prefix="utils/riscv-tests/isa/rv32ua-p-"
 
+rv32f=(
+    "fclass" "fcmp" "fcvt" "fcvt_w" "fmin"
+)
+rv32f_prefix="utils/riscv-tests/isa/rv32uf-p-"
+
 benchmarks=(
     "median" "memcpy" "multiply" "qsort" "rsort" "uart" "towers"
 )
@@ -40,7 +45,7 @@ fi
 args=("$@")
 
 if [[ " ${args[@]} " =~ " all " ]]; then
-    args=("rv32i" "rv32m" "rv32s" "rv32a" "benchmarks")
+    args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
 fi
 
 for arg in "${args[@]}"; do
@@ -63,6 +68,11 @@ for arg in "${args[@]}"; do
         rv32a)
             for test in "${rv32a[@]}"; do
                 selected_tests+=("${rv32a_prefix}${test}.bin")
+            done
+            ;;
+        rv32f)
+            for test in "${rv32f[@]}"; do
+                selected_tests+=("${rv32f_prefix}${test}.bin")
             done
             ;;
         benchmarks)

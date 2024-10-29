@@ -33,7 +33,6 @@ module IssueBank #(
     input logic rst,
     IssueBankIO.bank io,
     input WakeupBus wakeupBus,
-    input CommitWalk commitWalk,
     input BackendCtrl backendCtrl
 );
     logic `N(DEPTH) en;

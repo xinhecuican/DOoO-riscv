@@ -3,6 +3,7 @@
 module Regfile #(
     parameter READ_PORT=4,
     parameter WRITE_PORT=4,
+    parameter PREG_SIZE=128,
     parameter FP=0
 )(
     input logic clk,
@@ -19,10 +20,10 @@ module Regfile #(
 );
     MPRAM #(
         .WIDTH(`XLEN),
-        .DEPTH(`PREG_SIZE),
+        .DEPTH(PREG_SIZE),
         .READ_PORT(READ_PORT),
         .WRITE_PORT(WRITE_PORT),
-        .BANK_SIZE(`PREG_SIZE/2),
+        .BANK_SIZE(PREG_SIZE/2),
         .RESET(1)
     ) ram (
         .clk(clk),
@@ -37,7 +38,7 @@ module Regfile #(
     );
     
 `ifdef DIFFTEST
-    logic `N(`XLEN) data `N(`PREG_SIZE);
+    logic `N(`XLEN) data `N(PREG_SIZE);
     logic `ARRAY(32, `XLEN) diff_data;
     always_ff @(posedge clk)begin
         for(int i=0; i<WRITE_PORT; i++)begin

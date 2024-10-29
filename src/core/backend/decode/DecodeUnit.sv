@@ -218,19 +218,22 @@ module DecodeUnit(
     assign fcvtsu = fp & funct7_104 & rs2_1;
     assign fmv = fp & funct7_120 & funct3_0;
 
+    assign info.rm = funct3;
     assign info.flt_mem = loadfp | storefp;
     assign info.flt_we = loadfp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
                         fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvts | fcvtsu | fmv;
     assign info.frs1_sel = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
                             fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu |
-                            fmvx | feq | flt | fle;
+                            fmvx | feq | flt | fle | fclass;
     assign info.frs2_sel = storefp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
                            fsgnj | fsgnjn | fsgnjx | fmin | fmax | feq | flt | fle;
+    assign info.fflag_we = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+                           fsqrt | fmin | fmax | fcvt | fcvtu | feq | flt | fle | fcvts | fcvtsu;
     assign info.fltop[4] = fmvx | feq | flt | fle | fclass | fcvts | fcvtsu | fmv;
-    assign info.fltop[3] = fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu | fclass | fcvts | fmv;
-    assign info.fltop[2] = fmadd | fmsub | fnmsub | fnmadd | fmin | fmax | fcvt | fcvtu | fle | fcvts | fmv;
-    assign info.fltop[1] = fmul | fdiv | fnmsub | fnmadd | fsgnjn | fsgnjx | fcvt | fcvtu | flt | fcvtsu | fmv;
-    assign info.fltop[0] = fsub | fdiv | fmsub | fnmadd | fsgnj | fsgnjx | fmax | fcvtu | feq | fcvtsu;
+    assign info.fltop[3] = fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu | fclass | fcvts | fcvtsu;
+    assign info.fltop[2] = fmadd | fmsub | fnmsub | fnmadd | fmin | fmax | fcvt | fcvtu | fle | fcvts | fcvtsu;
+    assign info.fltop[1] = fmul | fdiv | fnmsub | fnmadd | fsgnjn | fsgnjx | fcvt | fcvtu | flt;
+    assign info.fltop[0] = fsub | fdiv | fmsub | fnmadd | fsgnj | fsgnjx | fmax | feq ;
 `endif
 
     assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & ~jal & ~jalr &
@@ -292,7 +295,11 @@ module DecodeUnit(
 `endif
 ;
 
-    assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu | srl | srli;
+    assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu | srl | srli
+`ifdef RVF
+                    | fcvtu | fcvtsu;
+`endif
+    ;
     logic [11: 0] imm, store_imm;
     logic [19: 0] lui_imm;
     logic `N(`DEC_IMM_WIDTH) branch_imm;
@@ -345,7 +352,10 @@ module DecodeUnit(
     assign info.amov = amo & ~ipf & ~iam;
 `endif
 `ifdef RVF
-    assign info.fltv = (fp | madd | msub | nmsub | nmadd) & ~ipf & ~iam;
+    assign info.fmiscv = (fsgnj | fsgnjn | fsgnjx | fmvx | feq | flt | fle | fclass |
+                           fcvt | fcvtu | fcvts | fcvtsu | fmv | fmin | fmax) & ~ipf & ~iam;
+    assign info.fcalv = (fmadd | fnmadd | fmsub | fnmsub | fadd | fsub | fmul | fdiv |
+                         fsqrt) & ~ipf & ~iam;
 `endif
 
 

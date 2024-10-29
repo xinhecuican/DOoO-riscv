@@ -17,6 +17,10 @@ module CSR(
     CsrTlbIO.csr csr_stlb_io,
     CsrL2IO.csr  csr_l2_io,
     ClintIO.cpu clint_io,
+`ifdef RVF
+    RobFCsrIO.csr rob_fcsr_io,
+    output logic [2: 0] round_mode,
+`endif
     output CSRIrqInfo irqInfo,
     output logic `N(`VADDR_SIZE) target_pc
 );
@@ -162,13 +166,15 @@ endgenerate                                                   \
     `CSR_CMP_DEF(mcycle, mcycle,        25,0, 0             )
     `CSR_CMP_DEF(minstret, minstret,    26,0, 0             )
 `ifdef RVF
-    `CSR_CMP_DEF(fcsr, fcsr,            27,0, 0             )
+    `CSR_CMP_DEF(fflags, fcsr[4: 0],    27,0, 0             )
+    `CSR_CMP_DEF(frm, fcsr[7: 5],       28,0, 0             )
+    `CSR_CMP_DEF(fcsr, fcsr,            29,0, 0             )
 `endif
 `ifdef RV32I
-    `CSR_CMP_DEF(mstatush, mstatush,    28,0, 0             )
-    `CSR_CMP_DEF(medelegh, medelegh,    29,0, 0             )
-    `CSR_CMP_DEF(mcycleh, mcycleh,      30,0, 0             )
-    `CSR_CMP_DEF(minstreth, minstreth,  31,0, 0             )
+    `CSR_CMP_DEF(mstatush, mstatush,    30,0, 0             )
+    `CSR_CMP_DEF(medelegh, medelegh,    31,0, 0             )
+    `CSR_CMP_DEF(mcycleh, mcycleh,      32,0, 0             )
+    `CSR_CMP_DEF(minstreth, minstreth,  33,0, 0             )
 `endif
 
     ParallelEQ #(
@@ -238,9 +244,6 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(mstatush,    0,              1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0)
 `endif
-`ifdef RVF
-    `CSR_WRITE_DEF(fcsr,        0,              1, 0, 0)
-`endif
 
     logic `N(`VADDR_SIZE-2) mvec_pc, svec_pc;
     logic `N(`VADDR_SIZE) mtarget_pc, starget_pc;
@@ -305,8 +308,23 @@ endgenerate                                                             \
                 mstatus.fs <= 2'b11;
                 mstatus.sd <= 1'b1;
             end
+            if((wen_o[fcsr_id]) & (mstatus.fs != 2'b00))begin
+                fcsr[7: 5] <= wdata_s2[7: 5];
+            end
+            if(wen_o[frm_id] & (mstatus.fs != 2'b00))begin
+                fcsr[7: 5] <= wdata_s2[2: 0];
+            end
+            if((wen_o[fcsr_id] | wen_o[fflags_id]) & (mstatus.fs != 2'b00))begin
+                fcsr[4: 0] <= wdata_s2[4: 0];
+            end
             if(wen_o[mstatus_id] & wdata_s2[14: 12] == 2'b00)begin
                 mstatus.sd <= 1'b0;
+            end
+            if(rob_fcsr_io.we)begin
+                mstatus.fs <= 2'b11;
+            end
+            if(rob_fcsr_io.flag_we)begin
+                fcsr[4: 0] <= rob_fcsr_io.flags;
             end
 `endif
             if(wen_o[mepc_id])begin
@@ -382,6 +400,13 @@ endgenerate                                                             \
             end
         end
     end
+
+`ifdef RVF
+    assign rob_fcsr_io.valid = mstatus.fs != 0;
+    always_ff @(posedge clk)begin
+        round_mode <= fcsr[7: 5];
+    end
+`endif
 
 // wb
     assign csr_wb_io.datas[0].en = issue_csr_io.en;

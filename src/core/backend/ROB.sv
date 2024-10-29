@@ -14,6 +14,7 @@ module ROB(
     input WriteBackBus int_wbBus,
 `ifdef RVF
     input WriteBackBus fp_wbBus,
+    RobFCsrIO.rob rob_fcsr_io,
 `endif
     CommitBus.rob commitBus,
     output CommitWalk commitWalk,
@@ -36,6 +37,7 @@ module ROB(
         logic store;
 `ifdef RVF
         logic fp_we;
+        logic fflag_we;
 `endif
         FsqIdxInfo fsqInfo;
         logic `N(5) vrd;
@@ -51,6 +53,10 @@ module ROB(
     WalkInfo walkInfo;
     logic walk_state;
     logic `N(`ROB_SIZE) wb; // set to 0 when commit, set to 1 when write back
+`ifdef RVF
+    logic `N(`ROB_SIZE) fp_op;
+    logic `N(`COMMIT_WIDTH) commit_fp;
+`endif
     logic `N(`EXC_WIDTH) exccode `N(`ROB_SIZE);
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
@@ -100,6 +106,7 @@ generate
         assign rob_wdata_pre[i].we = dis_io.op[i].di.we;
 `ifdef RVF
         assign rob_wdata_pre[i].fp_we = dis_io.op[i].di.flt_we;
+        assign rob_wdata_pre[i].fflag_we = dis_io.op[i].di.fflag_we;
 `endif
         assign rob_wdata_pre[i].mem = dis_io.op[i].di.memv;
         assign rob_wdata_pre[i].store = dis_io.op[i].di.memop[`MEMOP_WIDTH-1];
@@ -209,7 +216,12 @@ generate
         assign commit_store[i] = robData[i].store;
         assign commit_mem[i] = robData[i].mem;
         assign rexccode[i] = exccode[dataRIdx[i]];
+`ifdef RVF
+        assign commit_fp[i] = fp_op[dataRIdx[i]];
+        assign excValid[i] = commit_fp[i] ? ~rob_fcsr_io.valid : ~(&rexccode[i]);
+`else
         assign excValid[i] = ~(&rexccode[i]);
+`endif
     end
     assign commit_en_num = validCount < `COMMIT_WIDTH ? validCount : `COMMIT_WIDTH;
     assign commitValid = (1 << commit_en_num) - 1;
@@ -262,6 +274,20 @@ generate
 `endif
     end
 
+
+`ifdef RVF
+    logic `N($clog2(`COMMIT_WIDTH)) fp_commit_idx, fp_commit_idx_n;
+    logic fcsr_we;
+    PEncoder #(`COMMIT_WIDTH) encoder_fp_commit_idx (commit_en & commit_fp, fp_commit_idx);
+    assign rob_fcsr_io.we = fcsr_we;
+    assign rob_fcsr_io.flag_we = fcsr_we & robData[fp_commit_idx_n].fflag_we;
+    always_ff @(posedge clk)begin
+        fp_commit_idx_n <= fp_commit_idx;
+        fcsr_we <= (|(commit_en & commit_fp)) & rob_fcsr_io.valid;
+        rob_fcsr_io.flags <= rexccode[fp_commit_idx];
+    end
+`endif
+
     always_ff @(posedge clk)begin
         exc_en_n <= exc_en;
         if(!walk_state && initReady[0] && !exc_exist_n)begin
@@ -299,7 +325,11 @@ endgenerate
         excIdx_n <= excIdx;
         exc_robIdx <= dataRIdx[excIdx];
         exc_dir <= head[`ROB_WIDTH-1] & ~dataRIdx[excIdx][`ROB_WIDTH-1] ? ~hdir : hdir;
+`ifdef RVF
+        redirect_exccode <= commit_fp[excIdx] ? `EXC_II : rexccode[excIdx]; 
+`else
         redirect_exccode <= rexccode[excIdx];
+`endif
     end
     assign rob_redirect_io.fence = fence_redirect;
     assign rob_redirect_io.csrRedirect.en = exc_exist_n;
@@ -345,6 +375,9 @@ endgenerate
             tdir <= 0;
             remainCount <= `ROB_SIZE;
             validCount <= 0;
+`ifdef RVF
+            fp_op <= 0;
+`endif
         end
         else begin
             
@@ -370,6 +403,11 @@ endgenerate
                 if(fp_wbBus.en[i])begin
                     wb[fp_wbBus.robIdx[i].idx] <= 1'b1;
                     exccode[fp_wbBus.robIdx[i].idx] <= fp_wbBus.exccode[i];
+                end
+            end
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                if(dis_en[i])begin
+                    fp_op[dataWIdx[i]] <= dis_io.op[i].di.fmiscv | dis_io.op[i].di.fcalv;
                 end
             end
 `endif

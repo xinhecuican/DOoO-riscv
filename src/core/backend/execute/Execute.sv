@@ -13,6 +13,12 @@ module Execute(
     WriteBackIO.fu div_wb_io,
     IssueWakeupIO.issue div_wakeup_io,
 `endif
+`ifdef RVF
+    input logic [2: 0] round_mode,
+    IssueFMiscIO.fmisc issue_fmisc_io,
+    WriteBackIO.fu fmisc_wb_io,
+    IssueWakeupIO.issue fmisc_wakeup_io,
+`endif
     input BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo,
     output BranchRedirectInfo branchRedirectInfo
@@ -89,5 +95,11 @@ generate
         );
     end
 endgenerate
+`endif
+
+`ifdef RVF
+    FMiscUnit fmisc_unit (
+        .*
+    );
 `endif
 endmodule

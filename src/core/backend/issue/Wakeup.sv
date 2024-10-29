@@ -15,6 +15,7 @@ module Wakeup(
 `endif
     output WakeupBus int_wakeupBus,
 `ifdef RVF
+    IssueWakeupIO.wakeup fmisc_wakeup_io,
     output WakeupBus fp_wakeupBus,
 `endif
     IssueWakeupIO.wakeup int_wakeup_io,
@@ -63,13 +64,29 @@ endgenerate
 
     localparam LOAD_BASE = `ALU_SIZE * 2;
     assign load_wakeup_io.ready = {`LOAD_PIPELINE{1'b1}};
+`ifdef RVF
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign fmisc_wakeup_io.ready[`FMISC_SIZE+i] = ~load_wakeup_io.en[i];
+        assign int_wakeupBus.en[`ALU_SIZE+i] = load_wakeup_io.en[i] | fmisc_wakeup_io.en[`FMISC_SIZE+i];
+        assign int_wakeupBus.we[`ALU_SIZE+i] = load_wakeup_io.en[i] ? load_wakeup_io.we[i] : fmisc_wakeup_io.we[`FMISC_SIZE+i];
+        assign int_wakeupBus.rd[`ALU_SIZE+i] = load_wakeup_io.en[i] ? load_wakeup_io.rd[i] : fmisc_wakeup_io.rd[`FMISC_SIZE+i];
+    end
+endgenerate
+`else
     assign int_wakeupBus.en[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.en[`LOAD_PIPELINE-1: 0];
     assign int_wakeupBus.we[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.we[`LOAD_PIPELINE-1: 0];
     assign int_wakeupBus.rd[`LOAD_PIPELINE+`ALU_SIZE-1: `ALU_SIZE] = load_wakeup_io.rd[`LOAD_PIPELINE-1: 0];
+`endif
 
 `ifdef RVF
-    assign fp_wakeupBus.en[`LOAD_PIPELINE-1: 0] = load_wakeup_io.en[`LOAD_PIPELINE +: `LOAD_PIPELINE];
-    assign fp_wakeupBus.we[`LOAD_PIPELINE-1: 0] = load_wakeup_io.we[`LOAD_PIPELINE +: `LOAD_PIPELINE];
-    assign fp_wakeupBus.rd[`LOAD_PIPELINE-1: 0] = load_wakeup_io.rd[`LOAD_PIPELINE +: `LOAD_PIPELINE];
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign fmisc_wakeup_io.ready[i] = ~load_wakeup_io.en[`LOAD_PIPELINE+i];
+        assign fp_wakeupBus.en[i] = load_wakeup_io.en[`LOAD_PIPELINE+i] | fmisc_wakeup_io.en[i];
+        assign fp_wakeupBus.we[i] = load_wakeup_io.en[`LOAD_PIPELINE+i] ? load_wakeup_io.we[`LOAD_PIPELINE+i] : fmisc_wakeup_io.we[i];
+        assign fp_wakeupBus.rd[i] = load_wakeup_io.en[`LOAD_PIPELINE+i] ? load_wakeup_io.rd[`LOAD_PIPELINE+i] : fmisc_wakeup_io.rd[i];
+    end
+endgenerate
 `endif
 endmodule
