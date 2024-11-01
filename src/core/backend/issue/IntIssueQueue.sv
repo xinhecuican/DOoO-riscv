@@ -14,14 +14,14 @@ module IntIssueQueue(
 
     localparam BANK_SIZE = `INT_ISSUE_SIZE / `ALU_SIZE;
     localparam BANK_NUM = `ALU_SIZE;
-    IssueBankIO #($bits(IntIssueBundle), BANK_SIZE) bank_io [BANK_NUM-1: 0]();
+    IssueBankIO #($bits(IntIssueBundle), 2, BANK_SIZE) bank_io [BANK_NUM-1: 0]();
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) order;
     logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
     logic `N(BANK_NUM) full;
     logic `N(BANK_NUM) enNext, bigger;
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin
-        IssueBank #($bits(IntIssueBundle), BANK_SIZE, 1, 1) issue_bank (
+        IssueBank #($bits(IntIssueBundle), BANK_SIZE, 2, `INT_WAKEUP_PORT, 1) issue_bank (
             .clk(clk),
             .rst(rst),
             .io(bank_io[i]),
@@ -36,8 +36,8 @@ generate
         assign full[i] = bank_io[i].full;
 
         assign int_reg_io.en[i] = bank_io[i].reg_en;
-        assign int_reg_io.preg[i] = bank_io[i].rs1;
-        assign int_reg_io.preg[BANK_NUM+i] = bank_io[i].rs2;
+        assign int_reg_io.preg[i] = bank_io[i].src[0];
+        assign int_reg_io.preg[BANK_NUM+i] = bank_io[i].src[1];
         assign int_wakeup_io.en[i] = bank_io[i].reg_en & int_reg_io.ready[i];
         assign int_wakeup_io.we[i] = bank_io[i].we;
         assign int_wakeup_io.rd[i] = bank_io[i].rd;

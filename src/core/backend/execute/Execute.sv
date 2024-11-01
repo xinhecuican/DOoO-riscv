@@ -18,6 +18,9 @@ module Execute(
     IssueFMiscIO.fmisc issue_fmisc_io,
     WriteBackIO.fu fmisc_wb_io,
     IssueWakeupIO.issue fmisc_wakeup_io,
+    IssueFMAIO.fma issue_fma_io,
+    WriteBackIO.fu fma_wb_io,
+    IssueWakeupIO.issue fma_wakeup_io,
 `endif
     input BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo,
@@ -99,6 +102,9 @@ endgenerate
 
 `ifdef RVF
     FMiscUnit fmisc_unit (
+        .*
+    );
+    FMAUnit fma_unit (
         .*
     );
 `endif

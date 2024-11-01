@@ -276,15 +276,21 @@ generate
 
 
 `ifdef RVF
-    logic `N($clog2(`COMMIT_WIDTH)) fp_commit_idx, fp_commit_idx_n;
+    logic `N($clog2(`COMMIT_WIDTH)) fp_commit_idx, fp_commit_idx_n, fp_fflag_idx;
+    logic `N(`COMMIT_WIDTH) fflag_we;
     logic fcsr_we;
+    logic `ARRAY(`COMMIT_WIDTH, `EXC_WIDTH) rexccode_n;
     PEncoder #(`COMMIT_WIDTH) encoder_fp_commit_idx (commit_en & commit_fp, fp_commit_idx);
+    PEncoder #(`COMMIT_WIDTH) encoder_fp_fflag_idx (commit_en_n & fflag_we, fp_fflag_idx);
     assign rob_fcsr_io.we = fcsr_we;
-    assign rob_fcsr_io.flag_we = fcsr_we & robData[fp_commit_idx_n].fflag_we;
+    assign rob_fcsr_io.flag_we = |(commit_en_n & fflag_we);
+    assign rob_fcsr_io.flags = rexccode_n[fp_fflag_idx];
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign fflag_we[i] = robData[i].fflag_we;
+    end
     always_ff @(posedge clk)begin
-        fp_commit_idx_n <= fp_commit_idx;
-        fcsr_we <= (|(commit_en & commit_fp)) & rob_fcsr_io.valid;
-        rob_fcsr_io.flags <= rexccode[fp_commit_idx];
+        fcsr_we <= (|(commit_en & commit_fp)) & rob_fcsr_io.valid & ~walk_state & ~exc_exist_n;
+        rexccode_n <= rexccode;
     end
 `endif
 

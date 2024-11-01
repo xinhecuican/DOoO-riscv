@@ -15,18 +15,19 @@ jobs:
       with:
         fetch-depth: 3
         submodules: "recursive"
-    - name: Cache Dependency
-      uses: actions/cache@v4
-      id: cache
-      with:
-        path: |
-          $HOME/riscv
-          /usr/local/share/verilator
-          /usr/local/bin/verilator*
-        key: ${{ runner.os }}-${{ hashFiles('**/intall_depend.sh') }}
-        restore-keys: ${{ runner.os }}-${{ hashFiles('**/intall_depend.sh') }}
+    # - name: Cache Dependency
+    #   uses: actions/cache@v4
+    #   id: cache
+    #   with:
+    #     path: |
+    #       $HOME/riscv
+    #       /usr/local/share/verilator
+    #       /usr/local/bin/verilator*
+    #     key: ${{ runner.os }}-${{ hashFiles('**/intall_depend.sh') }}
+    #     restore-keys: ${{ runner.os }}-${{ hashFiles('**/intall_depend.sh') }}
 
-    - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+    # - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+    - name: install environment
       run: |
         sudo apt install wget
         wget https://github.com/xinhecuican/DOoO-riscv/releases/download/toolchain/riscv.tar.gz

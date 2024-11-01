@@ -359,6 +359,18 @@ interface IssueFMiscIO;
     modport fmisc (input en, rs1_data, rs2_data, status, bundle, output stall);
 endinterface
 
+interface IssueFMAIO;
+    logic `N(`FMA_SIZE) en;
+    logic `ARRAY(`FMA_SIZE, `XLEN) rs1_data;
+    logic `ARRAY(`FMA_SIZE, `XLEN) rs2_data;
+    logic `ARRAY(`FMA_SIZE, `XLEN) rs3_data;
+    ExStatusBundle `N(`FMA_SIZE) status;
+    FMAIssueBundle `N(`FMA_SIZE) bundle;
+
+    modport issue (output en, rs1_data, rs2_data, rs3_data, status, bundle);
+    modport fma (input en, rs1_data, rs2_data, rs3_data, status, bundle);
+endinterface
+
 interface WriteBackIO#(
     parameter FU_SIZE = 4
 );

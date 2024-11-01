@@ -131,6 +131,10 @@ typedef enum logic [1:0] {
 `define ROB_WIDTH $clog2(`ROB_SIZE)
 `define COMMIT_WIDTH 4
 
+// wb
+`define WB_SIZE (`ALU_SIZE+`LSU_SIZE)
+`define FP_WB_SIZE (`LSU_SIZE+`FMA_SIZE)
+
 // lsu
 `define LOAD_QUEUE_SIZE 32
 `define LOAD_QUEUE_WIDTH $clog2(`LOAD_QUEUE_SIZE)
@@ -150,8 +154,8 @@ typedef enum logic [1:0] {
 // regfile
 `define INT_REG_READ_PORT (`ALU_SIZE * 2 + `LOAD_PIPELINE + `STORE_PIPELINE * 2)
 `define INT_REG_WRITE_PORT `WB_SIZE
-`define FP_REG_READ_PORT `FMISC_SIZE * 2
-`define FP_REG_WRITE_PORT `LOAD_PIPELINE
+`define FP_REG_READ_PORT `FMISC_SIZE * 2 + `FMA_SIZE * 3
+`define FP_REG_WRITE_PORT `FP_WB_SIZE
 
 // issue
 `define INT_ISSUE_SIZE 32
@@ -169,8 +173,10 @@ typedef enum logic [1:0] {
 `define MULT_ISSUE_WIDTH $clog2(`MULT_ISSUE_SIZE)
 `define FMISC_SIZE 2
 `define FMISC_ISSUE_SIZE 16
+`define FMA_SIZE 2
+`define FMA_ISSUE_SIZE 16
 `define INT_WAKEUP_PORT `WB_SIZE
-`define FP_WAKEUP_PORT `LOAD_PIPELINE
+`define FP_WAKEUP_PORT `LOAD_PIPELINE+`FMA_SIZE
 
 // dispatch
 `define INT_DIS_SIZE 16
@@ -201,10 +207,6 @@ typedef enum logic [1:0] {
 `endif \
 )
 `define FP_BUSY_PORT (`STORE_DIS_PORT + `FMISC_DIS_PORT * 2 + `FCAL_DIS_PORT * 3)
-
-// wb
-`define WB_SIZE (`ALU_SIZE+`LSU_SIZE)
-`define FP_WB_SIZE (`LSU_SIZE)
 
 // dcache
 `define DCACHE_ID 4'b1

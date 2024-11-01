@@ -18,14 +18,11 @@ module MultUnit(
     localparam HNUM = (NUM / 2); // 17 33
     localparam HM = HNUM-1;
     logic `N(NUM) d1, d2;
-    logic `N(NUM/2) z0, z1, n, c0;
-    logic `N(NUM) pp   `N(NUM/2);
-    logic `N(NUM*2) fpp  `N(NUM/2);
+    logic `N(NUM/2) n;
     logic `ARRAY(NUM*2, NUM/2) st0;
     logic `N(NUM*2) result;
     logic sext1, sext2;
     logic valid_s0, selh_s0;
-    logic zero;
     ExStatusBundle status_s0;
 
     assign sext1 = multop == `MULT_MUL ||
@@ -41,63 +38,12 @@ module MultUnit(
     assign status_s0 = status_i;
     assign d1 = {{2{sext1 & rs1_data[`XLEN-1]}}, rs1_data};
     assign d2 = {{2{sext2 & rs2_data[`XLEN-1]}}, rs2_data};
-    assign zero = ~(|rs1_data);
 
     assign wakeup_en = valid_s0;
     assign wakeup_we = status_s0.we;
     assign wakeup_rd = status_s0.rd;
 
-generate
-    for(genvar i=0; i<NUM/2; i++)begin
-        if(i == 0)begin
-            booth_encoder be0(
-                .y   ({d2[1], d2[0], 1'b0}),
-                .z0  (z0[i]),
-                .z1  (z1[i]),
-                .neg (n[i])
-            );
-        end
-        else begin
-            booth_encoder be2(
-                .y   ({d2[2*i+1], d2[2*i], d2[2*i-1]}),
-                .z0  (z0[i]),
-                .z1  (z1[i]),
-                .neg (n[i])
-            );
-        end
-        for(genvar j=0; j<NUM; j++)begin
-            if(j==0) begin
-                booth_selector bs(     // LSB
-                    .z0  (z0[i]),
-                    .z1  (z1[i]),
-                    .x   (d1[j]),
-                    .xs  (1'b0),
-                    .neg (n[i]),
-                    .p   (pp[i][j])
-                );
-            end 
-            else begin
-                booth_selector u_bs(
-                    .z0  (z0[i]),
-                    .z1  (z1[i]),
-                    .x   (d1[j]),
-                    .xs  (d1[j-1]),
-                    .neg (n[i]),
-                    .p   (pp[i][j])
-                );
-            end
-        end
-    end
-endgenerate
-
-generate
-    for(genvar i=0; i<NUM/2; i++)begin
-        assign fpp[i] = {{(NUM-2*i){pp[i][NUM-1]}}, pp[i], {(2*i){n[i]}}};
-        for(genvar j=0; j<NUM*2; j++)begin
-            assign st0[j][i] = fpp[i][j];
-        end
-    end
-endgenerate
+    booth_tree #(NUM) booth_tree_inst (.*);
 
 `define STA_NUM_DEF(stage, stagen) \
     localparam S``stagen`` = S``stage``_ALL / 3; \
@@ -128,24 +74,8 @@ endgenerate
     // localparam S6_ALL = (S6 * 2 + S5_ALL % 3); // 2 3
     // localparam S7 = S6_ALL / 3; // 0 1
     // localparam S7_ALL = (S7 * 2 + S6_ALL % 3); // 2 2
-    logic `ARRAY(NUM*2+1, S1_ALL) st1;
-    logic `ARRAY(NUM*2+1, S2_ALL) st2;
-    logic `ARRAY(NUM*2, S2_ALL) st2_n;
-    logic `ARRAY(NUM*2+1, S3_ALL) st3;
-    logic `ARRAY(NUM*2+1, S4_ALL) st4;
-    logic `ARRAY(NUM*2+1, S5_ALL) st5;
-    logic `ARRAY(NUM*2, S5_ALL) st5_n;
-    logic `ARRAY(NUM*2+1, S6_ALL) st6;
-`ifdef RV64
-    logic `N(NUM*2) st7 `N(S7_ALL);
-`endif
 
 `define ST_REG(num, stage, stagen) \
-    for(genvar i=0; i<NUM*2; i++)begin \
-        always_ff @(posedge clk)begin \
-            st``num``_n[i] <= st``num``[i]; \
-        end \
-    end \
     logic valid_s``stagen, selh_s``stagen; \
     ExStatusBundle status_s``stagen; \
     logic bigger``stage; \
@@ -157,6 +87,7 @@ endgenerate
     end
 
 `define CSA_DEF(stage, stagen) \
+    logic `ARRAY(NUM*2+1, S``stagen``_ALL) st``stagen``; \
     logic `N(HNUM) c``stagen``; \
     for(genvar i=0; i<S``stagen``; i++)begin : cal_st``stagen \
         for(genvar j=0; j<NUM*2; j++)begin \
@@ -178,6 +109,13 @@ endgenerate
     assign c``stagen`` = c``stage``;
 
 `define CSAN_DEF(stage, stagen) \
+    logic `ARRAY(NUM*2, S``stage``_ALL) st``stage``_n; \
+    logic `ARRAY(NUM*2+1, S``stagen``_ALL) st``stagen``; \
+    for(genvar i=0; i<NUM*2; i++)begin \
+        always_ff @(posedge clk)begin \
+            st``stage``_n[i] <= st``stage``[i]; \
+        end \
+    end \
     logic `N(HNUM) c``stagen``; \
     for(genvar i=0; i<S``stagen``; i++)begin : cal_st``stagen \
         for(genvar j=0; j<NUM*2; j++)begin \
@@ -202,6 +140,7 @@ endgenerate
 
 generate
 // stage1
+    logic `N(NUM/2) c0;
     assign c0 = n;
     `CSA_DEF(0, 1)
     `CSA_DEF(1, 2)
@@ -238,9 +177,9 @@ generate
 endgenerate
     
 `ifdef SV32
-    assign result = transpose[0] + transpose[1] + c6[15];
+    assign result = transpose[0] + transpose[1] + c6[HNUM-2];
 `elsif SV64
-    assign result = transpose[0] + transpose[1] + c7[15];
+    assign result = transpose[0] + transpose[1] + c7[HNUM-2];
 `endif
     assign wbData.res = selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];
 
@@ -268,6 +207,71 @@ input   xs;     // x shifted
 input   neg;
 output  p;      // product
 assign  p = (neg ^ ((z0 & x) | (z1 & xs)));
+endmodule
+
+module booth_tree #(
+    parameter WIDTH=1
+)(
+    input logic [WIDTH-1: 0] d1,
+    input logic [WIDTH-1: 0] d2,
+    output logic [WIDTH/2-1: 0] n,
+    output logic `ARRAY(WIDTH*2, WIDTH/2) st0
+);
+    logic `N(WIDTH/2) z0, z1, c0;
+    logic `N(WIDTH) pp   `N(WIDTH/2);
+    logic `N(WIDTH*2) fpp  `N(WIDTH/2);
+
+generate
+    for(genvar i=0; i<WIDTH/2; i++)begin
+        if(i == 0)begin
+            booth_encoder be0(
+                .y   ({d2[1], d2[0], 1'b0}),
+                .z0  (z0[i]),
+                .z1  (z1[i]),
+                .neg (n[i])
+            );
+        end
+        else begin
+            booth_encoder be2(
+                .y   ({d2[2*i+1], d2[2*i], d2[2*i-1]}),
+                .z0  (z0[i]),
+                .z1  (z1[i]),
+                .neg (n[i])
+            );
+        end
+        for(genvar j=0; j<WIDTH; j++)begin
+            if(j==0) begin
+                booth_selector bs(     // LSB
+                    .z0  (z0[i]),
+                    .z1  (z1[i]),
+                    .x   (d1[j]),
+                    .xs  (1'b0),
+                    .neg (n[i]),
+                    .p   (pp[i][j])
+                );
+            end 
+            else begin
+                booth_selector u_bs(
+                    .z0  (z0[i]),
+                    .z1  (z1[i]),
+                    .x   (d1[j]),
+                    .xs  (d1[j-1]),
+                    .neg (n[i]),
+                    .p   (pp[i][j])
+                );
+            end
+        end
+    end
+endgenerate
+
+generate
+    for(genvar i=0; i<WIDTH/2; i++)begin
+        assign fpp[i] = {{(WIDTH-2*i){pp[i][WIDTH-1]}}, pp[i], {(2*i){n[i]}}};
+        for(genvar j=0; j<WIDTH*2; j++)begin
+            assign st0[j][i] = fpp[i][j];
+        end
+    end
+endgenerate
 endmodule
 
 // Carry Save Adder
@@ -306,40 +310,6 @@ generate
     end
 endgenerate
 endmodule
-
-// Ripple Carry Adder
-// module RCA #(
-//     parameter WID = 64
-// )(a, b, cin, sum, cout);
-// input  [WID-1:0] a, b;
-// input  cin;
-// output [WID-1:0] sum;
-// output cout;
-// wire   [WID-1:0] c;
-// genvar i;
-// generate
-//     for(i=0; i<WID; i=i+1) begin : for_rca
-//         if(i==0) begin
-//             FA u_fa(
-//                 .a    (a[i]),
-//                 .b    (b[i]),
-//                 .cin  (cin),
-//                 .sum  (sum[i]),
-//                 .cout (c[i])
-//             );
-//         end else begin
-//             FA u_fa(
-//                 .a    (a[i]),
-//                 .b    (b[i]),
-//                 .cin  (c[i-1]),
-//                 .sum  (sum[i]),
-//                 .cout (c[i])
-//             );
-//         end
-//     end
-// endgenerate
-// assign cout = c[WID-1];
-// endmodule
 
 // Full Adder
 module FA(a,b,cin,sum,cout);

@@ -10,7 +10,7 @@ module MultIssueQueue(
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl
 );
-    IssueBankIO #($bits(MultIssueBundle), `MULT_ISSUE_SIZE) bank_io [`MULT_SIZE-1: 0]();
+    IssueBankIO #($bits(MultIssueBundle), `MULT_ISSUE_SIZE, 2) bank_io [`MULT_SIZE-1: 0]();
     // logic `ARRAY(`MULT_SIZE, $clog2(`MULT_SIZE)) order;
     // logic `ARRAY(`MULT_SIZE, $clog2(`MULT_SIZE)) bankNum;
     logic `N(`MULT_SIZE) full;
@@ -21,7 +21,7 @@ module MultIssueQueue(
 
 generate
     for(genvar i=0; i<`MULT_SIZE; i++)begin
-        IssueBank #($bits(MultIssueBundle), `MULT_ISSUE_SIZE) issue_bank(
+        IssueBank #($bits(MultIssueBundle), `MULT_ISSUE_SIZE, 2, `INT_WAKEUP_PORT) issue_bank(
             .clk(clk),
             .rst(rst),
             .io(bank_io[i]),
@@ -36,8 +36,8 @@ generate
         assign full[i] = bank_io[i].full;
 
         assign mult_reg_io.en[i] = bank_io[i].reg_en & ~(select_div & ~div_ready);
-        assign mult_reg_io.preg[i] = bank_io[i].rs1;
-        assign mult_reg_io.preg[`MULT_SIZE+i] = bank_io[i].rs2;
+        assign mult_reg_io.preg[i] = bank_io[i].src[0];
+        assign mult_reg_io.preg[`MULT_SIZE+i] = bank_io[i].src[1];
         
         LoopCompare #(`ROB_WIDTH) cmp_bigger (bank_io[i].status_o.robIdx, backendCtrl.redirectIdx, bigger[i]);
     end

@@ -16,6 +16,7 @@ module RegfileWrapper(
 `ifdef RVF
     input WriteBackBus fp_wbBus,
     IssueRegIO.regfile fmisc_reg_io,
+    IssueRegIO.regfile fma_reg_io,
 `endif
     input WriteBackBus int_wbBus
 `ifdef DIFFTEST
@@ -31,7 +32,7 @@ module RegfileWrapper(
 `ifdef RVF
     logic `N(`FP_REG_READ_PORT) fp_en;
     logic `ARRAY(`FP_REG_READ_PORT, `PREG_WIDTH) fp_raddr;
-    logic `ARRAY(`FP_REG_READ_PORT, `XLEN) fp_reg_rdata;
+    logic `ARRAY(`FP_REG_READ_PORT, `XLEN) fp_reg_rdata, fp_rdata;
     logic `N(`FP_REG_WRITE_PORT) fp_we;
     logic `ARRAY(`FP_REG_WRITE_PORT, `PREG_WIDTH) fp_waddr;
     logic `ARRAY(`FP_REG_WRITE_PORT, `XLEN) fp_wdata;
@@ -163,7 +164,14 @@ endgenerate
         ,.diff_rat(diff_int_rat)
 `endif
     );
-    Bypass bypass(.*, .wbBus(int_wbBus));
+    Bypass #(
+        `ALU_SIZE, `INT_REG_READ_PORT
+    ) bypass(
+        .*,
+        .wb_en(int_wbBus.en[`ALU_SIZE-1: 0] & int_wbBus.we[`ALU_SIZE-1: 0]),
+        .wb_rd(int_wbBus.rd[`ALU_SIZE-1: 0]),
+        .wb_res(int_wbBus.res[`ALU_SIZE-1: 0])
+    );
 
 `ifdef RVF
     logic `N(`STORE_PIPELINE) fp_store_en;
@@ -202,9 +210,21 @@ endgenerate
     end
     assign fp_en[`FMISC_SIZE +: `FMISC_SIZE] = fmisc_rs2_en;
     assign fp_raddr[`FMISC_SIZE +: `FMISC_SIZE] = fmisc_rs2;
-    assign store_reg_io.data[`STORE_PIPELINE*2 +: `STORE_PIPELINE] = fp_reg_rdata[0 +: `STORE_PIPELINE];
-    assign fmisc_reg_io.data[0 +: `FMISC_SIZE * 2] = fp_reg_rdata[0 +: `FMISC_SIZE * 2];
+    assign store_reg_io.data[`STORE_PIPELINE*2 +: `STORE_PIPELINE] = fp_rdata[0 +: `STORE_PIPELINE];
+    assign fmisc_reg_io.data[0 +: `FMISC_SIZE * 2] = fp_rdata[0 +: `FMISC_SIZE * 2];
 
+    logic `N(`FMA_SIZE) fma_en;
+    logic `ARRAY(`FMA_SIZE * 3, `PREG_WIDTH) fma_src;
+    always_ff @(posedge clk)begin
+        fma_en <= fma_reg_io.en;
+        fma_src <= fma_reg_io.preg;
+    end
+    localparam FMA_BASE = `FMISC_SIZE*2;
+    assign fp_en[FMA_BASE +: `FMA_SIZE*3] = {3{fma_en}};
+    assign fp_raddr[FMA_BASE +: `FMA_SIZE*3] = fma_src;
+    assign fma_reg_io.ready = {`FMA_SIZE{1'b1}};
+    assign fma_reg_io.data = fp_rdata[FMA_BASE +: `FMA_SIZE * 3];
+    
 generate
     for(genvar i=0; i<`FP_WB_SIZE; i++)begin
         assign fp_we[i] = fp_wbBus.en[i] & fp_wbBus.we[i];
@@ -228,6 +248,19 @@ endgenerate
 `ifdef DIFFTEST
         ,.diff_rat(diff_fp_rat)
 `endif
+    );
+
+    Bypass #(
+        `FMA_SIZE, `FP_REG_READ_PORT, 0
+    ) fp_bypass (
+        .clk,
+        .rst,
+        .raddr(fp_raddr),
+        .reg_rdata(fp_reg_rdata),
+        .wb_en(fp_wbBus.en[`FMISC_SIZE +: `FMA_SIZE] & fp_wbBus.we[`FMISC_SIZE +: `FMA_SIZE]),
+        .wb_rd(fp_wbBus.rd[`FMISC_SIZE +: `FMA_SIZE]),
+        .wb_res(fp_wbBus.res[`FMISC_SIZE +: `FMA_SIZE]),
+        .rdata(fp_rdata)
     );
 `endif
 endmodule

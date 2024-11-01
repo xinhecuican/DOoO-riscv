@@ -312,8 +312,19 @@ typedef struct packed {
 } FMiscIssueBundle;
 
 typedef struct packed {
+    logic div;
     logic `N(`FLTOP_WIDTH) fltop;
+    logic `N(3) rm;
 } FCalIssueBundle;
+
+typedef struct packed {
+    logic `N(`FLTOP_WIDTH) fltop;
+    logic `N(3) rm;
+} FMAIssueBundle;
+
+typedef struct packed {
+    logic div;
+} FDivIssueBundle;
 
 typedef struct packed {
     logic we;
@@ -363,6 +374,14 @@ typedef struct packed {
     RobIdx robIdx;
     BranchUnitRes res;
 } AluBranchBundle;
+
+typedef struct packed {
+    logic is_nan;
+    logic is_signalling;
+    logic is_inf;
+    logic is_invalid;
+    logic sign;
+} FMulInfo;
 
 typedef struct packed {
     logic en;

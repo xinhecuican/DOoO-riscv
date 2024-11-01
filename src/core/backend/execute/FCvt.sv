@@ -129,7 +129,7 @@ module I2F #(
     fp_t fp;
     logic sign;
     logic `N(`XLEN) int_abs;
-    logic `N(`XLEN) int_shift; 
+    logic `N(`XLEN) int_shift, int_shift_pre; 
     logic `N($clog2(INT_WIDTH)) lzc_cnt;
     logic `N(MAN_BITS) raw_mant, round_mant;
     logic `N(EXP_BITS+1) raw_exp;
@@ -140,10 +140,10 @@ module I2F #(
     assign sign = src[INT_WIDTH-1] & ~uext;
     assign int_abs = sign ? -src : src;
     lzc #(INT_WIDTH, 1) lzc_inst (int_abs, lzc_cnt, lzc_empty);
-    assign int_shift = int_abs << (lzc_cnt+1);
+    assign int_shift_pre = int_abs << (lzc_cnt);
+    assign int_shift = {int_shift_pre[`XLEN-2: 0], 1'b0};
     
-    
-    assign raw_exp = (INT_WIDTH - 1 - lzc_cnt) + {1'b0, {EXP_BITS-1{1'b1}}};
+    assign raw_exp = (INT_WIDTH - 1 - lzc_cnt) + {1'b0, {EXP_BITS-1{~lzc_empty}}};
     assign raw_mant = int_shift[INT_WIDTH-1: INT_WIDTH-MAN_BITS];
     assign sticky = |int_shift[0 +: MAN_BITS+1];
     assign round = int_shift[MAN_BITS-1];

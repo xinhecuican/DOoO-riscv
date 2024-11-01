@@ -20,7 +20,7 @@ module Dispatch(
 `ifdef RVF
     input WakeupBus fp_wakeupBus,
     DisIssueIO.dis dis_fmisc_io,
-    DisIssueIO.dis dis_fcal_io,
+    DisIssueIO.dis dis_fma_io,
 `endif
     CommitBus.in commitBus,
     input CommitWalk commitWalk,
@@ -315,6 +315,8 @@ generate
         assign misc_bundle.uext = di.uext;
         assign misc_bundle.rm = di.rm;
         assign cal_bundle.fltop = di.fltop;
+        assign cal_bundle.rm = di.rm;
+        assign cal_bundle.div = di.fltop == `FLT_DIV || di.fltop == `FLT_SQRT;
         assign fmisc_io.en[i] = rename_dis_io.op[i].en & di.fmiscv & ~backendCtrl.redirect;
         assign fcal_io.en[i] = rename_dis_io.op[i].en & di.fcalv & ~backendCtrl.redirect;
         assign fmisc_io.data[i] = misc_bundle;
@@ -511,22 +513,22 @@ endgenerate
         .fp_rs2_en(fp_busy_io.reg_en[FMISC_FP_BASE + `FMISC_DIS_PORT +: `FMISC_DIS_PORT]),
         .fp_rs3_en()
     );
-    DispatchDequeue #(
-        .PORT_SIZE(`FCAL_DIS_PORT),
-        .RS1I(0),
-        .RS2I(0),
-        .RS1F(1),
-        .RS2F(1),
-        .RS3F(1)
-    ) fcal_dequeue (
-        .queue_io(fcal_io),
-        .dis_issue_io(dis_fcal_io),
-        .int_rs1_en(),
-        .int_rs2_en(),
-        .fp_rs1_en(fp_busy_io.reg_en[FCAL_FP_BASE +: `FCAL_DIS_PORT]),
-        .fp_rs2_en(fp_busy_io.reg_en[FCAL_FP_BASE + `FCAL_DIS_PORT +: `FCAL_DIS_PORT]),
-        .fp_rs3_en(fp_busy_io.reg_en[FCAL_FP_BASE + `FCAL_DIS_PORT * 2 +: `FCAL_DIS_PORT])
-    );
+generate
+    for(genvar i=0; i<`FMISC_DIS_PORT; i++)begin
+        FCalIssueBundle bundle;
+        IssueStatusBundle status;
+        logic rs1v, rs2v, rs3v;
+        assign bundle = fcal_io.data_o[i];
+        assign dis_fma_io.en[i] = fcal_io.en_o[i] & ~bundle.div;
+        assign dis_fma_io.data[i] = bundle[$bits(FCalIssueBundle)-2: 0];
+        assign rs1v = fp_busy_io.reg_en[FCAL_FP_BASE+i];
+        assign rs2v = fp_busy_io.reg_en[FCAL_FP_BASE+`FCAL_DIS_PORT+i];
+        assign rs3v = fp_busy_io.reg_en[FCAL_FP_BASE+`FCAL_DIS_PORT*2+i];
+        assign status = {rs1v, rs2v, rs3v, fcal_io.status_o[i]};
+        assign dis_fma_io.status[i] = status;
+    end
+    assign fcal_io.issue_full = dis_fma_io.full;
+endgenerate
 `endif
 endmodule
 
