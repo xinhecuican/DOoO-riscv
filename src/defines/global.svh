@@ -175,6 +175,8 @@ typedef enum logic [1:0] {
 `define FMISC_ISSUE_SIZE 16
 `define FMA_SIZE 2
 `define FMA_ISSUE_SIZE 16
+`define FDIV_SIZE 1
+`define FDIV_ISSUE_SIZE 4
 `define INT_WAKEUP_PORT `WB_SIZE
 `define FP_WAKEUP_PORT `LOAD_PIPELINE+`FMA_SIZE
 
@@ -193,8 +195,10 @@ typedef enum logic [1:0] {
 `define AMO_DIS_PORT 1
 `define FMISC_DIS_SIZE 8
 `define FMISC_DIS_PORT `FMISC_SIZE
-`define FCAL_DIS_SIZE 8
-`define FCAL_DIS_PORT 2
+`define FMA_DIS_SIZE 8
+`define FMA_DIS_PORT `FMA_SIZE
+`define FDIV_DIS_SIZE 4
+`define FDIV_DIS_PORT `FDIV_SIZE
 `define INT_BUSY_PORT (`INT_DIS_PORT * 2 + `LOAD_DIS_PORT + `STORE_DIS_PORT * 2 \
 `ifdef RVM \
     + `MULT_DIS_PORT * 2 \
@@ -206,7 +210,7 @@ typedef enum logic [1:0] {
     + `FMISC_DIS_PORT \
 `endif \
 )
-`define FP_BUSY_PORT (`STORE_DIS_PORT + `FMISC_DIS_PORT * 2 + `FCAL_DIS_PORT * 3)
+`define FP_BUSY_PORT (`STORE_DIS_PORT + `FMISC_DIS_PORT * 2 + `FMA_DIS_PORT * 3 + `FDIV_DIS_PORT * 2)
 
 // dcache
 `define DCACHE_ID 4'b1

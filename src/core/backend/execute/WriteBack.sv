@@ -13,6 +13,7 @@ module WriteBack(
 `ifdef RVF
     WriteBackIO.wb fmisc_wb_io,
     WriteBackIO.wb fma_wb_io,
+    WriteBackIO.wb fdiv_wb_io,
 `endif
     output WriteBackBus int_wbBus
 `ifdef RVF
@@ -89,12 +90,23 @@ generate
             fma_data <= fma_wb_io.datas[i];
         end
         assign fma_wb_io.valid[i] = 1'b1;
-        assign fp_wbBus.en[`FMISC_SIZE+i] = fma_data.en;
-        assign fp_wbBus.we[`FMISC_SIZE+i] = fma_data.we;
-        assign fp_wbBus.robIdx[`FMISC_SIZE+i] = fma_data.robIdx;
-        assign fp_wbBus.rd[`FMISC_SIZE+i] = fma_data.rd;
-        assign fp_wbBus.res[`FMISC_SIZE+i] = fma_data.res;
-        assign fp_wbBus.exccode[`FMISC_SIZE+i] = fma_data.exccode;
+        if(i == 0)begin
+            assign fdiv_wb_io.valid[0] = ~fma_data.en;
+            assign fp_wbBus.en[`FMISC_SIZE+i] = fdiv_wb_io.datas[0].en | fma_data.en;
+            assign fp_wbBus.we[`FMISC_SIZE+i] = fma_data.en ? fma_data.we : fdiv_wb_io.datas[0].we;
+            assign fp_wbBus.robIdx[`FMISC_SIZE+i] = fma_data.en ? fma_data.robIdx : fdiv_wb_io.datas[0].robIdx;
+            assign fp_wbBus.rd[`FMISC_SIZE+i] = fma_data.en ? fma_data.rd : fdiv_wb_io.datas[0].rd;
+            assign fp_wbBus.res[`FMISC_SIZE+i] = fma_data.en ? fma_data.res : fdiv_wb_io.datas[0].res;
+            assign fp_wbBus.exccode[`FMISC_SIZE+i] = fma_data.en ? fma_data.exccode : fdiv_wb_io.datas[0].exccode;
+        end
+        else begin
+            assign fp_wbBus.en[`FMISC_SIZE+i] = fma_data.en;
+            assign fp_wbBus.we[`FMISC_SIZE+i] = fma_data.we;
+            assign fp_wbBus.robIdx[`FMISC_SIZE+i] = fma_data.robIdx;
+            assign fp_wbBus.rd[`FMISC_SIZE+i] = fma_data.rd;
+            assign fp_wbBus.res[`FMISC_SIZE+i] = fma_data.res;
+            assign fp_wbBus.exccode[`FMISC_SIZE+i] = fma_data.exccode;
+        end
     end
 endgenerate
 `endif

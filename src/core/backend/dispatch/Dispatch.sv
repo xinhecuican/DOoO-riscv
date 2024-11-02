@@ -21,6 +21,7 @@ module Dispatch(
     input WakeupBus fp_wakeupBus,
     DisIssueIO.dis dis_fmisc_io,
     DisIssueIO.dis dis_fma_io,
+    DisIssueIO.dis dis_fdiv_io,
 `endif
     CommitBus.in commitBus,
     input CommitWalk commitWalk,
@@ -285,7 +286,8 @@ endgenerate
 
 `ifdef RVF
     DispatchQueueIO #($bits(FMiscIssueBundle), `FMISC_DIS_PORT) fmisc_io(.*);
-    DispatchQueueIO #($bits(FCalIssueBundle), `FCAL_DIS_PORT) fcal_io(.*);
+    DispatchQueueIO #($bits(FMAIssueBundle), `FMA_DIS_PORT) fma_io(.*);
+    DispatchQueueIO #($bits(FDivIssueBundle), `FDIV_DIS_PORT) fdiv_io(.*);
     DispatchQueue #(
         .DATA_WIDTH($bits(FMiscIssueBundle)),
         .DEPTH(`FMISC_DIS_SIZE),
@@ -296,31 +298,45 @@ endgenerate
         .io(fmisc_io)
     );
     DispatchQueue #(
-        .DATA_WIDTH($bits(FCalIssueBundle)),
-        .DEPTH(`FCAL_DIS_SIZE),
-        .OUT_WIDTH(`FCAL_DIS_PORT),
+        .DATA_WIDTH($bits(FMAIssueBundle)),
+        .DEPTH(`FMA_DIS_SIZE),
+        .OUT_WIDTH(`FMA_DIS_PORT),
         .RS3V(1)
-    ) fcal_dispatch_queue (
+    ) fma_dispatch_queue (
         .*,
-        .io(fcal_io)
+        .io(fma_io)
+    );
+    DispatchQueue #(
+        .DATA_WIDTH($bits(FDivIssueBundle)),
+        .DEPTH(`FDIV_DIS_SIZE),
+        .OUT_WIDTH(`FDIV_DIS_PORT)
+    ) fdiv_dispatch_queue (
+        .*,
+        .io(fdiv_io)
     );
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : fp_in
         DecodeInfo di;
         FMiscIssueBundle misc_bundle;
-        FCalIssueBundle cal_bundle;
+        FMAIssueBundle fma_bundle;
+        FDivIssueBundle fdiv_bundle;
+        logic div;
         assign di = rename_dis_io.op[i].di;
+        assign div = di.fltop == `FLT_DIV || di.fltop == `FLT_SQRT;
         assign misc_bundle.fltop = di.fltop;
         assign misc_bundle.flt_we = di.flt_we;
         assign misc_bundle.uext = di.uext;
         assign misc_bundle.rm = di.rm;
-        assign cal_bundle.fltop = di.fltop;
-        assign cal_bundle.rm = di.rm;
-        assign cal_bundle.div = di.fltop == `FLT_DIV || di.fltop == `FLT_SQRT;
+        assign fma_bundle.fltop = di.fltop;
+        assign fma_bundle.rm = di.rm;
+        assign fdiv_bundle.div = di.fltop == `FLT_DIV;
+        assign fdiv_bundle.rm = di.rm;
         assign fmisc_io.en[i] = rename_dis_io.op[i].en & di.fmiscv & ~backendCtrl.redirect;
-        assign fcal_io.en[i] = rename_dis_io.op[i].en & di.fcalv & ~backendCtrl.redirect;
+        assign fma_io.en[i] = rename_dis_io.op[i].en & di.fcalv & ~div & ~backendCtrl.redirect;
+        assign fdiv_io.en[i] = rename_dis_io.op[i].en & di.fcalv & div & ~backendCtrl.redirect;
         assign fmisc_io.data[i] = misc_bundle;
-        assign fcal_io.data[i] = cal_bundle;
+        assign fma_io.data[i] = fma_bundle;
+        assign fdiv_io.data[i] = fdiv_bundle;
     end
 endgenerate
 `endif
@@ -333,7 +349,7 @@ endgenerate
                   | amo_io.full
 `endif
 `ifdef RVF
-                  | fmisc_io.full
+                  | fmisc_io.full | fma_io.full | fdiv_io.full
 `endif
     ;
 
@@ -359,7 +375,8 @@ endgenerate
 `ifdef RVF
     assign fp_busy_io.dis_en = rename_dis_io.fp_wen & ~{`FETCH_WIDTH{backendCtrl.dis_full}};
     assign fp_busy_io.dis_rd = rename_dis_io.prd;
-    assign fp_busy_io.preg = {fcal_io.rs3_o, fcal_io.rs2_o, fcal_io.rs1_o,
+    assign fp_busy_io.preg = {fdiv_io.rs2_o, fdiv_io.rs1_o,
+                              fma_io.rs3_o, fma_io.rs2_o, fma_io.rs1_o,
                               fmisc_io.rs2_o, fmisc_io.rs1_o,
                               store_io.rs2_o};
     BusyTable #(`FP_WAKEUP_PORT, `FP_BUSY_PORT, `FP_PREG_SIZE) fp_busy_table(
@@ -497,7 +514,8 @@ endgenerate
 `endif
     ;
     localparam FMISC_FP_BASE = `STORE_DIS_PORT;
-    localparam FCAL_FP_BASE = `STORE_DIS_PORT + `FMISC_DIS_PORT * 2;
+    localparam FMA_FP_BASE = `STORE_DIS_PORT + `FMISC_DIS_PORT * 2;
+    localparam FDIV_BASE = FMA_FP_BASE + `FMA_SIZE * 3;
     DispatchDequeue #(
         .PORT_SIZE(`FMISC_DIS_PORT),
         .RS1I(1),
@@ -513,22 +531,37 @@ endgenerate
         .fp_rs2_en(fp_busy_io.reg_en[FMISC_FP_BASE + `FMISC_DIS_PORT +: `FMISC_DIS_PORT]),
         .fp_rs3_en()
     );
-generate
-    for(genvar i=0; i<`FMISC_DIS_PORT; i++)begin
-        FCalIssueBundle bundle;
-        IssueStatusBundle status;
-        logic rs1v, rs2v, rs3v;
-        assign bundle = fcal_io.data_o[i];
-        assign dis_fma_io.en[i] = fcal_io.en_o[i] & ~bundle.div;
-        assign dis_fma_io.data[i] = bundle[$bits(FCalIssueBundle)-2: 0];
-        assign rs1v = fp_busy_io.reg_en[FCAL_FP_BASE+i];
-        assign rs2v = fp_busy_io.reg_en[FCAL_FP_BASE+`FCAL_DIS_PORT+i];
-        assign rs3v = fp_busy_io.reg_en[FCAL_FP_BASE+`FCAL_DIS_PORT*2+i];
-        assign status = {rs1v, rs2v, rs3v, fcal_io.status_o[i]};
-        assign dis_fma_io.status[i] = status;
-    end
-    assign fcal_io.issue_full = dis_fma_io.full;
-endgenerate
+    DispatchDequeue #(
+        .PORT_SIZE(`FMA_DIS_PORT),
+        .RS1I(0),
+        .RS2I(0),
+        .RS1F(1),
+        .RS2F(1),
+        .RS3F(1)
+    ) fma_dequeue (
+        .queue_io(fma_io),
+        .dis_issue_io(dis_fma_io),
+        .int_rs1_en(),
+        .int_rs2_en(),
+        .fp_rs1_en(fp_busy_io.reg_en[FMA_FP_BASE +: `FMA_SIZE]),
+        .fp_rs2_en(fp_busy_io.reg_en[FMA_FP_BASE + `FMA_SIZE +: `FMA_SIZE]),
+        .fp_rs3_en(fp_busy_io.reg_en[FMA_FP_BASE + `FMA_SIZE * 2 +: `FMA_SIZE])
+    );
+    DispatchDequeue #(
+        .PORT_SIZE(`FDIV_DIS_PORT),
+        .RS1I(0),
+        .RS2I(0),
+        .RS1F(1),
+        .RS2F(1)
+    ) fdiv_dequeue (
+        .queue_io(fdiv_io),
+        .dis_issue_io(dis_fdiv_io),
+        .int_rs1_en(),
+        .int_rs2_en(),
+        .fp_rs1_en(fp_busy_io.reg_en[FDIV_BASE +: `FDIV_SIZE]),
+        .fp_rs2_en(fp_busy_io.reg_en[FDIV_BASE + `FDIV_SIZE +: `FDIV_SIZE]),
+        .fp_rs3_en()
+    );
 `endif
 endmodule
 

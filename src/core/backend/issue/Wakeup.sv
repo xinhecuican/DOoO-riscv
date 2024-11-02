@@ -17,6 +17,7 @@ module Wakeup(
 `ifdef RVF
     IssueWakeupIO.wakeup fmisc_wakeup_io,
     IssueWakeupIO.wakeup fma_wakeup_io,
+    IssueWakeupIO.wakeup fdiv_wakeup_io,
     output WakeupBus fp_wakeupBus,
 `endif
     IssueWakeupIO.wakeup int_wakeup_io,
@@ -90,9 +91,17 @@ generate
     end
     for(genvar i=0; i<`FMA_SIZE; i++)begin
         assign fma_wakeup_io.ready[i] = 1'b1;
-        assign fp_wakeupBus.en[`FMISC_SIZE+i] = fma_wakeup_io.en[i];
-        assign fp_wakeupBus.we[`FMISC_SIZE+i] = fma_wakeup_io.we[i];
-        assign fp_wakeupBus.rd[`FMISC_SIZE+i] = fma_wakeup_io.rd[i];
+        if(i == 0)begin
+            assign fp_wakeupBus.en[`FMISC_SIZE+i] = fma_wakeup_io.en[i] | fdiv_wakeup_io.en[0];
+            assign fp_wakeupBus.we[`FMISC_SIZE+i] = fma_wakeup_io.en[i] ? fma_wakeup_io.we[i] : fdiv_wakeup_io.we[0];
+            assign fp_wakeupBus.rd[`FMISC_SIZE+i] = fma_wakeup_io.en[i] ? fma_wakeup_io.rd[i] : fdiv_wakeup_io.rd[0];
+            assign fdiv_wakeup_io.ready[0] = ~fma_wakeup_io.en[i];
+        end
+        else begin
+            assign fp_wakeupBus.en[`FMISC_SIZE+i] = fma_wakeup_io.en[i];
+            assign fp_wakeupBus.we[`FMISC_SIZE+i] = fma_wakeup_io.we[i];
+            assign fp_wakeupBus.rd[`FMISC_SIZE+i] = fma_wakeup_io.rd[i];
+        end
     end
 endgenerate
 `endif

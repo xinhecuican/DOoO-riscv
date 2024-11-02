@@ -26,7 +26,8 @@ rv32a=(
 rv32a_prefix="utils/riscv-tests/isa/rv32ua-p-"
 
 rv32f=(
-    "fclass" "fcmp" "fcvt" "fcvt_w" "fmin" "fadd" "fmadd" "recoding"
+    "fclass" "fcmp" "fcvt" "fcvt_w" "fmin" "fadd" "fmadd" 
+    "recoding" "fdiv"
 )
 rv32f_prefix="utils/riscv-tests/isa/rv32uf-p-"
 

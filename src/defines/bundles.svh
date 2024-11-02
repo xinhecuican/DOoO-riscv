@@ -312,18 +312,13 @@ typedef struct packed {
 } FMiscIssueBundle;
 
 typedef struct packed {
-    logic div;
-    logic `N(`FLTOP_WIDTH) fltop;
-    logic `N(3) rm;
-} FCalIssueBundle;
-
-typedef struct packed {
     logic `N(`FLTOP_WIDTH) fltop;
     logic `N(3) rm;
 } FMAIssueBundle;
 
 typedef struct packed {
     logic div;
+    logic [2: 0] rm;
 } FDivIssueBundle;
 
 typedef struct packed {

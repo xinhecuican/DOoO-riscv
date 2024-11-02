@@ -371,6 +371,19 @@ interface IssueFMAIO;
     modport fma (input en, rs1_data, rs2_data, rs3_data, status, bundle);
 endinterface
 
+interface IssueFDivIO;
+    logic `N(`FDIV_SIZE) en;
+    logic `ARRAY(`FDIV_SIZE, `XLEN) rs1_data;
+    logic `ARRAY(`FDIV_SIZE, `XLEN) rs2_data;
+    ExStatusBundle `N(`FDIV_SIZE) status;
+    FDivIssueBundle `N(`FDIV_SIZE) bundle;
+    logic `N(`FDIV_SIZE) done;
+
+    modport issue (output en, rs1_data, rs2_data, status, bundle, input done);
+    modport fdiv (input en, rs1_data, rs2_data, status, bundle, output done);
+endinterface
+
+
 interface WriteBackIO#(
     parameter FU_SIZE = 4
 );

@@ -21,6 +21,9 @@ module Execute(
     IssueFMAIO.fma issue_fma_io,
     WriteBackIO.fu fma_wb_io,
     IssueWakeupIO.issue fma_wakeup_io,
+    IssueFDivIO.fdiv issue_fdiv_io,
+    IssueWakeupIO.issue fdiv_wakeup_io,
+    WriteBackIO.fu fdiv_wb_io,
 `endif
     input BackendCtrl backendCtrl,
     output BackendRedirectInfo backendRedirectInfo,
@@ -101,11 +104,8 @@ endgenerate
 `endif
 
 `ifdef RVF
-    FMiscUnit fmisc_unit (
-        .*
-    );
-    FMAUnit fma_unit (
-        .*
-    );
+    FMiscUnit fmisc_unit (.*);
+    FMAUnit fma_unit (.*);
+    FDivUnit fdiv_unit (.*);
 `endif
 endmodule

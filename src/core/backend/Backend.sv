@@ -49,15 +49,20 @@ module Backend(
     WakeupBus #(`FP_WAKEUP_PORT) fp_wakeupBus();
     WriteBackBus #(`FP_WB_SIZE) fp_wbBus();
     DisIssueIO #(.PORT_NUM(`FMISC_DIS_PORT), .DATA_SIZE($bits(FMiscIssueBundle))) dis_fmisc_io();
-    DisIssueIO #(.PORT_NUM(`FCAL_DIS_PORT), .DATA_SIZE($bits(FMAIssueBundle))) dis_fma_io();
+    DisIssueIO #(.PORT_NUM(`FMA_DIS_PORT), .DATA_SIZE($bits(FMAIssueBundle))) dis_fma_io();
+    DisIssueIO #(.PORT_NUM(`FDIV_DIS_PORT), .DATA_SIZE($bits(FDivIssueBundle))) dis_fdiv_io();
     IssueRegIO #(`FMISC_SIZE * 2, `FMISC_SIZE * 3) fmisc_reg_io();
     IssueRegIO #(`FMA_SIZE, `FMA_SIZE * 3) fma_reg_io();
+    IssueRegIO #(`FDIV_SIZE, `FDIV_SIZE * 2) fdiv_reg_io();
     IssueFMAIO issue_fma_io();
     IssueFMiscIO issue_fmisc_io();
+    IssueFDivIO issue_fdiv_io();
     WriteBackIO #(`FMISC_SIZE*2) fmisc_wb_io();
     IssueWakeupIO #(`FMISC_SIZE*2) fmisc_wakeup_io();
     IssueWakeupIO #(`FMA_SIZE) fma_wakeup_io();
     WriteBackIO #(`FMA_SIZE) fma_wb_io();
+    WriteBackIO #(`FDIV_SIZE) fdiv_wb_io();
+    IssueWakeupIO #(`FDIV_SIZE) fdiv_wakeup_io();
     RobFCsrIO rob_fcsr_io();
     logic [2: 0] round_mode;
 `endif
@@ -119,7 +124,7 @@ module Backend(
 `endif
 
     logic decode_rst, rename_rst, dispatch_rst, intissue_rst, csr_rst, mult_rst, lsu_rst, 
-    regfile_rst, wakeup_rst, exe_rst, csrissue_rst, wb_rst, rob_rst, fmisc_rst, fma_rst;
+    regfile_rst, wakeup_rst, exe_rst, csrissue_rst, wb_rst, rob_rst;
     SyncRst rst_decode(clk, rst, decode_rst);
     SyncRst rst_rename(clk, rst, rename_rst);
     SyncRst rst_dispatch(clk, rst, dispatch_rst);
@@ -133,8 +138,6 @@ module Backend(
     SyncRst rst_csrissue(clk, rst, csrissue_rst);
     SyncRst rst_wb(clk, rst, wb_rst);
     SyncRst rst_rob(clk, rst, rob_rst);
-    SyncRst rst_fmisc(clk, rst, fmisc_rst);
-    SyncRst rst_fma(clk, rst, fma_rst);
 
     assign commitBus_out.en = commitBus.en;
     assign commitBus_out.we = commitBus.we;
@@ -185,8 +188,9 @@ module Backend(
     MultIssueQueue mult_issue_queue(.*, .rst(mult_rst), .wakeupBus(int_wakeupBus));
 `endif
 `ifdef RVF
-    FMiscIssueQueue fmisc_issue_queue(.*, .rst(fmisc_rst));
-    FMAIssueQueue fma_issue_queue(.*, .rst(fma_rst));
+    FMiscIssueQueue fmisc_issue_queue(.*);
+    FMAIssueQueue fma_issue_queue(.*);
+    FDivIssueQueue fdiv_issue_queue(.*);
 `endif
     LSU lsu(
         .*,

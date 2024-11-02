@@ -1,17 +1,12 @@
 `include "../../../defines/defines.svh"
 
 typedef struct packed {
-    logic en;
     logic sext;
     logic zero;
     logic ov;
     logic rem;
     logic `N($clog2(`XLEN)) lzc;
-    logic `N(`XLEN*2+1) pa;
     logic `N(`XLEN) src1;
-    logic `N(`XLEN) b;
-    logic `N(`XLEN) q_pos;
-    logic `N(`XLEN) q_neg;
     logic ha, hb; // sign bit of divisor and dividend
     ExStatusBundle status;
 } DivPipeInfo;
@@ -46,10 +41,19 @@ module DivUnit(
     logic clean;
     logic sext;
 
+    logic `N(2*`XLEN+1) pipe1_pa, pa_o;
+    logic `N(`XLEN) q_pos, q_neg, q_neg_last, pipe1_q_pos, pipe1_q_neg;
+    logic en_o, we_o, pipe1_en;
+    logic rem_o;
+    logic zero_o, ov_o;
+    logic `N(`XLEN) src1_o, pipe1_b;
+    logic sext_o, ha_o;
+    ExStatusBundle status_o;
+    logic `N(`XLEN) r, q;
+
     LoopCompare #(`ROB_WIDTH) cmp_in (status_i.robIdx, backendCtrl.redirectIdx, bigger_i);
     assign en_i = en & multop[2] & (~backendCtrl.redirect | bigger_i);
     assign sext = multop == `MULT_DIV || multop == `MULT_REM;
-    assign pipe0_i.en = en_i;
     assign pipe0_i.sext = sext;
     assign pipe0_i.zero = rs2_data == 0;
     assign pipe0_i.ov = (rs1_data == 32'h80000000) && (rs2_data == 32'hffffffff) && sext;
@@ -58,20 +62,26 @@ module DivUnit(
     lzc #(`XLEN, 1) lzc_gen (abs_b, lzc_rs2,);
     assign abs_a = (sext & rs1_data[`XLEN-1]) ? ~rs1_data + 1 : rs1_data;
     assign abs_b = (sext & rs2_data[`XLEN-1]) ? ~rs2_data + 1 : rs2_data;
-    assign pipe0_i.pa = {{`XLEN+1{1'b0}}, abs_a} << lzc_rs2;
-    assign pipe0_i.b = abs_b << lzc_rs2;
-    assign pipe0_i.q_pos = 0;
-    assign pipe0_i.q_neg = 0;
     assign pipe0_i.ha = rs1_data[`XLEN-1];
     assign pipe0_i.hb = rs2_data[`XLEN-1];
     assign pipe0_i.status = status_i;
     assign pipe0_i.src1 = rs1_data;
 
-    DivPipe #(`XLEN/2) pipe0(
+    DivPipe #(`XLEN/2, `XLEN, $bits(DivPipeInfo)) pipe0(
         .clk(clk),
         .rst(rst),
         .info_i(pipe0_i),
         .info_o(pipe1_i),
+        .en_i(en_i),
+        .pa_i({{`XLEN+1{1'b0}}, abs_a} << lzc_rs2),
+        .b_i(abs_b << lzc_rs2),
+        .q_pos_i(0),
+        .q_neg_i(0),
+        .en_o(pipe1_en),
+        .pa_o(pipe1_pa),
+        .b_o(pipe1_b),
+        .q_pos_o(pipe1_q_pos),
+        .q_neg_o(pipe1_q_neg),
         .cnt_o(pipe0_cnt),
         .ready(pipe0_ready),
         .clean(clean),
@@ -85,16 +95,7 @@ module DivUnit(
     end
 
     // div end
-    logic `N(2*`XLEN+1) pa_o;
-    logic `N(`XLEN) q_pos, q_neg, q_neg_last;
-    logic en_o, we_o;
-    logic rem_o;
-    logic zero_o, ov_o;
-    logic `N(`XLEN) src1_o;
-    logic sext_o, ha_o;
-    ExStatusBundle status_o;
-    logic `N(`XLEN) r, q;
-    assign q_neg_last = pipe1_i.pa[2*`XLEN] ? pipe1_i.q_neg + 1 : pipe1_i.q_neg;
+    assign q_neg_last = pipe1_pa[2*`XLEN] ? pipe1_q_neg + 1 : pipe1_q_neg;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             ready <= 1'b1;
@@ -114,13 +115,13 @@ module DivUnit(
 
     always_ff @(posedge clk)begin
         div_end <= pipe0_cnt == 2;
-        if(pipe1_i.pa[2*`XLEN])begin
-            pa_o <= ((pipe1_i.pa + {pipe1_i.b, `XLEN'b0}) >> pipe1_i.lzc) & {2*`XLEN+1{~pipe1_i.ov}};
+        if(pipe1_pa[2*`XLEN])begin
+            pa_o <= ((pipe1_pa + {pipe1_b, `XLEN'b0}) >> pipe1_i.lzc) & {2*`XLEN+1{~pipe1_i.ov}};
         end
         else begin
-            pa_o <= (pipe1_i.pa >> pipe1_i.lzc) & {2*`XLEN+1{~pipe1_i.ov}};
+            pa_o <= (pipe1_pa >> pipe1_i.lzc) & {2*`XLEN+1{~pipe1_i.ov}};
         end
-        en_o <= pipe1_i.en & ~clean;
+        en_o <= pipe1_en & ~clean;
         status_o <= pipe1_i.status;
         rem_o <= pipe1_i.rem;
         zero_o <= pipe1_i.zero;
@@ -130,10 +131,10 @@ module DivUnit(
         ha_o <= pipe1_i.ha;
         if((pipe1_i.ha ^ pipe1_i.hb) & pipe1_i.sext)begin
             q_pos <= q_neg_last;
-            q_neg <= pipe1_i.q_pos;
+            q_neg <= pipe1_q_pos;
         end
         else begin
-            q_pos <= pipe1_i.q_pos;
+            q_pos <= pipe1_q_pos;
             q_neg <= q_neg_last;
         end
     end
@@ -154,14 +155,26 @@ endmodule
 
 module DivPipe #(
     parameter PIPE_NUM=4,
+    parameter WIDTH=32,
+    parameter DATA_WIDTH=1,
     parameter PIPE_START=0,
-    parameter PIPE_ALL_WIDTH=$clog2(`XLEN),
+    parameter PIPE_ALL_WIDTH=$clog2(WIDTH),
     parameter PIPE_WIDTH=$clog2(PIPE_NUM)
 )(
     input logic clk,
     input logic rst,
-    input DivPipeInfo info_i,
-    output DivPipeInfo info_o,
+    input logic `N(DATA_WIDTH) info_i,
+    output logic `N(DATA_WIDTH) info_o,
+    input logic en_i,
+    input logic `N(WIDTH*2+1) pa_i,
+    input logic `N(WIDTH) b_i,
+    input logic `N(WIDTH) q_pos_i,
+    input logic `N(WIDTH) q_neg_i,
+    output logic en_o,
+    output logic `N(WIDTH*2+1) pa_o,
+    output logic `N(WIDTH) b_o,
+    output logic `N(WIDTH) q_pos_o,
+    output logic `N(WIDTH) q_neg_o,
     output logic `N(PIPE_WIDTH+1) cnt_o,
     output logic ready,
     output logic clean,
@@ -170,26 +183,26 @@ module DivPipe #(
     logic `N(PIPE_WIDTH+1) cnt;
     logic `N(PIPE_ALL_WIDTH) cnt_global;
     logic sext, rem;
-    logic `N(`XLEN*2+1) pa, pa_n, pa_shift;
-    logic `N(`XLEN) b;
-    logic `N($clog2(`XLEN)) lzc;
-    logic `N(`XLEN*2+1) b_n1, b_n2, b_p1, b_p2;
-    logic `N(`XLEN) q_pos, q_neg, q_pos_n, q_neg_n;
-    logic `N(`XLEN) src1;
+    logic `N(WIDTH*2+1) pa, pa_n, pa_shift;
+    logic `N(WIDTH) b;
+    logic `N(WIDTH*2+1) b_n1, b_n2, b_p1, b_p2;
+    logic `N(WIDTH) q_pos, q_neg, q_pos_n, q_neg_n;
+    logic `N(WIDTH) src1;
+    logic `N(DATA_WIDTH) data;
     logic ha, hb, zero, ov;
-    ExStatusBundle status;
+    RobIdx robIdx;
     logic `N(3) q;
 
     qselect q_select(
-        .b(b[`XLEN-1: `XLEN-4]),
-        .p(pa[`XLEN*2: `XLEN*2-5]),
+        .b(b[WIDTH-1: WIDTH-4]),
+        .p(pa[WIDTH*2: WIDTH*2-5]),
         .q(q)
     );
 
     always_comb begin
         pa_shift = pa << 2;
-        b_n1 = {1'b0, b, `XLEN'b0};
-        b_n2 = {b, {`XLEN+1{1'b0}}};
+        b_n1 = {1'b0, b, {WIDTH{1'b0}}};
+        b_n2 = {b, {WIDTH+1{1'b0}}};
         b_p1 = ~b_n1 + 1;
         b_p2 = b_p1 << 1;
         case(q)
@@ -201,19 +214,19 @@ module DivPipe #(
         default: pa_n = pa_shift;
         endcase
         if(q == 3'b110)begin
-            q_neg_n = q_neg + (`XLEN'd2 << ({cnt_global, 1'b0}));
+            q_neg_n = q_neg + ('d2 << ({cnt_global, 1'b0}));
         end
         else if(q == 3'b111)begin
-            q_neg_n = q_neg + (`XLEN'd1 << ({cnt_global, 1'b0}));
+            q_neg_n = q_neg + ('d1 << ({cnt_global, 1'b0}));
         end
         else begin
             q_neg_n = q_neg;
         end
         if(q == 3'b001)begin
-            q_pos_n = q_pos + (`XLEN'd1 << ({cnt_global, 1'b0}));
+            q_pos_n = q_pos + ('d1 << ({cnt_global, 1'b0}));
         end
         else if(q == 3'b010)begin
-            q_pos_n = q_pos + (`XLEN'd2 << ({cnt_global, 1'b0}));
+            q_pos_n = q_pos + ('d2 << ({cnt_global, 1'b0}));
         end
         else begin
             q_pos_n = q_pos;
@@ -221,7 +234,7 @@ module DivPipe #(
     end
 
     logic bigger;
-    LoopCompare #(`ROB_WIDTH) cmp_bigger (backendCtrl.redirectIdx, status.robIdx, bigger);
+    LoopCompare #(`ROB_WIDTH) cmp_bigger (backendCtrl.redirectIdx, robIdx, bigger);
     assign clean = backendCtrl.redirect & bigger;
     assign ready = cnt == 0;
     assign cnt_o = cnt;
@@ -232,34 +245,24 @@ module DivPipe #(
             sext <= 0;
             pa <= 0;
             b <= 0;
-            ha <= 0;
-            hb <= 0;
-            status <= 0;
-            zero <= 0;
-            ov <= 0;
-            src1 <= 0;
-            rem <= 0;
+            data <= 0;
+            q_pos <= 0;
+            q_neg <= 0;
+            robIdx <= 0;
         end
         else begin
             if(clean & cnt != 0)begin
                 cnt <= 0;
             end
-            else if(info_i.en & ready)begin
+            else if(en_i & ready)begin
                 cnt <= PIPE_NUM ;
                 cnt_global <= PIPE_NUM + PIPE_START - 1;
-                sext <= info_i.sext;
-                rem <= info_i.rem;
-                pa <= info_i.pa;
-                b <= info_i.b;
-                ha <= info_i.ha;
-                hb <= info_i.hb;
-                status <= info_i.status;
-                lzc <= info_i.lzc;
-                q_pos <= info_i.q_pos;
-                q_neg <= info_i.q_neg;
-                zero <= info_i.zero;
-                ov <= info_i.ov;
-                src1 <= info_i.src1;
+                data <= info_i;
+                pa <= pa_i;
+                b <= b_i;
+                q_pos <= q_pos_i;
+                q_neg <= q_neg_i;
+                robIdx <= info_i[$bits(RobIdx)-1: 0];
             end
             else if(cnt != 0)begin
                 cnt <= cnt - 1;
@@ -271,24 +274,14 @@ module DivPipe #(
         end
     end
 
-    logic en_o;
     always_ff @(posedge clk)begin
         en_o <= cnt == 1 & ~clean;
     end
-    assign info_o.en = en_o;
-    assign info_o.sext = sext;
-    assign info_o.rem = rem;
-    assign info_o.pa = pa;
-    assign info_o.b = b;
-    assign info_o.q_pos = q_pos;
-    assign info_o.q_neg = q_neg;
-    assign info_o.ha = ha;
-    assign info_o.hb = hb;
-    assign info_o.status = status;
-    assign info_o.lzc = lzc;
-    assign info_o.zero = zero;
-    assign info_o.ov = ov;
-    assign info_o.src1 = src1;
+    assign info_o = data;
+    assign pa_o = pa;
+    assign b_o = b;
+    assign q_pos_o = q_pos;
+    assign q_neg_o = q_neg;
 endmodule
 
 module qselect (
@@ -326,14 +319,14 @@ module qselect (
     wire p_ge_neg3 = p >= -3;
     wire p_ge_neg2 = p >= -2;
 
-    wire p_ge_1 = (|p) & ~p[5];
-    wire p_ge_2 = p >= 2;
-    wire p_ge_3 = p >= 3;
-    wire p_ge_4 = p >= 4;
-    wire p_ge_5 = p >= 5;
+    wire p_ge_1 = (|p[4: 0]) & ~p[5];
+    wire p_ge_2 = (|p[4: 1]) & ~p[5];
+    wire p_ge_3 = ((|p[4: 2]) | p[1] & p[0]) & ~p[5];
+    wire p_ge_4 = (|p[4: 2]) & ~p[5];
+    wire p_ge_5 = ((|p[4: 2]) & ~(p[2] & ~p[1] & ~p[0])) & ~p[5];
     wire p_ge_6 = p >= 6;
-    wire p_ge_7 = p >= 7;
-    wire p_ge_8 = p >= 8;
+    wire p_ge_7 = ((|p[4: 3]) | p[2] & p[1] & p[0]) & ~p[5];
+    wire p_ge_8 = (|p[4: 3]) & ~p[5];
     wire p_ge_9 = p >= 9;
 
     wire p_ge_10 = p >= 10;
@@ -342,7 +335,7 @@ module qselect (
     wire p_ge_13 = p >= 13;
     wire p_ge_14 = p >= 14;
     wire p_ge_15 = p >= 15;
-    wire p_ge_16 = p >= 16;
+    wire p_ge_16 = p[4] & ~p[5];
     wire p_ge_17 = p >= 17;
     wire p_ge_18 = p >= 18;
     wire p_ge_19 = p >= 19;

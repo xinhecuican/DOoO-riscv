@@ -9,8 +9,8 @@ module FMAIssueQueue (
     input WakeupBus fp_wakeupBus,
     input BackendCtrl backendCtrl
 );
-    localparam BANK_SIZE = `FMISC_ISSUE_SIZE / `FMISC_SIZE;
-    localparam BANK_NUM = `FMISC_SIZE;
+    localparam BANK_SIZE = `FMA_ISSUE_SIZE / `FMA_SIZE;
+    localparam BANK_NUM = `FMA_SIZE;
     logic `N(BANK_NUM) full, enNext, reg_en;
     logic `N(BANK_NUM) bigger;
     IssueBankIO #($bits(FMAIssueBundle), 3, BANK_SIZE, 3) bank_io[BANK_NUM-1: 0]();
@@ -50,7 +50,7 @@ generate
         assign bank_io[i].type_ready[2] = 1'b1;
         assign full[i] = bank_io[i].full;
         assign reg_en[i] = bank_io[i].reg_en;
-        assign bank_io[i].ready = 1'b1;
+        assign bank_io[i].ready = fma_reg_io.ready[i];
 
         assign fma_reg_io.en[i] = bank_io[i].reg_en;
         assign fma_reg_io.preg[i] = bank_io[i].src[0];

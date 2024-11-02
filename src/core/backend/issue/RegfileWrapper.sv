@@ -17,6 +17,7 @@ module RegfileWrapper(
     input WriteBackBus fp_wbBus,
     IssueRegIO.regfile fmisc_reg_io,
     IssueRegIO.regfile fma_reg_io,
+    IssueRegIO.regfile fdiv_reg_io,
 `endif
     input WriteBackBus int_wbBus
 `ifdef DIFFTEST
@@ -215,15 +216,34 @@ endgenerate
 
     logic `N(`FMA_SIZE) fma_en;
     logic `ARRAY(`FMA_SIZE * 3, `PREG_WIDTH) fma_src;
-    always_ff @(posedge clk)begin
-        fma_en <= fma_reg_io.en;
-        fma_src <= fma_reg_io.preg;
+generate
+    for(genvar i=0; i<`FMA_SIZE; i++)begin
+        if(i == 0)begin
+            always_ff @(posedge clk)begin
+                fma_en[i] <= fma_reg_io.en[i] | fdiv_reg_io.en[0];
+                fma_src[i] <= fma_reg_io.en[i] ? fma_reg_io.preg[i] : fdiv_reg_io.preg[0];
+                fma_src[`FMA_SIZE+i] <= fma_reg_io.en[i] ? fma_reg_io.preg[`FMA_SIZE+i] : fdiv_reg_io.preg[1];
+                fma_src[`FMA_SIZE*2+i] <= fma_reg_io.preg[`FMA_SIZE*2+i];
+            end
+        end
+        else begin
+            always_ff @(posedge clk)begin
+                fma_en[i] <= fma_reg_io.en[i];
+                fma_src[i] <= fma_reg_io.preg[i];
+                fma_src[`FMA_SIZE+i] <= fma_reg_io.preg[`FMA_SIZE+i];
+                fma_src[`FMA_SIZE*2+i] <= fma_reg_io.preg[`FMA_SIZE*2+i];
+            end
+        end
     end
+endgenerate
     localparam FMA_BASE = `FMISC_SIZE*2;
     assign fp_en[FMA_BASE +: `FMA_SIZE*3] = {3{fma_en}};
     assign fp_raddr[FMA_BASE +: `FMA_SIZE*3] = fma_src;
     assign fma_reg_io.ready = {`FMA_SIZE{1'b1}};
     assign fma_reg_io.data = fp_rdata[FMA_BASE +: `FMA_SIZE * 3];
+    assign fdiv_reg_io.ready[0] = ~fma_reg_io.en[0];
+    assign fdiv_reg_io.data[0] = fp_rdata[FMA_BASE];
+    assign fdiv_reg_io.data[1] = fp_rdata[FMA_BASE+`FMA_SIZE];
     
 generate
     for(genvar i=0; i<`FP_WB_SIZE; i++)begin
