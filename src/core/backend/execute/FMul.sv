@@ -1,5 +1,6 @@
 `include "../../../defines/defines.svh"
 `include "../../../defines/fp_defines.svh"
+`include "../../../defines/mult_define.svh"
 
 module FMul #(
     parameter fp_format_e fp_fmt = 0
@@ -40,38 +41,48 @@ module FMul #(
     assign exp_nz_a = |fp_a.exp;
     assign exp_nz_b = |fp_b.exp;
 
-    logic `N(MAN_BITS+1) raw_mant_a, raw_mant_b;
+    logic `N(MAN_BITS+1) raw_mant_a, raw_mant_b, denormal_mant;
+    logic `N(MAN_BITS+1) shift_mant_a, shift_mant_b;
     logic `N(EXP_BITS) raw_exp_a, raw_exp_b;
+    logic `N(EXP_BITS+1) raw_exp_pre;
+    logic `N($clog2(MAN_BITS+1)) lzc_cnt;
     assign raw_exp_a = fp_a.exp | {{EXP_BITS-1{1'b0}}, ~exp_nz_a};
     assign raw_exp_b = fp_b.exp | {{EXP_BITS-1{1'b0}}, ~exp_nz_b};
+    assign raw_exp_pre = raw_exp_a + raw_exp_b;
     assign raw_mant_a = {exp_nz_a, fp_a.mant};
     assign raw_mant_b = {exp_nz_b, fp_b.mant};
+    assign denormal_mant = ~exp_nz_a ? raw_mant_a : raw_mant_b;
+    lzc #(MAN_BITS+1, 1) lzc_inst (denormal_mant, lzc_cnt, );
+    assign shift_mant_a = ~exp_nz_a ? raw_mant_a << lzc_cnt : raw_mant_a;
+    assign shift_mant_b = ~exp_nz_b ? raw_mant_b << lzc_cnt : raw_mant_b;
 
     logic `N(EXP_BITS+1) raw_exp;
     logic `N(MAN_BITS*2+2) raw_mant;
     logic sign;
     always_ff @(posedge clk)begin
-        raw_exp <= raw_exp_a + raw_exp_b;
+        raw_exp <= raw_exp_pre > lzc_cnt ? raw_exp_pre - lzc_cnt : 0;
         sign <= fp_a.sign ^ fp_b.sign ^ sub;
     end
 
     logic `N(EXP_BITS) shr_cnt, shr_cnt_mod;
     logic `N(EXP_BITS+1) raw_exp_n;
-    logic sign_n;
+    logic sign_n, need_shr, exp_z;
     always_ff @(posedge clk)begin
-        shr_cnt <= BIAS_SIZE > raw_exp ? BIAS_SIZE - raw_exp : 0;
+        shr_cnt <= BIAS_SIZE >= raw_exp ? BIAS_SIZE + 1 - raw_exp : 0;
+        need_shr <= BIAS_SIZE >= raw_exp;
+        exp_z <= raw_exp == BIAS_SIZE;
         raw_exp_n <= raw_exp;
         sign_n <= sign;
     end
 
-    FMantMul #(MAN_BITS+1) mul (clk, raw_mant_a, raw_mant_b, raw_mant);
+    FMantMul #(MAN_BITS+1) mul (clk, shift_mant_a, shift_mant_b, raw_mant);
 
     logic `N(EXP_BITS+1) shift_exp, shift_exp_normal;
-    logic `N(MAN_BITS*2) shift_mant;
+    logic `N(MAN_BITS*2+2) shift_mant;
     assign shift_exp = raw_exp_n + raw_mant[MAN_BITS*2+1];
     assign shift_exp_normal = shift_exp < BIAS_SIZE ? 0 : raw_exp - BIAS_SIZE;
-    assign shr_cnt_mod = shr_cnt + raw_mant[MAN_BITS*2+1];
-    assign shift_mant = raw_mant[MAN_BITS*2-1: 0] >> shr_cnt_mod; 
+    assign shr_cnt_mod = shr_cnt + (~need_shr & raw_mant[MAN_BITS*2+1]);
+    assign shift_mant = raw_mant >> shr_cnt_mod; 
 
     logic sticky;
     logic `N(MAN_BITS*2) sticky_mask;
@@ -80,7 +91,7 @@ module FMul #(
     assign sticky_mask = {sticky_shift_mask, {MAN_BITS{1'b1}}};
     assign sticky = |(raw_mant & sticky_mask);
 
-    logic `N(MAN_BITS) round_out;
+    logic `N(MAN_BITS) round_out, round_mant;
     logic round_ix, round_cout, round_up;
     logic `N(EXP_BITS+1) round_exp;
     logic `N(EXP_BITS) round_exp_o;
@@ -97,11 +108,18 @@ module FMul #(
         round_up
     );
     assign round_exp = shift_exp + round_cout;
-    assign round_exp_o = round_exp - BIAS_SIZE;
+    assign round_exp_o = round_exp < BIAS_SIZE ? 0 : 
+        round_exp > BIAS_SIZE + (1 << EXP_BITS) - 2 ? {EXP_BITS{1'b1}} : round_exp - BIAS_SIZE;
+    // if ov, return inf
+    assign round_mant = {MAN_BITS{~(round_exp > BIAS_SIZE + (1 << EXP_BITS) - 2)}} & round_out;
 
     logic of, uf;
-    assign normal_status.OF = round_exp >= BIAS_SIZE + (1 << EXP_BITS);
-    assign normal_status.UF = round_exp < BIAS_SIZE;
+    assign normal_status.NV = 0;
+    assign normal_status.DZ = 0;
+    assign normal_status.OF = round_exp > BIAS_SIZE + (1 << EXP_BITS) - 2;
+    assign normal_status.UF = round_ix & ((round_exp < BIAS_SIZE) |
+                ((round_exp == BIAS_SIZE) & ~shift_mant[MAN_BITS*2+1] & ~shift_mant[MAN_BITS*2] & 
+                ~(shift_mant[MAN_BITS*2-1] & round_cout)));
     assign normal_status.NX = round_ix;
 
     // ----------------------
@@ -120,19 +138,20 @@ module FMul #(
         if((info_a.is_inf && info_b.is_zero) || (info_a.is_zero && info_b.is_inf))begin
             result_is_special = 1'b1;
             special_status.NV = 1'b1;
-        end else if(info_a.is_zero | info_b.is_zero) begin
-            result_is_special = 1'b1;
-            special_result = '{sign: fp_a.sign ^ fp_b.sign ^ sub, exp: 0, mant: 0};
         end else if (info_a.is_nan | info_b.is_nan) begin
             result_is_special = 1'b1;
             special_status.NV = info_a.is_signalling | info_b.is_signalling;
         end else if (info_a.is_inf | info_b.is_inf) begin
             result_is_special = 1'b1;
-            if(info_a.is_inf & info_b.is_inf & (fp_a.sign ^ fp_b.sign ^ sub))
-                special_status.NV = 1'b1;
-            else if (info_b.is_inf) begin
-                special_result    = '{sign: fp_b.sign, exp: '1, mant: '0};
-            end
+            special_result    = '{sign: fp_a.sign ^ fp_b.sign ^ sub, exp: '1, mant: '0};
+        end else if(info_a.is_zero | info_b.is_zero) begin
+            result_is_special = 1'b1;
+            special_result = '{sign: fp_a.sign ^ fp_b.sign ^ sub, exp: 0, mant: 0};
+        end else if(~exp_nz_a & ~exp_nz_b)begin
+            result_is_special = 1'b1;
+            special_result = '{sign: fp_a.sign ^ fp_b.sign ^ sub, exp: 0, mant: 0};
+            special_status.NX = 1'b1;
+            special_status.UF = 1'b1;
         end
     end
 
@@ -151,7 +170,7 @@ module FMul #(
         mulInfo <= info_s2;
     end
 
-    assign res = result_special_o ? special_result_o : {sign_n, round_exp_o, round_out};
+    assign res = result_special_o ? special_result_o : {sign_n, round_exp_o, round_mant};
     assign status = result_special_o ? special_status_o : normal_status;
 
 endmodule

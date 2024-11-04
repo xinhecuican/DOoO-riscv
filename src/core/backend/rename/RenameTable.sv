@@ -29,12 +29,8 @@ module RenameTable #(
 `endif
 );
 
-    RATIO #(`FETCH_WIDTH, `WB_SIZE) rs1_io();
-    RATIO #(`FETCH_WIDTH, `WB_SIZE) rs2_io();
     RATIO #(`FETCH_WIDTH, `WB_SIZE) rd_io();
     RATIO #(`COMMIT_WIDTH, `COMMIT_WIDTH) commit_io();
-    RAT #(`FETCH_WIDTH, `WB_SIZE) rs1_rat(.*, .rat_io(rs1_io));
-    RAT #(`FETCH_WIDTH, `WB_SIZE) rs2_rat(.*, .rat_io(rs2_io));
     RAT #(`FETCH_WIDTH, `WB_SIZE) rd_rat(.*, .rat_io(rd_io));
     RAT #(`FETCH_WIDTH, `COMMIT_WIDTH) commit_rat(.*, .rat_io(commit_io));
 
@@ -61,11 +57,11 @@ endgenerate
     
 generate
     if(FPV)begin
-        assign commit_we = commitBus.en & commitBus.fp_we;
+        assign commit_we = commitBus.en & commitBus.fp_we & ~commitBus.excValid;
         assign walk_we = commitWalk.en & commitWalk.fp_we;
     end
     else begin
-        assign commit_we = commitBus.en & commitBus.we & ~commitBus.fp_we;
+        assign commit_we = commitBus.en & commitBus.we & ~commitBus.fp_we & ~commitBus.excValid;
         assign walk_we = commitWalk.en & commitWalk.we & ~commitWalk.fp_we;
     end
 endgenerate

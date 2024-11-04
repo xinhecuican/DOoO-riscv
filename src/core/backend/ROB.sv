@@ -91,6 +91,7 @@ module ROB(
     logic `N(`ROB_WIDTH + 1) walk_remainCount_n, ext_tail, walk_remain_count;
     logic `N(`FETCH_WIDTH) walk_en;
     logic `N($clog2(`COMMIT_WIDTH)+1) walk_num, walk_normal_num, redirect_num;
+    logic skip_current, walk_skip;
 
     logic exc_exist_n;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx_n;
@@ -302,6 +303,7 @@ generate
             end
             commitBus.num <= commitNum;
             commit_en_n <= commit_en;
+            commitBus.excValid <= excValid;
         end
         else begin
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
@@ -309,6 +311,7 @@ generate
             end
             commitBus.num <= 0;
             commit_en_n <= 0;
+            commitBus.excValid <= 0;
         end
         if(initReady[0])begin
             commitBus.loadNum <= commitLoadNum;
@@ -351,12 +354,12 @@ endgenerate
 // idx maintain
     always_comb begin
         if(walk_state)begin
-            addNum = 0;
+            addNum = walk_skip;
             subNum = walk_num;
-            head_n = head;
+            head_n = head - addNum;
             tail_n = tail - subNum;
-            remainCount_n = remainCount + subNum;
-            validCount_n = validCount - subNum;
+            remainCount_n = remainCount + subNum - addNum;
+            validCount_n = validCount - subNum + addNum;
         end
         else begin
             addNum = {ROB_ADD_WIDTH{~exc_exist_n}} & commitNum;
@@ -395,7 +398,8 @@ endgenerate
                 tdir <= ~tdir;
             end
             head <= head_n;
-            if(head[`ROB_WIDTH-1] & ~head_n[`ROB_WIDTH-1])begin
+            if(~walk_state & head[`ROB_WIDTH-1] & ~head_n[`ROB_WIDTH-1] |
+               walk_state & head_n[`ROB_WIDTH-1] & ~head[`ROB_WIDTH-1])begin
                 hdir <= ~hdir;
             end
             for(int i=0; i<`WB_SIZE; i++)begin
@@ -432,13 +436,15 @@ endgenerate
     end
 
     // walk
+    // 异常指令需要提交但是不能对寄存器堆产生影响
+    assign skip_current = ~exc_exist_n;
     assign ext_tail = {tdir ^ backendRedirect.robIdx.dir, tail};
-    assign walk_remainCount_n = ext_tail - backendRedirect.robIdx.idx - 1;
+    assign walk_remainCount_n = ext_tail - backendRedirect.robIdx.idx - skip_current;
     assign walk_remain_count = backendRedirect.en ? walk_remainCount_n : walkInfo.remainCount;
     assign redirect_num = (|walk_remainCount_n[`ROB_WIDTH: $clog2(`COMMIT_WIDTH)]) ? `COMMIT_WIDTH : walk_remainCount_n;
     assign walk_normal_num =  (|walkInfo.remainCount[`ROB_WIDTH: $clog2(`COMMIT_WIDTH)]) ? `COMMIT_WIDTH : walkInfo.remainCount;
     assign walk_num = backendRedirect.en ? redirect_num : walk_normal_num;
-    assign walk_en = backendRedirect.en ? (1 << redirect_num) - 1 : (1 << subNum) - 1;
+    assign walk_en = backendRedirect.en ? (1 << redirect_num) - 1 : (1 << walk_normal_num) - 1;
     // TODO: dataWIdx改为rw port，walk使用widx，从而walk和commit同时进行
     logic `N(`COMMIT_WIDTH) commit_walk_en;
     logic walk;
@@ -456,6 +462,7 @@ endgenerate
             walk <= 1'b0;
             commit_walk_num <= 0;
             walk_start <= 0;
+            walk_skip <= 0;
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 dataRIdx[i] <= i;
             end
@@ -472,6 +479,7 @@ endgenerate
                     commit_walk_num <= 0;
                 end
                 walk_start <= 1'b0;
+                walk_skip <= 1'b0;
                 commit_walk_en <= walk_en;
                 commit_walk_num <= walk_num;
                 walkInfo.remainCount <= walk_remain_count - walk_num;
@@ -481,6 +489,7 @@ endgenerate
                 walkInfo.remainCount <= walk_remainCount_n;
                 walk <= 1'b1;
                 walk_start <= 1'b1;
+                walk_skip <= ~skip_current;
             end
 
             if(walk_state && walk_remain_count == 0)begin
@@ -506,7 +515,7 @@ endgenerate
 
             if(backendRedirect.en)begin
                 for(int i=0; i<`FETCH_WIDTH; i++)begin
-                    dataWIdx[i] <= backendRedirect.robIdx.idx + i + 1;
+                    dataWIdx[i] <= backendRedirect.robIdx.idx + i + skip_current;
                 end
             end
             else begin

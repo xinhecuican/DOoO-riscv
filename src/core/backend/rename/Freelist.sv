@@ -34,11 +34,11 @@ module Freelist #(
 
 generate
     if(FPV)begin
-        assign we = commitBus.en & commitBus.fp_we;
+        assign we = commitBus.en & commitBus.fp_we & ~commitBus.excValid;
         assign walk_we = commitWalk.en & commitWalk.fp_we;
     end
     else begin
-        assign we = commitBus.en & commitBus.we & ~commitBus.fp_we;
+        assign we = commitBus.en & commitBus.we & ~commitBus.fp_we & ~commitBus.excValid;
         assign walk_we = commitWalk.en & commitWalk.we & ~commitWalk.fp_we;
     end
 endgenerate

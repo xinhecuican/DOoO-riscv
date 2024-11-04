@@ -235,6 +235,7 @@ endgenerate
     RobIdx lq_vio_robIdx;
     FsqIdxInfo lq_vio_fsqInfo;
     logic `N(`LOAD_QUEUE_SIZE) head_mask;
+    logic vio_bigger;
     
     MaskGen #(`LOAD_QUEUE_SIZE) decoder_head (head, head_mask);
 generate
@@ -247,12 +248,14 @@ generate
         assign mask_vec_all[i] = ~({`LOAD_QUEUE_SIZE{span}} ^ (head_mask ^ store_mask));
     end
 endgenerate
+    `UNPARAM(STORE_PIPELINE, 2, "store violation")
+    LoopCompare #(`ROB_WIDTH) cmp_vio_robIdx (vio_robIdx[1], vio_robIdx[0], vio_bigger);
     always_ff @(posedge clk)begin
         lq_violation_en <= |vio_en;
-        lq_violation_idx <= vio_en[1] ? vio_idx[1] : vio_idx[0];
-        lq_vio_dir <= vio_en[1] ? vio_dir[1] : vio_dir[0];
-        lq_vio_robIdx <= vio_en[1] ? vio_robIdx[1] : vio_robIdx[0];
-        lq_vio_fsqInfo <= vio_en[1] ? vio_fsqInfo[1] : vio_fsqInfo[0];
+        lq_violation_idx <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_idx[1] : vio_idx[0];
+        lq_vio_dir <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_dir[1] : vio_dir[0];
+        lq_vio_robIdx <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_robIdx[1] : vio_robIdx[0];
+        lq_vio_fsqInfo <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_fsqInfo[1] : vio_fsqInfo[0];
     end
     assign io.lq_violation.en = lq_violation_en;
     assign io.lq_violation.addr = 0;

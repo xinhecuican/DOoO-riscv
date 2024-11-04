@@ -417,7 +417,7 @@ endgenerate                                                             \
     assign csr_wb_io.datas[0].exccode = ((csrrw | csrrs | csrrc) & (~mode_valid | (~((|cmp_eq) | pmp_cmp)))) |
                                         (wen[satp_id] & mstatus.tvm)
 `ifdef RVF
-                                        | (wen[fcsr_id] & ~(|mstatus.fs)) 
+            | ((csrrw | csrrs | csrrc) & (cmp_eq[fcsr_id] | cmp_eq[fflags_id] | cmp_eq[frm_id]) & ~(|mstatus.fs)) 
 `endif
                                         ? `EXC_II :
                                         issue_csr_io.bundle.exc_valid ? issue_csr_io.bundle.exccode : `EXC_NONE;

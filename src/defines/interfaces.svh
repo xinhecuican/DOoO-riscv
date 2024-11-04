@@ -417,6 +417,7 @@ interface CommitBus;
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
     logic `N(`COMMIT_WIDTH) fp_we;
+    logic `N(`COMMIT_WIDTH) excValid;
     logic fence_valid;
     FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
     logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
@@ -427,8 +428,8 @@ interface CommitBus;
     logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
     RobIdx robIdx;
 
-    modport rob(output en, we, fence_valid, fsqInfo, vrd, prd, num, loadNum, storeNum, robIdx, output fp_we);
-    modport in(input en, we, fsqInfo, vrd, prd, num, input fp_we);
+    modport rob(output en, we, excValid, fence_valid, fsqInfo, vrd, prd, num, loadNum, storeNum, robIdx, output fp_we);
+    modport in(input en, we, excValid, fsqInfo, vrd, prd, num, input fp_we);
     modport mem(input loadNum, storeNum, robIdx);
     modport csr(input robIdx, fsqInfo, fence_valid, en);
 endinterface

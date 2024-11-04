@@ -166,31 +166,3 @@ module I2F #(
     assign status.NV = round_ix;
     assign dest = fp;
 endmodule
-
-module fp_rounding #(
-    parameter MAN_BITS=1
-)(
-    input logic `N(MAN_BITS) in,
-    input logic round,
-    input logic sticky,
-    input logic sign,
-    input roundmode_e round_mode,
-    output logic `N(MAN_BITS) out,
-    output logic inexact,
-    output logic cout,
-    output logic r_up
-);
-    assign inexact = sticky | round;
-    always_comb begin
-        case(round_mode)
-        RNE: r_up = round & sticky | (round & ~sticky & in[0]);
-        RUP: r_up = inexact & ~sign;
-        RDN: r_up = inexact & sign;
-        RMM: r_up = round;
-        default: r_up = 0;
-        endcase
-    end
-
-    assign out = r_up ? in + 1 : in;
-    assign cout = r_up & (&(in));
-endmodule
