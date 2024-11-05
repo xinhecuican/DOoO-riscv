@@ -12,6 +12,7 @@ module FMAIssueQueue (
     localparam BANK_SIZE = `FMA_ISSUE_SIZE / `FMA_SIZE;
     localparam BANK_NUM = `FMA_SIZE;
     logic `N(BANK_NUM) full, enNext, reg_en;
+    logic `ARRAY(BANK_NUM, 3) type_o;
     logic `N(BANK_NUM) bigger;
     IssueBankIO #($bits(FMAIssueBundle), 3, BANK_SIZE, 3) bank_io[BANK_NUM-1: 0]();
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) order;
@@ -44,7 +45,7 @@ generate
         assign bank_io[i].status = dis_fma_io.status[order[i]];
         assign bank_io[i].data = dis_fma_io.data[order[i]];
         assign bank_io[i].ready = ~fma_reg_io.ready[i];
-        assign bank_io[i].type_ready[0] = ~(enNext[i] & bank_io[i].type_o[1] | 
+        assign bank_io[i].type_ready[0] = ~(enNext[i] & type_o[i][1] | 
                                           bank_en_s4[i] & madd_s4[i]);
         assign bank_io[i].type_ready[1] = ~(issue_fma_io.en[i] & madd_s3[i]);
         assign bank_io[i].type_ready[2] = 1'b1;
@@ -69,9 +70,10 @@ generate
             issue_fma_io.en[i] <= enNext[i] & (~backendCtrl.redirect | bigger[i]);
             issue_fma_io.status[i] <= bank_io[i].status_o;
             issue_fma_io.bundle[i] <= bank_io[i].data_o;
-            madd_s3[i] <= bank_io[i].type_o[2];
+            madd_s3[i] <= type_o[i][2];
             madd_s4[i] <= madd_s3[i];
             bank_en_s4[i] <= issue_fma_io.en[i];
+            type_o[i] <= bank_io[i].type_o;
         end
     end
 endgenerate

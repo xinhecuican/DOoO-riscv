@@ -88,13 +88,13 @@ module FMASlice (
         mul_sub_s2 <= fltop == `FLT_NMADD || fltop == `FLT_MSUB;
         mul_sub_s3 <= mul_sub_s2;
         mul_sub_s4 <= mul_sub_s3;
-        madd_en_s2 <= en & ~redirect_s1 & (fltop == `FLT_MADD) | (fltop == `FLT_MSUB) | (fltop == `FLT_NMSUB) |
+        madd_en_s2 <= en & ~(backendCtrl.redirect & redirect_s1) & (fltop == `FLT_MADD) | (fltop == `FLT_MSUB) | (fltop == `FLT_NMSUB) |
                     (fltop == `FLT_NMADD);
-        madd_en_s3 <= madd_en_s2 & ~redirect_s2;
-        madd_en_s4 <= madd_en_s3 & ~redirect_s3;
-        mul_en_s2 <= en & ~redirect_s1 & (fltop == `FLT_MUL);
-        mul_en_s3 <= mul_en_s2 & ~redirect_s2;
-        add_en_s2 <= madd_en_s4 & ~redirect_s4 | (en & ~mul_en_s2 & ~redirect_s1 & (fltop == `FLT_ADD) | (fltop == `FLT_SUB));
+        madd_en_s3 <= madd_en_s2 & ~(backendCtrl.redirect & redirect_s2);
+        madd_en_s4 <= madd_en_s3 & ~(backendCtrl.redirect & redirect_s3);
+        mul_en_s2 <= en & ~(backendCtrl.redirect & redirect_s1) & (fltop == `FLT_MUL);
+        mul_en_s3 <= mul_en_s2 & ~(backendCtrl.redirect & redirect_s2);
+        add_en_s2 <= madd_en_s4 & ~(backendCtrl.redirect & redirect_s4) | (en & ~mul_en_s2 & ~(backendCtrl.redirect & redirect_s1) & (fltop == `FLT_ADD) | (fltop == `FLT_SUB));
         add_ex_status_s2 <= madd_en_s4 ? ex_status_s4 : ex_status;
 
         info_fma <= mulInfo;
@@ -147,9 +147,9 @@ module FMASlice (
     assign wakeup_rd = mul_en_s2 ? ex_status_s2.rd :
                        madd_en_s4 ? ex_status_s4.rd : ex_status.rd;
 
-    assign en_o = mul_en_s3 & ~redirect_s3 | add_en_s2 & ~add_redirect_s2;
-    assign res = mul_en_s3 & ~redirect_s3 ? mul_res : add_res;
-    assign ex_status_o = mul_en_s3 & ~redirect_s3 ? ex_status_s3 : add_ex_status_s2;
-    assign status = mul_en_s3 & ~redirect_s3 ? mul_status : add_status;
+    assign en_o = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) | add_en_s2 & ~(backendCtrl.redirect & add_redirect_s2);
+    assign res = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? mul_res : add_res;
+    assign ex_status_o = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? ex_status_s3 : add_ex_status_s2;
+    assign status = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? mul_status : add_status;
 
 endmodule

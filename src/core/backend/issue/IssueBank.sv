@@ -123,13 +123,11 @@ generate
         logic `ARRAY(TYPE_SIZE, DEPTH) type_readys;
         for(genvar i=0; i<TYPE_SIZE; i++)begin
             assign type_readys[i] = {DEPTH{io.type_ready[i]}} & src_type[i];
+            assign io.type_o[i] = src_type[i][selectIdx];
         end
         ParallelOR #(DEPTH, TYPE_SIZE) or_type_ready (type_readys, type_ready);
 
         always_ff @(posedge clk)begin
-            for(int i=0; i<TYPE_SIZE; i++)begin
-                io.type_o[i] <= src_type[i][selectIdx];
-            end
             if(io.en)begin
                 for(int i=0; i<TYPE_SIZE; i++)begin
                     src_type[i][freeIdx] <= io.type_i[i];

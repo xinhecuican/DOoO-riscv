@@ -665,6 +665,7 @@ interface CachePTWIO;
 endinterface
 
 interface FenceBus;
+    logic valid;
     logic fence_end;
     logic store_flush;
     logic store_flush_end;
@@ -684,12 +685,12 @@ interface FenceBus;
     RobIdx preRobIdx;
     FsqIdxInfo fsqInfo;
 
-    modport csr (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, fence_end, robIdx, preRobIdx, fsqInfo, input store_flush_end, mmu_flush_end
+    modport csr (output valid, mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, fence_end, robIdx, preRobIdx, fsqInfo, input store_flush_end, mmu_flush_end
 `ifdef EXT_FENCEI
     , output inst_flush, input inst_flush_end
 `endif
     );
-    modport lsu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
+    modport lsu (input valid, mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
     modport rob (input fence_end);
     modport mmu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid);
     modport l2tlb (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, output mmu_flush_end);

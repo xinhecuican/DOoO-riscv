@@ -238,12 +238,14 @@ endgenerate
             fenceBus.robIdx <= 0;
             fenceBus.fsqInfo <= 0;
             fenceBus.mmu_flush <= 0;
+            fenceBus.valid <= 1'b0;
         end
         else begin
             if(commitBus.fence_valid)begin
                 fenceBus.preRobIdx <= preRobIdx;
                 fenceBus.robIdx <= commitBus.robIdx;
                 fenceBus.fsqInfo <= fence_fsqInfo;
+                fenceBus.valid <= 1'b1;
             end
             if(commitBus.fence_valid & (fence_type.sfence_vma | fence_type.fence
 `ifdef EXT_FENCEI
@@ -282,9 +284,12 @@ endgenerate
                                   (commitBus.fence_valid & fence_type.csr) |
                                   (fence & fenceBus.store_flush_end)
 `ifdef EXT_FENCEI
-                                  | (fenceBus.inst_flush_end & ~fenceBus.store_flush);
+                                  | (fenceBus.inst_flush_end & ~fenceBus.store_flush)
 `endif
-;
+                                ;
+            if(fenceBus.fence_end)begin
+                fenceBus.valid <= 1'b0;
+            end
         end
     end
     

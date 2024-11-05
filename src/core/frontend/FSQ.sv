@@ -409,7 +409,7 @@ endgenerate
                 wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {cr.en, rd.taken, rd.br_type, rd.ras_type, rd.target, fsq_back_io.redirect.fsqInfo.offset};
             end
             if(queue_we)begin
-                pred_error_en[tail] <= 1'b0;
+                pred_error_en[write_index] <= 1'b0;
             end
             if(fsq_back_io.redirect.en)begin
                 pred_error_en[fsq_back_io.redirect.fsqInfo.idx] <= rd.en | cr.en;
@@ -570,6 +570,49 @@ endgenerate
     end
     `Log(DLog::Debug, T_FSQ, bpu_fsq_io.update, $sformatf("update BP%4d. [%8h %4d]->%8h %8h %b", commit_head, logStream.start_addr, logStream.size, logStream.target, update_target_pc, logError))
     `Log(DLog::Debug, T_FSQ, bpu_fsq_io.squash, $sformatf("squash BP [%d %d].", redirect_idx, redirect_n))
+
+    logic `N(5) dbg_commit_idx, dbg_commit_head;
+    logic `ARRAY(32, `FSQ_WIDTH) dbg_fsq_idxs;
+    logic `ARRAY(`COMMIT_WIDTH, 5) dbg_commit_idxs;
+    logic `ARRAY(8, 5) dbg_commit_head_idxs;
+
+generate
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign dbg_commit_idxs[i] = dbg_commit_idx + i;
+    end
+    for(genvar i=0; i<8; i++)begin
+        assign dbg_commit_head_idxs[i] = dbg_commit_head + i;
+    end
+endgenerate
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            dbg_commit_idx <= 0;
+            dbg_fsq_idxs <= 0;
+            dbg_commit_head <= 0;
+        end
+        else begin
+            if(commitValid)begin
+                dbg_commit_head <= dbg_commit_head + streamCommitNum;
+            end
+            dbg_commit_idx <= dbg_commit_idx + commitBus.num;
+            for(int i=0; i<`COMMIT_WIDTH; i++)begin
+                if(i < commitBus.num)begin
+                    dbg_fsq_idxs[dbg_commit_idxs[i]] <= commitBus.fsqInfo[i].idx;
+                end
+            end
+        end
+    end
+
+    always_ff @(posedge clk)begin
+        if(commitValid)begin
+            for(int i=0; i<8; i++)begin
+                if((i < streamCommitNum) && commit_head != dbg_fsq_idxs[dbg_commit_head_idxs[i]])begin
+                    $display("[%16d] fsq commit[%d] error", DLog::cycleCnt, commit_head);
+                end
+            end
+        end
+    end
 `endif
 
 endmodule

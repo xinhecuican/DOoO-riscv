@@ -115,6 +115,7 @@ module LSU(
         .tlb_valid(tlb_lsu_io.amo_valid),
         .tlb_error(tlb_lsu_io.amo_error),
         .tlb_exception(tlb_lsu_io.amo_exception),
+        .fence_valid(fenceBus.valid),
         .amo_paddr(tlb_lsu_io.amo_paddr),
         .store_flush(amo_flush),
         .flush_end(amo_flush_end),
@@ -815,7 +816,7 @@ endgenerate
     assign redirect_io.memRedirect.robIdx.idx = fenceBus.fence_end ? fenceBus.preRobIdx.idx : robIdx_p;
     assign redirect_io.memRedirect.robIdx.dir = fenceBus.fence_end ? fenceBus.preRobIdx.dir : robIdx_p[`ROB_WIDTH-1] & ~out.robIdx.idx[`ROB_WIDTH-1] ? ~out.robIdx.dir : out.robIdx.dir;
     assign redirect_io.memRedirect.fsqInfo = fenceBus.fence_end ? fenceBus.fsqInfo : out.fsqInfo;
-    assign redirect_io.memRedirectIdx = fenceBus.fence_end ? fenceBus.robIdx : out.robIdx;
+    assign redirect_io.memRedirectIdx = fenceBus.fence_end ? fenceBus.preRobIdx : out.robIdx;
 endmodule
 
 module ViolationCompare(

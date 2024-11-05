@@ -18,6 +18,7 @@ module AmoQueue(
     input logic tlb_exception,
     input logic `N(`PADDR_SIZE) amo_paddr,
 
+    input logic fence_valid,
     output logic store_flush,
     input logic flush_end,
 
@@ -119,7 +120,10 @@ module AmoQueue(
                 if(waiting_data)begin
                     datav <= 1'b1;
                 end
-                if(datav)begin
+                if(backendCtrl.redirect & redirect_older)begin
+                    state <= IDLE;
+                end
+                else if(datav & ~fence_valid)begin
                     if(misalign_pre)begin
                         misalign <= 1'b1;
                         state <= WB;
@@ -131,9 +135,6 @@ module AmoQueue(
                         tlb_ready <= 1'b0;
                         flush_ready <= 1'b0;
                     end
-                end
-                else if(backendCtrl.redirect & redirect_older)begin
-                    state <= IDLE;
                 end
             end
             TLB_REQ: begin

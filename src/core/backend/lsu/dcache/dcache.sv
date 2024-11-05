@@ -300,7 +300,7 @@ endgenerate
         // write_invalid <= miss_req_n && (waddr_n`DCACHE_BLOCK_BUS == waddr`DCACHE_BLOCK_BUS);
     end
 `ifdef RVA
-    assign cache_wreq = wreq_n | amo_req_n;
+    assign cache_wreq = wreq_n & whit | amo_req_n;
     assign cache_wway = amo_req_n ? amo_wway : w_wayhit;
 `else
     assign cache_wreq = wreq_n & whit;

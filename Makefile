@@ -38,7 +38,7 @@ ifeq ($(WITH_DRAMSIM3),1)
 endif
 ifeq ($(EMU_TRACE), 1)
 	export EMU_TRACE
-	TRACE_ARGS = --dump-wave
+	TRACE_ARGS = --dump-wave --enable-fork
 endif
 ifeq ($(ENABLE_DIFF), 1)
 	DIFF_ARGS := --diff=utils/NEMU/build/riscv64-nemu-interpreter-so
@@ -54,7 +54,7 @@ emu:
 
 emu-run: emu
 	mkdir -p $(LOG_PATH)
-	build/emu -i "${I}" ${DIFF_ARGS} -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH} --enable-fork > ${LOG_PATH}log.txt
+	build/emu -i "${I}" ${DIFF_ARGS} -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH}
 
 convert: build/${TOP}/${TOP}.v
 build/${TOP}/${TOP}.v: ${SRC}
