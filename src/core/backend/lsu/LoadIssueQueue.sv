@@ -249,7 +249,7 @@ endgenerate
 
             for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
                 issue[i] <= ((issue[i] & ~(backendCtrl.redirect & tlbmiss[i])) |
-                            (((|ready) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
+                            (((ready[i]) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
                             ~(io.reply_fast.en & (io.reply_fast.reason != 2'b11) & replyfast_decode[i]) &
                             ~(io.reply_slow.en & replyslow_decode[i]) &
                             ~(io.tlb_en & tlbbank_decode[i]) &

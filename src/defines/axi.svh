@@ -472,7 +472,7 @@ typedef struct packed {
     assign lhs.ar_valid = rhs.ar_valid; \
     assign rhs.ar_ready = lhs.ar_ready; \
     assign rhs.r_valid = lhs.r_valid; \
-    assign rhs.r_ready = lhs.r_ready;
+    assign lhs.r_ready = rhs.r_ready;
 `define AXI_ASSIGN_W_REQ(lhs, rhs) \
     `__AXI_TO_AW(assign, lhs.aw, _, rhs.aw, _) \
     `__AXI_TO_W(assign, lhs.w, _, rhs.w, _) \

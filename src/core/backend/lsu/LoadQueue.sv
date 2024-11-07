@@ -55,6 +55,7 @@ module LoadQueue(
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) bank_tail;
     logic bank_tail_equal, bank_tail_dir;
     logic `N(`LOAD_PIPELINE) uncache_arvalid;
+    logic `ARRAY(`LOAD_PIPELINE, 2) uncache_arsize;
     logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) uncache_addr;
     logic `N(`STORE_PIPELINE) overflow;
     logic `ARRAY(`STORE_PIPELINE, `LOAD_QUEUE_SIZE) mask_vec_all;
@@ -128,6 +129,7 @@ generate
             .tail_full(bank_tail_full[i]),
             .tail(bank_tail_idx[i]),
             .uncache_arvalid(uncache_arvalid[i]),
+            .uncache_arsize(uncache_arsize[i]),
             .uncache_addr(uncache_addr[i]),
             .uncache_arready(laxi_io.ar_ready),
             .uncache_rdata(laxi_io.r_data),
@@ -207,16 +209,16 @@ endgenerate
 // uncache
     assign laxi_io.ar_id = 0;
     always_comb begin
-        case(uncache_arvalid)
-        2'b00: laxi_io.ar_addr = uncache_addr[0];
-        2'b01: laxi_io.ar_addr = uncache_addr[0];
-        2'b10: laxi_io.ar_addr = uncache_addr[1];
-        2'b11: laxi_io.ar_addr = uncache_addr[1];
-        default: laxi_io.ar_addr = uncache_addr[0];
-        endcase
+        if(uncache_arvalid[1])begin
+            laxi_io.ar_addr = uncache_addr[1];
+            laxi_io.ar_size = uncache_arsize[1];
+        end
+        else begin
+            laxi_io.ar_addr = uncache_addr[0];
+            laxi_io.ar_size = uncache_arsize[0];
+        end
     end
     assign laxi_io.ar_len = 0;
-    assign laxi_io.ar_size = $clog2(`DATA_BYTE);
     assign laxi_io.ar_burst = 0;
     assign laxi_io.ar_lock = 0;
     assign laxi_io.ar_cache = 0;
@@ -310,6 +312,7 @@ module LoadQueueBank #(
     output logic `N(BANK_WIDTH) tail,
 
     output logic uncache_arvalid,
+    output logic `N(2) uncache_arsize,
     output logic `N(`PADDR_SIZE) uncache_addr,
     input logic uncache_arready,
     input logic `N(`XLEN) uncache_rdata,
@@ -345,7 +348,7 @@ module LoadQueueBank #(
     logic `N($clog2(`COMMIT_WIDTH)) commitNum;
     logic `N(`LOAD_UNCACHE_WIDTH) uncache_idx_o;
     logic `N(`XLEN) uncache_wb_data;
-    logic uncache_wb_valid;
+    logic uncache_wb_valid, uncache_wb_valid_n;
 
     logic redirect_n;
     logic `N(BANK_SIZE) bigger, walk_en, validStart, validEnd;
@@ -399,7 +402,9 @@ module LoadQueueBank #(
     PEncoder #(BANK_SIZE) pencoder_wb_idx (waiting_wb, wbIdx_pre);
     assign wbIdx = uncache_wb_valid ? head : wbIdx_pre;
     assign writeData.we = data.we;
+`ifdef RVF
     assign writeData.frd_en = data.frd_en;
+`endif
     assign writeData.rd = data.rd;
     assign writeData.robIdx = data.robIdx;
     MPRAM #(
@@ -433,7 +438,7 @@ module LoadQueueBank #(
     ) load_data_mask_ram (
         .clk,
         .rst,
-        .en(en),
+        .en(cache_en),
         .raddr(cache_lqIdx),
         .rdata({mask_data, refillData}),
         .we(en),
@@ -458,14 +463,17 @@ module LoadQueueBank #(
         .ready()
     );
 
-    assign wb_valid = (|waiting_wb) & ~redirect & ~redirect_n;
-    `SIG_N(wb_valid, wb_valid_n)
+    assign wb_valid = ((|waiting_wb) | uncache_wb_valid) & ~redirect & ~redirect_n;
+    always_ff @(posedge clk)begin
+        wb_valid_n <= wb_valid & wb_ready;
+        uncache_wb_valid_n <= uncache_wb_valid;
+    end
 `ifdef RVF
     assign fp_wbData.en = wb_valid_n & wb_queue_data.frd_en;
     assign fp_wbData.we = 1'b1;
     assign fp_wbData.robIdx = wb_queue_data.robIdx;
     assign fp_wbData.rd = wb_queue_data.rd;
-    assign fp_wbData.res = uncache_wb_valid ? uncache_wb_data : wb_data;
+    assign fp_wbData.res = uncache_wb_valid_n ? uncache_wb_data : wb_data;
     assign fp_wbData.exccode = `EXC_NONE;
 `endif
     assign int_wbData.en = wb_valid_n
@@ -477,7 +485,7 @@ module LoadQueueBank #(
     assign int_wbData.we = wb_queue_data.we;
     assign int_wbData.robIdx = wb_queue_data.robIdx;
     assign int_wbData.rd = wb_queue_data.rd;
-    assign int_wbData.res = uncache_wb_valid ? uncache_wb_data : wb_data;
+    assign int_wbData.res = uncache_wb_valid_n ? uncache_wb_data : wb_data;
     assign int_wbData.exccode = `EXC_NONE;
 
 // redirect
@@ -517,7 +525,7 @@ endgenerate
         .redirectIdx,
         .data,
         .uncache_valid(valid[head] & addrValid[head] & uncache[head]),
-        .wb_en(wb_valid_n & wb_valid),
+        .wb_en(wb_valid & wb_ready),
         .commit_valid(|commit_en),
         .commitIdx,
         .uncache_idx_i(uncache_idx[head]),
@@ -527,6 +535,7 @@ endgenerate
         .uncache_wb_valid,
         .uncache_wb_data,
         .uncache_arvalid,
+        .uncache_arsize,
         .uncache_addr,
         .uncache_arready,
         .uncache_rdata,
@@ -616,6 +625,7 @@ module LoadUncacheBuffer(
     output logic uncache_wb_valid,
     output logic `N(`DCACHE_BITS) uncache_wb_data,
     output logic uncache_arvalid,
+    output logic `N(2) uncache_arsize,
     output logic `N(`PADDR_SIZE) uncache_addr,
     input logic uncache_arready,
     input logic `N(`XLEN) uncache_rdata,
@@ -625,54 +635,62 @@ module LoadUncacheBuffer(
     typedef struct packed {
         logic uext;
         logic `N(2) size;
-        logic `N(`DCACHE_BYTE_WIDTH) offset;
         logic `N(`PADDR_SIZE) addr;
     } UncacheData;
     typedef enum { IDLE, LOOKUP, WRITEBACK, RETIRE } UncacheState;
     UncacheState uncacheState;
     logic `N(`LOAD_UNCACHE_SIZE) valid, free_en, busy_en;
     RobIdx redirect_robIdxs `N(`LOAD_UNCACHE_SIZE);
+    RobIdx uncache_robIdx;
     logic `N(`LOAD_UNCACHE_WIDTH) freeIdx, busyIdx;
     UncacheData data_o, data_i;
     logic `N(`LOAD_UNCACHE_SIZE) bigger;
     logic `N(`XLEN) uncache_data;
     logic uncache_req;
+    logic uncache_bigger;
+    logic input_eq, input_en;
+    logic full_pre;
+    logic uncache_uext;
+    logic input_cache;
 
-    PSelector #(`LOAD_UNCACHE_SIZE) selector_free_en(valid, free_en);
+    PSelector #(`LOAD_UNCACHE_SIZE) selector_free_en(~valid, free_en);
     Encoder #(`LOAD_UNCACHE_SIZE) encoder_free_idx(free_en, freeIdx);
     Decoder #(`LOAD_UNCACHE_SIZE) decoder_busy_idx(busyIdx, busy_en);
     assign uncache_idx_o = freeIdx;
     assign data_i.uext = data.uext;
     assign data_i.size = data.size;
-    assign data_i.offset = addr[`DCACHE_BYTE_WIDTH-1: 0];
     assign data_i.addr = addr;
     MPRAM #(
         .WIDTH($bits(UncacheData)),
         .DEPTH(`LOAD_UNCACHE_SIZE),
         .READ_PORT(1),
-        .WRITE_PORT(1)
+        .WRITE_PORT(1),
+        .READ_LATENCY(0)
     ) data_ram (
         .clk,
         .rst,
         .en(1'b1),
         .raddr(uncache_idx_i),
         .rdata(data_o),
-        .we(en & ~full),
+        .we(en & ~full_pre),
         .waddr(freeIdx),
         .wdata(data_i),
         .ready()
     );
-    RDataGen uncache_data_gen (data_o.uext, data_o.size, data_o.offset, uncache_rdata, uncache_data);
-    assign uncache_addr = data_o.addr;
+    RDataGen uncache_data_gen (uncache_uext, uncache_arsize, 0, uncache_rdata, uncache_data);
     assign uncache_arvalid = uncache_req;
-    assign full = &valid;
+    assign input_eq = data.robIdx == commitIdx;
+    assign input_en = input_eq & en;
+    assign full_pre = &valid;
+    assign full = full_pre & ~input_eq;
     assign uncache_wb_valid = uncacheState == WRITEBACK;
 
     always_ff @(posedge clk)begin
-        if(en)begin
+        if(en & ~full_pre)begin
             redirect_robIdxs[freeIdx] <= data.robIdx;
         end
     end
+    LoopCompare #(`ROB_WIDTH) cmp_uncache_bigger (redirectIdx, uncache_robIdx, uncache_bigger);
 
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
@@ -680,18 +698,27 @@ module LoadUncacheBuffer(
             uncache_req <= 0;
             uncache_wb_data <= 0;
             busyIdx <= 0;
+            uncache_arsize <= 0;
+            input_cache <= 0;
+            uncache_addr <= 0;
+            uncache_robIdx <= 0;
         end
-        else if(redirect & (uncacheState != IDLE))begin
+        else if(redirect & uncache_bigger & (uncacheState != IDLE))begin
             uncacheState <= IDLE;
         end
         else begin
             case(uncacheState)
             IDLE:begin
                 if(uncache_valid &
-                (commitIdx == redirect_robIdxs[uncache_idx_i]))begin
+                (commitIdx == redirect_robIdxs[uncache_idx_i]) | input_en)begin
                     uncacheState <= LOOKUP;
                     uncache_req <= 1'b1;
                     busyIdx <= uncache_idx_i;
+                    uncache_arsize <= input_en ? data.size : data_o.size;
+                    uncache_addr <= input_en ? addr : data_o.addr;
+                    uncache_uext <= input_en ? data.uext : data_o.uext;
+                    uncache_robIdx <= input_en ? data.robIdx : redirect_robIdxs[uncache_idx_i];
+                    input_cache <= input_en;
                 end
             end
             LOOKUP:begin
@@ -700,7 +727,7 @@ module LoadUncacheBuffer(
                 end
                 if(uncache_rvalid)begin
                     uncacheState <= WRITEBACK;
-                    uncache_wb_data <= uncache_data;
+                    uncache_wb_data <= uncache_rdata;
                 end
             end
             WRITEBACK:begin
@@ -729,9 +756,9 @@ endgenerate
         end
         else begin
             for(int i=0; i<`LOAD_UNCACHE_SIZE; i++)begin
-                valid[i] <= (valid[i] | free_en[i]) &
+                valid[i] <= (valid[i] | en & free_en[i]) &
                             ~(redirect & ~bigger[i]) &
-                            ~(commit_valid & busy_en[i]);
+                            ~(commit_valid & (uncacheState == RETIRE) & ~input_cache & busy_en[i]);
             end
         end
     end

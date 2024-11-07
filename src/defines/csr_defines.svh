@@ -9,24 +9,30 @@
 `define PMA_SIZE 4
 `define PMACFG_SIZE (`PMA_SIZE / 4)
 
-`ifdef SV32
 `define PMP_SIZE 8
 `define PMPCFG_SIZE (`PMP_SIZE / 4)
+`define CSR_GROUP_SIZE (3 \
+`ifdef RV32I \
+    + 1 \
+`endif \
+)
+
 `define CSR_NUM (27 \
 `ifdef RV32I \
-    + 4 \
+    + 2 \
 `endif \
 `ifdef RVF \
     +3 \
 `endif \
 )
-`endif
+
 `define CSRID_mstatus   12'h300
 `define CSRID_misa      12'h301
 `define CSRID_medeleg   12'h302
 `define CSRID_mideleg   12'h303
 `define CSRID_mie       12'h304
 `define CSRID_mtvec     12'h305
+`define CSRID_mcounteren 12'h306
 `define CSRID_mstatush  12'h310
 `define CSRID_medelegh  12'h312
 `define CSRID_mscratch  12'h340
@@ -50,6 +56,7 @@
 
 `define CSRID_sstatus   12'h100
 `define CSRID_stvec     12'h105
+`define CSRID_scounteren 12'h106
 `define CSRID_sip       12'h144
 `define CSRID_sie       12'h104
 `define CSRID_sscratch  12'h140
@@ -61,6 +68,12 @@
 `define CSRID_fflags    12'h001
 `define CSRID_frm       12'h002
 `define CSRID_fcsr      12'h003
+
+
+`define CSRGROUP_mpf        0
+`define CSRGROUP_pmpcfg     1
+`define CSRGROUP_pmpaddr    2
+`define CSRGROUP_mpfh       3    
 
 typedef struct packed {
     logic `N(4) reserve0;
@@ -182,6 +195,8 @@ typedef struct packed {
 
 `define CAUSE_MASK {1'b1, {`MXL-7{1'b0}}, 6'h3f}
 `define MEDELEG_INIT {{`MXL-16{1'b0}}, 16'hb3ff}
+`define MEDELEG_MASK {{`MXL-16{1'b0}}, 16'hb3ff}
+`define COUNTEREN_MASK 32'h3
 
 typedef struct packed {
     logic mode;

@@ -44,18 +44,26 @@ module CSR(
     logic `N(`MXL) mepc;
     CAUSE mcause;
     logic `N(`MXL) mtval;
-    logic `N(`MXL) mcycle;
-    logic `N(`MXL) minstret;
+    logic `ARRAY(2, `MXL) mpfcounter;
+    logic mpfcounterexc;
+    logic `N(`MXL) mpfval; // m performence counter val
+    logic `N(5) mpf_offset;
+    logic `N(32) mcounteren, mpf_offset_decode;
 `ifdef RV32I
     STATUSH mstatush;
     logic `N(`MXL) medelegh;
-    logic `N(`MXL) mcycleh;
-    logic `N(`MXL) minstreth;
+    // mcycle, minstret
+    logic `ARRAY(2, `MXL) mpfhcounter;
+    logic `N(5) mpfh_offset;
+    logic `N(`MXL) mpfhval;
 `endif
     logic `N(`MXL) mconfigptr;
 
     logic `ARRAY(`PMPCFG_SIZE, `MXL) pmpcfg;
     logic `ARRAY(`PMP_SIZE, `MXL) pmpaddr;
+    logic `N(`MXL) pmpcfgval, pmpval;
+    logic `N($clog2(`PMPCFG_SIZE)) pmpcfg_offset;
+    logic `N($clog2(`PMP_SIZE)) pmpaddr_offset;
 
 `ifdef RVF
     logic `N(`MXL) fcsr;
@@ -68,6 +76,7 @@ module CSR(
     logic `N(`MXL) sscratch;
     CAUSE scause;
     SATP satp;
+    logic `N(`MXL) scounteren;
 
     assign mode_m = mode == `M_MODE;
     assign mode_s = mode == `S_MODE;
@@ -75,27 +84,27 @@ module CSR(
 
 // csr write
     logic we, we_s1, we_s2, we_o;
-    logic `N(`CSR_NUM) wen, wen_s1, wen_s2, wen_o; // exe wb retire
+    logic `N(`CSR_NUM+`CSR_GROUP_SIZE) wen, wen_s1, wen_s2, wen_o; // exe wb retire
     logic `N(`XLEN) wdata, origin_data, rdata, cmp_rdata;
+    logic `ARRAY(`CSR_GROUP_SIZE+1, `MXL) cmp_rdata_pre;
     logic `N(`XLEN) wdata_s1, wdata_s2;
     logic `N(`CSROP_WIDTH) csrop;
     logic csrrw, csrrs, csrrc;
     logic `N(`EXC_WIDTH) exccode;
-    logic pmp_cmp;
-    logic `N(`XLEN) pmp_rdata;
 
     assign csrop = issue_csr_io.bundle.csrop;
     assign origin_data = csrop[2] ? issue_csr_io.bundle.imm : issue_csr_io.rdata;
     assign csrrw = ~csrop[3] & ~csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
     assign csrrs = ~csrop[3] & csrop[1] & ~csrop[0] & ~issue_csr_io.bundle.exc_valid;
     assign csrrc = ~csrop[3] & csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
-    assign rdata = pmp_cmp ? pmp_rdata : cmp_rdata;
+    assign rdata = cmp_rdata;
     assign wdata = csrrw ? origin_data :
                    csrrs ? rdata | origin_data : rdata & ~origin_data;
 // csr read
     logic `ARRAY(`CSR_NUM, 12) cmp_csrid;
     logic `ARRAY(`CSR_NUM, `MXL) cmp_csr_data;
-    logic `N(`CSR_NUM) cmp_eq;
+    logic `N(`CSR_NUM+`CSR_GROUP_SIZE) cmp_eq;
+    logic cmp_valid;
     logic mode_valid;
     logic s_map, s_map_s1, s_map_s2;
     RobIdx robIdx_s1, robIdx_s2;
@@ -108,10 +117,10 @@ module CSR(
                  (~backendCtrl.redirect | redirect_older) & 
                  issue_csr_io.en & mode_valid &
                  (csrrw | csrrs | csrrc);
-    assign wen = cmp_eq  & {`CSR_NUM{we}};
+    assign wen = cmp_eq  & {`CSR_NUM+`CSR_GROUP_SIZE{we}};
     assign s_map = issue_csr_io.bundle.csrid[9: 8] == 2'b01;
     assign we_o = we_s2 & (~backendCtrl.redirect | redirect_s2_older);
-    assign wen_o = wen_s2 & {`CSR_NUM{(~backendCtrl.redirect) | redirect_s2_older}};
+    assign wen_o = wen_s2 & {`CSR_NUM+`CSR_GROUP_SIZE{(~backendCtrl.redirect) | redirect_s2_older}};
     always_ff @(posedge clk)begin
         robIdx_s1 <= issue_csr_io.status.robIdx;
         robIdx_s2 <= robIdx_s1;
@@ -122,7 +131,7 @@ module CSR(
         we_s1 <= we;
         we_s2 <= we_s1 & (~backendCtrl.redirect | redirect_s1_older);
         wen_s1 <= wen;
-        wen_s2 <= wen_s1 & {`CSR_NUM{(~backendCtrl.redirect | redirect_s1_older)}};
+        wen_s2 <= wen_s1 & {`CSR_NUM+`CSR_GROUP_SIZE{(~backendCtrl.redirect | redirect_s1_older)}};
 
     end
 
@@ -145,8 +154,8 @@ endgenerate                                                   \
     `CSR_CMP_DEF(mhartid, mhartid,      4, 0, 0             )
     `CSR_CMP_DEF(mstatus, mstatus,      5, 0, 0             )
     `CSR_CMP_DEF(mtvec, mtvec,          6, 1, `TVEC_MASK    )
-    `CSR_CMP_DEF(medeleg, medeleg,      7, 0, 0             )
-    `CSR_CMP_DEF(mideleg, mideleg,      8, 0, 0             )
+    `CSR_CMP_DEF(medeleg, medeleg,      7, 1, `MEDELEG_MASK )
+    `CSR_CMP_DEF(mideleg, mideleg,      8, 1, `MEDELEG_MASK )
     `CSR_CMP_DEF(mip, mip,              9, 1, `IP_MASK      )
     `CSR_CMP_DEF(mie, mie,              10,1, `IP_MASK      )
     `CSR_CMP_DEF(mscratch, mscratch,    11,0, 0             )
@@ -163,8 +172,8 @@ endgenerate                                                   \
     `CSR_CMP_DEF(sie, mie,              22,1, `SIP_MASK     )
     `CSR_CMP_DEF(scause, scause,        23,1, `CAUSE_MASK   )
     `CSR_CMP_DEF(sscratch, sscratch,    24,0, 0             )
-    `CSR_CMP_DEF(mcycle, mcycle,        25,0, 0             )
-    `CSR_CMP_DEF(minstret, minstret,    26,0, 0             )
+    `CSR_CMP_DEF(mcounteren, mcounteren,25,0, `COUNTEREN_MASK)
+    `CSR_CMP_DEF(scounteren, scounteren,26,0, `COUNTEREN_MASK)
 `ifdef RVF
     `CSR_CMP_DEF(fflags, fcsr[4: 0],    27,0, 0             )
     `CSR_CMP_DEF(frm, fcsr[7: 5],       28,0, 0             )
@@ -173,8 +182,6 @@ endgenerate                                                   \
 `ifdef RV32I
     `CSR_CMP_DEF(mstatush, mstatush,    30,0, 0             )
     `CSR_CMP_DEF(medelegh, medelegh,    31,0, 0             )
-    `CSR_CMP_DEF(mcycleh, mcycleh,      32,0, 0             )
-    `CSR_CMP_DEF(minstreth, minstreth,  33,0, 0             )
 `endif
 
     ParallelEQ #(
@@ -186,7 +193,52 @@ endgenerate                                                   \
         .cmp_en({`CSR_NUM{1'b1}}),
         .cmp(cmp_csrid),
         .data_i(cmp_csr_data),
-        .eq(cmp_eq),
+        .eq(cmp_eq[`CSR_NUM-1: 0]),
+        .data_o(cmp_rdata_pre[0])
+    );
+
+    CSRGroupCmp #(5, 2) group_cmp_mpf (
+        .csrid(issue_csr_io.bundle.csrid),
+        .cmp_csrid({12'hc00, 12'hb00}),
+        .data_i({{`MXL*30{1'b0}}, mpfcounter}),
+        .en(cmp_eq[`CSR_NUM+`CSRGROUP_mpf]),
+        .offset(mpf_offset),
+        .data_o(cmp_rdata_pre[`CSRGROUP_mpf+1])
+    );
+
+    CSRGroupCmp #($clog2(`PMPCFG_SIZE)) group_cmp_pmpcfg (
+        .csrid(issue_csr_io.bundle.csrid),
+        .cmp_csrid(12'h3a0),
+        .data_i(pmpcfg),
+        .en(cmp_eq[`CSR_NUM+`CSRGROUP_pmpcfg]),
+        .offset(pmpcfg_offset),
+        .data_o(cmp_rdata_pre[`CSRGROUP_pmpcfg+1])
+    );
+
+    CSRGroupCmp #($clog2(`PMP_SIZE)) group_cmp_pmpaddr (
+        .csrid(issue_csr_io.bundle.csrid),
+        .cmp_csrid(12'h3b0),
+        .data_i(pmpaddr),
+        .en(cmp_eq[`CSR_NUM+`CSRGROUP_pmpaddr]),
+        .offset(pmpaddr_offset),
+        .data_o(cmp_rdata_pre[`CSRGROUP_pmpaddr+1])
+    );
+
+`ifdef RV32I
+    CSRGroupCmp #(5) group_cmp_mpfh (
+        .csrid(issue_csr_io.bundle.csrid),
+        .cmp_csrid(12'hb80),
+        .data_i({{`MXL*30{1'b0}}, mpfhcounter}),
+        .en(cmp_eq[`CSR_NUM+`CSRGROUP_mpfh]),
+        .offset(mpfh_offset),
+        .data_o(cmp_rdata_pre[`CSRGROUP_mpfh+1])
+    );
+`endif
+
+    FairSelect #(`CSR_GROUP_SIZE+1, `MXL) select_rdata (
+        .en({cmp_eq[`CSR_NUM+`CSR_GROUP_SIZE-1: `CSR_NUM], |cmp_eq[`CSR_NUM-1: 0]}),
+        .data_i(cmp_rdata_pre),
+        .en_o(cmp_valid),
         .data_o(cmp_rdata)
     );
 
@@ -240,6 +292,8 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(stvec,       0,              1, 0, 0)
     `CSR_WRITE_DEF(mconfigptr,  0,              0, 0, 0)
     `CSR_WRITE_DEF(sscratch,    0,              1, 0, 0)
+    `CSR_WRITE_DEF(mcounteren,  0,              1, 0, 0)
+    `CSR_WRITE_DEF(scounteren,  0,              1, 0, 0)
 `ifdef RV32I
     `CSR_WRITE_DEF(mstatush,    0,              1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0)
@@ -273,9 +327,15 @@ endgenerate                                                             \
     Decoder #(`MXL) deocder_exccode (exccode, exccode_decode);
     assign edelege = medeleg & exccode_decode;
     assign edelege_valid = (|edelege) & (mode != 2'b11) | (redirect.irq & redirect.irq_deleg);
+    Decoder #(32) decoder_mpf_counter (mpf_offset, mpf_offset_decode);
+    assign mpfcounterexc = (cmp_eq[`CSR_NUM+`CSRGROUP_mpf]
+`ifdef RV32I
+                            | cmp_eq[`CSR_NUM+`CSRGROUP_mpfh]
+`endif
+    ) & (~mcounteren & mpf_offset_decode & ~mode_m) & (~scounteren & mpf_offset_decode & mode_u);
 
     logic `N(64) mcycle_n;
-    assign mcycle_n = {mcycleh, mcycle} + 1;
+    assign mcycle_n = {mpfhcounter[0], mpfcounter[0]} + 1;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
@@ -286,14 +346,14 @@ endgenerate                                                             \
             sepc <= 0;
             stval <= 0;
             mie <= 0;
-            mcycle <= 0;
-            mcycleh <= 0;
-            minstret <= 0;
-            minstreth <= 0;
+            mpfcounter <= 0;
+`ifdef RV32I
+            mpfhcounter <= 0;
+`endif
         end
         else begin
 `ifndef DIFFTEST
-            {mcycleh, mcycle} <= mcycle_n;
+            {mpfhcounter[0], mpfcounter[0]} <= mcycle_n;
 `endif
             if(wen_o[mstatus_id])begin
                 if(s_map)begin
@@ -414,7 +474,8 @@ endgenerate                                                             \
     assign csr_wb_io.datas[0].robIdx = issue_csr_io.status.robIdx;
     assign csr_wb_io.datas[0].rd = issue_csr_io.status.rd;
     assign csr_wb_io.datas[0].res = rdata;
-    assign csr_wb_io.datas[0].exccode = ((csrrw | csrrs | csrrc) & (~mode_valid | (~((|cmp_eq) | pmp_cmp)))) |
+    assign csr_wb_io.datas[0].exccode = ((csrrw | csrrs | csrrc) & (~mode_valid | (~cmp_valid))) |
+                                        mpfcounterexc |
                                         (wen[satp_id] & mstatus.tvm)
 `ifdef RVF
             | ((csrrw | csrrs | csrrc) & (cmp_eq[fcsr_id] | cmp_eq[fflags_id] | cmp_eq[frm_id]) & ~(|mstatus.fs)) 
@@ -506,37 +567,26 @@ endgenerate
     end
 
 // pmp
-    localparam [11: 0] pmpcfg_base = 12'h3a0;
-    localparam [11: 0] pmpaddr_base = 12'h3b0;
-    logic `N($clog2(`PMPCFG_SIZE)) pmp_id;
-    logic `N($clog2(`PMP_SIZE)) pmpaddr_id;
-    logic pmpcfg_cmp_en, pmpaddr_cmp_en;
-    logic pmpcfg_s1, pmpcfg_s2, pmpaddr_s1, pmpaddr_s2;
-    assign pmp_id = issue_csr_io.bundle.csrid[$clog2(`PMPCFG_SIZE)-1: 0];
-    assign pmpaddr_id = issue_csr_io.bundle.csrid[$clog2(`PMP_SIZE)-1: 0];
-    assign pmpcfg_cmp_en = issue_csr_io.bundle.csrid[11: $clog2(`PMPCFG_SIZE)] == pmpcfg_base[11: $clog2(`PMPCFG_SIZE)];
-    assign pmpaddr_cmp_en = issue_csr_io.bundle.csrid[11: $clog2(`PMP_SIZE)] == pmpaddr_base[11: $clog2(`PMP_SIZE)];
-    assign pmp_cmp = pmpcfg_cmp_en | pmpaddr_cmp_en;
-    assign pmp_rdata = issue_csr_io.bundle.csrid[11: 4] == 8'h3a ? pmpcfg[pmp_id] : pmpaddr[pmpaddr_id];
+    logic `N($clog2(`PMPCFG_SIZE)) pmp_id_s1, pmp_id_s2;
+    logic `N($clog2(`PMP_SIZE)) pmpaddr_id_s1, pmpaddr_id_s2;
 
     always_ff @(posedge clk)begin
-        pmpcfg_s1 <= pmpcfg_cmp_en;
-        pmpcfg_s2 <= pmpcfg_s1;
-        pmpaddr_s1 <= pmpaddr_cmp_en;
-        pmpaddr_s2 <= pmpaddr_s1;
+        pmp_id_s1 <= pmpcfg_offset;
+        pmp_id_s2 <= pmp_id_s1;
+        pmpaddr_id_s1 <= pmpaddr_offset;
+        pmpaddr_id_s2 <= pmpaddr_id_s1;
     end
-
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             pmpcfg <= 0;
             pmpaddr <= 0;
         end
         else begin
-            if(we_o & pmpcfg_s2)begin
-                pmpcfg[pmp_id] <= wdata_s2;
+            if(wen_o[`CSR_NUM+`CSRGROUP_pmpcfg])begin
+                pmpcfg[pmp_id_s2] <= wdata_s2;
             end
-            if(we_o & pmpcfg_s2)begin
-                pmpaddr[pmpaddr_id] <= wdata_s2;
+            if(wen_o[`CSR_NUM+`CSRGROUP_pmpaddr])begin
+                pmpaddr[pmpaddr_id_s2] <= wdata_s2;
             end
         end
     end
@@ -555,8 +605,8 @@ endgenerate
             name.mode <= mode; \
         end \
         ``name``_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older); \
-        ``name``_pmpcfg_en <= pmpcfg_s1; \
-        ``name``_pmpaddr_en <= pmpaddr_s1; \
+        ``name``_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg]; \
+        ``name``_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr]; \
         ``name``_wdata <= wdata_s1; \
         name.sum <= mstatus.sum; \
         name.mxr <= mstatus.mxr; \
@@ -570,10 +620,10 @@ endgenerate
         end \
         else begin \
             if(``name``_we_o & ``name``_pmpcfg_en)begin \
-                name.pmpcfg[pmp_id] <= ``name``_wdata; \
+                name.pmpcfg[pmp_id_s2] <= ``name``_wdata; \
             end \
             if(``name``_we_o & ``name``_pmpaddr_en)begin \
-                name.pmpaddr[pmpaddr_id] <= ``name``_wdata; \
+                name.pmpaddr[pmpaddr_id_s2] <= ``name``_wdata; \
             end \
         end \
     end \
@@ -610,8 +660,31 @@ endgenerate
         .mie(mie),
         .mscratch(mscratch),
         .sscratch(sscratch),
-        .mideleg(mideleg),
-        .medeleg(medeleg)
+        .mideleg(mideleg & `MEDELEG_MASK),
+        .medeleg(medeleg & `MEDELEG_MASK)
     );
 `endif
+endmodule
+
+module CSRGroupCmp #(
+    parameter OFFSET_WIDTH=1,
+    parameter CMP_NUM=1,
+    parameter OFFSET_SIZE=(1<<OFFSET_WIDTH)-1
+)(
+    input logic `ARRAY(CMP_NUM, 12) cmp_csrid,
+    input logic `N(12) csrid,
+    input logic `ARRAY(OFFSET_SIZE, `MXL) data_i,
+    output logic en,
+    output logic `N(OFFSET_WIDTH) offset,
+    output logic `N(`MXL) data_o
+);
+    logic `N(CMP_NUM) cmp_en;
+generate
+    for(genvar i=0; i<CMP_NUM; i++)begin
+        assign cmp_en[i] = csrid[11: OFFSET_WIDTH] == cmp_csrid[i][11: OFFSET_WIDTH];
+    end
+endgenerate
+    assign en = |cmp_en;
+    assign offset = csrid[OFFSET_WIDTH-1: 0];
+    assign data_o = data_i[csrid[OFFSET_WIDTH-1: 0]];
 endmodule

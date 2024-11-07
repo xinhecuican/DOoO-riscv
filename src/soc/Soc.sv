@@ -261,12 +261,12 @@ module Soc(
     ApbIO uart_io();
     `APB_REQ_ASSIGN(uart_req, uart_io)
     `APB_RESP_ASSIGN(uart_resp, uart_io)
-    apb4_uart uart_inst(
-        .clk(clk),
-        .rst(peri_rst),
+    apb_uart16550 uart_inst(
+        .PCLK(clk),
+        .PRESETn(~peri_rst),
         .apb4(uart_io),
-        .irq_out(uart_irq),
-        .rxd(rxd),
-        .txd(txd)
+        .intr_o(uart_irq),
+        .sin_i(rxd),
+        .sout_o(txd)
     );
 endmodule

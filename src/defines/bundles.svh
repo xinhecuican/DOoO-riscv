@@ -430,7 +430,9 @@ typedef struct packed {
 
 typedef struct packed {
     logic we;
+`ifdef RVF
     logic frd_en;
+`endif
     logic `N(`PREG_WIDTH) rd;
     RobIdx robIdx;
 } LoadQueueData;

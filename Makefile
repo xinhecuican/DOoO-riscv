@@ -38,7 +38,7 @@ ifeq ($(WITH_DRAMSIM3),1)
 endif
 ifeq ($(EMU_TRACE), 1)
 	export EMU_TRACE
-	TRACE_ARGS = --dump-wave --enable-fork
+	TRACE_ARGS = --dump-wave
 endif
 ifeq ($(ENABLE_DIFF), 1)
 	DIFF_ARGS := --diff=utils/NEMU/build/riscv64-nemu-interpreter-so

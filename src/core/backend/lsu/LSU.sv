@@ -392,7 +392,7 @@ endgenerate
     assign load_io.success_idx = issue_idx_n2;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i])) | tlb_lsu_io.lcancel[i] | uncache_full_s4[i];
+        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i]) | tlb_lsu_io.lcancel[i] | uncache_full_s4[i]);
         assign load_io.reply_slow[i].issue_idx = issue_idx_n2[i];
         assign load_io.reply_slow[i].reason = fwd_data_invalid_n ? 2'b10 : 2'b00;
     end
