@@ -692,6 +692,7 @@ interface FenceBus;
     );
     modport lsu (input valid, mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
     modport rob (input fence_end);
+    modport dis (input valid);
     modport mmu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid);
     modport l2tlb (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, output mmu_flush_end);
     modport backend (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, input mmu_flush_end

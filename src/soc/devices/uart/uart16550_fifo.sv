@@ -62,6 +62,7 @@
 //   Other               :                                         
 // -FHDR-------------------------------------------------------------
 `include "../../../defines/defines.svh"
+`include "../../../defines/devices.svh"
 
 
 //Error bits are in MSBs

@@ -27,11 +27,13 @@ SRC += $(shell find src/soc -name "*.v" -or -name "*.sv" -or -name "*.svh")
 
 WITH_DRAMSIM3 := 1
 EMU_TRACE := 1
+EMU_THREADS := 0
 TRACE_ARGS := 
+ENABLE_FORK := 0
 ENABLE_DIFF := 1
 DIFF_ARGS :=
 
-
+export EMU_THREADS
 ifeq ($(WITH_DRAMSIM3),1)
 	export WITH_DRAMSIM3
 	DEFINES += DRAMSIM3=ON;
@@ -39,6 +41,9 @@ endif
 ifeq ($(EMU_TRACE), 1)
 	export EMU_TRACE
 	TRACE_ARGS = --dump-wave
+endif
+ifeq ($(ENABLE_FORK), 1)
+	TRACE_ARGS += --enable-fork
 endif
 ifeq ($(ENABLE_DIFF), 1)
 	DIFF_ARGS := --diff=utils/NEMU/build/riscv64-nemu-interpreter-so

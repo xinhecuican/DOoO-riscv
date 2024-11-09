@@ -24,6 +24,7 @@ module Dispatch(
     DisIssueIO.dis dis_fdiv_io,
 `endif
     CommitBus.in commitBus,
+    FenceBus.dis fenceBus,
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl,
     output logic full
@@ -341,7 +342,7 @@ generate
 endgenerate
 `endif
 
-    assign full = int_io.full | load_io.full | store_io.full | csr_io.full
+    assign full = int_io.full | load_io.full | store_io.full | csr_io.full | fenceBus.valid
 `ifdef RVM
                   | mult_io.full
 `endif
@@ -367,7 +368,7 @@ endgenerate
 `endif
                                 store_io.rs2_o, store_io.rs1_o, load_io.rs1_o,
                                 int_io.rs2_o, int_io.rs1_o};
-    BusyTable #(`INT_WAKEUP_PORT, `INT_BUSY_PORT, `INT_PREG_SIZE, 1) int_busy_table(
+    BusyTable #(`INT_WAKEUP_PORT, `INT_BUSY_PORT, `INT_PREG_SIZE, 0) int_busy_table(
         .*, 
         .io(int_busy_io.busytable),
         .wakeupBus(int_wakeupBus)
@@ -379,7 +380,7 @@ endgenerate
                               fma_io.rs3_o, fma_io.rs2_o, fma_io.rs1_o,
                               fmisc_io.rs2_o, fmisc_io.rs1_o,
                               store_io.rs2_o};
-    BusyTable #(`FP_WAKEUP_PORT, `FP_BUSY_PORT, `FP_PREG_SIZE) fp_busy_table(
+    BusyTable #(`FP_WAKEUP_PORT, `FP_BUSY_PORT, `FP_PREG_SIZE, 1) fp_busy_table(
         .*,
         .io(fp_busy_io.busytable),
         .wakeupBus(fp_wakeupBus)

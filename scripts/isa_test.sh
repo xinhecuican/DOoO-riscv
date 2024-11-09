@@ -33,7 +33,7 @@ rv32f_prefix="utils/riscv-tests/isa/rv32uf-p-"
 
 benchmarks=(
     "median" "memcpy" "multiply" "qsort" "rsort" "uart" "towers" "spmv"
-    "mt-matmul" "mt-memcpy"
+    "mt-matmul" "mt-memcpy" "mm"
 )
 benchmarks_prefix="utils/riscv-tests/benchmarks/"
 

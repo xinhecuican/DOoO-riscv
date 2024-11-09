@@ -757,7 +757,7 @@ endgenerate
         else begin
             for(int i=0; i<`LOAD_UNCACHE_SIZE; i++)begin
                 valid[i] <= (valid[i] | en & free_en[i]) &
-                            ~(redirect & ~bigger[i]) &
+                            ~(redirect & valid[i] & ~bigger[i]) &
                             ~(commit_valid & (uncacheState == RETIRE) & ~input_cache & busy_en[i]);
             end
         end

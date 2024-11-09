@@ -96,6 +96,7 @@
  * 0x1  RW Divisor Latch MSB          DLM  Bit15    | Bit14    | Bit13    | Bit12    | Bit11    | Bit10    | Bit9     | Bit8     |
  */
 `include "../../../defines/defines.svh"
+`include "../../../defines/devices.svh"
 
 module uart16550_regs
 #(

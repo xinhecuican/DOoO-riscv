@@ -226,7 +226,7 @@ endgenerate
             for(int i=0; i<DEPTH; i++)begin
                 if(bank_en & free_en[i])begin
                     rs1v[i] <= status.rs1v;
-                    rs2v[i] <= status.rs2v;
+                    rs2v[i] <= status.rs2v | ~status.frs2_sel;
                 end
                 else begin
                     rs1v[i] <= (rs1v[i] | (rs1_cmp[i]));

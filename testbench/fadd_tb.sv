@@ -18,16 +18,17 @@ module fadd_tb();
     FFlags flag_dut, flag_ref;
 
     always #5 clk = ~clk;
-
-    FAdd #(FP32) fadd_dut (
+    localparam int unsigned FP32_EXP_BITS = exp_bits(FP32);
+    localparam int unsigned FP32_MAN_BITS = man_bits(FP32);
+    FAdd #(FP32_EXP_BITS, FP32_MAN_BITS*2, FP32_MAN_BITS) fadd_dut (
         .clk,
         .rst,
         .round_mode,
         .sub(sub),
         .fma(1'b0),
         .info_fma(info),
-        .rs1_data(rs1_data),
-        .rs2_data(rs2_data),
+        .rs1_data({rs1_data, {FP32_MAN_BITS{1'b0}}}),
+        .rs2_data({rs2_data, {FP32_MAN_BITS{1'b0}}}),
         .res(res_dut),
         .status(flag_dut)
     );

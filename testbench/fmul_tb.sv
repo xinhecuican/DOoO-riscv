@@ -76,10 +76,10 @@ module fmul_tb();
         round_mode = 0;
         #10;
         // Regression Tests
-        stimulus_a[7: 0] = '{32'h22cb525a, 32'h40000000, 32'h83e73d5c, 32'hbf9b1e94, 32'h34082401, 32'h05e8ef81, 32'h5c75da81, 32'h002b017};
-        stimulus_b[7: 0] = '{32'hadd79efa, 32'hc0000000, 32'h1c800000, 32'hc038ed3a, 32'hb328cd45, 32'h0114f3db, 32'h2f642a39, 32'hff3807ab};
+        stimulus_a[8: 0] = '{32'h22cb525a, 32'h40000000, 32'h83e73d5c, 32'hbf9b1e94, 32'h34082401, 32'h05e8ef81, 32'h5c75da81, 32'h002b017, 32'habe8c057};
+        stimulus_b[8: 0] = '{32'hadd79efa, 32'hc0000000, 32'h1c800000, 32'hc038ed3a, 32'hb328cd45, 32'h0114f3db, 32'h2f642a39, 32'hff3807ab, 32'h3b11f376};
         $display("Regression Tests");
-        run_test(stimulus_a, stimulus_b, 8);
+        run_test(stimulus_a, stimulus_b, 9);
         
 
         // Corner Cases

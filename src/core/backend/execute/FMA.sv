@@ -64,6 +64,8 @@ module FMASlice (
     output ExStatusBundle ex_status_o,
     output FFlags status
 );
+    localparam int unsigned FP32_EXP_BITS = exp_bits(FP32);
+    localparam int unsigned FP32_MAN_BITS = man_bits(FP32);
     logic mul_en_s2, mul_en_s3;
     logic madd_en_s2, madd_en_s3, madd_en_s4;
     logic mul_sub_s2, mul_sub_s3, mul_sub_s4;
@@ -101,7 +103,8 @@ module FMASlice (
     end
 
 
-    logic `N(`XLEN) mul_res, mul_res_n;
+    logic `N(`XLEN) mul_res;
+    logic `N(FP32_EXP_BITS+FP32_MAN_BITS*2+2) toadd_res, toadd_res_n;
     FFlags mul_status;
     FMul #(FP32) fmul (
         .clk,
@@ -111,25 +114,26 @@ module FMASlice (
         .rs2_data,
         .fltop,
         .mulInfo,
+        .toadd_res(toadd_res),
         .res(mul_res),
         .status(mul_status)
     );
 
     always_ff @(posedge clk)begin
-        mul_res_n <= mul_res;
+        toadd_res_n <= toadd_res;
     end
 
-    logic `N(`XLEN) add_rs1, add_rs2;
+    logic `N(FP32_EXP_BITS+FP32_MAN_BITS*2+2) add_rs1, add_rs2;
     logic add_sub;
     logic add_fma;
     logic `N(`XLEN) add_res;
     FFlags add_status;
 
     assign add_fma = madd_en_s4;
-    assign add_rs1 = madd_en_s4 ? mul_res_n : rs1_data;
-    assign add_rs2 = madd_en_s4 ? rs3_data_s4 : rs2_data;
+    assign add_rs1 = madd_en_s4 ? toadd_res_n : {rs1_data, {FP32_MAN_BITS+1{1'b0}}};
+    assign add_rs2 = madd_en_s4 ? {rs3_data_s4, {FP32_MAN_BITS+1{1'b0}}} : {rs2_data, {FP32_MAN_BITS+1{1'b0}}};
     assign add_sub = madd_en_s4 ? mul_sub_s4 : fltop == `FLT_SUB;
-    FAdd #(FP32) fadd (
+    FAdd #(FP32_EXP_BITS, FP32_MAN_BITS*2+1, FP32_MAN_BITS) fadd (
         .clk,
         .rst,
         .round_mode,

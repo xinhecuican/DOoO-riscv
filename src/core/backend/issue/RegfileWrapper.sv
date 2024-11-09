@@ -177,19 +177,16 @@ endgenerate
 `ifdef RVF
     logic `N(`STORE_PIPELINE) fp_store_en;
     logic `ARRAY(`STORE_PIPELINE, `PREG_WIDTH) fp_store_preg;
-    always_ff @(posedge clk)begin
-        fp_store_en <= store_reg_io.en[`STORE_PIPELINE * 2 +: `STORE_PIPELINE];
-        fp_store_preg <= store_reg_io.preg[`STORE_PIPELINE * 2 +: `STORE_PIPELINE];
-    end
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         always_ff @(posedge clk)begin
-            fp_store_en[i] <= store_reg_io.en[`STORE_PIPELINE+i] | fmisc_reg_io.en[i];
-            fp_store_preg[i] <= store_reg_io.en[`STORE_PIPELINE+i] ? store_reg_io.preg[`STORE_PIPELINE+i] : fmisc_reg_io.preg[i];
+            fp_store_en[i] <= store_reg_io.en[`STORE_PIPELINE*2+i] | fmisc_reg_io.en[i];
+            fp_store_preg[i] <= store_reg_io.en[`STORE_PIPELINE*2+i] ? store_reg_io.preg[`STORE_PIPELINE*2+i] : fmisc_reg_io.preg[i];
         end
         assign fp_en[i] = fp_store_en[i];
         assign fp_raddr[i] = fp_store_preg[i];
-        assign fmisc_reg_io.ready[i] = ~store_reg_io.en[`STORE_PIPELINE+i];
+        assign store_reg_io.ready[`STORE_PIPELINE*2+i] = 1'b1;
+        assign fmisc_reg_io.ready[i] = ~store_reg_io.en[`STORE_PIPELINE*2+i];
     end
     for(genvar i=`STORE_PIPELINE; i<`FMISC_SIZE; i++)begin
         logic fmisc_en;

@@ -90,7 +90,7 @@ module FMisc #(
     FTypeInfo `N(2) info;
     FTypeInfo info_a, info_b;
     fp_t operand_a, operand_b;
-    fp_classifier #(format, 2) classifier (
+    fp_classifier #(EXP_BITS, MAN_BITS, 2) classifier (
         .operands_i ({rs2_data, rs1_data}),
         .is_boxed_i (2'b11),
         .info_o (info)
@@ -272,16 +272,15 @@ module FMisc #(
 endmodule
 
 module fp_classifier #(
-    parameter fp_format_e format = fp_format_e'(0),
+    parameter int unsigned EXP_BITS = 8,
+    parameter int unsigned MAN_BITS = 23,
     parameter int unsigned             NumOperands = 1,
-    localparam int unsigned WIDTH = fp_width(format)
+    localparam int unsigned WIDTH = EXP_BITS + MAN_BITS + 1
 )(
   input  logic                [NumOperands-1:0][WIDTH-1:0] operands_i,
   input  logic                [NumOperands-1:0]            is_boxed_i,
   output FTypeInfo [NumOperands-1:0]            info_o
 );
-  localparam int unsigned EXP_BITS = exp_bits(format);
-  localparam int unsigned MAN_BITS = man_bits(format);
 
 
   // Type definition

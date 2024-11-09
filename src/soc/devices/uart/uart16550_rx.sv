@@ -62,7 +62,7 @@
 //   Other               :                                         
 // -FHDR-------------------------------------------------------------
 `include "../../../defines/defines.svh"
-
+`include "../../../defines/devices.svh"
 
 module uart16550_rx
 (

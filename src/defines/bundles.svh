@@ -375,6 +375,7 @@ typedef struct packed {
     logic is_signalling;
     logic is_inf;
     logic is_invalid;
+    logic is_ov;
     logic sign;
 } FMulInfo;
 

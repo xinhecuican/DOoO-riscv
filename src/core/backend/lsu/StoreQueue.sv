@@ -38,14 +38,17 @@ module StoreQueue(
     logic `N($clog2(`STORE_DIS_PORT)+1) disNum;
     logic `N($clog2(`STORE_PIPELINE)+1) commitNum, commitNum_n;
     logic `ARRAY(`STORE_DIS_PORT, `STORE_QUEUE_WIDTH) disWIdx;
+    logic `ARRAY(`STORE_DIS_PORT, `STORE_QUEUE_SIZE) disWIdx_dec, dis_wvalid;
+    logic `N(`STORE_QUEUE_SIZE) dis_wvalid_combine;
     logic `ARRAY(`COMMIT_WIDTH, `STORE_QUEUE_WIDTH) commitIdx;
     logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_WIDTH) headCommitIdx;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_SIZE) headCommit_dec, headCommitValid;
+    logic `N(`STORE_QUEUE_SIZE) commitValid_combine;
 
     StoreIdx redirectIdx;
     logic `ARRAY(`STORE_PIPELINE, `STORE_QUEUE_WIDTH) redirectRobIdx;
     StoreIdx `N(`STORE_PIPELINE) redirectSqIdx;
     logic `N(`STORE_QUEUE_SIZE) head_n_mask, redirect_mask;
-    logic redirect_next;
     logic `N(`STORE_QUEUE_SIZE) bigger, walk_en, validStart, validEnd;
     logic `N(`STORE_QUEUE_WIDTH) validSelect1, validSelect2, walk_tail, valid_select, valid_select_n;
     logic walk_valid, walk_dir;
@@ -68,6 +71,8 @@ generate
         assign addr_eqIdx[i] = io.data[i].sqIdx.idx;
         assign data_eqIdx[i] = issue_queue_io.data_sqIdx[i].idx;
         assign headCommitIdx[i] = head + i;
+        Decoder #(`STORE_QUEUE_SIZE) decoder_head_commit (headCommitIdx[i], headCommit_dec[i]);
+        assign headCommitValid[i] = {`STORE_QUEUE_SIZE{store_commit_en_n[i] & ~queue_commit_io.conflict}} & headCommit_dec[i];
         logic `N(`XLEN) reg_data;
 `ifdef RVF
         assign reg_data = issue_queue_io.data_fp_sel[i] ? store_data[`STORE_PIPELINE+i] : store_data[i];
@@ -78,8 +83,12 @@ generate
     end
     for(genvar i=0; i<`STORE_DIS_PORT; i++)begin
         assign disWIdx[i] = tail + i;
+        Decoder #(`STORE_QUEUE_SIZE) decoder_dis_widx (disWIdx[i], disWIdx_dec[i]);
+        assign dis_wvalid[i] = {`STORE_QUEUE_SIZE{issue_queue_io.dis_en[i] & ~issue_queue_io.dis_stall}} & disWIdx_dec[i];
         assign full[i] = issue_queue_io.dis_en[i] & ((issue_queue_io.dis_sq_idx[i].idx == head) & (issue_queue_io.dis_sq_idx[i].dir ^ hdir));
     end
+    ParallelOR #(`STORE_QUEUE_SIZE, `STORE_DIS_PORT) or_wvalid (dis_wvalid, dis_wvalid_combine);
+    ParallelOR #(`STORE_QUEUE_SIZE, `STORE_PIPELINE) or_commit (headCommitValid, commitValid_combine);
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitIdx[i] = commitHead + i;
     end
@@ -89,7 +98,7 @@ endgenerate
     ParallelAdder #(1, `STORE_PIPELINE) addr_commit_num (queue_commit_io.en, commitNum);
     assign io.sqIdx.idx = tail;
     assign io.sqIdx.dir = tdir;
-    assign issue_queue_io.full = (|full) | redirect_next;
+    assign issue_queue_io.full = (|full) | backendCtrl.redirect;
     assign head_n = queue_commit_io.conflict ? head : head + commitNum_n;
     assign storeHead_n = queue_commit_io.conflict ? storeHead : storeHead + commitNum;
     assign commitHead_n = commitHead + commitBus.storeNum;
@@ -110,7 +119,7 @@ endgenerate
             head <= head_n;
             storeHead <= storeHead_n;
             hdir <= hdir_n;
-            if(redirect_next)begin
+            if(backendCtrl.redirect)begin
                 tail <= walk_valid ? walk_tail: head_n;
                 tdir <= walk_valid ? walk_dir : hdir_n;
             end
@@ -132,9 +141,6 @@ endgenerate
     logic `N(`COMMIT_WIDTH) commitMask;
     MaskGen #(`COMMIT_WIDTH+1) mask_gen_commit (commitBus.storeNum, commitMask);
 
-    always_ff @(posedge clk)begin
-        redirect_next <= backendCtrl.redirect;
-    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             addr_mask <= '{default: 0};
@@ -150,7 +156,6 @@ endgenerate
                     addrValid[disWIdx[i]] <= 1'b0;
                     dataValid[disWIdx[i]] <= 1'b0;
                     commited[disWIdx[i]] <= 1'b0;
-                    valid[disWIdx[i]] <= 1'b1;
                     uncache[disWIdx[i]] <= 0;
                 end
             end
@@ -171,18 +176,11 @@ endgenerate
                     commited[commitIdx[i]] <= 1'b1;
                 end
             end
-            for(int i=0; i<`STORE_PIPELINE; i++)begin
-                if(store_commit_en_n[i] & ~queue_commit_io.conflict)begin
-                    valid[headCommitIdx[i]] <= 1'b0;
-                end
-            end
-            if(redirect_next)begin
-                if(walk_valid)begin
-                    valid <= hdir_n ^ walk_dir ? ~(head_n_mask ^ redirect_mask) : head_n_mask ^ redirect_mask;
-                end
-                else begin
-                    valid <= 0;
-                end
+
+            for(int i=0; i<`STORE_QUEUE_SIZE; i++)begin
+                valid[i] <= (valid[i] & ~(backendCtrl.redirect & ~walk_en[i]) | 
+                            dis_wvalid_combine[i]) & 
+                            ~commitValid_combine[i];
             end
         end
     end
@@ -216,11 +214,9 @@ endgenerate
     assign walk_en = valid & (bigger | commited);
     assign valid_select_n = valid_select + 1;
     assign walk_full = &walk_en;
-    always_ff @(posedge clk)begin
-        walk_valid <= |walk_en;
-        walk_tail <= walk_full ? tail : valid_select_n;
-        walk_dir <= walk_full || (valid_select_n <= tail) ? tdir : ~tdir;
-    end
+    assign walk_valid = |walk_en;
+    assign walk_tail = walk_full ? tail : valid_select_n;
+    assign walk_dir = walk_full || (valid_select_n <= tail) ? tdir : ~tdir;
 
 // uncache
     assign saxi_io.aw_id = 0;
