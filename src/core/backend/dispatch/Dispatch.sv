@@ -172,7 +172,7 @@ generate
         MemIssueBundle sdata;
         assign data = '{uext: di.uext, memop: di.memop, imm: di.imm[19: 8],
 `ifdef RVF
-                        fp_en: di.frs1_sel | di.flt_we;
+                        fp_en: di.frs1_sel | di.flt_we,
 `endif
                         fsqInfo: rename_dis_io.op[i].fsqInfo,
                         lqIdx: lq_eq_tail[i], sqIdx: sq_eq_tail[i]};
@@ -180,9 +180,9 @@ generate
         assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
                                (~(backendCtrl.redirect));
         assign load_io.data[i] = data;
-        assign data = '{uext: di.uext, memop: di.memop, imm: di.imm[11: 0],
+        assign sdata = '{uext: di.uext, memop: di.memop, imm: di.imm[11: 0],
 `ifdef RVF
-                        fp_en: di.frs1_sel | di.flt_we;
+                        fp_en: di.frs1_sel | di.flt_we,
 `endif
                         fsqInfo: rename_dis_io.op[i].fsqInfo,
                         lqIdx: lq_eq_tail[i], sqIdx: sq_eq_tail[i]};
