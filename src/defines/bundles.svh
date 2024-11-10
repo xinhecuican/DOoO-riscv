@@ -187,7 +187,6 @@ typedef struct packed {
 `ifdef RVA
     logic amov;
 `endif
-    logic [11: 0] csrid;
     logic uext;
     logic we;
     logic immv;
@@ -288,8 +287,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic `N(`CSROP_WIDTH) csrop;
-    logic `N(5) imm;
-    logic `N(12) csrid;
+    logic `N(`DEC_IMM_WIDTH-3) imm;
     logic `N(32) inst; // illigal inst
     logic exc_valid;
     logic `N(`EXC_WIDTH) exccode;

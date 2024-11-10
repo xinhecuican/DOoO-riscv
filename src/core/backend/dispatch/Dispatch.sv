@@ -169,22 +169,26 @@ generate
         LoopAdder #(`STORE_QUEUE_WIDTH, $clog2(`FETCH_WIDTH)) adder_sqIdx (sq_add_num[i], sq_tail, sq_eq_tail[i]);
         DecodeInfo di;
         MemIssueBundle data;
+        MemIssueBundle sdata;
+        assign data = '{uext: di.uext, memop: di.memop, imm: di.imm[19: 8],
 `ifdef RVF
-        assign data.fp_en = di.frs1_sel | di.flt_we;
+                        fp_en: di.frs1_sel | di.flt_we;
 `endif
-        assign data.uext = di.uext;
-        assign data.memop = di.memop;
-        assign data.imm = di.imm[11: 0];
-        assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
-        assign data.lqIdx = lq_eq_tail[i];
-        assign data.sqIdx = sq_eq_tail[i];
+                        fsqInfo: rename_dis_io.op[i].fsqInfo,
+                        lqIdx: lq_eq_tail[i], sqIdx: sq_eq_tail[i]};
         assign di = rename_dis_io.op[i].di;
         assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
                                (~(backendCtrl.redirect));
         assign load_io.data[i] = data;
+        assign data = '{uext: di.uext, memop: di.memop, imm: di.imm[11: 0],
+`ifdef RVF
+                        fp_en: di.frs1_sel | di.flt_we;
+`endif
+                        fsqInfo: rename_dis_io.op[i].fsqInfo,
+                        lqIdx: lq_eq_tail[i], sqIdx: sq_eq_tail[i]};
         assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
                                 (~(backendCtrl.redirect));
-        assign store_io.data[i] = data;
+        assign store_io.data[i] = sdata;
     end
 endgenerate
     MemDispatchQueue #(
@@ -229,8 +233,7 @@ generate
         DecodeInfo di;
         CsrIssueBundle data;
         assign data.csrop = di.csrop;
-        assign data.imm = di.imm[4: 0];
-        assign data.csrid = di.csrid;
+        assign data.imm = di.imm[19: 3];
         assign data.fsqInfo = rename_dis_io.op[i].fsqInfo;
         assign data.exc_valid = di.exccode != `EXC_NONE;
         assign data.exccode = di.exccode;

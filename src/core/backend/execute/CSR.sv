@@ -11,6 +11,7 @@ module CSR(
     input CSRRedirectInfo redirect,
     IssueCSRIO.csr issue_csr_io,
     WriteBackIO.fu csr_wb_io,
+    CommitBus.in commitBus,
     input BackendCtrl backendCtrl,
     CsrTlbIO.csr csr_itlb_io,
     CsrTlbIO.csr csr_ltlb_io,
@@ -91,9 +92,11 @@ module CSR(
     logic `N(`CSROP_WIDTH) csrop;
     logic csrrw, csrrs, csrrc;
     logic `N(`EXC_WIDTH) exccode;
+    logic `N(12) csrid;
 
     assign csrop = issue_csr_io.bundle.csrop;
-    assign origin_data = csrop[2] ? issue_csr_io.bundle.imm : issue_csr_io.rdata;
+    assign csrid = issue_csr_io.bundle.imm[16: 5];
+    assign origin_data = csrop[2] ? issue_csr_io.bundle.imm[4: 0] : issue_csr_io.rdata;
     assign csrrw = ~csrop[3] & ~csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
     assign csrrs = ~csrop[3] & csrop[1] & ~csrop[0] & ~issue_csr_io.bundle.exc_valid;
     assign csrrc = ~csrop[3] & csrop[1] & csrop[0] & ~issue_csr_io.bundle.exc_valid;
@@ -112,13 +115,13 @@ module CSR(
     LoopCompare #(`ROB_WIDTH) cmp_redirect_older (issue_csr_io.status.robIdx, backendCtrl.redirectIdx, redirect_older);
     LoopCompare #(`ROB_WIDTH) cmp_redirect_s1_older (robIdx_s1, backendCtrl.redirectIdx, redirect_s1_older);
     LoopCompare #(`ROB_WIDTH) cmp_redirect_s2_older (robIdx_s2, backendCtrl.redirectIdx, redirect_s2_older);
-    assign mode_valid = mode >= issue_csr_io.bundle.csrid[9: 8];
-    assign we = ~((csrrs | csrrc) & (issue_csr_io.bundle.imm == 0)) & 
+    assign mode_valid = mode >= csrid[9: 8];
+    assign we = ~((csrrs | csrrc) & (issue_csr_io.bundle.imm[4: 0] == 0)) & 
                  (~backendCtrl.redirect | redirect_older) & 
                  issue_csr_io.en & mode_valid &
                  (csrrw | csrrs | csrrc);
     assign wen = cmp_eq  & {`CSR_NUM+`CSR_GROUP_SIZE{we}};
-    assign s_map = issue_csr_io.bundle.csrid[9: 8] == 2'b01;
+    assign s_map = csrid[9: 8] == 2'b01;
     assign we_o = we_s2 & (~backendCtrl.redirect | redirect_s2_older);
     assign wen_o = wen_s2 & {`CSR_NUM+`CSR_GROUP_SIZE{(~backendCtrl.redirect) | redirect_s2_older}};
     always_ff @(posedge clk)begin
@@ -189,7 +192,7 @@ endgenerate                                                   \
         .WIDTH(12),
         .DATA_WIDTH(`MXL)
     ) parallel_eq_rdata (
-        .origin(issue_csr_io.bundle.csrid),
+        .origin(csrid),
         .cmp_en({`CSR_NUM{1'b1}}),
         .cmp(cmp_csrid),
         .data_i(cmp_csr_data),
@@ -198,7 +201,7 @@ endgenerate                                                   \
     );
 
     CSRGroupCmp #(5, 2) group_cmp_mpf (
-        .csrid(issue_csr_io.bundle.csrid),
+        .csrid(csrid),
         .cmp_csrid({12'hc00, 12'hb00}),
         .data_i({{`MXL*30{1'b0}}, mpfcounter}),
         .en(cmp_eq[`CSR_NUM+`CSRGROUP_mpf]),
@@ -207,7 +210,7 @@ endgenerate                                                   \
     );
 
     CSRGroupCmp #($clog2(`PMPCFG_SIZE)) group_cmp_pmpcfg (
-        .csrid(issue_csr_io.bundle.csrid),
+        .csrid(csrid),
         .cmp_csrid(12'h3a0),
         .data_i(pmpcfg),
         .en(cmp_eq[`CSR_NUM+`CSRGROUP_pmpcfg]),
@@ -216,7 +219,7 @@ endgenerate                                                   \
     );
 
     CSRGroupCmp #($clog2(`PMP_SIZE)) group_cmp_pmpaddr (
-        .csrid(issue_csr_io.bundle.csrid),
+        .csrid(csrid),
         .cmp_csrid(12'h3b0),
         .data_i(pmpaddr),
         .en(cmp_eq[`CSR_NUM+`CSRGROUP_pmpaddr]),
@@ -226,7 +229,7 @@ endgenerate                                                   \
 
 `ifdef RV32I
     CSRGroupCmp #(5) group_cmp_mpfh (
-        .csrid(issue_csr_io.bundle.csrid),
+        .csrid(csrid),
         .cmp_csrid(12'hb80),
         .data_i({{`MXL*30{1'b0}}, mpfhcounter}),
         .en(cmp_eq[`CSR_NUM+`CSRGROUP_mpfh]),
@@ -334,8 +337,9 @@ endgenerate                                                             \
 `endif
     ) & (~mcounteren & mpf_offset_decode & ~mode_m) & (~scounteren & mpf_offset_decode & mode_u);
 
-    logic `N(64) mcycle_n;
+    logic `N(64) mcycle_n, minstret_n;
     assign mcycle_n = {mpfhcounter[0], mpfcounter[0]} + 1;
+    assign minstret_n = {mpfhcounter[1], mpfcounter[1]} + commitBus.num;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
@@ -352,9 +356,8 @@ endgenerate                                                             \
 `endif
         end
         else begin
-`ifndef DIFFTEST
             {mpfhcounter[0], mpfcounter[0]} <= mcycle_n;
-`endif
+            {mpfhcounter[1], mpfhcounter[1]} <= minstret_n;
             if(wen_o[mstatus_id])begin
                 if(s_map)begin
                     mstatus <= wdata_s2 & `SSTATUS_MASK;
@@ -661,7 +664,9 @@ endgenerate
         .mscratch(mscratch),
         .sscratch(sscratch),
         .mideleg(mideleg & `MEDELEG_MASK),
-        .medeleg(medeleg & `MEDELEG_MASK)
+        .medeleg(medeleg & `MEDELEG_MASK),
+        .mcycle({mpfhcounter[0], mpfcounter[0]}),
+        .minstret({mpfhcounter[1], mpfcounter[1]})
     );
 `endif
 endmodule

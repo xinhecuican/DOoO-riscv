@@ -141,8 +141,6 @@ module DecodeUnit(
     assign csrrsi = opsystem & funct3_6;
     assign csrrci = opsystem & funct3_7;
 
-    assign info.csrid = inst[31: 20];
-
 `ifdef RVM
     logic mult, mul, mulh, mulhsu, mulhu, div, divu, rem ,remu;
     assign mult = opreg & funct7_1;
@@ -300,32 +298,20 @@ module DecodeUnit(
                     | fcvtu | fcvtsu;
 `endif
     ;
-    logic [11: 0] imm, store_imm;
-    logic [19: 0] lui_imm;
+    logic [`DEC_IMM_WIDTH-1: 0] store_imm;
+    logic [`DEC_IMM_WIDTH-1: 0] lui_imm;
     logic `N(`DEC_IMM_WIDTH) branch_imm;
     assign branch_imm = {inst[31], inst[7], inst[30: 25], inst[11: 8], 1'b0};
-    assign imm = inst[31: 20];
     assign store_imm = {inst[31: 25], inst[11: 7]};
     assign lui_imm = inst[31: 12];
 
     assign info.immv = slli | srai | srli | addi | slti | xori | ori | andi | sltiu;
-    assign info.imm = {`DEC_IMM_WIDTH{beq | bne | blt | bge | bgeu | bltu}} & branch_imm |
-                      {`DEC_IMM_WIDTH{lui | auipc}} & lui_imm |
-                      {`DEC_IMM_WIDTH{csrrw | csrrs | csrrc | csrrwi | csrrsi | csrrci
-                      }} & inst[19: 15] |
-                      {`DEC_IMM_WIDTH{store
+    assign info.imm = beq | bne | blt | bge | bgeu | bltu ? branch_imm :
+                      store
 `ifdef RVF
-                                     | storefp
+                      | storefp 
 `endif
-                      }} & store_imm |
-                      {`DEC_IMM_WIDTH{load | opimm | jalr
-`ifdef DIFFTEST
-                        | sim_trap
-`endif
-`ifdef RVF
-                        | loadfp
-`endif
-                      }} & imm;
+                                ? store_imm : lui_imm;
 
     assign info.intv = (lui | opimm |
                        add | sub | sll | slt | sltu | _xor | srl | sra | _or | _and |

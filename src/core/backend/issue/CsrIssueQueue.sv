@@ -124,13 +124,16 @@ endgenerate
         end
     end
 
-    function logic detectFence(input CsrIssueBundle bundle);
+    function logic detectFence(
+        input logic `N(`CSROP_WIDTH) csrop, 
+        input logic `N(12) csrid
+    );
                 // sfence.vma, fence, fence.i
-        return bundle.csrop[3] |
+        return csrop[3] |
                 // mstatus, mpp need fence, usually sfence.vma followed with w satp
-               (~bundle.csrop[3] &
-               ((bundle.csrid == `CSRID_mstatus) | (bundle.csrid == `CSRID_sstatus) |
-                (bundle.csrid[11: 0] >= `CSRID_pmpcfg && bundle.csrid[11: 0] < 12'h3f0)));
+               (~csrop[3] &
+               ((csrid == `CSRID_mstatus) | (csrid == `CSRID_sstatus) |
+                (csrid[11: 0] >= `CSRID_pmpcfg && csrid[11: 0] < 12'h3f0)));
     endfunction
 
     always_ff @(posedge clk, posedge rst)begin
@@ -150,7 +153,7 @@ endgenerate
             if(wakeup_en)begin
                 trapInst <= rdata.inst;
                 fence_req.robIdx <= writeRobIdx;
-                fence_req.req <= detectFence(rdata);
+                fence_req.req <= detectFence(rdata.csrop, rdata.imm[16: 5]);
             end
             case(state)
             IDLE:begin

@@ -62,7 +62,7 @@ module BranchModel(
     output BranchUnitRes branchRes,
     output logic `N(`XLEN) result
 );
-    logic `N(`XLEN) s_imm;
+    logic `N(`XLEN) s_imm, jalr_imm;
     logic cmp, scmp, cmp_result;
     logic equal;
     logic dir;
@@ -97,9 +97,10 @@ module BranchModel(
     end
 
     logic `N(`VADDR_SIZE) jalr_target, br_target;
-    assign s_imm = {{`XLEN-12{imm[11]}}, imm[11: 1], 1'b0};
+    assign s_imm = {{`XLEN-13{imm[12]}}, imm[12: 1], 1'b0};
+    assign jalr_imm = {{`XLEN-12{imm[19]}}, imm[19: 8]};
     `CRITICAL(jalr_target, branchRedirect)
-    KSA #(`VADDR_SIZE) ksa_jalr(rs1_data, s_imm, jalr_target);
+    KSA #(`VADDR_SIZE) ksa_jalr(rs1_data, jalr_imm, jalr_target);
     assign br_target = vaddr + s_imm;
     assign branchRes.target = op == `BRANCH_JALR ? jalr_target : 
                               dir ? br_target : result;
@@ -132,10 +133,9 @@ module ALUModel(
     input logic `N(`PREDICTION_WIDTH) offset,
     output logic `N(`XLEN) result
 );
-    logic `N(`XLEN) lui_imm, ext_imm, s_imm;
+    logic `N(`XLEN) lui_imm, s_imm;
     assign lui_imm = {{`XLEN-32{imm[19]}}, imm[19: 0], 12'b0};
-    assign ext_imm = {{`XLEN-12{imm[11] & ~uext}}, imm[11: 0]};
-    assign s_imm = {{`XLEN-12{imm[11]}}, imm[11: 0]};
+    assign s_imm = {{`XLEN-12{imm[19]}}, imm[19: 8]};
 
     logic `N(`XLEN) data1, data2, cmp_data;
     logic `N(`XLEN) add_result;
