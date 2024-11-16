@@ -18,7 +18,7 @@ module apb4_clint (
     ClintIO.clint clint
 );
 
-  logic [3:0] s_apb4_addr;
+  logic [15:0] s_apb4_addr;
   logic s_apb4_wr_hdshk, s_apb4_rd_hdshk;
   logic [`CLINT_MSIP_WIDTH-1:0] s_msip_d, s_msip_q;
   logic s_msip_en;
@@ -28,7 +28,7 @@ module apb4_clint (
   logic s_mtimecmp_en;
   logic s_rtc_rise_edge;
 
-  assign s_apb4_addr     = apb4.paddr[5:2];
+  assign s_apb4_addr     = apb4.paddr[15: 0];
   assign s_apb4_wr_hdshk = (apb4.psel && apb4.penable) && apb4.pwrite;
   assign s_apb4_rd_hdshk = (apb4.psel && apb4.penable) && (~apb4.pwrite);
   assign apb4.pready     = 1'b1;
@@ -90,7 +90,7 @@ module apb4_clint (
     apb4.prdata = '0;
     if (s_apb4_rd_hdshk) begin
       unique case (s_apb4_addr)
-        `CLINT_MSIP:      apb4.prdata[`CLINT_MSIP_WIDTH-1:0] = s_msip_q;
+        `CLINT_MSIP:      apb4.prdata = s_msip_q;
         `CLINT_MTIMEL:    apb4.prdata = s_mtime_q[31:0];
         `CLINT_MTIMEH:    apb4.prdata = s_mtime_q[63:32];
         `CLINT_MTIMECMPL: apb4.prdata = s_mtimecmp_q[31:0];

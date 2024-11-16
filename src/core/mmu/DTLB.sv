@@ -18,7 +18,7 @@ module DTLB(
     logic `N(`LOAD_PIPELINE) lwb_pipeline;
     Decoder #(`LOAD_PIPELINE) decoder_load_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], lwb_pipeline);
     logic `N(`STORE_PIPELINE) swb_pipeline;
-    Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], swb_pipeline);
+    Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `STORE_ISSUE_BANK_WIDTH], swb_pipeline);
 
     logic `N(`DTLB_SIZE) replace_en, replace_hit;
     logic `N(`VADDR_SIZE-`TLB_OFFSET) replace_vpn `N(`DTLB_SIZE);
@@ -117,7 +117,8 @@ endgenerate
     TLBRepeater repeater1(.*, .flush(flush1), .in(tlb_l2_io1), .out(tlb_l2_io));
 
 `ifdef RVA
-    logic amo_req, amo_req_s2, amo_vaddr;
+    logic amo_req, amo_req_s2;
+    logic `N(`VADDR_SIZE) amo_vaddr;
     always_ff @(posedge clk)begin
         amo_req <= tlb_lsu_io.amo_req;
         amo_vaddr <= tlb_lsu_io.amo_addr;
@@ -194,10 +195,10 @@ endgenerate
         sreq_cancel_s3 <= sreq_cancel_s2 & {`STORE_PIPELINE{~flush1}};
 `ifdef RVA
         lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | amo_req_s2}}) & {`LOAD_PIPELINE{~flush0}};
-        sreq_cancel_s4 <= sreq_all_s3 & (sreq_cancel_s3 | {`STORE_PIPELINE{amo_req_s2}}) & {`STORE_PIPELINE{~flush1}};
+        sreq_cancel_s4 <= sreq_all_s2 & (sreq_cancel_s3 | {`STORE_PIPELINE{amo_req_s2}}) & {`STORE_PIPELINE{~flush1}};
 `else
         lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2}}) & {`LOAD_PIPELINE{~flush0}};
-        sreq_cancel_s4 <= sreq_all_s3 & sreq_cancel_s3 & {``STORE_PIPELINE{~flush1}};
+        sreq_cancel_s4 <= sreq_all_s2 & sreq_cancel_s3 & {``STORE_PIPELINE{~flush1}};
 `endif
         lreq_all_s3 <= lreq_all_s2 & {`LOAD_PIPELINE{~flush0}};
         sreq_all_s3 <= sreq_all_s2 & {`STORE_PIPELINE{~flush1}};
@@ -220,11 +221,11 @@ endgenerate
         tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & ~flush0 & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
         tlb_lsu_io.lwb_exception <= {`LOAD_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.lwb_error <= {`LOAD_PIPELINE{tlb_l2_io0.error}};
-        tlb_lsu_io.lwb_idx <= {`LOAD_PIPELINE{tlb_l2_io0.info_o.idx}};
+        tlb_lsu_io.lwb_idx <= {`LOAD_PIPELINE{tlb_l2_io0.info_o.idx[`LOAD_ISSUE_BANK_WIDTH-1: 0]}};
         tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & ~flush1 & (tlb_l2_io0.info_o.source == 2'b10)}} & swb_pipeline;
         tlb_lsu_io.swb_exception <= {`STORE_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.swb_error <= {`STORE_PIPELINE{tlb_l2_io0.error}};
-        tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx}};
+        tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx[`STORE_ISSUE_BANK_WIDTH-1: 0]}};
 `ifdef RVA
         tlb_lsu_io.amo_valid <= amo_req & ~ltlb_io[0].miss | 
                                 (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid;

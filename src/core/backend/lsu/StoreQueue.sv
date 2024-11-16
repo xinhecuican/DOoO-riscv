@@ -60,6 +60,8 @@ module StoreQueue(
     typedef enum { IDLE, LOOKUP, WRITEBACK, RETIRE } UncacheState;
     UncacheState uncacheState;
     logic `N(`PADDR_SIZE) uncache_addr;
+    logic `N(`DCACHE_BYTE_WIDTH) uncache_size, uncache_size_pre;
+    logic `N(`DCACHE_BYTE_WIDTH) uncache_offset;
     logic `N(`DCACHE_BITS) uncache_data, uncache_wb_data;
     logic `N(`STORE_QUEUE_WIDTH) uncache_head;
     logic `N(`DCACHE_BYTE) uncache_strb;
@@ -222,7 +224,7 @@ endgenerate
     assign saxi_io.aw_id = 0;
     assign saxi_io.aw_addr = uncache_addr;
     assign saxi_io.aw_len = 0;
-    assign saxi_io.aw_size = $clog2(`DATA_BYTE);
+    assign saxi_io.aw_size = uncache_size;
     assign saxi_io.aw_burst = 0;
     assign saxi_io.aw_lock = 0;
     assign saxi_io.aw_cache = 0;
@@ -243,11 +245,21 @@ endgenerate
     assign io.wb_req = uncacheState == WRITEBACK;
     assign io.wb_robIdx = uncache_robIdx;
 
+    lzc #(`DCACHE_BYTE) lzc_uncache_offset (addr_mask[commitHead][`DCACHE_BYTE-1: 0], uncache_offset, );
+    ParallelAdder #(1, `DCACHE_BYTE) adder_uncache_size (addr_mask[commitHead][`DCACHE_BYTE-1: 0], uncache_size_pre);
+
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             uncacheState <= IDLE;
             uncache_req <= 0;
             uncache_wreq <= 0;
+            uncache_size <= 0;
+            uncache_addr <= 0;
+            uncache_head <= 0;
+            uncache_strb <= 0;
+            uncache_data <= 0;
+            uncache_size <= 0;
+            uncache_robIdx <= 0;
         end
         else begin
             case(uncacheState)
@@ -255,11 +267,12 @@ endgenerate
                 if(valid[commitHead] & uncache[commitHead] &
                 (commitBus.robIdx == redirect_robIdxs[commitHead]))begin
                     uncacheState <= LOOKUP;
-                    uncache_addr <= {addr_mask[commitHead][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE], {`DCACHE_BYTE_WIDTH{1'b0}}};
+                    uncache_addr <= {addr_mask[commitHead][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE], uncache_offset};
+                    uncache_size <= uncache_size_pre;
                     uncache_head <= commitHead;
                     uncache_req <= 1'b1;
                     uncache_data <= data[commitHead];
-                    uncache_strb <= addr_mask[commitHead][`DCACHE_BYTE-1: 0];
+                    uncache_strb <= addr_mask[commitHead][`DCACHE_BYTE-1: 0] >> uncache_offset;
                     uncache_robIdx <= commitBus.robIdx;
                 end
             end
@@ -378,6 +391,8 @@ generate
         
     end
     
+    `Log(DLog::Debug, T_DCACHE, saxi_io.w_valid & saxi_io.w_ready, 
+        $sformatf("uncache write. [%x %d] %x", uncache_addr, uncache_size, uncache_data))
 endgenerate
 endmodule
 

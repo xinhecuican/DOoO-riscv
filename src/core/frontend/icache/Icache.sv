@@ -84,6 +84,7 @@ module ICache(
     logic abandon_lookup, abandon_idle;
     logic stall_wait;
     logic `N(`ICACHE_WAY) replace_way;
+    logic cache_stall;
 
     assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx;
     assign stream_size = fsq_cache_io.stream.size + 1;
@@ -107,10 +108,11 @@ module ICache(
     assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
     assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};
-    assign itlb_cache_io.flush = fsq_cache_io.flush;
+    assign itlb_cache_io.flush = fsq_cache_io.flush | abandon_lookup;
     assign itlb_cache_io.ready = ~fsq_cache_io.stall;
     assign ptag1 = itlb_cache_io.paddr[0][`PADDR_SIZE-1: `TLB_OFFSET];
     assign ptag2 = itlb_cache_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET];
+    assign cache_stall = fsq_cache_io.stall | ((main_state == LOOKUP) & (itlb_cache_io.miss & ~(|itlb_cache_io.exception)));
 
     logic `N(`ICACHE_WAY) tagv_we;
     logic `N(`ICACHE_SET_WIDTH) tagv_index, tagv_windex;
@@ -139,12 +141,12 @@ module ICache(
 `else
     {1'b1, miss_buffer.paddr[`ICACHE_TAG + `ICACHE_SET_WIDTH -1 : `ICACHE_SET_WIDTH]};
 `endif
-    assign data_en = {`ICACHE_BANK{~fsq_cache_io.stall}};
+    assign data_en = {`ICACHE_BANK{~cache_stall}};
     assign data_we = {`ICACHE_BANK{replace_way & {`ICACHE_WAY{refill_en}}}};
     ICacheData icache_data(
         .clk,
         .rst(cache_rst),
-        .tagv_en((fsq_cache_io.en & ~fsq_cache_io.stall)),
+        .tagv_en((fsq_cache_io.en & ~cache_stall)),
         .tagv_we,
         .tagv_index,
         .tagv_windex,
@@ -200,15 +202,17 @@ module ICache(
 
 
     assign fsq_cache_io.ready = ((main_state == IDLE && (abandon_idle || (!fsq_cache_io.stall))) ||
-                                (main_state == LOOKUP && (!(|cache_miss) &&
-                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) &&
-                                (abandon_lookup || abandon_idle || !fsq_cache_io.stall)))
+                                (main_state == LOOKUP && (((!(|cache_miss) &&
+                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) && !fsq_cache_io.stall) || 
+                                (abandon_lookup || abandon_idle && fsq_cache_io.en))))
 `ifdef EXT_FENCEI
                                 & ~fenceValid
 `endif
                                 ;
-    assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & ((~(|cache_miss)) | (|itlb_cache_io.exception)) & ~abandon_lookup) | miss_data_en}}
-                             & request_buffer.expand_en_shift;
+    assign cache_pd_io.en = {`ICACHE_BANK{((main_state == LOOKUP) & 
+                            ((~((|cache_miss) | itlb_cache_io.miss)) | 
+                            (|itlb_cache_io.exception)) & ~abandon_lookup) | miss_data_en}} & 
+                            request_buffer.expand_en_shift;
     assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
     assign cache_pd_io.stream.start_addr = request_buffer.stream.start_addr;
     assign cache_pd_io.start_addr = request_buffer.start_addr;
@@ -224,7 +228,7 @@ module ICache(
         for(genvar bank=0; bank<`BLOCK_INST_SIZE; bank++)begin
             logic `N(BANK_IDX_SIZE) bank_index;
             always_ff @(posedge clk)begin
-                if(!fsq_cache_io.stall)begin
+                if(!cache_stall)begin
                     bank_index <= bank + fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: 2] + fsq_cache_io.shiftIdx;
                 end
             end
@@ -288,7 +292,7 @@ module ICache(
                 if(fsq_cache_io.flush | abandon_lookup)begin
                     main_state <= IDLE;
                 end
-                else if(fsq_cache_io.stall | (itlb_cache_io.miss & ~(|itlb_cache_io.exception)))begin
+                else if(cache_stall)begin
                     
                 end
                 else if((|cache_miss) & ~(|itlb_cache_io.exception))begin

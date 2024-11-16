@@ -638,11 +638,13 @@ endinterface
 interface CsrL2IO;
     logic sum;
     logic mxr;
+    logic mprv;
     logic `N(2) mode;
+    logic `N(2) mpp;
     PPNAddr ppn;
 
-    modport csr (output sum, mxr, mode, ppn);
-    modport tlb (input sum, mxr, mode, ppn);
+    modport csr (output sum, mxr, mode, ppn, mprv, mpp);
+    modport tlb (input sum, mxr, mode, ppn, mprv, mpp);
 endinterface
 
 interface CachePTWIO;
@@ -691,7 +693,7 @@ interface FenceBus;
 `endif
     );
     modport lsu (input valid, mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
-    modport rob (input fence_end);
+    modport rob (input fence_end, valid);
     modport dis (input valid);
     modport mmu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid);
     modport l2tlb (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, output mmu_flush_end);

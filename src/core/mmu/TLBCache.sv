@@ -81,8 +81,8 @@ module TLBCache(
     PRSelector #(`TLB_PN) select_hit (hit, hit_first);
 
     logic pn1_exception;
-    TLBExcDetect exc_detect0 (pn0_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mode, exception[0]);
-    TLBExcDetect exc_detect1 (pn1_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mode, pn1_exception);
+    TLBExcDetect exc_detect0 (pn0_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, exception[0]);
+    TLBExcDetect exc_detect1 (pn1_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn1_exception);
     assign exception[1] = pn1_exception | (leaf[1] & pn1_io.meta);
 
     logic `ARRAY(`TLB_PN, `PADDR_SIZE) paddr;
@@ -166,8 +166,10 @@ generate
         end
     end
     for(genvar j=0; j<BANK; j++)begin
+        PTEEntry entry;
+        assign entry = ptw_page_io.refill_data[j];
         if(PN == 1)begin
-            assign unaligned[j] = ptw_page_io.refill_data[j][`TLB_PPN0+10: 10] != 0;
+            assign unaligned[j] = entry.ppn.ppn0 != 0;
         end
         else begin
             assign unaligned[j] = 0;
@@ -389,14 +391,18 @@ module TLBExcDetect#(
     input logic `N(2) source,
     input logic mxr,
     input logic sum,
+    input logic mprv,
+    input logic [1: 0] mpp,
     input logic [1: 0] mode,
     output logic exception
 );
     logic leaf;
     logic r, w, x;
-    assign r = source[0] & ~source[1];
-    assign w = source[1] & ~source[0];
+    logic [1: 0] mode_i;
+    assign r = source[0];
+    assign w = source[1];
     assign x = ~source[0] & ~source[1];
+    assign mode_i = ~x & mprv ? mpp : mode;
 generate
     if(IS_LEAF)begin
         assign leaf = 1'b1;
@@ -411,7 +417,7 @@ endgenerate
                       (leaf & ~((entry.r & r) |
                               (entry.x & (x | (r & mxr))) |
                               (entry.w & w))) |
-                      (leaf & (((mode == 2'b01) & ~sum & entry.u) |
-                      ((mode == 2'b00) & ~entry.u) |
+                      (leaf & (((mode_i == 2'b01) & ~sum & entry.u) |
+                      ((mode_i == 2'b00) & ~entry.u) |
                       (~entry.a | (w & ~entry.d))));
 endmodule

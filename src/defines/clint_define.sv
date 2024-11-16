@@ -40,11 +40,11 @@
 */
 
 // verilog_format: off
-`define CLINT_MSIP      4'b0000 // BASEADDR + 0x00
-`define CLINT_MTIMEL    4'b0001 // BASEADDR + 0x04
-`define CLINT_MTIMEH    4'b0010 // BASEADDR + 0x08
-`define CLINT_MTIMECMPL 4'b0011 // BASEADDR + 0x0C
-`define CLINT_MTIMECMPH 4'b0100 // BASEADDR + 0x10
+`define CLINT_MSIP      16'h0000 // BASEADDR + 0x00
+`define CLINT_MTIMEL    16'hbff8 // BASEADDR + 0x04
+`define CLINT_MTIMEH    16'hbffc // BASEADDR + 0x08
+`define CLINT_MTIMECMPL 16'h4000 // BASEADDR + 0x0C
+`define CLINT_MTIMECMPH 16'h4004 // BASEADDR + 0x10
 
 
 `define CLINT_MSIP_ADDR      {26'b0, `CLINT_MSIP     , 2'b00}

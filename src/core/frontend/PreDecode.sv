@@ -57,7 +57,7 @@ module PreDecode(
             tailIdx <= cache_pd_io.stream.size;
             stream_next <= cache_pd_io.stream;
             instNumNext <= instNum;
-            next_pc <= cache_pd_io.stream.start_addr + cache_pd_io.stream.size + 4;
+            next_pc <= cache_pd_io.stream.start_addr + {cache_pd_io.stream.size, 2'b00} + 4;
             shiftIdx <= cache_pd_io.shiftIdx;
             ipf <= cache_pd_io.exception;
             start_addr_n <= cache_pd_io.start_addr;

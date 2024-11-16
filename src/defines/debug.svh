@@ -9,6 +9,7 @@
 `define T_DCACHE
 `define T_SCB
 // `define T_ICACHE
+`define T_COMMIT
 
 // `define REPORT_RAM
 // `define REPORT_UNPARAM

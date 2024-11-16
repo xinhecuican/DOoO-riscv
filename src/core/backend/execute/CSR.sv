@@ -35,7 +35,7 @@ module CSR(
     logic `N(`MXL) marchid;
     logic `N(`MXL) mimpid;
     logic `N(`MXL) mhartid;
-    STATUS mstatus;
+    STATUS mstatus, sstatus;
     TVEC mtvec;
     logic `N(`MXL) medeleg;
     logic `N(`MXL) mideleg;
@@ -61,6 +61,7 @@ module CSR(
     logic `N(`MXL) mconfigptr;
 
     logic `ARRAY(`PMPCFG_SIZE, `MXL) pmpcfg;
+    PMPCfg `N(`PMP_SIZE) pmpcfg_t;
     logic `ARRAY(`PMP_SIZE, `MXL) pmpaddr;
     logic `N(`MXL) pmpcfgval, pmpval;
     logic `N($clog2(`PMPCFG_SIZE)) pmpcfg_offset;
@@ -88,6 +89,7 @@ module CSR(
     logic `N(`CSR_NUM+`CSR_GROUP_SIZE) wen, wen_s1, wen_s2, wen_o; // exe wb retire
     logic `N(`XLEN) wdata, origin_data, rdata, cmp_rdata;
     logic `ARRAY(`CSR_GROUP_SIZE+1, `MXL) cmp_rdata_pre;
+    logic `N(`MXL) pmp_cmp_rdata;
     logic `N(`XLEN) wdata_s1, wdata_s2;
     logic `N(`CSROP_WIDTH) csrop;
     logic csrrw, csrrs, csrrc;
@@ -224,8 +226,10 @@ endgenerate                                                   \
         .data_i(pmpaddr),
         .en(cmp_eq[`CSR_NUM+`CSRGROUP_pmpaddr]),
         .offset(pmpaddr_offset),
-        .data_o(cmp_rdata_pre[`CSRGROUP_pmpaddr+1])
+        .data_o(pmp_cmp_rdata)
     );
+    assign pmpcfg_t = pmpcfg;
+    assign cmp_rdata_pre[`CSRGROUP_pmpaddr+1] = pmpcfg_t[pmpaddr_offset].a == `PMP_NAPOT ? pmp_cmp_rdata | `PMP_NAPOT_MASK : pmp_cmp_rdata & `PMP_MASK;
 
 `ifdef RV32I
     CSRGroupCmp #(5) group_cmp_mpfh (
@@ -359,12 +363,22 @@ endgenerate                                                             \
             {mpfhcounter[0], mpfcounter[0]} <= mcycle_n;
             {mpfhcounter[1], mpfhcounter[1]} <= minstret_n;
             if(wen_o[mstatus_id])begin
-                if(s_map)begin
-                    mstatus <= wdata_s2 & `SSTATUS_MASK;
-                end
-                else begin
-                    mstatus <= wdata_s2 & `STATUS_MASK;
-                end
+                mstatus.sie <= wdata_s2[1];
+                mstatus.mie <= wdata_s2[3];
+                mstatus[23: 5] <= wdata_s2[23: 5];
+            end
+            if(wen_o[sstatus_id])begin
+                mstatus.sie <= wdata_s2[1];
+                mstatus.spie <= wdata_s2[5];
+                mstatus.ube <= wdata_s2[6];
+                mstatus[8] <= wdata_s2[8];
+                mstatus.vs <= wdata_s2[10: 9];
+                mstatus.fs <= wdata_s2[14: 13];
+                mstatus.xs <= wdata_s2[16: 15];
+                mstatus.sum <= wdata_s2[18];
+                mstatus.mxr <= wdata_s2[19];
+                mstatus.spelp <= wdata_s2[23];
+                mstatus.sdt <= wdata_s2[24];
             end
 `ifdef RVF
             if(wen_o[fcsr_id] & (mstatus.fs != 2'b00))begin
@@ -396,8 +410,14 @@ endgenerate                                                             \
             if(wen_o[sepc_id])begin
                 sepc <= wdata_s2;
             end
-            if(wen_o[mie_id] | wen_o[sie_id])begin
+            if(wen_o[mie_id])begin
                 mie <= wdata_s2;
+            end
+            if(wen_o[sie_id])begin
+                mie[1] <= wdata_s2[1];
+                mie[5] <= wdata_s2[5];
+                mie[9] <= wdata_s2[9];
+                mie[13] <= wdata_s2[13];
             end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
@@ -635,21 +655,22 @@ endgenerate
     `TLB_ASSIGN(csr_ltlb_io, 0)
     `TLB_ASSIGN(csr_stlb_io, 0)
     always_ff @(posedge clk)begin
-        if((mode == 2'b11) & mstatus.mprv)begin
-            csr_l2_io.mode <= mstatus.mpp;
-        end
         csr_l2_io.sum <= mstatus.sum;
         csr_l2_io.mxr <= mstatus.mxr;
         csr_l2_io.ppn <= satp.ppn;
+        csr_l2_io.mpp <= mstatus.mpp;
+        csr_l2_io.mprv <= mstatus.mprv;
+        csr_l2_io.mode <= mode;
     end
 
 `ifdef DIFFTEST
+    assign sstatus = mstatus & `SSTATUS_MASK;
     DifftestCSRState difftest_csr_state (
         .clock(clk),
         .coreid(mhartid),
         .priviledgeMode(mode),
-        .mstatus(mstatus),
-        .sstatus((mstatus & `SSTATUS_MASK)),
+        .mstatus({mstatus[31], 32'h0, mstatus[30: 0]}),
+        .sstatus({sstatus[31], 32'h0, sstatus[30: 0]}),
         .mepc(mepc),
         .sepc(sepc),
         .mtval(mtval),

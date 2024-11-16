@@ -180,7 +180,7 @@ module Soc(
         .axi_resp_o(irq_resp),
         .apb_req_o({plic_req, clint_req}),
         .apb_resp_i({plic_resp, clint_resp}),
-        .addr_map_i(map_rules)
+        .addr_map_i(irq_map_rules)
     );
 
     ApbIO clint_apb_io();

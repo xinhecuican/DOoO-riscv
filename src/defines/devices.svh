@@ -7,7 +7,7 @@
 `define IRQ_START           `PADDR_SIZE'h08000000
 `define IRQ_END             `PADDR_SIZE'h10000000
 `define CLINT_START         `PADDR_SIZE'h08000000
-`define CLINT_END           `PADDR_SIZE'h08001000
+`define CLINT_END           `PADDR_SIZE'h08010000
 `define PLIC_START          `PADDR_SIZE'h0c000000
 `define PLIC_END            `PADDR_SIZE'h0c001000
 
@@ -21,7 +21,7 @@
 `define MEM_END             `PADDR_SIZE'ha0000000
 
 typedef struct packed {
-    logic [$clog2(`PERIPHERAL_SIZE): 0] idx;
+    logic [$clog2(`PERIPHERAL_SIZE+2): 0] idx;
     logic [`PADDR_SIZE-1: 0] start_addr;
     logic [`PADDR_SIZE-1: 0] end_addr;
 } addr_rule_t;

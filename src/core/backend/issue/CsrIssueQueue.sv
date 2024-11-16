@@ -49,7 +49,7 @@ module CsrIssueQueue(
     assign select_en = (head != tail || (hdir ^ tdir)) &&
                         state == IDLE &&
                         statush.robIdx == commitBus.robIdx &&
-                        !backendCtrl.redirect;
+                        !backendCtrl.redirect && !fenceBus.valid;
     always_ff @(posedge clk)begin
         wakeup_en <= select_en & csr_wakeup_io.ready & csr_reg_io.ready;
         status_n <= statush;
@@ -133,6 +133,7 @@ endgenerate
                 // mstatus, mpp need fence, usually sfence.vma followed with w satp
                (~csrop[3] &
                ((csrid == `CSRID_mstatus) | (csrid == `CSRID_sstatus) |
+                (csrid == `CSRID_satp) | (csrid == `CSRID_fcsr) |
                 (csrid[11: 0] >= `CSRID_pmpcfg && csrid[11: 0] < 12'h3f0)));
     endfunction
 

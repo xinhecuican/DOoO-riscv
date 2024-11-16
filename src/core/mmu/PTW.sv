@@ -43,46 +43,46 @@ module PTW(
     logic pn1_leaf;
     logic `N(`PADDR_SIZE) wb_addr;
 
-    localparam PN0_TAG_SIZE = `TLB_VPN * `TLB_PN - $clog2(`TLB_P0_BANK);
-    localparam PN0_BIT_SIZE = `VADDR_SIZE + $bits(TLBInfo) + `PADDR_SIZE;
+    localparam PN0_TAG_SIZE = `TLB_VPN * `TLB_PN;
+    localparam PN0_BIT_SIZE = `VADDR_SIZE + $bits(TLBInfo) + `PADDR_SIZE - `TLB_OFFSET;
     PTBufferIO #(
         .TAG_WIDTH(PN0_TAG_SIZE),
         .DATA_WIDTH(PN0_BIT_SIZE - PN0_TAG_SIZE)
     ) pn0_io();
     PTBuffer #(
-        .TAG_WIDTH(`TLB_VPN * `TLB_PN),
-        .DATA_WIDTH($bits(TLBInfo) + `TLB_OFFSET + `PADDR_SIZE),
+        .TAG_WIDTH(PN0_TAG_SIZE),
+        .DATA_WIDTH(PN0_BIT_SIZE-PN0_TAG_SIZE),
         .DEPTH(`TLB_PTB0_SIZE),
         .MULTI(1)
     ) pn0_buffer (.*, .io(pn0_io));
 
-    localparam PN1_TAG_SIZE = `TLB_VPN * (`TLB_PN - 1) - $clog2(`TLB_P1_BANK);
+    localparam PN1_TAG_SIZE = `TLB_VPN * (`TLB_PN - 1);
     localparam PN1_BIT_SIZE = `VADDR_SIZE + $bits(TLBInfo);
     PTBufferIO #(
         .TAG_WIDTH(PN1_TAG_SIZE),
         .DATA_WIDTH(PN1_BIT_SIZE - PN1_TAG_SIZE)
     ) pn1_io();
     PTBuffer #(
-        .TAG_WIDTH(`TLB_VPN * (`TLB_PN - 1)),
-        .DATA_WIDTH($bits(TLBInfo) + `TLB_OFFSET + `TLB_VPN),
+        .TAG_WIDTH(PN1_TAG_SIZE),
+        .DATA_WIDTH(PN1_BIT_SIZE-PN1_TAG_SIZE),
         .DEPTH(`TLB_PTB1_SIZE)
     ) pn1_buffer (.*, .io(pn1_io));
 
     assign pn0_io.flush = flush;
     assign pn0_io.en = cache_ptw_io.req & cache_ptw_io.valid[1] |
                        (state == WB_PN1 && (~pn1_leaf & ~pn1_exception & ~pn0_io.full));
-    assign pn0_io.tag = cache_ptw_io.req & cache_ptw_io.valid[1] ? cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)+`DCACHE_BANK_WIDTH] :
-                        req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)+`DCACHE_BANK_WIDTH];
-    assign pn0_io.data = cache_ptw_io.req & cache_ptw_io.valid[1] ? {cache_ptw_io.vaddr[`TLB_OFFSET+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info, cache_ptw_io.paddr[1]} :
-                         {req_buf.vaddr[`TLB_OFFSET+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info, wb_addr};
+    assign pn0_io.tag = cache_ptw_io.req & cache_ptw_io.valid[1] ? cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)] :
+                        req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)];
+    assign pn0_io.data = cache_ptw_io.req & cache_ptw_io.valid[1] ? {cache_ptw_io.vaddr[`TLB_OFFSET-1: 0], cache_ptw_io.info, cache_ptw_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET]} :
+                         {req_buf.vaddr[`TLB_OFFSET-1: 0], req_buf.info, wb_addr[`PADDR_SIZE-1: `TLB_OFFSET]};
     assign pn0_io.data_valid = rlast && (state == WALK_PN0);
-    assign pn0_io.ctag = req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)+`DCACHE_BANK_WIDTH];
+    assign pn0_io.ctag = req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(0)];
     assign pn0_io.wb_ready = (state == WB_PN0) & ptw_io.valid & ptw_io.ready;
 
     assign pn1_io.flush = flush;
     assign pn1_io.en = cache_ptw_io.req & (~cache_ptw_io.valid[1] & ~cache_ptw_io.valid[0]);
-    assign pn1_io.tag = cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH];
-    assign pn1_io.data = {cache_ptw_io.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: 0], cache_ptw_io.info};
+    assign pn1_io.tag = cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(1)];
+    assign pn1_io.data = {cache_ptw_io.vaddr[`TLB_VPN_BASE(1)-1: 0], cache_ptw_io.info};
     assign pn1_io.data_valid = rlast && (state == WALK_PN1);
     assign pn1_io.ready = state == IDLE;
 
@@ -104,7 +104,7 @@ module PTW(
     end
     assign axi_io.ar_id = 0;
     assign axi_io.ar_valid = ar_valid;
-    assign axi_io.ar_addr = req_buf.paddr;
+    assign axi_io.ar_addr = {req_buf.paddr[`PADDR_SIZE-1: `DCACHE_LINE_WIDTH], {`DCACHE_LINE_WIDTH{1'b0}}};
     assign axi_io.ar_len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign axi_io.ar_size = $clog2(`DATA_BYTE);
     assign axi_io.ar_burst = 2'b01;
@@ -121,7 +121,7 @@ module PTW(
 
     logic pn1_unalign;
     assign pn1_unalign = pn1_leaf & (|req_buf.wb_entry.ppn[0]);
-    TLBExcDetect exc_detect1 (req_buf.wb_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mode, pn0_exception);
+    TLBExcDetect exc_detect1 (req_buf.wb_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn0_exception);
     assign pn1_exception = pn0_exception | pn1_unalign;
 
     assign ptw_io.waddr = req_buf.vaddr;
@@ -202,8 +202,8 @@ module PTW(
                 end
                 else if(pn0_io.valid)begin
                     req_buf.vaddr <= pn0_io.data_o[PN0_BIT_SIZE-1: PN0_BIT_SIZE - `VADDR_SIZE];
-                    req_buf.paddr <= pn0_io.data_o[`PADDR_SIZE-1: 0];
-                    req_buf.info <= pn0_io.data_o[`PADDR_SIZE+$bits(TLBInfo)-1: `PADDR_SIZE];
+                    req_buf.paddr <= pn0_io.data_o[`PADDR_SIZE-`TLB_OFFSET-1: 0];
+                    req_buf.info <= pn0_io.data_o[`PADDR_SIZE-`TLB_OFFSET +: $bits(TLBInfo)];
                     state <= WALK_PN0;
                 end
 
@@ -218,7 +218,7 @@ module PTW(
                 end
                 if(rlast)begin
                     state <= WB_PN1;
-                    req_buf.wb_entry <= rdata[req_buf.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: `TLB_VPN_BASE(1)]];
+                    req_buf.wb_entry <= rdata[req_buf.vaddr[`TLB_VPN_BASE(1) +: `DCACHE_BANK_WIDTH]];
                 end
             end
             WB_PN1: begin
@@ -229,8 +229,8 @@ module PTW(
                 end
                 else if(~(cache_ptw_io.req & cache_ptw_io.valid[1]) & ~pn0_io.full)begin
                     req_buf.vaddr <= pn0_io.data_o[PN0_BIT_SIZE-1: PN0_BIT_SIZE - `VADDR_SIZE];
-                    req_buf.paddr <= pn0_io.data_o[`PADDR_SIZE-1: 0];
-                    req_buf.info <= pn0_io.data_o[`PADDR_SIZE+$bits(TLBInfo)-1: `PADDR_SIZE];
+                    req_buf.paddr <= pn0_io.data_o[`PADDR_SIZE-`TLB_OFFSET-1: 0];
+                    req_buf.info <= pn0_io.data_o[`PADDR_SIZE-`TLB_OFFSET +: $bits(TLBInfo)];
                     ar_valid <= 1'b1;
                     state <= WALK_PN0;
                 end
@@ -241,16 +241,16 @@ module PTW(
                 end
                 if(rlast)begin
                     state <= WB_PN0;
-                    req_buf.wb_entry <= rdata[req_buf.vaddr[`TLB_VPN_BASE(1)+`DCACHE_BANK_WIDTH-1: `TLB_VPN_BASE(1)]];
+                    req_buf.wb_entry <= rdata[req_buf.vaddr[`TLB_VPN_BASE(0) +: `DCACHE_BANK_WIDTH]];
                 end
             end
             WB_PN0: begin
                 if(pn0_io.wb_valid & ptw_io.ready)begin
                     req_buf.wb_valid <= 1'b1;
-                    req_buf.vaddr <= pn0_io.wb_data[PN0_BIT_SIZE-1: PN0_BIT_SIZE - `VADDR_SIZE];
-                    req_buf.paddr <= pn0_io.wb_data[`PADDR_SIZE-1: 0];
-                    req_buf.info <= pn0_io.wb_data[`PADDR_SIZE+$bits(TLBInfo)-1: `PADDR_SIZE];
-                    req_buf.wb_entry <= rdata[pn0_io.wb_data[PN0_BIT_SIZE-PN0_TAG_SIZE-1: PN0_BIT_SIZE-PN0_TAG_SIZE-`DCACHE_BANK_WIDTH]];
+                    req_buf.vaddr <= pn0_io.data_o[PN0_BIT_SIZE-1: PN0_BIT_SIZE - `VADDR_SIZE];
+                    req_buf.info <= pn0_io.data_o[`PADDR_SIZE-`TLB_OFFSET +: $bits(TLBInfo)];
+                    state <= WALK_PN0;
+                    req_buf.wb_entry <= rdata[pn0_io.wb_data[PN0_BIT_SIZE-PN0_TAG_SIZE+`DCACHE_BANK_WIDTH-1: PN0_BIT_SIZE-PN0_TAG_SIZE]];
                 end
                 if(~pn0_io.wb_valid & req_buf.wb_valid & ptw_io.ready)begin
                     req_buf.wb_valid <= 1'b0;
@@ -322,18 +322,25 @@ module PTBuffer #(
 
 generate
     if(MULTI)begin
-        logic `N(DEPTH) data_valid;
+        logic `N(DEPTH) data_valid, wb_valid;
         logic `N(DEPTH) tag_cmp;
-        logic `N(DEPTH) valid_idx_decode;
+        logic `N(DEPTH) select_idx_dec;
+        logic `N(ADDR_WIDTH) select_idx;
 
-        Decoder #(DEPTH) decoder_valid_idx (valid_idx, valid_idx_decode);
+        Decoder #(DEPTH) decoder_valid_idx (select_idx, select_idx_dec);
 
         for(genvar i=0; i<DEPTH; i++)begin
             assign tag_cmp[i] = en[i] & (tag[i] == io.ctag);
         end
         assign io.wb_valid = |data_valid;
-        PEncoder #(DEPTH) encoder_wb_idx (data_valid, wb_idx);
+        PSelector #(DEPTH) selector_wb_valid (data_valid, wb_valid);
+        Encoder #(DEPTH) encoder_wb_idx (wb_valid, wb_idx);
         assign io.wb_data = {tag[wb_idx], data[wb_idx]};
+        always_ff @(posedge clk)begin
+            if(io.valid & io.ready)begin
+                select_idx <= valid_idx;
+            end
+        end
         always_ff @(posedge clk, posedge rst)begin
             if(rst == `RST)begin
                 data_valid <= 0;
@@ -347,13 +354,14 @@ generate
                 if(io.en)begin
                     en[free_idx] <= 1'b1;
                 end
-                if(io.data_valid)begin
-                    data_valid <= tag_cmp & ~valid_idx_decode;
-                end
                 if(io.wb_valid & io.wb_ready)begin
-                    data_valid[wb_idx] <= 1'b0;
                     en[wb_idx] <= 1'b0;
                 end
+
+                for(int i=0; i<DEPTH; i++)begin
+                    data_valid[i] <= (data_valid[i] | io.data_valid & tag_cmp[i] & ~select_idx_dec[i]) &
+                                  ~(io.wb_ready & wb_valid[i]);
+                end 
             end
         end
     end

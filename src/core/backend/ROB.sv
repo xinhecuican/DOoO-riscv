@@ -91,7 +91,7 @@ module ROB(
     logic `N(`ROB_WIDTH + 1) walk_remainCount_n, ext_tail, walk_remain_count;
     logic `N(`FETCH_WIDTH) walk_en;
     logic `N($clog2(`COMMIT_WIDTH)+1) walk_num, walk_normal_num, redirect_num;
-    logic skip_current, walk_skip;
+    logic skip_current, walk_skip, walk_skip_exist;
 
     logic exc_exist_n;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx_n;
@@ -198,7 +198,7 @@ endgenerate
         end
         else begin
             // en[0] is csr issue queue idx and it's in order
-            if(int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx) & ~irqInfo.irq)begin
+            if(int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx) & ~irqInfo.irq & ~fenceBus.valid)begin
                 wb_sfence <= int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx);
             end
             else if((|commit_en_n) | exc_exist_n)begin
@@ -463,6 +463,7 @@ endgenerate
             commit_walk_num <= 0;
             walk_start <= 0;
             walk_skip <= 0;
+            walk_skip_exist <= 0;
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 dataRIdx[i] <= i;
             end
@@ -479,7 +480,7 @@ endgenerate
                     commit_walk_num <= 0;
                 end
                 walk_start <= 1'b0;
-                walk_skip <= 1'b0;
+                walk_skip <= backendRedirect.en & ~walk_skip_exist & ~skip_current;
                 commit_walk_en <= walk_en;
                 commit_walk_num <= walk_num;
                 walkInfo.remainCount <= walk_remain_count - walk_num;
@@ -490,6 +491,14 @@ endgenerate
                 walk <= 1'b1;
                 walk_start <= 1'b1;
                 walk_skip <= ~skip_current;
+                walk_skip_exist <= ~skip_current;
+            end
+
+            if(backendRedirect.en)begin
+                walk_skip_exist <= walk_skip_exist | ~skip_current;
+            end
+            if(walk_state && walk_remain_count == 0) begin
+                walk_skip_exist <= 1'b0;
             end
 
             if(walk_state && walk_remain_count == 0)begin
@@ -623,5 +632,8 @@ endgenerate
             instrCnt <= instrCnt + commitCnt;
         end
     end
+
+    `Log(DLog::Debug, T_COMMIT, exc_exist_n,
+        $sformatf("exception[%d %x] pc: %x", irq_n, redirect_exccode, exc_pc))
 `endif
 endmodule

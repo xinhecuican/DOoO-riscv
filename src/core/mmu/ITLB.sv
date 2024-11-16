@@ -92,16 +92,16 @@ endgenerate
             end
             WALK_ADDR0: begin
                 if((req_buf.req_s3 & ~tlb_l2_io0.ready) | 
-                   (tlb_l2_io.dataValid & tlb_l2_io.error))begin
+                   (tlb_l2_io0.dataValid & tlb_l2_io0.error))begin
                     req_buf.req <= 1'b1;
                 end
-                if(tlb_l2_io.dataValid & tlb_l2_io.exception)begin
+                if(tlb_l2_io0.dataValid & tlb_l2_io0.exception)begin
                     req_buf.exception[0] <= 1'b1; 
                 end
-                if(tlb_l2_io.dataValid & ~tlb_l2_io.exception & ~tlb_l2_io.error)begin
+                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
                     req_buf.paddr[0] <= wpaddr;
                 end
-                if(tlb_l2_io.dataValid & ~tlb_l2_io.error)begin
+                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error)begin
                     if(req_buf.miss[1])begin
                         state <= WALK_ADDR1;
                         req_buf.req <= 1'b1;
@@ -115,16 +115,16 @@ endgenerate
             end
             WALK_ADDR1: begin
                 if((req_buf.req_s3 & ~tlb_l2_io0.ready) | 
-                   (tlb_l2_io.dataValid & tlb_l2_io.error))begin
+                   (tlb_l2_io0.dataValid & tlb_l2_io0.error))begin
                     req_buf.req <= 1'b1;
                 end
-                if(tlb_l2_io.dataValid & ~tlb_l2_io.exception & ~tlb_l2_io.error)begin
+                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
                     req_buf.paddr[1] <= wpaddr;
                 end
-                if(tlb_l2_io.dataValid & tlb_l2_io.exception)begin
+                if(tlb_l2_io0.dataValid & tlb_l2_io0.exception)begin
                     req_buf.exception[1] <= 1'b1; 
                 end
-                if(tlb_l2_io.dataValid & ~tlb_l2_io.error)begin
+                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error)begin
                     state <= IDLE;
                     miss_end <= 1'b1;
                 end
@@ -144,14 +144,7 @@ endgenerate
     VPNAddr vpn;
     PPNAddr wppn;
     assign vpn = tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
-    always_comb begin
-        if(tlb_l2_io0.wpn == 2'b01)begin
-            wppn.ppn1 = tlb_l2_io0.entry.ppn.ppn1;
-            wppn.ppn0 = vpn.vpn[0];
-        end
-        else begin
-            wppn = tlb_l2_io0.entry.ppn;
-        end
-    end
+    assign wppn.ppn1 = tlb_l2_io0.wpn[1] ? vpn.vpn[1] : tlb_l2_io0.entry.ppn.ppn1;
+    assign wppn.ppn0 = tlb_l2_io0.wpn[0] ? vpn.vpn[0] : tlb_l2_io0.entry.ppn.ppn0;
     assign wpaddr = {wppn, tlb_l2_io0.waddr[`TLB_OFFSET-1: 0]};
 endmodule

@@ -227,6 +227,8 @@ typedef struct packed {
 `define PMP_TOR     2'b01
 `define PMP_NA4     2'b10
 `define PMP_NAPOT   2'b11
+`define PMP_MASK    32'hfffffc00
+`define PMP_NAPOT_MASK ((~(`PMP_MASK)) >> 1)
 
 typedef struct packed {
     logic l;
@@ -244,13 +246,14 @@ typedef struct packed {
     logic [2: 0] unuse2;
 } PMACfg;
 
+// same as pmpaddr, address[33: 2]
 `define PMA_ASSIGN \
     logic `ARRAY(`PMACFG_SIZE, `MXL) pmacfg; \
     logic `ARRAY(`PMA_SIZE, `MXL) pmaaddr; \
 `ifdef SV32 \
     assign pmacfg[0] = 32'h00002808; \
-    assign pmaaddr[0] = 32'h04000000; \
-    assign pmaaddr[1] = 32'h20000000; \
+    assign pmaaddr[0] = 32'h01000000; \
+    assign pmaaddr[1] = 32'h08000000; \
     assign pmaaddr[2] = 0; \
     assign pmaaddr[3] = 0; \
 `endif
