@@ -123,22 +123,6 @@ module Backend(
 `endif
 `endif
 
-    logic decode_rst, rename_rst, dispatch_rst, intissue_rst, csr_rst, mult_rst, lsu_rst, 
-    regfile_rst, wakeup_rst, exe_rst, csrissue_rst, wb_rst, rob_rst;
-    SyncRst rst_decode(clk, rst, decode_rst);
-    SyncRst rst_rename(clk, rst, rename_rst);
-    SyncRst rst_dispatch(clk, rst, dispatch_rst);
-    SyncRst rst_int(clk, rst, intissue_rst);
-    SyncRst rst_csr(clk, rst, csr_rst);
-    SyncRst rst_mult(clk, rst, mult_rst);
-    SyncRst rst_lsu(clk, rst, lsu_rst);
-    SyncRst rst_regfile(clk, rst, regfile_rst);
-    SyncRst rst_wakeup(clk, rst, wakeup_rst);
-    SyncRst rst_exe(clk, rst, exe_rst);
-    SyncRst rst_csrissue(clk, rst, csrissue_rst);
-    SyncRst rst_wb(clk, rst, wb_rst);
-    SyncRst rst_rob(clk, rst, rob_rst);
-
     assign commitBus_out.en = commitBus.en;
     assign commitBus_out.we = commitBus.we;
     assign commitBus_out.fsqInfo = commitBus.fsqInfo;
@@ -163,29 +147,25 @@ module Backend(
 `endif
 
     Decode decode(.*,
-                  .rst(decode_rst),
                   .insts(ifu_backend_io.fetchBundle));
     Rename rename(.*,
-                  .rst(rename_rst),
                   .full(rename_full));
     ROB rob(.*,
-            .rst(rob_rst),
             .dis_io(rename_dis_io),
             .full(rob_full),
             .backendRedirect(backendRedirect.out));
     Dispatch dispatch(.*,
-                      .rst(dispatch_rst),
                       .full(backendCtrl.dis_full));
     IntIssueQueue int_issue_queue(
         .*,
-        .rst(intissue_rst),
         .dis_issue_io(dis_int_io),
         .issue_exu_io(int_exu_io),
         .wakeupBus(int_wakeupBus)
     );
-    CsrIssueQueue csr_issue_queue(.*, .rst(csrissue_rst));
+    CsrIssueQueue csr_issue_queue(.*,
+                                  .commitStreamSize(fsq_back_io.commitStreamSize));
 `ifdef RVM
-    MultIssueQueue mult_issue_queue(.*, .rst(mult_rst), .wakeupBus(int_wakeupBus));
+    MultIssueQueue mult_issue_queue(.*, .wakeupBus(int_wakeupBus));
 `endif
 `ifdef RVF
     FMiscIssueQueue fmisc_issue_queue(.*);
@@ -194,26 +174,22 @@ module Backend(
 `endif
     LSU lsu(
         .*,
-        .rst(lsu_rst),
         .redirect_io(backendRedirect),
         .snoop_io(dcache_snoop_io)
     );
-    RegfileWrapper regfile_wrapper(.*, .rst(regfile_rst));
-    Wakeup wakeup(.*, .rst(wakeup_rst));
+    RegfileWrapper regfile_wrapper(.*);
+    Wakeup wakeup(.*);
     Execute execute(.*,
-                    .rst(exe_rst),
                     .backendRedirectInfo(backendRedirect.branchRedirect),
                     .branchRedirectInfo(backendRedirect.branchInfo));
     BackendRedirectCtrl backend_redirect_ctrl(.*,
-                                              .rst(wb_rst),
                                               .io(backendRedirect),
                                               .redirectIdx(backendCtrl.redirectIdx));
     CSR csr(.*,
-            .rst(csr_rst),
             .exc_pc(fsq_back_io.exc_pc),
             .redirect(backendRedirect.csrOut),
             .target_pc(exc_pc));
-    WriteBack write_back(.*, .rst(wb_rst));
+    WriteBack write_back(.*);
 
 // perf
     `PERF(renameStall, backendCtrl.rename_full)

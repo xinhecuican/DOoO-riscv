@@ -39,6 +39,9 @@ module ROB(
         logic fp_we;
         logic fflag_we;
 `endif
+`ifdef RVC
+        logic rvc;
+`endif
         FsqIdxInfo fsqInfo;
         logic `N(5) vrd;
         logic `N(`PREG_WIDTH) prd;
@@ -108,6 +111,9 @@ generate
 `ifdef RVF
         assign rob_wdata_pre[i].fp_we = dis_io.op[i].di.flt_we;
         assign rob_wdata_pre[i].fflag_we = dis_io.op[i].di.fflag_we;
+`endif
+`ifdef RVC
+        assign rob_wdata_pre[i].rvc = dis_io.op[i].di.rvc;
 `endif
         assign rob_wdata_pre[i].mem = dis_io.op[i].di.memv;
         assign rob_wdata_pre[i].store = dis_io.op[i].di.memop[`MEMOP_WIDTH-1];
@@ -270,6 +276,9 @@ generate
         assign commitBus.fp_we[i] = robData[i].fp_we;
         assign commitWalk.fp_we[i] = robData[i].fp_we;
 `else
+`ifdef RVC
+        assign commitBus.rvc[i] = robData[i].rvc;
+`endif
         assign commitBus.fp_we[i] = 0;
         assign commitWalk.fp_we[i] = 0;
 `endif
@@ -342,6 +351,9 @@ endgenerate
     end
     assign rob_redirect_io.fence = fence_redirect;
     assign rob_redirect_io.csrRedirect.en = exc_exist_n;
+`ifdef RVC
+    assign rob_redirect_io.csrRedirect.rvc = robData[excIdx_n].rvc;
+`endif
     assign rob_redirect_io.csrRedirect.fsqInfo = robData[excIdx_n].fsqInfo;
     assign rob_redirect_io.csrRedirect.robIdx.idx = exc_robIdx;
     assign rob_redirect_io.csrRedirect.robIdx.dir = exc_dir;

@@ -11,7 +11,7 @@
 
 // intop
 `define INT_ADD     `INTOP_WIDTH'b00000
-`define INT_SUB     `INTOP_WIDTH'b01101
+`define INT_SUB     `INTOP_WIDTH'b01110
 `define INT_LUI     `INTOP_WIDTH'b00001
 `define INT_SLT     `INTOP_WIDTH'b00010
 `define INT_XOR     `INTOP_WIDTH'b00100
@@ -28,8 +28,8 @@
 `define MEM_LH      `MEMOP_WIDTH'b0001
 `define MEM_LW      `MEMOP_WIDTH'b0010
 `define MEM_SB      `MEMOP_WIDTH'b1000
-`define MEM_SH      `MEMOP_WIDTH'b1100
-`define MEM_SW      `MEMOP_WIDTH'b1010
+`define MEM_SH      `MEMOP_WIDTH'b1001
+`define MEM_SW      `MEMOP_WIDTH'b1100
 
 // branchop
 

@@ -97,16 +97,28 @@ interface FsqCacheIO;
     FsqIdx fsqIdx;
     logic flush;
     logic stall;
-    logic `N(`PREDICTION_WIDTH+1) shiftIdx;
+    logic `N(`PREDICTION_WIDTH) shiftOffset;
+`ifdef RVC
+    logic `N(`PREDICTION_WIDTH) shiftIdx;
+`endif
 
-    modport fsq (input ready, output en, stream, fsqIdx, abandon, abandonIdx, flush, stall, shiftIdx);
-    modport cache (output ready, input en, stream,fsqIdx, abandon, abandonIdx, flush, stall, shiftIdx);
+    modport fsq (input ready, output en, stream, fsqIdx, abandon, abandonIdx, flush, stall, shiftOffset
+`ifdef RVC
+    , shiftIdx
+`endif
+    );
+    modport cache (output ready, input en, stream,fsqIdx, abandon, abandonIdx, flush, stall, shiftOffset
+`ifdef RVC
+    , shiftIdx
+`endif
+    );
 endinterface
 
 interface FsqBackendIO;
-    FetchStream `N(`FETCH_WIDTH) streams;
-    logic `ARRAY(`FETCH_WIDTH, `FSQ_WIDTH) fsqIdx;
+    FetchStream `N(`ALU_SIZE) streams;
+    logic `ARRAY(`ALU_SIZE, `FSQ_WIDTH) fsqIdx;
     logic `N(`VADDR_SIZE) exc_pc;
+    logic `N(`PREDICTION_WIDTH+1) commitStreamSize;
 
     BackendRedirectInfo redirect;
     BranchRedirectInfo redirectBr;
@@ -117,16 +129,14 @@ interface FsqBackendIO;
     logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) diff_pc;
 `endif
     
-    modport fsq (input fsqIdx, redirect, redirectBr, redirectCsr, output streams, exc_pc
+    modport fsq (input fsqIdx, redirect, redirectBr, redirectCsr, output streams, exc_pc, commitStreamSize
 `ifdef DIFFTEST
-    ,input diff_fsqInfo,
-    output diff_pc
+    ,input diff_fsqInfo, output diff_pc
 `endif
     );
-    modport backend (output fsqIdx, redirect, redirectBr, redirectCsr, input streams, exc_pc
+    modport backend (output fsqIdx, redirect, redirectBr, redirectCsr, input streams, exc_pc, commitStreamSize
 `ifdef DIFFTEST
-    ,output diff_fsqInfo,
-    input diff_pc
+    ,output diff_fsqInfo, input diff_pc
 `endif
     );
 endinterface
@@ -134,14 +144,29 @@ endinterface
 interface CachePreDecodeIO;
     logic `N(`BLOCK_INST_SIZE) en;
     logic `N(`BLOCK_INST_SIZE) exception;
-    logic `ARRAY(`BLOCK_INST_SIZE, 32) data;
+`ifdef RVC
+    logic `ARRAY(`BLOCK_INST_SIZE+1, `INST_BITS) data;
+`else
+    logic `ARRAY(`BLOCK_INST_SIZE, `INST_BITS) data;
+`endif
     logic `N(`VADDR_SIZE) start_addr;
     FetchStream stream;
     FsqIdx fsqIdx;
-    logic `N(`PREDICTION_WIDTH+1) shiftIdx;
+    logic `N(`PREDICTION_WIDTH) shiftOffset;
+`ifdef RVC
+    logic `N(`PREDICTION_WIDTH) shiftIdx;
+`endif
 
-    modport cache (output en, exception, start_addr, data, stream, fsqIdx, shiftIdx);
-    modport pd (input en, exception, start_addr, data, stream, fsqIdx, shiftIdx);
+    modport cache (output en, exception, start_addr, data, stream, fsqIdx, shiftOffset
+`ifdef RVC
+    , shiftIdx
+`endif
+    );
+    modport pd (input en, exception, start_addr, data, stream, fsqIdx, shiftOffset
+`ifdef RVC
+    , shiftIdx
+`endif
+    );
 endinterface
 
 interface ReplaceIO #(
@@ -176,12 +201,14 @@ interface PreDecodeRedirect;
     logic en;
     logic exc_en;
     logic direct;
-    RasType ras_type;
     FsqIdx fsqIdx;
     FetchStream stream;
+    logic `N(`PREDICTION_WIDTH) size;
+    logic `N(`PREDICTION_WIDTH) last_offset;
+    logic empty;
 
-    modport predecode(output en, exc_en, direct, ras_type, fsqIdx, stream);
-    modport redirect(input en, exc_en, direct, ras_type, fsqIdx, stream);
+    modport predecode(output en, exc_en, direct, fsqIdx, stream, size, last_offset, empty);
+    modport redirect(input en, exc_en, direct, fsqIdx, stream, size, last_offset, empty);
 endinterface
 
 interface PreDecodeIBufferIO;
@@ -189,12 +216,13 @@ interface PreDecodeIBufferIO;
     logic `N(`BLOCK_INST_SIZE) ipf;
     logic `N($clog2(`BLOCK_INST_SIZE)+1) num;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) inst;
+    logic `ARRAY(`BLOCK_INST_SIZE, `PREDICTION_WIDTH) offset;
     logic iam; // for exception, instruction address misaligned
     logic `N(`FSQ_WIDTH) fsqIdx;
-    logic `N(`PREDICTION_WIDTH+1) shiftIdx;
+    logic `N(`PREDICTION_WIDTH) shiftIdx;
 
-    modport predecode(output en, ipf, num, inst, iam, fsqIdx, shiftIdx);
-    modport instbuffer(input en, ipf, num, inst, iam, fsqIdx, shiftIdx);
+    modport predecode(output en, ipf, num, inst, offset, iam, fsqIdx, shiftIdx);
+    modport instbuffer(input en, ipf, num, inst, offset, iam, fsqIdx, shiftIdx);
 endinterface
 
 interface IfuBackendIO;
@@ -417,6 +445,9 @@ interface CommitBus;
     logic `N(`COMMIT_WIDTH) en;
     logic `N(`COMMIT_WIDTH) we;
     logic `N(`COMMIT_WIDTH) fp_we;
+`ifdef RVC
+    logic `N(`COMMIT_WIDTH) rvc;
+`endif
     logic `N(`COMMIT_WIDTH) excValid;
     logic fence_valid;
     FsqIdxInfo `N(`COMMIT_WIDTH) fsqInfo;
@@ -428,10 +459,22 @@ interface CommitBus;
     logic `N($clog2(`COMMIT_WIDTH)+1) storeNum;
     RobIdx robIdx;
 
-    modport rob(output en, we, excValid, fence_valid, fsqInfo, vrd, prd, num, loadNum, storeNum, robIdx, output fp_we);
-    modport in(input en, we, excValid, fsqInfo, vrd, prd, num, input fp_we);
+    modport rob(output en, we, excValid, fence_valid, fsqInfo, vrd, prd, num, loadNum, storeNum, robIdx, output fp_we
+`ifdef RVC
+    , output rvc
+`endif
+    );
+    modport in(input en, we, excValid, fsqInfo, vrd, prd, num, input fp_we
+`ifdef RVC
+    , input rvc
+`endif
+    );
     modport mem(input loadNum, storeNum, robIdx);
-    modport csr(input robIdx, fsqInfo, fence_valid, en);
+    modport csr(input robIdx, fsqInfo, fence_valid, en
+`ifdef RVC
+    , input rvc
+`endif
+    );
 endinterface
 
 interface BackendRedirectIO;

@@ -170,7 +170,7 @@ module StoreAddrBank(
 
     logic `N(`STORE_ISSUE_BANK_SIZE) en, issue, exception, tlbmiss;
     StatusBundle `N(`STORE_ISSUE_BANK_SIZE) status_ram;
-    logic `N(`STORE_ISSUE_BANK_SIZE) free_en;
+    logic `N(`STORE_ISSUE_BANK_SIZE) free_en, tlbmiss_valid;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
     logic `N(`STORE_ISSUE_BANK_SIZE) ready;
     logic `N(`STORE_ISSUE_BANK_SIZE) select_en;
@@ -234,6 +234,7 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
         assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
+        assign tlbmiss_valid[i] = io.reply.en && (io.reply.reason == 2'b11) & reply_decode[i];
     end
 endgenerate
 
@@ -277,13 +278,12 @@ endgenerate
             end
 
             for(int i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
-                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & tlbmiss[i])) |
+                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & (tlbmiss[i] | tlbmiss_valid[i]))) |
                             (((|ready) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
                             ~(io.reply.en & (io.reply.reason != 2'b11) & reply_decode[i]) &
                             ~(io.tlb_en & tlbbank_decode[i]) &
                             ~(io.en & free_en[i]);
-                tlbmiss[i] <= (tlbmiss[i] |
-                              (io.reply.en && (io.reply.reason == 2'b11) & reply_decode[i])) &
+                tlbmiss[i] <= (tlbmiss[i] | tlbmiss_valid[i]) &
                               ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
                               
             end

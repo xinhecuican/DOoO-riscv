@@ -7,6 +7,9 @@
 typedef struct packed {
     logic en;
     logic carry;
+`ifdef RVC
+    logic rvc;
+`endif
     logic `N(`PREDICTION_WIDTH) offset;
     logic `N(`JAL_OFFSET) target;
     TargetState tar_state;
@@ -15,6 +18,9 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     logic carry;
+`ifdef RVC
+    logic rvc;
+`endif
     BranchType br_type;
     RasType ras_type;
     logic `N(`PREDICTION_WIDTH) offset;
@@ -28,6 +34,9 @@ typedef struct packed {
     BranchSlot `N(`SLOT_NUM-1) slots;
     TailSlot tailSlot;
     logic `N(`PREDICTION_WIDTH) fthAddr;
+`ifdef RVC
+    logic fth_rvc;
+`endif
 } BTBEntry;
 
 typedef struct packed {
@@ -35,6 +44,9 @@ typedef struct packed {
     BranchSlot `N(`SLOT_NUM-1) slots;
     TailSlot tailSlot;
     logic `N(`PREDICTION_WIDTH) fthAddr;
+`ifdef RVC
+    logic fth_rvc;
+`endif
 } BTBUpdateInfo;
 
 typedef struct packed {
@@ -63,8 +75,9 @@ typedef struct packed {
 
 typedef struct packed {
     logic taken;
-    BranchType branch_type;
-    RasType ras_type;
+`ifdef RVC
+    logic rvc;
+`endif
     logic `VADDR_BUS start_addr;
     logic `VADDR_BUS target;
     logic `N(`PREDICTION_WIDTH) size;
@@ -105,6 +118,8 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     FetchStream stream;
+    BranchType br_type;
+    RasType ras_type;
     BTBEntry btbEntry;
     logic `N(`PREDICT_STAGE-1) redirect;
     logic `N(2) cond_num;
@@ -117,10 +132,11 @@ typedef struct packed {
 } PredictionResult;
 
 typedef struct packed {
+`ifdef RVC
+    logic rvc;
+`endif
     logic branch;
     logic direct;
-    BranchType br_type;
-    RasType ras_type;
     logic `VADDR_BUS target;
 } PreDecodeBundle;
 
@@ -138,6 +154,9 @@ typedef struct packed {
 } CondPredInfo;
 
 typedef struct packed {
+`ifdef RVC
+    logic rvc;
+`endif
     logic `VADDR_BUS start_addr;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `VADDR_BUS target_pc;
@@ -160,6 +179,9 @@ typedef struct packed {
 
 typedef struct packed {
     logic `N(`FSQ_WIDTH) idx;
+`ifdef RVC
+    logic `N(`PREDICTION_WIDTH) size;
+`endif
     logic `N(`PREDICTION_WIDTH) offset;
 } FsqIdxInfo;
 
@@ -212,6 +234,9 @@ typedef struct packed {
     logic frs2_sel;
     logic flt_we;
 `endif
+`ifdef RVC
+    logic rvc;
+`endif
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
     logic `N(`EXC_WIDTH) exccode;
@@ -257,6 +282,9 @@ typedef struct packed {
     logic branchv;
     logic uext;
     logic immv;
+`ifdef RVC
+    logic rvc;
+`endif
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;
     logic `N(`DEC_IMM_WIDTH) imm;
@@ -277,7 +305,9 @@ typedef struct packed {
 
 typedef struct packed {
     logic uext;
+`ifdef RVF
     logic fp_en;
+`endif
     logic `N(`MEMOP_WIDTH) memop;
     logic `N(12) imm;
     LoadIdx lqIdx;
@@ -327,6 +357,9 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
+`ifdef RVC
+    logic rvc;
+`endif
     FsqIdxInfo fsqInfo;
     RobIdx robIdx;
 } BackendRedirectInfo;
@@ -356,6 +389,9 @@ typedef struct packed {
 typedef struct packed {
     logic direction;
     logic error;
+`ifdef RVC
+    logic rvc;
+`endif
     logic `N(`VADDR_SIZE) target;
     RasType ras_type;
     BranchType br_type;
@@ -419,6 +455,12 @@ typedef struct packed {
     RobIdx robIdx;
     FsqIdxInfo fsqInfo;
 } ViolationData;
+
+typedef struct packed {
+    logic dir;
+    logic `N($clog2(`LOAD_QUEUE_SIZE / `LOAD_PIPELINE)) idx;
+    FsqIdxInfo fsqInfo;
+} LoadVioData;
 
 typedef struct packed {
     logic en;

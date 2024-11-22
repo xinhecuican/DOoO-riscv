@@ -31,7 +31,13 @@ module RAS(
     assign waddr = ras_io.squash && squashType == POP_PUSH ? r.rasTop - 1 :
                    ras_io.squash ? r.rasTop :
                    ras_io.ras_type == POP_PUSH ? top_p1 : top;
-    assign squash_target = ras_io.squashInfo.start_addr + {ras_io.squashInfo.offset, 2'b00} + 4;
+    assign squash_target = ras_io.squashInfo.start_addr + {ras_io.squashInfo.offset, {`INST_OFFSET{1'b0}}} + 
+`ifdef RVC
+    {~ras_io.squashInfo.rvc, ras_io.squashInfo.rvc, 1'b0}
+`else
+    4
+`endif
+;
     assign updateEntry.pc = ras_io.squash ? squash_target : ras_io.target;
     assign squashType = ras_io.squashInfo.ras_type;
     assign we = ~ras_io.squash & ras_io.request & ras_io.ras_type[1] | 

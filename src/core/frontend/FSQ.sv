@@ -28,8 +28,11 @@ module FSQ (
     logic tdir, hdir, shdir;
     logic `N(`FSQ_WIDTH) searchIdx;
     FetchStream commitStream, searchStream, writeStream;
+    logic `N(`PREDICTION_WIDTH) commitSize;
     logic initReady;
     logic commitValid;
+    logic streamCommitEmpty;
+    FetchStream `N(`ALU_SIZE) back_streams;
 
     assign tail_n1 = tail + 1;
     assign search_head_n1 = search_head + 1;
@@ -56,7 +59,7 @@ module FSQ (
         .waddr(write_index),
         .raddr({searchIdx, fsq_back_io.fsqIdx, n_commit_head}),
         .wdata(writeStream),
-        .rdata({searchStream, fsq_back_io.streams, commitStream}),
+        .rdata({searchStream, back_streams, commitStream}),
         .ready(initReady)
     );
 
@@ -178,27 +181,36 @@ endgenerate
     assign bpu_fsq_io.stall = full;
     assign cache_req_ok = fsq_cache_io.ready;
 
-    logic `N(`PREDICTION_WIDTH) shiftIdx;
+    logic `N(`PREDICTION_WIDTH) shiftOffset, shiftIdx;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
+            shiftOffset <= 0;
             shiftIdx <= 0;
         end
         else begin
             
             if(fsq_back_io.redirectBr.en | fsq_back_io.redirectCsr.en)begin
+                shiftOffset <= 0;
                 shiftIdx <= 0;
             end
             else if(fsq_back_io.redirect.en)begin
                 // redirect mem, start from next instr
-                shiftIdx <= fsq_back_io.redirect.fsqInfo.offset;
+                shiftOffset <= fsq_back_io.redirect.fsqInfo.offset;
+`ifdef RVC
+                shiftIdx <= fsq_back_io.redirect.fsqInfo.size;
+`endif
             end
             else if(cache_req_ok)begin
+                shiftOffset <= 0;
                 shiftIdx <= 0;
             end
         end
     end
     always_ff @(posedge clk)begin
+        fsq_cache_io.shiftOffset <= shiftOffset;
+`ifdef RVC
         fsq_cache_io.shiftIdx <= shiftIdx;
+`endif
     end
 
     // logic `N(`SLOT_NUM) condFree;
@@ -275,10 +287,16 @@ endgenerate
                                                         pd_redirect.stream.target;
         squash_pred_info <= fsq_back_io.redirectBr.en | fsq_back_io.redirectCsr.en ? redirectCondInfo : pd_condInfo;
         squash_br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : DIRECT;
-        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : 
-                           fsq_back_io.redirect.en ? NONE : pd_redirect.ras_type;
+        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : NONE;
         squash_offset <= fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.offset : pd_redirect.stream.size;
     end
+`ifdef RVC
+    logic squash_rvc;
+    assign bpu_fsq_io.squashInfo.rvc = squash_rvc;
+    always_ff @(posedge clk)begin
+        squash_rvc <= fsq_back_io.redirect.en ? fsq_back_io.redirect.rvc : pd_redirect.stream.rvc;
+    end
+`endif
 
 // idx maintain
     logic search_bigger, search_eq, search_abandon;
@@ -382,6 +400,10 @@ endgenerate
     typedef struct packed {
         logic exception;
         logic taken;
+`ifdef RVC
+        logic rvc;
+        logic `N(`PREDICTION_WIDTH) size;
+`endif
         BranchType br_type;
         RasType ras_type;
         logic `N(`VADDR_SIZE) target;
@@ -403,10 +425,18 @@ endgenerate
         end
         else begin
             if(pd_redirect.en & pd_redirect.direct)begin
-                wbInfos[pd_redirect.fsqIdx.idx] <= {1'b0, 1'b1, DIRECT, pd_redirect.ras_type, pd_redirect.stream.target, pd_redirect.stream.size};
+                wbInfos[pd_redirect.fsqIdx.idx] <= {1'b0, 1'b1, 
+`ifdef RVC
+                pd_redirect.stream.rvc, pd_redirect.size,
+`endif
+                DIRECT, NONE, pd_redirect.stream.target, pd_redirect.stream.size};
             end
             if(rd.en | cr.en)begin
-                wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {cr.en, rd.taken, rd.br_type, rd.ras_type, rd.target, fsq_back_io.redirect.fsqInfo.offset};
+                wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {cr.en, rd.taken, 
+`ifdef RVC
+                fsq_back_io.redirect.rvc, fsq_back_io.redirect.fsqInfo.size,
+`endif
+                rd.br_type, rd.ras_type, rd.target, fsq_back_io.redirect.fsqInfo.offset};
             end
             if(queue_we)begin
                 pred_error_en[write_index] <= 1'b0;
@@ -420,22 +450,37 @@ endgenerate
         end
     end
 
-    logic `N(8) commitNum;
+    localparam FSQ_INST_WIDTH=$clog2(`FSQ_SIZE*`BLOCK_INST_SIZE);
+    logic `N(FSQ_INST_WIDTH+1) commitNum;
     BTBUpdateInfo commitUpdateEntry;
     FsqIdxInfo commitFsqInfo;
+    logic `N(`PREDICTION_WIDTH) commitFsqSize;
+`ifdef RVC
+    assign commitFsqSize = commitWBInfo.size;
+`else
+    assign commitFsqSize = commitWBInfo.offset;
+`endif
     // because streamVec is not init
     assign commitValid = initReady & (
-                        (|commitNum[7: `PREDICTION_WIDTH]) || 
-                        (commitNum[`PREDICTION_WIDTH-1: 0] > commitStream.size) ||
-                        (pred_error_en[commit_head] & (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqInfo.offset)));
+                        (|commitNum[FSQ_INST_WIDTH: `PREDICTION_WIDTH]) || 
+`ifdef RVC
+            ((commitNum[`PREDICTION_WIDTH-1: 0] > commitSize) || streamCommitEmpty) ||
+`else
+                        (commitNum[`PREDICTION_WIDTH-1: 0] > commitSize) ||
+`endif
+                        (pred_error_en[commit_head] & (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqSize)));
     assign pred_error = initReady & pred_error_en[commit_head] & 
-                        ((|commitNum[7: `PREDICTION_WIDTH]) | (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqInfo.offset));
+                        ((|commitNum[FSQ_INST_WIDTH: `PREDICTION_WIDTH]) | (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqSize));
 
-    logic `N(`PREDICTION_WIDTH) streamCommitOffset;
+    logic `N(`PREDICTION_WIDTH) streamCommitSize;
     logic `N(`PREDICTION_WIDTH+1) streamCommitNum;
 
-    assign streamCommitOffset = pred_error_en[commit_head] ? commitFsqInfo.offset : commitStream.size;
-    assign streamCommitNum = streamCommitOffset + 1;
+    assign streamCommitSize = pred_error_en[commit_head] ? commitFsqSize : commitSize;
+`ifdef RVC
+    assign streamCommitNum = streamCommitEmpty ? 0 : streamCommitSize + 1;
+`else
+    assign streamCommitNum = streamCommitSize + 1;
+`endif
 
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -450,6 +495,9 @@ endgenerate
     assign commitWBInfo = wbInfos[commit_head];
     assign u_predInfo = predictionInfos[commitFsqInfo.idx];
     assign commitFsqInfo.idx = commit_head;
+`ifdef RVC
+    assign commitFsqInfo.size = commitWBInfo.size;
+`endif
     assign commitFsqInfo.offset = commitWBInfo.offset;
     BTBEntryGen commit_btb_entry_gen (
         .oldEntry(oldEntry),
@@ -462,6 +510,9 @@ endgenerate
         .exception(commitWBInfo.exception),
         .target(commitWBInfo.target),
         .taken(commitWBInfo.taken),
+`ifdef RVC
+        .rvc(commitWBInfo.rvc),
+`endif
         .predTaken(u_predInfo.condHist),
         .updateEntry(commitUpdateEntry),
         .realTaken(realTaken),
@@ -492,8 +543,8 @@ endgenerate
         update_alloc_slot <= allocSlot;
     end
 
-    // TODO: fix excpetion pc time
     logic `N(`FSQ_WIDTH) exception_head, exception_head_n;
+    logic `N(`PREDICTION_WIDTH) pd_size;
     logic exc_wen;
     logic `N(`FSQ_WIDTH) exc_widx;
     logic `N(`VADDR_SIZE) exc_waddr;
@@ -502,6 +553,7 @@ endgenerate
         exc_wen <= pd_redirect.exc_en;
         exc_widx <= pd_redirect.fsqIdx.idx;
         exc_waddr <= pd_redirect.stream.start_addr;
+        pd_size <= pd_redirect.size;
     end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
@@ -535,16 +587,89 @@ endgenerate
         .wdata(exc_waddr),
         .ready()
     );
+    MPRAM #(
+        .WIDTH(`PREDICTION_WIDTH),
+        .DEPTH(`FSQ_SIZE),
+        .READ_PORT(1),
+        .WRITE_PORT(1)
+    ) stream_size_ram (
+        .clk(clk),
+        .rst(rst),
+        .en(1'b1),
+        .raddr(n_commit_head),
+        .rdata(commitSize),
+        .we(exc_wen),
+        .waddr(exc_widx),
+        .wdata(pd_size),
+        .ready()
+    );
+    assign fsq_back_io.commitStreamSize = commitSize;
+
+`ifdef RVC
+    logic `N(`FSQ_SIZE) stream_empty, commit_head_mask, redirect_mask;
+    logic `ARRAY(`ALU_SIZE, `PREDICTION_WIDTH) stream_lasts;
+    logic `N(`PREDICTION_WIDTH) last_offset;
+    always_ff @(posedge clk)begin
+        last_offset <= pd_redirect.last_offset;
+    end
+    assign streamCommitEmpty = stream_empty[commit_head];
+    MaskGen #(`FSQ_SIZE) mask_gen_commit_head (commit_head, commit_head_mask);
+    MaskGen #(`FSQ_SIZE) mask_gen_redirect (fsq_back_io.redirect.fsqInfo.idx, redirect_mask);
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            stream_empty <= 1'b0;
+        end
+        else if(fsq_back_io.redirect.en)begin
+            stream_empty <= stream_empty & (commit_head_mask ^ redirect_mask ^ {`FSQ_SIZE{hdir ^ directionTable[redirect_dir_idx]}});
+        end
+        else begin
+            if(pd_redirect.exc_en)begin
+                stream_empty[pd_redirect.fsqIdx.idx] <= pd_redirect.empty;
+            end
+            
+            if(commitValid)begin
+                stream_empty[commit_head] <= 1'b0;
+            end
+        end
+    end
+    MPRAM #(
+        .WIDTH(`PREDICTION_WIDTH),
+        .DEPTH(`FSQ_SIZE),
+        .READ_PORT(`ALU_SIZE),
+        .WRITE_PORT(1)
+    ) stream_last_ram (
+        .clk(clk),
+        .rst(rst),
+        .en({`ALU_SIZE{1'b1}}),
+        .raddr(fsq_back_io.fsqIdx),
+        .rdata(stream_lasts),
+        .we(exc_wen),
+        .waddr(exc_widx),
+        .wdata(last_offset),
+        .ready()
+    );
+generate
+    for(genvar i=0; i<`ALU_SIZE; i++)begin
+        always_comb begin
+            fsq_back_io.streams[i] = back_streams[i];
+            fsq_back_io.streams[i].size = stream_lasts[i];
+        end
+    end
+endgenerate
+`else
+    assign fsq_back_io.streams = back_streams;
+`endif
 
     logic `N($clog2(`COMMIT_WIDTH)) exc_ridx;
     assign exc_ridx = fsq_back_io.redirect.fsqInfo.idx - commit_head;
-    assign fsq_back_io.exc_pc = exception_addrs[exc_ridx] + {fsq_back_io.redirect.fsqInfo.offset, 2'b00};
+    assign fsq_back_io.exc_pc = exception_addrs[exc_ridx] + {fsq_back_io.redirect.fsqInfo.offset, {`INST_OFFSET{1'b0}}};
 
 `ifdef DIFFTEST
     logic `N(`VADDR_SIZE) diff_pcs `N(`FSQ_SIZE);
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign fsq_back_io.diff_pc[i] = diff_pcs[fsq_back_io.diff_fsqInfo[i].idx] + {fsq_back_io.diff_fsqInfo[i].offset, 2'b00};
+        assign fsq_back_io.diff_pc[i] = diff_pcs[fsq_back_io.diff_fsqInfo[i].idx] + {fsq_back_io.diff_fsqInfo[i].offset, {`INST_OFFSET{1'b0}}};
     end
 endgenerate
     always_ff @(posedge clk or posedge rst)begin
@@ -626,6 +751,9 @@ module BTBEntryGen(
     input RasType ras_type,
     input logic pred_error,
     input logic exception,
+`ifdef RVC
+    input logic rvc,
+`endif
     input logic `VADDR_BUS target,
     input logic `N(`SLOT_NUM) predTaken,
     input logic taken,
@@ -646,9 +774,7 @@ module BTBEntryGen(
 
     logic `N(`SLOT_NUM) free, free_p, oldest, equal, we;
     logic `ARRAY(`SLOT_NUM+1, `PREDICTION_WIDTH) offsets;
-    logic `ARRAY(`SLOT_NUM+1, $clog2(`SLOT_NUM+1)) idx;
     logic `N(`PREDICTION_WIDTH) oldestOffset;
-    logic `N($clog2(`SLOT_NUM+1)) oldestIdx;
     logic `N(`SLOT_NUM+1) oldestDecode;
     logic `N(`SLOT_NUM) taken_ext;
 generate
@@ -666,20 +792,36 @@ endgenerate
     assign equal[`SLOT_NUM-1] = oldEntry.tailSlot.en && oldEntry.tailSlot.br_type == CONDITION &&  oldEntry.tailSlot.offset == fsqInfo.offset;
     assign offsets[`SLOT_NUM] = fsqInfo.offset;
     PRSelector #(`SLOT_NUM) selector_free (free, free_p);
+
+    typedef struct packed {
+        logic `N($clog2(`SLOT_NUM)+1) idx;
+// `ifdef RVC
+//         logic rvc;
+// `endif
+    } OldestInfo;
+    OldestInfo `N(`SLOT_NUM+1) selectInfos;
+    OldestInfo oldestInfo;
+// `ifdef RVC
+//     for(genvar i =0; i<`SLOT_NUM-1; i++)begin
+//         assign selectInfos[i].rvc = oldEntry.slots[i].rvc;
+//     end
+//     assign selectInfos[`SLOT_NUM-1].rvc = oldEntry.tailSlot.rvc;
+//     assign selectInfos[`SLOT_NUM].rvc = rvc;
+// `endif
     for(genvar i=0; i<`SLOT_NUM+1; i++)begin
-        assign idx[i] = i;
+        assign selectInfos[i].idx = i;
     end
     OldestSelect #(
         .RADIX(`SLOT_NUM+1),
         .WIDTH(`PREDICTION_WIDTH),
-        .DATA_WIDTH($clog2(`SLOT_NUM+1))
+        .DATA_WIDTH($bits(OldestInfo))
     ) oldest_select (
         .cmp(offsets),
-        .data_i(idx),
+        .data_i(selectInfos),
         .cmp_o(oldestOffset),
-        .data_o(oldestIdx)
+        .data_o(oldestInfo)
     );
-    Decoder #(`SLOT_NUM+1) decode_oldest(oldestIdx, oldestDecode);
+    Decoder #(`SLOT_NUM+1) decode_oldest(oldestInfo.idx, oldestDecode);
     assign oldest = oldestDecode[`SLOT_NUM-1: 0];
 
     TargetState tarState, tailTarState;
@@ -697,6 +839,9 @@ endgenerate
             updateEntry.tailSlot.carry = ~oldEntry.tailSlot.en;
             updateEntry.tailSlot.br_type = br_type;
             updateEntry.tailSlot.ras_type = ras_type;
+`ifdef RVC
+            updateEntry.tailSlot.rvc = rvc;
+`endif
             updateEntry.tailSlot.offset = fsqInfo.offset;
             updateEntry.tailSlot.target = target[`JALR_OFFSET: 1];
             updateEntry.tailSlot.tar_state = tailTarState;
@@ -710,6 +855,9 @@ endgenerate
                                               `BLOCK_INST_SIZE - 1;
                 updateEntry.slots[i].target = we[i] ? target[`JAL_OFFSET: 1] : oldEntry.slots[i].target;
                 updateEntry.slots[i].tar_state = we[i] ? tarState : oldEntry.slots[i].tar_state;
+`ifdef RVC
+                updateEntry.slots[i].rvc = we[i] ? rvc : oldEntry.slots[i].rvc;
+`endif
             end
             updateEntry.tailSlot.en = we[`SLOT_NUM-1] ? 1'b1 : oldEntry.tailSlot.en;
             updateEntry.tailSlot.carry = (oldEntry.tailSlot.carry | free_p[`SLOT_NUM-1]) & ~equal[`SLOT_NUM-1];
@@ -720,9 +868,15 @@ endgenerate
                                           `BLOCK_INST_SIZE - 1;
             updateEntry.tailSlot.target = we[`SLOT_NUM-1] ? target[`JAL_OFFSET: 1] : oldEntry.tailSlot.target;
             updateEntry.tailSlot.tar_state = we[`SLOT_NUM-1] ? tarState : oldEntry.tailSlot.tar_state;
-
+`ifdef RVC
+            updateEntry.tailSlot.rvc = we[`SLOT_NUM-1] ? rvc : oldEntry.tailSlot.rvc;
+            updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-2 : 
+                                  oldEntry.en ? oldEntry.fthAddr : `BLOCK_INST_SIZE-2;
+            updateEntry.fth_rvc = 0;
+`else
             updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-1 : 
                                   oldEntry.en ? oldEntry.fthAddr : `BLOCK_INST_SIZE-1;
+`endif
         end
     end
 

@@ -20,6 +20,9 @@ module AluBranchCtrl(
     BranchCtrlCmp #(`ALU_SIZE) cmp (io.bundles, bundle_o);
     always_comb begin
         io.redirectInfo.en = bundle_o.en & bundle_o.res.error;
+`ifdef RVC
+        io.redirectInfo.rvc = bundle_o.res.rvc;
+`endif
         io.redirectInfo.fsqInfo = bundle_o.fsqInfo;
         io.redirectInfo.robIdx = bundle_o.robIdx;
         io.branchInfo.en = 1'b0;

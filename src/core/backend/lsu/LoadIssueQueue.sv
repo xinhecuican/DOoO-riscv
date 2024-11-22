@@ -138,7 +138,7 @@ module LoadIssueBank(
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) freeIdx;
     // exception: tlb miss exception
     logic `N(`LOAD_ISSUE_BANK_SIZE) ready, issue, exception, tlbmiss;
-    logic `N(`LOAD_ISSUE_BANK_SIZE) select_en;
+    logic `N(`LOAD_ISSUE_BANK_SIZE) select_en, tlbmiss_valid;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
     LoadIssueData data_o;
     logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, `INT_WAKEUP_PORT) rs1_cmp;
@@ -204,6 +204,7 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
         assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
+        assign tlbmiss_valid[i] = io.reply_fast.en && (io.reply_fast.reason == 2'b11) & replyfast_decode[i];
     end
 endgenerate
 
@@ -248,14 +249,13 @@ endgenerate
             end
 
             for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & tlbmiss[i])) |
+                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & (tlbmiss[i] | tlbmiss_valid[i]))) |
                             (((ready[i]) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
                             ~(io.reply_fast.en & (io.reply_fast.reason != 2'b11) & replyfast_decode[i]) &
                             ~(io.reply_slow.en & replyslow_decode[i]) &
                             ~(io.tlb_en & tlbbank_decode[i]) &
                             ~(io.en & free_en[i]);
-                tlbmiss[i] <= (tlbmiss[i] |
-                              (io.reply_fast.en && (io.reply_fast.reason == 2'b11) & replyfast_decode[i])) &
+                tlbmiss[i] <= (tlbmiss[i] | tlbmiss_valid[i]) &
                               ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
             end
 

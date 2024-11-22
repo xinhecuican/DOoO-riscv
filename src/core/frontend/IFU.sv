@@ -23,21 +23,13 @@ module IFU (
     FetchBundle fetchBundle;
     FrontendCtrl frontendCtrl;
 
-    logic predictor_rst, fsq_rst, icache_rst, decoder_rst, buf_rst;
-    SyncRst rst_predictor(clk, rst, predictor_rst);
-    SyncRst rst_fsq(clk, rst, fsq_rst);
-    SyncRst rst_icache(clk, rst, icache_rst);
-    SyncRst rst_decoder(clk, rst, decoder_rst);
-    SyncRst rst_buf(clk, rst, buf_rst);
-
     assign ifu_backend_io.fetchBundle = fetchBundle;
     assign frontendCtrl.redirect = fsq_back_io.redirect.en;
-    BranchPredictor branch_predictor(.*, .rst(predictor_rst));
-    FSQ fsq(.*, .rst(fsq_rst));
-    ICache icache(.*, .rst(icache_rst));
-    PreDecode predecode(.*, .rst(decoder_rst));
+    BranchPredictor branch_predictor(.*);
+    FSQ fsq(.*);
+    ICache icache(.*);
+    PreDecode predecode(.*);
     InstBuffer instBuffer(.*,
-                          .rst(buf_rst),
                           .full(frontendCtrl.ibuf_full),
                           .stall(ifu_backend_io.stall));
 endmodule

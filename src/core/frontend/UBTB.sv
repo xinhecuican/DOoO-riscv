@@ -5,7 +5,7 @@ module UBTB(
     input logic rst,
     BpuUBtbIO.ubtb ubtb_io
 );
-
+    // TODO: 一次只更新一级BTB
     BTBEntry `N(`UBTB_SIZE) entrys;
     logic `ARRAY(`SLOT_NUM, 2) ctrs `N(`UBTB_SIZE);
     BTBEntry lookup_entry;
@@ -28,6 +28,10 @@ module UBTB(
     logic `N(`SLOT_NUM) isBr, cond_valid;
     logic `N(`SLOT_NUM) cond_history;
     logic older;
+`ifdef RVC
+    logic br_rvc;
+    logic br_rvc_normal;
+`endif
 
     ReplaceD1IO #(.WAY_NUM(`UBTB_SIZE)) replace_io();
 
@@ -46,9 +50,13 @@ module UBTB(
                             tail_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
     assign tail_taken = lookup_entry.tailSlot.en && lookup_entry.tailSlot.br_type != CONDITION;
+`ifdef RVC
+    assign fthOffset = lookup_entry.fthAddr + {~lookup_entry.fth_rvc, lookup_entry.fth_rvc};
+`else
     assign fthOffset = lookup_entry.fthAddr + 1;
+`endif
     assign tail_target = tail_taken ? {tail_target_high, lookup_entry.tailSlot.target, 1'b0} : 
-                         {fthOffset, 2'b00} + ubtb_io.pc;
+                         {fthOffset, {`INST_OFFSET{1'b0}}} + ubtb_io.pc;
     assign tail_size = tail_taken ? lookup_entry.tailSlot.offset : lookup_entry.fthAddr;
     PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
                                         lookup_entry.slots[0].target,lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0],
@@ -56,6 +64,11 @@ module UBTB(
     PMux2 #(`PREDICTION_WIDTH) pmux2_br_size(br_takens, 
                                         lookup_entry.slots[0].offset,lookup_entry.tailSlot.offset,
                                         br_size_normal);
+`ifdef RVC
+    PMux2 #(1) pmux2_br_rvc(br_takens,
+                            lookup_entry.slots[0].rvc, lookup_entry.tailSlot.rvc,
+                            br_rvc_normal);
+`endif
     PMux2 #(2) pmux2_br_tar(br_takens,
                             lookup_entry.slots[0].tar_state, lookup_entry.tailSlot.tar_state,
                             br_tar_state_normal);
@@ -90,6 +103,9 @@ endgenerate
             br_offset = lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0];
             br_size = lookup_entry.tailSlot.offset;
             br_tar_state = lookup_entry.tailSlot.tar_state;
+`ifdef RVC
+            br_rvc = lookup_entry.tailSlot.rvc;
+`endif
         end
         else begin
             br_num = isBr[0] + isBr[1];
@@ -97,19 +113,31 @@ endgenerate
             br_offset = br_offset_normal;
             br_size = br_size_normal;
             br_tar_state = br_tar_state_normal;
+`ifdef RVC
+            br_rvc = br_rvc_normal;
+`endif
         end
     end
 
     always_comb begin
         ubtb_io.result.en = ~ubtb_io.redirect.flush & ~ubtb_io.redirect.s2_redirect & ubtb_io.redirect.tage_ready;
         ubtb_io.result.stream.taken = lookup_hit & ((|br_takens) | (tail_taken));
-        ubtb_io.result.stream.branch_type = |br_takens ? CONDITION : lookup_entry.tailSlot.br_type;
-        ubtb_io.result.stream.ras_type = NONE;
+        ubtb_io.result.br_type = |br_takens ? CONDITION : lookup_entry.tailSlot.br_type;
+        ubtb_io.result.ras_type = NONE;
         ubtb_io.result.stream.start_addr = ubtb_io.pc;
-        ubtb_io.result.stream.size = ~(lookup_hit) ? (1 << `PREDICTION_WIDTH) - 1 :
-                                    |br_takens ? br_size : tail_size;
+
         ubtb_io.result.stream.target = ~(lookup_hit) ? ubtb_io.pc + `BLOCK_SIZE :
                                 |br_takens ? br_target : tail_target;
+`ifdef RVC
+        ubtb_io.result.stream.rvc = ~lookup_hit ? 0 :
+                                    |br_takens ? br_rvc :
+                                    tail_taken ? lookup_entry.tailSlot.rvc : lookup_entry.fth_rvc;
+        ubtb_io.result.stream.size = ~(lookup_hit) ? `BLOCK_INST_SIZE - 2 :
+                                    |br_takens ? br_size : tail_size;
+`else
+        ubtb_io.result.stream.size = ~(lookup_hit) ? `BLOCK_INST_SIZE - 1 :
+                                    |br_takens ? br_size : tail_size;
+`endif
         ubtb_io.result.redirect = 0;
         ubtb_io.result.cond_num = ~lookup_hit ? 0 : br_num;
         ubtb_io.result.cond_valid = cond_valid;

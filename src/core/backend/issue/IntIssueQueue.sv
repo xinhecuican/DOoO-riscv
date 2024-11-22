@@ -56,7 +56,7 @@ generate
             enNext[i] <= bank_io[i].reg_en & int_wakeup_io.ready[i] & int_reg_io.ready[i];
             issue_exu_io.status[i] <= bank_io[i].status_o;
             issue_exu_io.bundle[i] <= bank_io[i].data_o;
-            issue_exu_io.vaddrs[i] <= {fsq_back_io.streams[i].start_addr[`VADDR_SIZE-1: 2] + bundle.fsqInfo.offset, 2'b00};
+            issue_exu_io.vaddrs[i] <= {fsq_back_io.streams[i].start_addr[`VADDR_SIZE-1: `INST_OFFSET] + bundle.fsqInfo.offset, {`INST_OFFSET{1'b0}}};
         end
     end
 endgenerate

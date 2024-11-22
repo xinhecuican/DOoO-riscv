@@ -17,7 +17,6 @@ module ALU(
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
         .op(io.bundle.intop),
-        .stream(io.stream),
         .vaddr(io.vaddr),
         .offset(io.bundle.fsqInfo.offset),
         .result(result)
@@ -25,6 +24,9 @@ module ALU(
     BranchModel branchModel(
         .immv(io.bundle.immv),
         .uext(io.bundle.uext),
+`ifdef RVC
+        .rvc(io.bundle.rvc),
+`endif
         .imm(io.bundle.imm),
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
@@ -50,6 +52,9 @@ endmodule
 module BranchModel(
     input logic immv,
     input logic uext,
+`ifdef RVC
+    input logic rvc,
+`endif
     input logic `N(`DEC_IMM_WIDTH) imm,
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
@@ -104,9 +109,11 @@ module BranchModel(
     assign br_target = vaddr + s_imm;
     assign branchRes.target = op == `BRANCH_JALR ? jalr_target : 
                               dir ? br_target : result;
-    logic `N(`PREDICTION_WIDTH+1) addrOffset;
-    assign addrOffset = offset + 1;
+`ifdef RVC
+    assign result = vaddr + {~rvc, rvc, 1'b0};
+`else
     assign result = vaddr + 4;
+`endif
 
     // predict error
     // cal stream taken offset
@@ -119,6 +126,9 @@ module BranchModel(
                         op != `BRANCH_JAL ? branchError : 0;
     assign branchRes.br_type = br_type;
     assign branchRes.ras_type = ras_type;
+`ifdef RVC
+    assign branchRes.rvc = rvc;
+`endif
 endmodule
 
 module ALUModel(
@@ -128,7 +138,6 @@ module ALUModel(
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
     input logic `N(`INTOP_WIDTH) op,
-    input FetchStream stream,
     input logic `N(`VADDR_SIZE) vaddr,
     input logic `N(`PREDICTION_WIDTH) offset,
     output logic `N(`XLEN) result

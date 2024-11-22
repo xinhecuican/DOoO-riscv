@@ -10,6 +10,7 @@ module CsrIssueQueue(
     CommitBus.csr commitBus,
     input BackendCtrl backendCtrl,
     FenceBus.csr fenceBus,
+    input logic `N(`PREDICTION_WIDTH) commitStreamSize,
     output logic `N(32) trapInst,
     output FenceReq fence_req
 );
@@ -210,8 +211,17 @@ endgenerate
     RobIdx preRobIdx;
     FenceType fence_type;
 
-    assign fsq_offset_n = commitBus.fsqInfo[0].offset + 1;
-    assign fence_fsqInfo.idx = commitBus.fsqInfo[0].idx + fsq_offset_n[`PREDICTION_WIDTH];
+`ifdef RVC
+    assign fsq_offset_n = commitBus.fsqInfo[0].size >= commitStreamSize ? 0 : commitBus.fsqInfo[0].offset + {~commitBus.rvc[0], commitBus.rvc[0]};
+    logic `N(`PREDICTION_WIDTH+1) fsq_size_n;
+    assign fsq_size_n = commitBus.fsqInfo[0].size >= commitStreamSize ? 0 : commitBus.fsqInfo[0].size + 1;
+    assign fence_fsqInfo.size = fsq_size_n[`PREDICTION_WIDTH-1: 0];
+    assign fence_fsqInfo.idx = commitBus.fsqInfo[0].size >= commitStreamSize ? commitBus.fsqInfo[0].idx + 1 : commitBus.fsqInfo[0].idx;
+`else
+    assign fsq_offset_n = commitBus.fsqInfo[0].offset >= commitStreamSize ? 0 : commitBus.fsqInfo[0].offset + 1;
+    assign fence_fsqInfo.idx = commitBus.fsqInfo[0].offset >= commitStreamSize ? commitBus.fsqInfo[0].idx + 1 : commitBus.fsqInfo[0].idx;
+`endif
+
     assign fence_fsqInfo.offset = fsq_offset_n[`PREDICTION_WIDTH-1: 0];
     assign vma_clear_all = csr_rdata[0][`VADDR_SIZE-1: 0] == 0;
 

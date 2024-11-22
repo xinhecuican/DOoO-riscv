@@ -145,6 +145,9 @@ module S2Control(
     logic `N(`SLOT_NUM) cond_valid;
     logic `N(`BTB_TAG_SIZE) lookup_tag;
     logic older;
+`ifdef RVC
+    logic br_rvc, br_rvc_normal;
+`endif
 
     BTBTagGen gen_tag(pc, lookup_tag);
     assign hit = entry.en && (lookup_tag == entry.tag);
@@ -164,6 +167,11 @@ module S2Control(
     PMux2 #(`PREDICTION_WIDTH) pmux2_br_size(br_takens, 
                                         entry.slots[0].offset,entry.tailSlot.offset,
                                         br_size_normal);
+`ifdef RVC
+    PMux2 #(1) pmux2_br_rvc(br_takens,
+                            entry.slots[0].rvc, entry.tailSlot.rvc,
+                            br_rvc_normal);
+`endif
     PMux2 #(2) pmux2_br_tar(br_takens,
                             entry.slots[0].tar_state, entry.tailSlot.tar_state,
                             br_tar_state_normal);
@@ -173,8 +181,12 @@ module S2Control(
                             tail_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
     assign tail_taken = entry.tailSlot.en && entry.tailSlot.br_type != CONDITION;
+`ifdef RVC
+    assign fthOffset = entry.fthAddr + {~entry.fth_rvc, entry.fth_rvc};
+`else
     assign fthOffset = entry.fthAddr + 1;
-    assign tail_target = tail_taken ? tail_indirect_target : {fthOffset, 2'b00} + pc;
+`endif
+    assign tail_target = tail_taken ? tail_indirect_target : {fthOffset, {`INST_OFFSET{1'b0}}} + pc;
     assign br_target_high = br_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
                             br_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
@@ -189,6 +201,9 @@ module S2Control(
             br_size = entry.tailSlot.offset;
             br_offset = entry.tailSlot.target[`JAL_OFFSET-1: 0];
             br_tar_state = entry.tailSlot.tar_state;
+`ifdef RVC
+            br_rvc = entry.tailSlot.rvc;
+`endif
         end
         else begin
             cond_num = isBr[0] + isBr[1];
@@ -196,12 +211,20 @@ module S2Control(
             br_size = br_size_normal;
             br_offset = br_offset_normal;
             br_tar_state = br_tar_state_normal;
+`ifdef RVC
+            br_rvc = br_rvc_normal;
+`endif
         end
     end
 
     assign ras_io.request = result_i.en & hit & ~(|br_takens);
     assign ras_io.ras_type = entry.tailSlot.ras_type;
-    assign ras_io.target = pc + {entry.tailSlot.offset, 2'b00} + 4;
+`ifdef RVC
+    assign ras_io.target = pc + {entry.tailSlot.offset, {`INST_OFFSET}} +
+                            {~entry.tailSlot.rvc, entry.tailSlot.rvc, 1'b0};
+`else
+    assign ras_io.target = pc + {entry.tailSlot.offset, {`INST_OFFSET}} + 4;
+`endif
 
     always_comb begin
         if(ras_io.en && entry.tailSlot.ras_type != NONE)begin
@@ -212,9 +235,13 @@ module S2Control(
         end
         if(hit && predict_pc != result_i.stream.target)begin
             result_o.stream.taken = (|br_takens) | tail_taken;
-            result_o.stream.branch_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
-            result_o.stream.ras_type = entry.tailSlot.ras_type;
+            result_o.br_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
+            result_o.ras_type = entry.tailSlot.ras_type;
             result_o.stream.size = |br_takens ? br_size : tail_size;
+`ifdef RVC
+            result_o.stream.rvc = |br_takens ? br_rvc :
+                                  tail_taken ? entry.tailSlot.rvc : entry.fth_rvc;
+`endif
             result_o.stream.target = predict_pc;
             result_o.redirect = 1;
             result_o.cond_num = cond_num;
@@ -225,10 +252,13 @@ module S2Control(
         end
         else begin
             result_o.stream.taken = result_i.stream.taken;
-            result_o.stream.branch_type = result_i.stream.branch_type;
-            result_o.stream.ras_type = result_i.stream.ras_type;
+            result_o.br_type = result_i.br_type;
+            result_o.ras_type = result_i.ras_type;
             result_o.stream.target = result_i.stream.target;
             result_o.stream.size = result_i.stream.size;
+`ifdef RVC
+            result_o.stream.rvc = result_i.stream.rvc;
+`endif
             result_o.redirect = result_i.redirect;
             result_o.cond_num = result_i.cond_num;
             result_o.cond_valid = result_i.cond_valid;
@@ -237,7 +267,7 @@ module S2Control(
             result_o.btbEntry = result_i.btbEntry;
         end
         result_o.en = result_i.en;
-        result_o.stream.start_addr= result_i.stream.start_addr;
+        result_o.stream.start_addr = result_i.stream.start_addr;
         result_o.stream_idx = result_i.stream_idx;
         result_o.stream_dir = result_i.stream_dir;
         result_o.redirect_info = result_i.redirect_info;

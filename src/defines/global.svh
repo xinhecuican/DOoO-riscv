@@ -33,7 +33,14 @@
 // BranchPrediction
 `define PREDICT_STAGE 2
 `define BLOCK_SIZE 32 // max bytes for an instruction block/fetch stream
-`define BLOCK_INST_SIZE (`BLOCK_SIZE / 4)
+`ifdef RVC
+`define INST_BYTE 2
+`else
+`define INST_BYTE 4
+`endif
+`define INST_OFFSET $clog2(`INST_BYTE)
+`define INST_BITS (`INST_BYTE * 8)
+`define BLOCK_INST_SIZE (`BLOCK_SIZE / `INST_BYTE)
 `define BLOCK_WIDTH $clog2(`BLOCK_SIZE)
 `define BLOCK_INST_WIDTH $clog2(`BLOCK_INST_SIZE)
 `define PREDICTION_WIDTH $clog2(`BLOCK_INST_SIZE)
@@ -49,7 +56,7 @@
 `define UBTB_SIZE 64
 `define UBTB_WIDTH $clog2(`UBTB_SIZE)
 
-`define BTB_TAG_SIZE 14
+`define BTB_TAG_SIZE 8
 `define BTB_WAY 2
 `define BTB_SET 256
 `define BTB_SET_WIDTH $clog2(`BTB_SET)
@@ -101,7 +108,7 @@ typedef enum logic [1:0] {
 `define ICACHE_LINE 64
 `define ICACHE_BYTE 4 // bank byte
 `define ICACHE_BITS (`DCACHE_BYTE * 8)
-`define ICACHE_BANK (`ICACHE_LINE / 4)
+`define ICACHE_BANK (`ICACHE_LINE / `ICACHE_BYTE)
 `define ICACHE_BANK_WIDTH $clog2(`ICACHE_BANK)
 `define ICACHE_WAY_WIDTH $clog2(`ICACHE_WAY)
 `define ICACHE_SET_WIDTH $clog2(`ICACHE_SET)
@@ -111,12 +118,13 @@ typedef enum logic [1:0] {
 `define ICACHE_SET_BUS [`ICACHE_SET_WIDTH+`ICACHE_LINE_WIDTH-1: `ICACHE_LINE_WIDTH]
 
 // InstBuffer
-`define IBUF_SIZE 32
-`define IBUF_BANK_NUM 8
+`define PIPELINE_WIDTH 4
+`define IBUF_SIZE `PIPELINE_WIDTH * 8
+`define IBUF_BANK_NUM `PIPELINE_WIDTH
 `define IBUF_BANK_SIZE (`IBUF_SIZE / `IBUF_BANK_NUM)
 `define IBUF_BANK_WIDTH $clog2(`IBUF_BANK_SIZE)
 
-`define FETCH_WIDTH 4
+`define FETCH_WIDTH `PIPELINE_WIDTH
 `define FETCH_WIDTH_LOG $clog2(`FETCH_WIDTH)
 `define DEC_IMM_WIDTH 20
 
@@ -129,7 +137,7 @@ typedef enum logic [1:0] {
 `define ROB_SIZE 128
 `define ROB_BANK 2
 `define ROB_WIDTH $clog2(`ROB_SIZE)
-`define COMMIT_WIDTH 4
+`define COMMIT_WIDTH `PIPELINE_WIDTH
 
 // wb
 `define WB_SIZE (`ALU_SIZE+`LSU_SIZE)

@@ -91,7 +91,11 @@ generate
         assign bundle = '{intv: di.intv, branchv: di.branchv, uext: di.uext, immv: di.immv,
                         intop: di.intop, branchop: di.branchop, imm: di.imm,
                         br_type: br_type, ras_type: ras_type,
-                        fsqInfo: rename_dis_io.op[i].fsqInfo};
+                        fsqInfo: rename_dis_io.op[i].fsqInfo
+`ifdef RVC
+                        , rvc: di.rvc
+`endif
+                        };
         assign int_io.en[i] = rename_dis_io.op[i].en & 
                               (di.intv | di.branchv) &
                               (~(backendCtrl.redirect));
@@ -169,7 +173,6 @@ generate
         LoopAdder #(`STORE_QUEUE_WIDTH, $clog2(`FETCH_WIDTH)) adder_sqIdx (sq_add_num[i], sq_tail, sq_eq_tail[i]);
         DecodeInfo di;
         MemIssueBundle data;
-        MemIssueBundle sdata;
         assign data = '{uext: di.uext, memop: di.memop, imm: di.imm[19: 8],
 `ifdef RVF
                         fp_en: di.frs1_sel | di.flt_we,
@@ -180,15 +183,9 @@ generate
         assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
                                (~(backendCtrl.redirect));
         assign load_io.data[i] = data;
-        assign sdata = '{uext: di.uext, memop: di.memop, imm: di.imm[11: 0],
-`ifdef RVF
-                        fp_en: di.frs1_sel | di.flt_we,
-`endif
-                        fsqInfo: rename_dis_io.op[i].fsqInfo,
-                        lqIdx: lq_eq_tail[i], sqIdx: sq_eq_tail[i]};
         assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
                                 (~(backendCtrl.redirect));
-        assign store_io.data[i] = sdata;
+        assign store_io.data[i] = data;
     end
 endgenerate
     MemDispatchQueue #(

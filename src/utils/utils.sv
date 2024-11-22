@@ -68,6 +68,7 @@ generate;
 	7: PEncoder7 pencoder(in, out);
 	8: PEncoder8 pencoder(in, out);
 	16: PEncoder16 pencoder(in, out);
+	17: PEncoder17 pencoder(in, out);
 	32: PEncoder32 pencoder(in, out);
 	default: begin
 		PEncoder2 pencoder(in, out);
@@ -420,9 +421,11 @@ generate
 	5: MaskGen8 mask_gen(in, out);
 	8: MaskGen8 mask_gen(in, out);
 	16: MaskGen16 mask_gen(in, out);
+	17: MaskGen17 mask_gen(in, out);
 	20: MaskGen20 mask_gen(in, out);
 	22: MaskGen22 mask_gen(in, out);
 	32: MaskGen32 mask_gen(in, out);
+	64: MaskGen64 mask_gen(in, out);
 	default: begin
 		MaskGen2 mask_gen(in, out);
 		always_comb begin
@@ -510,18 +513,22 @@ endgenerate
 endmodule
 
 module CalValidNum #(
-	parameter WIDTH=4
+	parameter WIDTH=4,
+	parameter IDX_WIDTH=WIDTH > 1 ? $clog2(WIDTH) : 1
 )(
 	input logic [WIDTH-1: 0] en,
-	output logic [WIDTH-1: 0][$clog2(WIDTH)-1: 0] out
+	output logic [WIDTH-1: 0][IDX_WIDTH-1: 0] out
 );
 generate
 	case(WIDTH)
-	4: CalValidNum4 #($clog2(WIDTH)) calValidNum(en, out);
-	3: CalValidNum3 #($clog2(WIDTH)) calValidNum(en, out);
-	2: CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
+	16: CalValidNum16 calValidNum(en, out);
+	8: CalValidNum8 calValidNum(en, out);
+	4: CalValidNum4 calValidNum(en, out);
+	3: CalValidNum3 calValidNum(en, out);
+	2: CalValidNum2 calValidNum(en, out);
+	1: CalValidNum1 calValidNum(en, out);
 	default: begin
-		CalValidNum2 #($clog2(WIDTH)) calValidNum(en, out);
+		CalValidNum2 calValidNum(en, out);
 		always_comb begin
 			$display("unimpl CalValidNum");
 		end

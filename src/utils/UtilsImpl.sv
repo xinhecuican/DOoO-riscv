@@ -227,6 +227,21 @@ module PEncoder16(
 	assign out[2: 0] = is_high ? out1 : out2;
 endmodule
 
+module PEncoder17(
+	input logic [16: 0] in,
+	output logic [4: 0] out
+);
+	logic [2: 0] out1, out2;
+	logic is_high;
+	PEncoder8 high(in[15: 8], out1);
+	PEncoder8 low(in[7: 0], out2);
+	assign is_high = |in[15: 8];
+	assign out[4] = in[16];
+	assign out[3] = is_high & ~in[16];
+	assign out[2: 0] = {3{is_high & ~in[16]}} & out1 | {3{~is_high & ~in[16]}} & out2;
+endmodule
+
+
 module PEncoder32(
 	input logic [31: 0] in,
 	output logic [4: 0] out
@@ -384,6 +399,16 @@ module MaskGen16(
 	assign out[7: 0] = low | {8{in[3]}};
 endmodule
 
+module MaskGen17(
+	input logic [4: 0] in,
+	output logic [16: 0] out
+);
+	logic [15: 0] low;
+	MaskGen16 gen_low (in[3: 0], low);
+	assign out[16] = 0;
+	assign out[15: 0] = low | {16{in[4]}};
+endmodule
+
 module MaskGen20(
 	input logic [4: 0] in,
 	output logic [19: 0] out
@@ -414,21 +439,34 @@ module MaskGen32(
 	assign out[15: 0] = low | {16{in[4]}};
 endmodule
 
-module CalValidNum2 #(
-	parameter DATA_WIDTH=1
-)(
+module MaskGen64(
+	input logic [5: 0] in,
+	output logic [63: 0] out
+);
+	logic [31: 0] low;
+	MaskGen32 gen_low (in[4: 0], low);
+	assign out[63: 32] = low & {32{in[5]}};
+	assign out[31: 0] = low | {32{in[5]}};
+endmodule
+
+module CalValidNum1(
+	input logic en,
+	output logic out
+);
+	assign out = 1'b0;
+endmodule
+
+module CalValidNum2(
 	input logic [1: 0] en,
-	output logic [1: 0][DATA_WIDTH-1: 0] out
+	output logic [1: 0] out
 );
 	assign out[0] = 0;
 	assign out[1] = en[0];
 endmodule
 
-module CalValidNum3 #(
-	parameter DATA_WIDTH=2
-)(
+module CalValidNum3(
 	input logic [2: 0] en,
-	output logic [2: 0][DATA_WIDTH-1: 0] out
+	output logic [2: 0][1: 0] out
 );
 	assign out[0] = 0;
 	assign out[1] = en[0];
@@ -436,17 +474,36 @@ module CalValidNum3 #(
 					en[0] | en[1] ? 1 : 0;
 endmodule
 
-module CalValidNum4 #(
-	parameter DATA_WIDTH=2
-)(
+module CalValidNum4(
 	input logic [3: 0] en,
 	output logic [3: 0][1: 0] out
 );
-	CalValidNum3 #(DATA_WIDTH) calValidNum(en[2: 0], out[2: 0]);
+	CalValidNum3 calValidNum(en[2: 0], out[2: 0]);
 	assign out[3] = en[0] & en[1] & en[2] ? 3 :
 					en[0] & en[1] | en[0] & en[2] | en[1] & en[2] ? 2 :
 					en[0] | en[1] | en[2] ? 1 : 0;
 endmodule
+
+`define CAL_VALID_NUM_TEMPLATE(num, half, num_log, half_log) \
+module CalValidNum``num``( \
+	input logic [``num``-1: 0] en, \
+	output logic [``num``-1: 0][``num_log``-1: 0] out \
+); \
+	logic [``half``-1: 0][``half_log``-1: 0] out_low, out_high; \
+	logic [``num_log``-1: 0] num1; \
+	CalValidNum``half  low (en[``half``-1: 0], out_low); \
+	CalValidNum``half  high (en[``num``-1: ``half``], out_high); \
+	ParallelAdder #(1, ``half``) adder_low (en[``half``-1: 0], num1); \
+generate \
+	for(genvar i=0; i<``half``; i++)begin \
+		assign out[i] = {1'b0, out_low[i]}; \
+		assign out[i+``half``] = out_high[i] + num1; \
+	end \
+endgenerate \
+endmodule
+
+`CAL_VALID_NUM_TEMPLATE(8, 4, 3, 2)
+`CAL_VALID_NUM_TEMPLATE(16, 8, 4, 3)
 
 module Arbiter2 #(
 	parameter DATA_WIDTH=4

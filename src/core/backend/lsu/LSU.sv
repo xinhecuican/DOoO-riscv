@@ -68,17 +68,6 @@ module LSU(
     
     logic `N(`LOAD_PIPELINE) from_issue;
 
-    logic load_issue_rst, load_queue_rst, store_issue_rst, store_queue_rst;
-    logic store_commit_rst, violation_rst, tlb_rst, exc_rst;
-    SyncRst rst_load_issue(clk, rst, load_issue_rst);
-    SyncRst rst_load_queue(clk, rst, load_queue_rst);
-    SyncRst rst_store_issue(clk, rst, store_issue_rst);
-    SyncRst rst_store_queue(clk, rst, store_queue_rst);
-    SyncRst rst_store_commit(clk, rst, store_commit_rst);
-    SyncRst rst_violation(clk, rst, violation_rst);
-    SyncRst rst_tlb(clk, rst, tlb_rst);
-    SyncRst rst_exc(clk, rst, exc_rst);
-
     LoadUnitIO load_io();
     DCacheLoadIO rio();
     DCacheStoreIO wio();
@@ -125,18 +114,13 @@ module LSU(
 `endif
     LoadIssueQueue load_issue_queue(
         .*,
-        .rst(load_issue_rst),
         .wakeupBus(int_wakeupBus)
     );
     DCache dcache(.*);
-    LoadQueue load_queue(.*, .rst(load_queue_rst), .io(load_queue_io));
-    StoreIssueQueue store_issue_queue(
-        .*,
-        .rst(store_issue_rst)
-    );
+    LoadQueue load_queue(.*, .io(load_queue_io));
+    StoreIssueQueue store_issue_queue(.*);
     StoreQueue store_queue(
         .*,
-        .rst(store_queue_rst),
         .io(store_queue_io),
         .issue_queue_io(store_io),
         .queue_commit_io(store_commit_io),
@@ -150,7 +134,6 @@ module LSU(
     );
     StoreCommitBuffer store_commit_buffer (
         .*,
-        .rst(store_commit_rst),
 `ifdef RVA
         .flush(fenceBus.store_flush | amo_flush),
 `else
@@ -160,8 +143,8 @@ module LSU(
         .loadFwd(commit_queue_fwd),
         .empty(sc_buffer_empty)
     );
-    ViolationDetect violation_detect(.*, .rst(violation_rst), .tail(load_queue_io.lqIdx), .io(violation_io));
-    DTLB dtlb(.*, .rst(tlb_rst), .tlb_l2_io(dtlb_io), .fenceBus(fenceBus_tlb.mmu));
+    ViolationDetect violation_detect(.*, .tail(load_queue_io.lqIdx), .io(violation_io));
+    DTLB dtlb(.*, .tlb_l2_io(dtlb_io), .fenceBus(fenceBus_tlb.mmu));
 
     assign lqIdx = load_queue_io.lqIdx;
     assign sqIdx = store_queue_io.sqIdx;
@@ -723,8 +706,8 @@ endgenerate
     assign exc_redirect = exc_redirect_older | exc_redirect_equal;
     LoopCompare #(`ROB_WIDTH) cmp_exc_pipe_older (exc_robIdx_o, exc_idx, exc_pipline_older);
 
-    always_ff @(posedge clk, posedge exc_rst)begin
-        if(exc_rst == `RST)begin
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
             exc_valid <= 0;
             exc_idx <= 0;
             exc_vaddr <= 0;

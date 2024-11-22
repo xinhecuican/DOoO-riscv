@@ -59,10 +59,10 @@ module LoadQueue(
     logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) uncache_addr;
     logic `N(`STORE_PIPELINE) overflow;
     logic `ARRAY(`STORE_PIPELINE, `LOAD_QUEUE_SIZE) mask_vec_all;
-    logic `N(`LOAD_PIPELINE) vio_en, vio_dir;
-    RobIdx `N(`LOAD_PIPELINE) vio_robIdx;
+    logic `N(`LOAD_PIPELINE) vio_en;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) vio_idx;
-    FsqIdxInfo `N(`LOAD_PIPELINE) vio_fsqInfo;
+    LoadVioData `N(`LOAD_PIPELINE) vio_datas;
+    RobIdx `N(`LOAD_PIPELINE) vio_robIdx;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -140,11 +140,9 @@ generate
             .mask_vec,
             .vio_en(vio_en[i]),
             .vio_robIdx(vio_robIdx[i]),
-            .vio_dir(vio_dir[i]),
-            .vio_idx(bank_idx),
-            .vio_fsqInfo(vio_fsqInfo[i])
+            .vio_data_o(vio_datas[i])
         );
-        assign vio_idx[i] = {bank_idx, i[0]};
+        assign vio_idx[i] = {vio_datas[i].idx, i[0]};
     end
 endgenerate
 
@@ -255,9 +253,9 @@ endgenerate
     always_ff @(posedge clk)begin
         lq_violation_en <= |vio_en;
         lq_violation_idx <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_idx[1] : vio_idx[0];
-        lq_vio_dir <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_dir[1] : vio_dir[0];
+        lq_vio_dir <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_datas[1].dir : vio_datas[0].dir;
         lq_vio_robIdx <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_robIdx[1] : vio_robIdx[0];
-        lq_vio_fsqInfo <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_fsqInfo[1] : vio_fsqInfo[0];
+        lq_vio_fsqInfo <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_datas[1].fsqInfo : vio_datas[0].fsqInfo;
     end
     assign io.lq_violation.en = lq_violation_en;
     assign io.lq_violation.addr = 0;
@@ -324,9 +322,7 @@ module LoadQueueBank #(
     input logic `ARRAY(`STORE_PIPELINE, BANK_SIZE) mask_vec,
     output logic vio_en,
     output RobIdx vio_robIdx,
-    output logic vio_dir,
-    output logic `N(BANK_WIDTH) vio_idx,
-    output FsqIdxInfo vio_fsqInfo
+    output LoadVioData vio_data_o
 );
     logic `N(BANK_SIZE) valid, miss, addrValid, dataValid, writeback, uncache;
     logic `N(BANK_SIZE) waiting_wb;
@@ -559,18 +555,15 @@ endgenerate
     logic `N(BANK_SIZE) vio_vec, vio_vec_n, vio_vec_redirect;
 
     RobIdx `N(BANK_SIZE) vio_robIdxs;
-    typedef struct packed {
-        logic dir;
-        logic `N(BANK_WIDTH) idx;
-        FsqIdxInfo fsqInfo;
-    } LoadVioData;
+
     LoadVioData `N(BANK_SIZE) vio_datas;
     logic `N(`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH) addr_mask `N(BANK_SIZE);
 
     always_ff @(posedge clk)begin
         if(en)begin
             vio_robIdxs[eqIdx] <= data.robIdx;
-            vio_datas[eqIdx] <= {data.lqIdx.dir, eqIdx, data.fsqInfo};
+            vio_datas[eqIdx] <= {data.lqIdx.dir, 
+            eqIdx, data.fsqInfo};
             addr_mask[eqIdx] <= {addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH], mask};
         end
     end
@@ -603,7 +596,7 @@ endgenerate
         .data_i(vio_datas),
         .en_o(vio_en),
         .cmp_o(vio_robIdx),
-        .data_o({vio_dir, vio_idx, vio_fsqInfo})
+        .data_o(vio_data_o)
     );
 endmodule
 
