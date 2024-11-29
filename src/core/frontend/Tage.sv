@@ -90,7 +90,7 @@ module Tage(
 	logic base_we;
 	logic `N($clog2(`TAGE_BASE_SIZE)) base_lookup_idx, base_update_idx;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr, base_update_ctr, base_ctr_inc;
-	assign base_lookup_idx = tage_io.pc[`TAGE_BASE_WIDTH+1: 2] ^ tage_io.pc[`TAGE_BASE_WIDTH * 2 + 1 : `TAGE_BASE_WIDTH + 2];
+	assign base_lookup_idx = tage_io.pc[`TAGE_BASE_WIDTH+1: `INST_OFFSET] ^ tage_io.pc[`TAGE_BASE_WIDTH * `INST_OFFSET + 1 : `TAGE_BASE_WIDTH + `INST_OFFSET];
 	MPRAM #(
 		.WIDTH((`TAGE_BASE_CTR * `SLOT_NUM)),
 		.DEPTH(`TAGE_BASE_SIZE),
@@ -134,7 +134,7 @@ module Tage(
 	logic [`TAGE_BANK-1: 0][`SLOT_NUM-1: 0][`TAGE_U_SIZE-1: 0] update_u_origin, update_u;
 	logic `ARRAY(`TAGE_BANK, `SLOT_NUM) update_u_en;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) update_u_valid;
-	BTBEntry btbEntry;
+	BTBUpdateInfo btbEntry;
 	TageMeta meta;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) alloc;
 	logic `N(`SLOT_NUM) alloc_combine;
@@ -158,7 +158,7 @@ generate
 		assign base_update_ctr[i] = u_slot_en[i] ? base_ctr_inc[i] : meta.base_ctr[i];
 	end
 	assign base_we = |u_slot_en;
-	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: 2] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * 2 + 1 : `TAGE_BASE_WIDTH + 2];
+	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: `INST_OFFSET] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * `INST_OFFSET + 1 : `TAGE_BASE_WIDTH + `INST_OFFSET];
 
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
 		assign u_slot_en[i] = tage_io.update & tage_io.updateInfo.allocSlot[i] & ~btbEntry.slots[i].carry;

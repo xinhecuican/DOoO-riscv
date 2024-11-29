@@ -6,6 +6,7 @@ module UBTB(
     BpuUBtbIO.ubtb ubtb_io
 );
     // TODO: 一次只更新一级BTB
+    `BTB_ENTRY_GEN(`UBTB_TAG_SIZE)
     BTBEntry `N(`UBTB_SIZE) entrys;
     logic `ARRAY(`SLOT_NUM, 2) ctrs `N(`UBTB_SIZE);
     BTBEntry lookup_entry;
@@ -13,7 +14,7 @@ module UBTB(
     logic `N(`UBTB_SIZE) lookup_hits, updateHits;
     logic `N(`SLOT_NUM) lookup_carry;
     logic `N($clog2(`UBTB_SIZE)) lookup_index, updateIdx, updateSelectIdx;
-    logic `N(`BTB_TAG_SIZE) lookup_tag, update_tag;
+    logic `N(`UBTB_TAG_SIZE) lookup_tag, update_tag;
     logic `N(`SLOT_NUM) br_takens;
     logic tail_taken;
     logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
@@ -37,7 +38,10 @@ module UBTB(
 
     Encoder #(`UBTB_SIZE) encoder_lookup(lookup_hits, lookup_index);
     Encoder #(`UBTB_SIZE) encoder_update(updateHits, updateIdx);
-    BTBTagGen gen_tag(ubtb_io.pc, lookup_tag);
+    BTBTagGen #(
+        `INST_OFFSET,
+        `UBTB_TAG_SIZE
+    )gen_tag(ubtb_io.pc, lookup_tag);
     assign replace_io.hit_en = 0;
     assign replace_io.hit_way = 0;
     assign lookup_hit = |lookup_hits;
@@ -77,7 +81,10 @@ module UBTB(
                                                      ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
     assign br_target = {br_target_high, br_offset, 1'b0};
     assign older = lookup_entry.slots[0].offset < lookup_entry.tailSlot.offset;
-    BTBTagGen gen_update_tag(ubtb_io.updateInfo.start_addr, update_tag);
+    BTBTagGen #(
+        `INST_OFFSET,
+        `UBTB_TAG_SIZE
+    )gen_update_tag(ubtb_io.updateInfo.start_addr, update_tag);
 generate;
     for(genvar i=0; i<`UBTB_SIZE; i++)begin
         assign lookup_hits[i] = entrys[i].en && entrys[i].tag == lookup_tag;
@@ -148,7 +155,7 @@ endgenerate
         ubtb_io.result.redirect_info.ghistIdx = ubtb_io.history.ghistIdx;
         ubtb_io.result.redirect_info.tage_history = ubtb_io.history.tage_history;
         ubtb_io.result.redirect_info.rasInfo = 0;
-        ubtb_io.result.btbEntry = (|lookup_hits) ? lookup_entry : 0;
+        ubtb_io.result.btbEntry = (|lookup_hits) ? lookup_entry[$bits(BTBUpdateInfo)-1: 0] : 0;
         ubtb_io.meta.ctr = lookup_ctr;
     end
 
@@ -194,5 +201,8 @@ endgenerate
             end
         end
     end
+
+    `Log(DLog::Debug, T_BTB, ubtb_io.update & ubtb_io.updateInfo.btbEntry.en,
+    $sformatf("update ubtb. %h->%h[%h]", ubtb_io.updateInfo.start_addr, updateSelectIdx, update_tag))
 
 endmodule

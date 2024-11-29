@@ -45,7 +45,7 @@ module ICache(
         logic addition_request;
         logic flush;
         logic `N(`BLOCK_INST_WIDTH+1) current_index;
-        logic `ARRAY(`BLOCK_INST_SIZE+1, `INST_BITS) data;
+        logic `ARRAY(`BLOCK_INST_SIZE+BLOCK_DELTA, `INST_BITS) data;
         logic `ARRAY(`ICACHE_BANK, 32) replace_data;
         logic `N(`ICACHE_SET_WIDTH) windex;
         logic `N(`ICACHE_BANK_WIDTH) stream_index;
@@ -407,7 +407,8 @@ endgenerate
                     end
                 end
                 if(axi_io.r_valid && axi_io.r_last)begin
-                    if(!miss_buffer.addition_request || miss_buffer.flush)begin
+                    if(!miss_buffer.addition_request || miss_buffer.flush ||
+                        fsq_cache_io.flush)begin
                         main_state <= IDLE;
                     end
                     else begin

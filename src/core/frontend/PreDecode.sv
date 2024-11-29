@@ -12,6 +12,7 @@ module PreDecode(
     PreDecodeBundle bundles_next `N(`BLOCK_INST_SIZE);
     logic `N(`BLOCK_INST_SIZE) redirect_mask_pre, redirect_mask, en_next;
     FsqIdx fsqIdx;
+    logic `N(`FSQ_WIDTH) fsqIdx_n, redirect_fsqIdx_n;
     logic `N(`PREDICTION_WIDTH) tailIdx;
     FetchStream stream_next;
     logic `N(`BLOCK_INST_WIDTH) selectIdx, jumpSelectIdx, jumpSelectIdx_pre;
@@ -46,6 +47,7 @@ endgenerate
     logic `N(`PREDICTION_WIDTH+1) stream_tail_idx;
     logic `ARRAY(`BLOCK_INST_SIZE, `VADDR_SIZE) addrs;
     logic half_rvi;
+    logic `N(`FSQ_SIZE) redirect_half_rvi;
     assign rvc_mask[0] = half_rvi;
     assign addrs[0] = cache_pd_io.stream.start_addr + {~bundles[0].rvc, bundles[0].rvc, 1'b0};
 generate
@@ -62,6 +64,7 @@ endgenerate
     PEncoder #(`BLOCK_INST_SIZE+1) encoder_stream_idx(cache_pd_io.en, stream_tail_idx);
     // pipeline cal tail_rvi_idx if needed
     assign tail_rvi_idx = cache_pd_io.stream.size + {~cache_pd_io.stream.rvc, cache_pd_io.stream.rvc} - 1;
+    assign redirect_fsqIdx_n = frontendCtrl.redirectInfo.idx + 1;
     // 如果恰好最后2 byte有效并且是RVI指令，那么需要获得后半条指令并下一个指令块前2 byte无效
     // 当BTB未命中时，获得的数量为BLOCK_INST_SIZE+1, half_rvi为最后一条指令为rvi指令
     // 当BTB命中时，
@@ -74,16 +77,38 @@ endgenerate
         if(rst == `RST)begin
             half_rvi <= 0;
         end
-        else if(pd_redirect.en || frontendCtrl.redirect)begin
-            half_rvi <= 0;
+        else if(frontendCtrl.redirect)begin
+            half_rvi <= (frontendCtrl.redirectInfo.offset == 0) & frontendCtrl.redirect_mem &
+                        redirect_half_rvi[frontendCtrl.redirectInfo.idx];
+        end
+        else if(pd_redirect.en)begin
+            if(jump_en)begin
+                half_rvi <= 0;
+            end
+            else begin
+                half_rvi <= redirect_half_rvi[pd_redirect.fsqIdx.idx];
+            end
         end
         else if(~frontendCtrl.ibuf_full & cache_pd_io.en[0])begin
             half_rvi <= rvc_en[tailIdx_pre] & (tail_rvi_idx == tailIdx_pre) & ~bundles[tailIdx_pre].rvc;
         end
     end
+    assign fsqIdx_n = fsqIdx.idx + 1;
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            redirect_half_rvi <= 0;
+        end
+        else if(frontendCtrl.redirect & ~frontendCtrl.redirect_mem)begin
+            redirect_half_rvi[redirect_fsqIdx_n] <= 1'b0;
+        end
+        else if(~frontendCtrl.ibuf_full & stream_valid)begin
+            redirect_half_rvi[fsqIdx_n] <= half_rvi & ~pd_redirect.en;
+        end
+    end
 `else
     ParallelAdder #(.DEPTH(`BLOCK_INST_SIZE)) adder_instnum (cache_pd_io.en, instNum);
 `endif
+
 
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -125,8 +150,6 @@ endgenerate
             jumpSelectIdx <= rvc_idx[jumpSelectIdx_pre];
             selectOffset <= jumpSelectIdx_pre;
             shiftIdx <= cache_pd_io.shiftIdx;
-            // rvc_num == 0 说明上一条指令是rvi并且该指令块大小为1并且为rvc指令(BTB预测错误)
-            next_pc <= rvc_num == 0 ? cache_pd_io.stream.start_addr + 2 : addrs[tailIdx_pre];
 `else
             bundles_next <= bundles;
             en_next <= cache_pd_io.en;
@@ -137,7 +160,7 @@ endgenerate
             jumpSelectIdx <= jumpSelectIdx_pre;
             selectOffset <= jumpSelectIdx_pre;
             shiftIdx <= cache_pd_io.shiftOffset;
-            next_pc <= cache_pd_io.stream.start_addr + {cache_pd_io.stream.size, {`INST_OFFSET{1'b0}}} + 4;
+
 `endif
             stream_valid <= cache_pd_io.en[0];
             fsqIdx <= cache_pd_io.fsqIdx;
@@ -145,18 +168,24 @@ endgenerate
             shiftOffset <= cache_pd_io.shiftOffset;
             ipf <= cache_pd_io.exception;
             start_addr_n <= cache_pd_io.start_addr;
+            next_pc <= cache_pd_io.stream.start_addr + `BLOCK_SIZE;
         end
     end
 
     assign selectIdx = jumpSelectIdx;
     assign selectBundle = bundles_next[selectIdx];
 
+    // if nobranch_error is set, redirect this stream as nobranch stream and execute again
     logic nobranch_error, jump_error;
-    assign nobranch_error = (stream_valid & stream_next.taken & (~bundles_next[tailIdx].branch
 `ifdef RVC
-    | ((bundles_next[tailIdx].rvc ^ stream_next.rvc) | half_rvi)
+    assign nobranch_error = (stream_valid & (stream_next.taken & 
+                            (~bundles_next[tailIdx].branch | 
+                            ((bundles_next[tailIdx].rvc ^ stream_next.rvc) | half_rvi)) | 
+                            (instNumNext == 0)));
+`else
+    assign nobranch_error = (stream_valid & stream_next.taken & (~bundles_next[tailIdx].branch));
 `endif
-    ));
+
     assign jump_error = jump_en & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
                             (stream_next.taken & ((tailIdx != selectIdx) |
                             (bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)))));
@@ -172,18 +201,17 @@ endgenerate
     assign pd_redirect.stream.start_addr = start_addr_n;
     assign pd_redirect.stream.target = jump_en ? bundles_next[selectIdx].target : next_pc;
 `ifdef RVC
-    assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : bundles_next[tailIdx].rvc;
+    assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : 0;
     assign pd_redirect.last_offset = jump_en ? rvc_offset[selectIdx] + shiftOffset :
                                                 rvc_offset[tailIdx] + shiftOffset;
-    assign pd_redirect.empty = instNumNext == 0;
-    assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : rvc_offset[tailIdx] + shiftOffset;
+    assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : `BLOCK_INST_SIZE - 2;
 `else
-    assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : stream_next.size;
+    assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : `BLOCK_INST_SIZE - 1;
 
 `endif
 
     MaskGen #(`BLOCK_INST_SIZE) mask_gen_redirect (selectIdx, redirect_mask_pre);
-    assign redirect_mask = {redirect_mask_pre[`BLOCK_INST_SIZE-2: 0], 1'b1};
+    assign redirect_mask = jump_en ? {redirect_mask_pre[`BLOCK_INST_SIZE-2: 0], 1'b1} : 0;
     assign pd_ibuffer_io.en = ({`BLOCK_INST_SIZE{~pd_redirect.en}} | redirect_mask) & en_next;
     assign pd_ibuffer_io.num = redirect_en & jump_en ? selectIdx + 1 : 
                                redirect_en ? tailIdx + 1 : instNumNext;

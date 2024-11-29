@@ -1,17 +1,20 @@
 `include "../../defines/defines.svh"
 
-module BTBTagGen(
+module BTBTagGen #(
+    parameter OFFSET=0,
+    parameter WIDTH=1
+)(
     input logic `VADDR_BUS pc,
-    output logic `N(`BTB_TAG_SIZE) tag
+    output logic `N(WIDTH) tag
 );
-    assign tag = pc[`BTB_TAG_SIZE + 1 : 2] ^ pc[`BTB_TAG_SIZE + 1 + `BTB_TAG_SIZE : 2+`BTB_TAG_SIZE];
+    assign tag = pc[OFFSET + WIDTH - 1 : OFFSET] ^ pc[`VADDR_SIZE-1: `VADDR_SIZE - WIDTH];
 endmodule
 
 module BTBIndexGen(
     input logic `VADDR_BUS pc,
     output logic `N(`BTB_SET_WIDTH) index
 );
-    assign index = pc[`BTB_SET_WIDTH + 1 + $clog2(`BTB_WAY): 2 + $clog2(`BTB_WAY)];
+    assign index = pc[`BTB_SET_WIDTH + `INST_OFFSET + $clog2(`BTB_WAY) - 1: `INST_OFFSET + $clog2(`BTB_WAY)];
 endmodule
 
 module BTB (
@@ -20,11 +23,9 @@ module BTB (
     BpuBtbIO.btb btb_io
 );
 
-`ifdef DIFFTEST
+`BTB_ENTRY_GEN(`BTB_TAG_SIZE)
+
     typedef struct packed {
-`else
-    typedef struct {
-`endif
         logic we;
         logic `N(`BTB_SET_WIDTH) waddr;
         logic `N(`BTB_SET_WIDTH) raddr;
@@ -44,7 +45,10 @@ module BTB (
     BTBIndexGen update_index_gen(btb_io.updateInfo.start_addr, updateIdx);
     Decoder #(`BTB_WAY) decoder_bank(btb_io.pc[1+$clog2(`BTB_WAY): 2], bank_en);
     Decoder #(`BTB_WAY) decoder_we(btb_io.updateInfo.start_addr[1+$clog2(`BTB_WAY): 2], bank_we);
-    BTBTagGen gen_update_tag(btb_io.updateInfo.start_addr, update_tag);
+    BTBTagGen #(
+        `BTB_SET_WIDTH + `INST_OFFSET + $clog2(`BTB_WAY), 
+        `BTB_TAG_SIZE
+    ) gen_update_tag(btb_io.updateInfo.start_addr, update_tag);
     generate;
         for(genvar i=0; i<`BTB_WAY; i++)begin
             MPRAM #(
@@ -70,11 +74,12 @@ module BTB (
             assign bank_ctrl[i].wdata = {update_tag, btb_io.updateInfo.btbEntry};
         end
     endgenerate
-    assign btb_io.entry = bank_ctrl[s2_bank].rdata;
+    assign btb_io.entry = bank_ctrl[s2_bank].rdata[$bits(BTBUpdateInfo)-1: 0];
+    assign btb_io.tag = bank_ctrl[s2_bank].rdata.tag;
 
     always_ff @(posedge clk)begin
         if(~btb_io.redirect.stall)begin
-            s2_bank <= btb_io.pc[1+$clog2(`BTB_WAY): 2];
+            s2_bank <= btb_io.pc[1+$clog2(`BTB_WAY): `INST_OFFSET];
         end
     end
 

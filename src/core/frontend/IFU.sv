@@ -25,6 +25,8 @@ module IFU (
 
     assign ifu_backend_io.fetchBundle = fetchBundle;
     assign frontendCtrl.redirect = fsq_back_io.redirect.en;
+    assign frontendCtrl.redirect_mem = ~fsq_back_io.redirectBr.en & ~fsq_back_io.redirectCsr.en;
+    assign frontendCtrl.redirectInfo = fsq_back_io.redirect.fsqInfo;
     BranchPredictor branch_predictor(.*);
     FSQ fsq(.*);
     ICache icache(.*);

@@ -13,6 +13,8 @@ module FSQ (
     CommitBus.in commitBus,
     input FrontendCtrl frontendCtrl
 );
+    // TODO: update branch predictor when squash. Because branch metas are stored in ram
+    // so even Wrongly updated branch predictor, it can be recovered when update
     logic `N(`FSQ_WIDTH) search_head, commit_head, tail, write_index;
     logic `N(`FSQ_WIDTH) search_head_n1, tail_n1, n_commit_head;
     logic `N(`FSQ_WIDTH) write_tail;
@@ -31,7 +33,6 @@ module FSQ (
     logic `N(`PREDICTION_WIDTH) commitSize;
     logic initReady;
     logic commitValid;
-    logic streamCommitEmpty;
     FetchStream `N(`ALU_SIZE) back_streams;
 
     assign tail_n1 = tail + 1;
@@ -98,7 +99,7 @@ module FSQ (
         .rdata(oldEntry),
         .we(queue_we),
         .waddr(write_tail),
-        .wdata(bpu_fsq_io.prediction.btbEntry[$bits(BTBUpdateInfo)-1: 0]),
+        .wdata(bpu_fsq_io.prediction.btbEntry),
         .ready()
     );
 
@@ -139,7 +140,7 @@ module FSQ (
 
     assign pd_wr_info.condNum = bpu_fsq_io.prediction.cond_num;
     assign pd_wr_info.condHist = bpu_fsq_io.prediction.predTaken;
-    BTBEntry predEntry;
+    BTBUpdateInfo predEntry;
     assign predEntry = bpu_fsq_io.prediction.btbEntry;
 generate
     for(genvar i=0; i<`SLOT_NUM-1; i++)begin
@@ -320,7 +321,12 @@ endgenerate
                 search_head <= fsq_back_io.redirect.fsqInfo.idx;
             end
             else if(pd_redirect.en)begin
-                search_head <= pd_redirect_n1;
+                if(pd_redirect.direct)begin
+                    search_head <= pd_redirect_n1;
+                end
+                else begin
+                    search_head <= pd_redirect.fsqIdx.idx;
+                end
             end
             else if(bpu_fsq_io.redirect & search_abandon)begin
                 search_head <= bpu_fsq_io.prediction.stream_idx;
@@ -377,7 +383,12 @@ endgenerate
                 shdir <= directionTable[redirect_dir_idx];
             end
             else if(pd_redirect.en)begin
-                shdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
+                if(pd_redirect.direct)begin
+                    shdir <= pd_redirect.fsqIdx.idx[`FSQ_WIDTH-1] & ~pd_redirect_n1[`FSQ_WIDTH-1] ? ~pd_redirect.fsqIdx.dir : pd_redirect.fsqIdx.dir;
+                end
+                else begin
+                    shdir <= pd_redirect.fsqIdx.dir;
+                end
             end
             else if(bpu_fsq_io.redirect & search_abandon)begin
                 shdir <= bpu_fsq_io.prediction.stream_dir;
@@ -463,11 +474,7 @@ endgenerate
     // because streamVec is not init
     assign commitValid = initReady & (
                         (|commitNum[FSQ_INST_WIDTH: `PREDICTION_WIDTH]) || 
-`ifdef RVC
-            ((commitNum[`PREDICTION_WIDTH-1: 0] > commitSize) || streamCommitEmpty) ||
-`else
                         (commitNum[`PREDICTION_WIDTH-1: 0] > commitSize) ||
-`endif
                         (pred_error_en[commit_head] & (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqSize)));
     assign pred_error = initReady & pred_error_en[commit_head] & 
                         ((|commitNum[FSQ_INST_WIDTH: `PREDICTION_WIDTH]) | (commitNum[`PREDICTION_WIDTH-1: 0] > commitFsqSize));
@@ -476,11 +483,7 @@ endgenerate
     logic `N(`PREDICTION_WIDTH+1) streamCommitNum;
 
     assign streamCommitSize = pred_error_en[commit_head] ? commitFsqSize : commitSize;
-`ifdef RVC
-    assign streamCommitNum = streamCommitEmpty ? 0 : streamCommitSize + 1;
-`else
     assign streamCommitNum = streamCommitSize + 1;
-`endif
 
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -606,33 +609,15 @@ endgenerate
     assign fsq_back_io.commitStreamSize = commitSize;
 
 `ifdef RVC
-    logic `N(`FSQ_SIZE) stream_empty, commit_head_mask, redirect_mask;
+    logic `N(`FSQ_SIZE) commit_head_mask, redirect_mask;
     logic `ARRAY(`ALU_SIZE, `PREDICTION_WIDTH) stream_lasts;
     logic `N(`PREDICTION_WIDTH) last_offset;
     always_ff @(posedge clk)begin
         last_offset <= pd_redirect.last_offset;
     end
-    assign streamCommitEmpty = stream_empty[commit_head];
     MaskGen #(`FSQ_SIZE) mask_gen_commit_head (commit_head, commit_head_mask);
     MaskGen #(`FSQ_SIZE) mask_gen_redirect (fsq_back_io.redirect.fsqInfo.idx, redirect_mask);
 
-    always_ff @(posedge clk, posedge rst)begin
-        if(rst == `RST)begin
-            stream_empty <= 1'b0;
-        end
-        else if(fsq_back_io.redirect.en)begin
-            stream_empty <= stream_empty & (commit_head_mask ^ redirect_mask ^ {`FSQ_SIZE{hdir ^ directionTable[redirect_dir_idx]}});
-        end
-        else begin
-            if(pd_redirect.exc_en)begin
-                stream_empty[pd_redirect.fsqIdx.idx] <= pd_redirect.empty;
-            end
-            
-            if(commitValid)begin
-                stream_empty[commit_head] <= 1'b0;
-            end
-        end
-    end
     MPRAM #(
         .WIDTH(`PREDICTION_WIDTH),
         .DEPTH(`FSQ_SIZE),

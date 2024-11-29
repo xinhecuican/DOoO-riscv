@@ -13,7 +13,7 @@ module BranchPredictor(
     logic squash;
     logic update;
     logic stall_normal;
-    BpuBtbIO btb_io(.*);
+    BpuBtbIO #(`BTB_TAG_SIZE) btb_io(.*);
     BpuTageIO tage_io(.*);
     BpuUBtbIO ubtb_io(.*);
     BpuRASIO ras_io(.*);
@@ -108,6 +108,7 @@ module BranchPredictor(
     S2Control s2_control(
         .pc(s2_result_in.stream.start_addr),
         .entry(btb_io.entry),
+        .tag(btb_io.tag),
         .prediction(tage_io.prediction),
         .ras_io(ras_io.control),
         .result_i(s2_result_in),
@@ -123,7 +124,8 @@ endmodule
 
 module S2Control(
     input logic `VADDR_BUS pc,
-    input BTBEntry entry,
+    input logic `N(`BTB_TAG_SIZE) tag,
+    input BTBUpdateInfo entry,
     input logic `N(`SLOT_NUM) prediction,
     BpuRASIO.control ras_io,
     input PredictionResult result_i,
@@ -150,7 +152,7 @@ module S2Control(
 `endif
 
     BTBTagGen gen_tag(pc, lookup_tag);
-    assign hit = entry.en && (lookup_tag == entry.tag);
+    assign hit = entry.en && (lookup_tag == tag);
     assign br_takens = isBr & (prediction | carry);
     generate;
         for(genvar br=0; br<`SLOT_NUM-1; br++)begin
