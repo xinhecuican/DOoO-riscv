@@ -91,18 +91,17 @@ generate
         assign data_io[i].en = addr_io[i].en;
         assign data_io[i].status = addr_io[i].status;
         assign data_io[i].data = addr_io[i].data;
-        assign data_io[i].reg_ready = store_reg_io.ready[i];
-        
-        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en
-`ifdef RVF
-                                                          & ~data_io[i].fp_reg_en
-`endif
-        ;
+
         assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM+i] = data_io[i].rs2;
 `ifdef RVF
         assign store_reg_io.en[`STORE_ISSUE_BANK_NUM*2+i] = data_io[i].reg_en & data_io[i].fp_reg_en;
         assign store_reg_io.preg[`STORE_ISSUE_BANK_NUM*2+i] = data_io[i].rs2;
         assign store_io.data_fp_sel[i] = data_io[i].fp_sel_o;
+        assign data_io[i].reg_ready = store_reg_io.ready[`STORE_PIPELINE+i] | data_io[i].fp_reg_en;
+        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en & ~data_io[i].fp_reg_en;
+`else
+        assign data_io[i].reg_ready = store_reg_io.ready[`STORE_PIPELINE+i];
+        assign store_reg_io.en[`STORE_ISSUE_BANK_NUM+i] = data_io[i].reg_en;
 `endif
         assign store_io.data_sqIdx[i] = data_io[i].sqIdx_o;
         assign store_io.dis_rob_idx[i] = dis_store_io.status[i].robIdx;
@@ -246,6 +245,57 @@ endgenerate
     Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_reply (io.reply.issue_idx, reply_decode);
     Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_tlbbank (io.tlb_bank_idx, tlbbank_decode);
 
+// tlb miss resend
+    logic `N(`STORE_ISSUE_BANK_SIZE) tlb_reply_en, tlb_reply_valid;
+    logic `ARRAY(`STORE_ISSUE_BANK_SIZE, 2) repeat_times;
+    logic `ARRAY(`STORE_ISSUE_BANK_SIZE, 4) tlb_counter;
+    logic `N(4) current_tlb_counter;
+    logic `N(2) current_repeat_times;
+
+    always_comb begin
+        case(current_repeat_times)
+        0: current_tlb_counter = 4'h3;
+        1: current_tlb_counter = 4'h7;
+        2: current_tlb_counter = 4'hb;
+        3: current_tlb_counter = 4'hf;
+        endcase
+    end
+generate
+    for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
+        assign tlb_reply_valid[i] = tlb_reply_en[i] & (tlb_counter[i] == 0);
+    end
+endgenerate
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            repeat_times <= 0;
+            tlb_counter <= 0;
+            tlb_reply_en <= 0;
+        end
+        else begin
+            for(int i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
+                tlb_reply_en[i] <= (tlb_reply_en[i] | io.tlb_en & io.tlb_error & tlbbank_decode[i]) &
+                                   ~backendCtrl.redirect & ~tlb_reply_valid[i];
+            end
+            if(io.en)begin
+                repeat_times[freeIdx] <= 0;
+            end
+            if(io.tlb_en & io.tlb_error)begin
+                if(repeat_times[io.tlb_bank_idx] < 3)begin
+                    repeat_times[io.tlb_bank_idx] <= repeat_times[io.tlb_bank_idx] + 1;
+                end
+            end
+            for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
+                if(io.tlb_en & io.tlb_error & (i == io.tlb_bank_idx))begin
+                    tlb_counter[i] <= current_tlb_counter;
+                end
+                else if(tlb_counter[i] != 0)begin
+                    tlb_counter[i] <= tlb_counter[i] - 1;
+                end
+            end
+        end
+    end
+
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
         io.issue_idx <= selectIdxNext;
@@ -281,23 +331,10 @@ endgenerate
                 issue[i] <= ((issue[i] & ~(backendCtrl.redirect & (tlbmiss[i] | tlbmiss_valid[i]))) |
                             (((|ready) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
                             ~(io.reply.en & (io.reply.reason != 2'b11) & reply_decode[i]) &
-                            ~(io.tlb_en & tlbbank_decode[i]) &
+                            ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i]) & ~tlb_reply_valid[i] &
                             ~(io.en & free_en[i]);
                 tlbmiss[i] <= (tlbmiss[i] | tlbmiss_valid[i]) &
-                              ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
-                              
-            end
-
-            if((|ready) & ~backendCtrl.redirect)begin
-                issue[selectIdx] <= 1'b1;
-            end
-
-            if(io.reply.en && (io.reply.reason != 2'b11))begin
-                issue[io.reply.issue_idx] <= 1'b0;
-            end
-
-            if(io.tlb_en)begin
-                issue[io.tlb_bank_idx] <= 1'b0;
+                              ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i] | tlb_reply_valid[i]) & ~backendCtrl.redirect;                  
             end
 
             if(io.tlb_en & io.tlb_exception)begin

@@ -5,7 +5,9 @@
 `include "apb.svh"
 `include "ace.svh"
 
-interface BpuBtbIO(
+interface BpuBtbIO#(
+    parameter TAG_SIZE=1
+)(
     input RedirectCtrl redirect,
     input logic squash,
     input SquashInfo squashInfo,
@@ -14,9 +16,10 @@ interface BpuBtbIO(
 );
     logic request;
     logic `VADDR_BUS pc;
-    BTBEntry entry;
+    BTBUpdateInfo entry;
+    logic `N(TAG_SIZE) tag;
 
-    modport btb (output entry, input request, pc, redirect, squash, squashInfo, update, updateInfo);
+    modport btb (output entry, tag, input request, pc, redirect, squash, squashInfo, update, updateInfo);
 endinterface
 
 interface BpuUBtbIO(
@@ -173,8 +176,8 @@ interface ReplaceIO #(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
     parameter READ_PORT = 1,
-    parameter WAY_WIDTH = $clog2(WAY_NUM),
-    parameter ADDR_WIDTH = $clog2(DEPTH)
+    parameter WAY_WIDTH = idxWidth(WAY_NUM),
+    parameter ADDR_WIDTH = idxWidth(DEPTH)
 );
     logic `N(READ_PORT) hit_en;
     logic `ARRAY(READ_PORT, WAY_NUM) hit_way;
@@ -205,10 +208,9 @@ interface PreDecodeRedirect;
     FetchStream stream;
     logic `N(`PREDICTION_WIDTH) size;
     logic `N(`PREDICTION_WIDTH) last_offset;
-    logic empty;
 
-    modport predecode(output en, exc_en, direct, fsqIdx, stream, size, last_offset, empty);
-    modport redirect(input en, exc_en, direct, fsqIdx, stream, size, last_offset, empty);
+    modport predecode(output en, exc_en, direct, fsqIdx, stream, size, last_offset);
+    modport redirect(input en, exc_en, direct, fsqIdx, stream, size, last_offset);
 endinterface
 
 interface PreDecodeIBufferIO;
@@ -469,7 +471,7 @@ interface CommitBus;
     , input rvc
 `endif
     );
-    modport mem(input loadNum, storeNum, robIdx);
+    modport mem(input loadNum, storeNum, robIdx, fence_valid);
     modport csr(input robIdx, fsqInfo, fence_valid, en
 `ifdef RVC
     , input rvc
@@ -597,7 +599,7 @@ interface DTLBLsuIO;
     logic flush;
 
     logic `N(`LOAD_PIPELINE) lreq;
-    logic `N(`LOAD_PIPELINE) lreq_cancel;
+    logic `N(`LOAD_PIPELINE) lreq_s2;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lidx;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) laddr;
     
@@ -613,7 +615,7 @@ interface DTLBLsuIO;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lwb_idx;
 
     logic `N(`STORE_PIPELINE) sreq;
-    logic `N(`STORE_PIPELINE) sreq_cancel;
+    logic `N(`STORE_PIPELINE) sreq_s2;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sidx;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) saddr;
 
@@ -636,7 +638,8 @@ interface DTLBLsuIO;
     logic amo_error;
     logic `N(`PADDR_SIZE) amo_paddr;
 `endif
-    modport tlb(input flush, lreq, lidx, laddr, sreq, sidx, saddr,  lreq_cancel, sreq_cancel,
+    modport tlb(input flush, lreq, lreq_s2, lidx, laddr, 
+                sreq, sreq_s2, sidx, saddr,
 `ifdef RVA
                 input amo_req, amo_addr,
                 output amo_valid, amo_exception, amo_error, amo_paddr,
@@ -671,7 +674,7 @@ interface TlbL2IO;
     logic exception;
     TLBInfo info_o;
     PTEEntry entry;
-    logic `N(2) wpn;
+    logic `N(`TLB_PN) wpn;
     logic `N(`VADDR_SIZE) waddr;
 
     modport tlb(output req, req_addr, info, input ready, dataValid, error, exception, info_o, entry, wpn, waddr);

@@ -206,6 +206,7 @@ endgenerate
 `endif
     } FenceType;
     logic sfence_vma, vma_clear_all, fence, fencei;
+    logic fencei_end;
     FsqIdxInfo fence_fsqInfo;
     logic `N(`PREDICTION_WIDTH+1) fsq_offset_n;
     RobIdx preRobIdx;
@@ -246,6 +247,7 @@ endgenerate
             fence <= 1'b0;
 `ifdef EXT_FENCEI
             fencei <= 1'b0;
+            fencei_end <= 1'b0;
 `endif
             fenceBus.fence_end <= 1'b0;
             fenceBus.preRobIdx <= 0;
@@ -279,8 +281,14 @@ endgenerate
                 fencei <= 1'b1;
             end
             fenceBus.inst_flush <= commitBus.fence_valid & fence_type.fencei;
-            if(fencei & fenceBus.inst_flush_end & ~fenceBus.store_flush)begin
+            if(fencei & fencei_end & fenceBus.store_flush_end)begin
                 fencei <= 1'b0;
+            end
+            if(fencei & fenceBus.inst_flush_end)begin
+                fencei_end <= 1'b1;
+            end
+            if(fencei & fencei_end & fenceBus.store_flush_end)begin
+                fencei_end <= 1'b0;
             end
 `endif
             if(fenceBus.store_flush & fenceBus.store_flush_end)begin
@@ -298,7 +306,7 @@ endgenerate
                                   (commitBus.fence_valid & fence_type.csr) |
                                   (fence & fenceBus.store_flush_end)
 `ifdef EXT_FENCEI
-                                  | (fenceBus.inst_flush_end & ~fenceBus.store_flush)
+                                  | (fencei & fencei_end & fenceBus.store_flush_end)
 `endif
                                 ;
             if(fenceBus.fence_end)begin

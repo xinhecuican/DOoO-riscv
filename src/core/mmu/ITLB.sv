@@ -36,7 +36,7 @@ module ITLB(
     assign replace_io.hit_way = 0;
 generate
     for(genvar i=0; i<2; i++)begin
-        assign itlb_io[i].req = itlb_cache_io.req[i];
+        assign itlb_io[i].req = itlb_cache_io.req[i] & ~itlb_cache_io.flush;
         // assign itlb_io.asid = itlb_cache_io.asid;
         assign itlb_io[i].vaddr = itlb_cache_io.vaddr[i];
         assign itlb_io[i].flush = itlb_cache_io.flush;

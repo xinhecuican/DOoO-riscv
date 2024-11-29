@@ -28,15 +28,16 @@ typedef struct packed {
     TargetState tar_state;
 } TailSlot;
 
-typedef struct packed {
-    logic `N(`BTB_TAG_SIZE) tag;
-    logic en;
-    BranchSlot `N(`SLOT_NUM-1) slots;
-    TailSlot tailSlot;
-    logic `N(`PREDICTION_WIDTH) fthAddr;
-`ifdef RVC
-    logic fth_rvc;
-`endif
+`define BTB_ENTRY_GEN(tag_size) \
+typedef struct packed { \
+    logic `N(``tag_size``) tag; \
+    logic en; \
+    BranchSlot `N(`SLOT_NUM-1) slots; \
+    TailSlot tailSlot; \
+    logic `N(`PREDICTION_WIDTH) fthAddr; \
+`ifdef RVC \
+    logic fth_rvc; \
+`endif \
 } BTBEntry;
 
 typedef struct packed {
@@ -120,7 +121,7 @@ typedef struct packed {
     FetchStream stream;
     BranchType br_type;
     RasType ras_type;
-    BTBEntry btbEntry;
+    BTBUpdateInfo btbEntry;
     logic `N(`PREDICT_STAGE-1) redirect;
     logic `N(2) cond_num;
     logic `N(`SLOT_NUM) cond_valid;
@@ -513,7 +514,7 @@ typedef struct packed {
     logic x;
     logic exc;
     logic uc;
-    logic `N(2) size;
+    logic `N(`TLB_PN) size;
     // logic `N(`TLB_ASID) asid;
     VPNAddr vpn;
     PPNAddr ppn;
@@ -555,6 +556,8 @@ typedef struct packed {
 typedef struct packed {
     logic ibuf_full;
     logic redirect;
+    logic redirect_mem;
+    FsqIdxInfo redirectInfo;
 } FrontendCtrl;
 
 typedef struct packed {

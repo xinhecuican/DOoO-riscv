@@ -121,7 +121,7 @@ endgenerate
     logic `N(`STORE_PIPELINE * 2) store_en;
     logic `ARRAY(`STORE_PIPELINE * 2, `PREG_WIDTH) store_preg;
     always_comb begin
-        store_reg_io.ready = {`STORE_PIPELINE*2{1'b1}};
+        store_reg_io.ready[`STORE_PIPELINE*2-1: 0] = {`STORE_PIPELINE*2{1'b1}};
         en[`STORE_PIPELINE*2+STORE_BASE-1: STORE_BASE] = store_en;
 `ifdef RVA
         store_reg_io.ready[`STORE_PIPELINE] = ~amo_reg_io.en[0];

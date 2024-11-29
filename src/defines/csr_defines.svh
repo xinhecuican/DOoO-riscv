@@ -9,7 +9,7 @@
 `define PMA_SIZE 4
 `define PMACFG_SIZE (`PMA_SIZE / 4)
 
-`define PMP_SIZE 8
+`define PMP_SIZE 16
 `define PMPCFG_SIZE (`PMP_SIZE / 4)
 `define CSR_GROUP_SIZE (3 \
 `ifdef RV32I \
@@ -17,9 +17,10 @@
 `endif \
 )
 
-`define CSR_NUM (27 \
+`define CSR_NORMAL_NUM 29
+`define CSR_NUM (`CSR_NORMAL_NUM \
 `ifdef RV32I \
-    + 2 \
+    + 3 \
 `endif \
 `ifdef RVF \
     +3 \
@@ -33,8 +34,11 @@
 `define CSRID_mie       12'h304
 `define CSRID_mtvec     12'h305
 `define CSRID_mcounteren 12'h306
+`define CSRID_menvcfg   12'h30a
 `define CSRID_mstatush  12'h310
 `define CSRID_medelegh  12'h312
+`define CSRID_menvcfgh  12'h31a
+`define CSRID_mcounterinhibit 12'h320
 `define CSRID_mscratch  12'h340
 `define CSRID_mepc      12'h341
 `define CSRID_mcause    12'h342
@@ -105,6 +109,7 @@ typedef struct packed {
     Extensions ext;
 } ISA;
 `define ISA_MASK {2'b11, {`MXL-28{1'b0}}, {4'h0, 2'h3, 1'b0, 1'b1, 1'b0, 2'h3, 1'b0, 2'h3, 3'b000, 2'h3, 1'b0, 6'h3f}}
+`define MARCH_INIT 32'h34
 
 `define MISA_INIT '{ \
 `ifdef RV32I \
@@ -196,7 +201,7 @@ typedef struct packed {
 `define CAUSE_MASK {1'b1, {`MXL-7{1'b0}}, 6'h3f}
 `define MEDELEG_INIT {{`MXL-16{1'b0}}, 16'hb3ff}
 `define MEDELEG_MASK {{`MXL-16{1'b0}}, 16'hb3ff}
-`define COUNTEREN_MASK 32'h3
+`define COUNTEREN_MASK 32'h7
 
 typedef struct packed {
     logic mode;
@@ -222,6 +227,23 @@ typedef struct packed {
     logic ssip;
     logic unuse9;
 } IP;
+
+typedef struct packed {
+    logic stce;
+    logic pbmte;
+    logic adue;
+    logic dte;
+    logic [24: 0] unuse1;
+    logic [1: 0] pmm;
+    logic [23: 0] unuse2;
+    logic cbze;
+    logic cbcfe;
+    logic cbie;
+    logic sse;
+    logic lpe;
+    logic unuse3;
+    logic fiom;
+} MENVCFG;
 
 `define PMP_OFF     2'b00
 `define PMP_TOR     2'b01

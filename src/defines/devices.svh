@@ -18,7 +18,7 @@
 `define UART_END            `PADDR_SIZE'h10001000
 
 `define MEM_START           `PADDR_SIZE'h80000000
-`define MEM_END             `PADDR_SIZE'ha0000000
+`define MEM_END             `PADDR_SIZE'hf0000000
 
 typedef struct packed {
     logic [$clog2(`PERIPHERAL_SIZE+2): 0] idx;

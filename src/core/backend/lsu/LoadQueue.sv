@@ -38,7 +38,8 @@ module LoadQueue(
     CommitBus.mem commitBus,
     input BackendCtrl backendCtrl,
     DCacheLoadIO.queue rio,
-    AxiIO.masterr laxi_io
+    AxiIO.masterr laxi_io,
+    input logic fence_valid
 );
     localparam BANK_SIZE = `LOAD_QUEUE_SIZE / `LOAD_PIPELINE;
     logic `N(`LOAD_QUEUE_WIDTH) head, tail, head_n, tail_n, redirect_tail;
@@ -118,6 +119,7 @@ generate
             .redirect(backendCtrl.redirect),
             .redirectIdx(backendCtrl.redirectIdx),
             .commit_en(commit_en),
+            .fence_valid(fence_valid),
             .commit_idx(bank_commit_idx),
             .commitIdx(commitBus.robIdx),
             .wb_ready(io.wb_ready[i]),
@@ -294,6 +296,7 @@ module LoadQueueBank #(
 
     input logic redirect,
     input RobIdx redirectIdx,
+    input logic fence_valid,
 
     input logic `N(`COMMIT_WIDTH) commit_en,
     input logic `ARRAY(`COMMIT_WIDTH, BANK_WIDTH) commit_idx,
@@ -536,6 +539,7 @@ endgenerate
         .uncache_arready,
         .uncache_rdata,
         .uncache_rvalid,
+        .fence_valid,
         .full(uncache_full)
     );
 
@@ -611,6 +615,7 @@ module LoadUncacheBuffer(
     input logic uncache_valid,
     input logic wb_en,
     input logic commit_valid,
+    input logic fence_valid,
     input logic `N(`LOAD_UNCACHE_WIDTH) uncache_idx_i,
     input logic `N(`PADDR_SIZE) addr,
     input logic `N(`DCACHE_BYTE) mask,
@@ -703,7 +708,7 @@ module LoadUncacheBuffer(
             case(uncacheState)
             IDLE:begin
                 if(uncache_valid &
-                (commitIdx == redirect_robIdxs[uncache_idx_i]) | input_en)begin
+                (commitIdx == redirect_robIdxs[uncache_idx_i]) & ~fence_valid | input_en)begin
                     uncacheState <= LOOKUP;
                     uncache_req <= 1'b1;
                     busyIdx <= uncache_idx_i;
@@ -720,7 +725,7 @@ module LoadUncacheBuffer(
                 end
                 if(uncache_rvalid)begin
                     uncacheState <= WRITEBACK;
-                    uncache_wb_data <= uncache_rdata;
+                    uncache_wb_data <= uncache_data;
                 end
             end
             WRITEBACK:begin

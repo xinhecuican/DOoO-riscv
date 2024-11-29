@@ -10,6 +10,10 @@
         name_n <= name; \
     end
 
+function automatic integer idxWidth(input integer num_idx);
+    return (num_idx > 32'd1) ?$clog2(num_idx) : 32'd1;
+endfunction
+
 `define NUM_CORE 1
 `define CORE_WIDTH $clog2(`NUM_CORE + 1)
 
@@ -53,6 +57,7 @@
 `define JAL_OFFSET 12
 `define JALR_OFFSET 20
 
+`define UBTB_TAG_SIZE 14
 `define UBTB_SIZE 64
 `define UBTB_WIDTH $clog2(`UBTB_SIZE)
 
@@ -308,9 +313,11 @@ typedef enum logic [1:0] {
 
 // tlb cache
 `define TLB_P0_SET 64
+`define TLB_P0_WAY 2
 `define TLB_P0_BANK `DCACHE_BANK
 `define TLB_P0_SET_WIDTH $clog2(`TLB_P0_SET)
 `define TLB_P0_TAG `TLB_TAG - $clog2(`TLB_P0_BANK) - `TLB_P0_SET_WIDTH
+`define TLB_P1_WAY 1
 `define TLB_P1_SET 32
 `define TLB_P1_BANK (`DCACHE_BANK)
 `define TLB_P1_SET_WIDTH $clog2(`TLB_P1_SET)

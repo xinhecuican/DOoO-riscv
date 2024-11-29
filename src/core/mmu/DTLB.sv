@@ -13,7 +13,6 @@ module DTLB(
     TLBIO #(`DTLB_SIZE) stlb_io `N(`LOAD_PIPELINE) ();
     TlbL2IO tlb_l2_io0();
     TlbL2IO tlb_l2_io1();
-    logic flush0, flush1, flush2;
 
     logic `N(`LOAD_PIPELINE) lwb_pipeline;
     Decoder #(`LOAD_PIPELINE) decoder_load_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], lwb_pipeline);
@@ -21,40 +20,27 @@ module DTLB(
     Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `STORE_ISSUE_BANK_WIDTH], swb_pipeline);
 
     logic `N(`DTLB_SIZE) replace_en, replace_hit;
-    logic `N(`VADDR_SIZE-`TLB_OFFSET) replace_vpn `N(`DTLB_SIZE);
-    logic `N($clog2(`DTLB_SIZE)) tlb_widx, replace_widx;
-    ReplaceD1IO #(.WAY_NUM(`DTLB_SIZE)) replace_io();
-    RandomReplaceD1 #(1, `DTLB_SIZE) replace (.*);
-    assign replace_io.hit_en = 0;
-    assign replace_io.hit_way = 0;
-    always_ff @(posedge clk, posedge rst)begin
-        if(rst == `RST)begin
-            replace_vpn <= '{default: 0};
-            replace_en <= 0;
-        end
-        else if(tlb_lsu_io.flush)begin
-            replace_en <= 0;
-        end
-        else begin
-            if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception)begin
-                replace_vpn[tlb_widx] <= tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
-                replace_en[tlb_widx] <= 1'b1;
-            end
-        end
-    end
-generate
-    for(genvar i=0; i<`DTLB_SIZE; i++)begin
-        assign replace_hit[i] = replace_en[i] & (replace_vpn[i] == tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET]);
-    end
-endgenerate
-    Encoder #(`DTLB_SIZE) encoder_replace_idx (replace_hit, replace_widx);
-    assign tlb_widx = |replace_hit ? replace_widx : replace_io.miss_way;
+    logic `ARRAY(`DTLB_SIZE, `TLB_PN) replace_pn_valid;
+    VPNAddr replace_vpn `N(`DTLB_SIZE);
+    logic `ARRAY(`DTLB_SIZE, `TLB_PN) replace_pn_hits;
+    VPNAddr replace_cmp_vaddr;
+    logic `N($clog2(`DTLB_SIZE)) tlb_widx, replace_widx, replace_miss_idx;
 
-    always_ff @(posedge clk)begin
-        flush0 <= tlb_lsu_io.flush;
-        flush1 <= tlb_lsu_io.flush;
-        flush2 <= tlb_lsu_io.flush;
-    end
+    typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
+    FenceState fenceState;
+    logic fenceReq, fenceWe;
+    logic `N($clog2(`DTLB_SIZE)) fenceIdx;
+    VPNAddr fenceVaddr;
+
+    ReplaceIO #(
+        .DEPTH(1),
+        .WAY_NUM(`DTLB_SIZE)
+    ) replace_io();
+    PLRU #(1, `DTLB_SIZE) replace (.*);
+    assign replace_io.hit_en = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
+    assign replace_io.hit_way = replace_hit;
+    assign replace_io.miss_index = 0;
+    assign replace_io.hit_index = 0;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -77,8 +63,9 @@ generate
         end
 `endif
 
-        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
-        assign ltlb_io[i].widx = tlb_widx;
+        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception | fenceWe;
+        assign ltlb_io[i].wen = ~fenceWe;
+        assign ltlb_io[i].widx = fenceWe ? fenceIdx : tlb_widx;
         assign ltlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign ltlb_io[i].wentry = tlb_l2_io0.entry;
         assign ltlb_io[i].wpn = tlb_l2_io0.wpn;
@@ -99,8 +86,9 @@ generate
         assign stlb_io[i].vaddr = tlb_lsu_io.saddr[i];
         assign stlb_io[i].flush = tlb_lsu_io.flush;
 
-        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
-        assign stlb_io[i].widx = tlb_widx;
+        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception | fenceWe;
+        assign stlb_io[i].wen = ~fenceWe;
+        assign stlb_io[i].widx = fenceWe ? fenceIdx : tlb_widx;
         assign stlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign stlb_io[i].wentry = tlb_l2_io0.entry;
         assign stlb_io[i].wpn = tlb_l2_io0.wpn;
@@ -113,8 +101,8 @@ generate
     end
 endgenerate
 
-    TLBRepeater repeater0(.*, .flush(flush0), .in(tlb_l2_io0), .out(tlb_l2_io1));
-    TLBRepeater repeater1(.*, .flush(flush1), .in(tlb_l2_io1), .out(tlb_l2_io));
+    TLBRepeater repeater0(.*, .flush(tlb_lsu_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io1));
+    TLBRepeater repeater1(.*, .flush(tlb_lsu_io.flush), .in(tlb_l2_io1), .out(tlb_l2_io));
 
 `ifdef RVA
     logic amo_req, amo_req_s2;
@@ -122,7 +110,7 @@ endgenerate
     always_ff @(posedge clk)begin
         amo_req <= tlb_lsu_io.amo_req;
         amo_vaddr <= tlb_lsu_io.amo_addr;
-        amo_req_s2 <= amo_req & ltlb_io[0].miss & ~ltlb_io[0].exception;
+        amo_req_s2 <= amo_req & ltlb_io[0].miss & ~ltlb_io[0].exception & ~tlb_lsu_io.flush;
     end
 `endif
 
@@ -136,15 +124,15 @@ endgenerate
 generate
     `UNPARAM(LOAD_PIPELINE, 2, "lreq_cancel_s2")
     assign lreq_cancel_s2[0] = 0;
-    assign lreq_cancel_s2[1] = (ltlb_io[0].miss & ~ltlb_io[0].exception);
+    assign lreq_cancel_s2[1] = (ltlb_io[0].miss & ~ltlb_io[0].exception) & tlb_lsu_io.lreq_s2[0];
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
 `ifdef RVA
         if(i == 0)begin
-            assign lreq[i] = ltlb_io[i].miss & ~ltlb_io[i].exception & ~amo_req;
+            assign lreq[i] = ltlb_io[i].miss & ~ltlb_io[i].exception & ~amo_req & tlb_lsu_io.lreq_s2[i];
         end
         else begin
 `endif
-        assign lreq[i] = ltlb_io[i].miss & ~ltlb_io[i].exception;
+        assign lreq[i] = ltlb_io[i].miss & ~ltlb_io[i].exception & tlb_lsu_io.lreq_s2[i];
 `ifdef RVA
         end
 `endif
@@ -171,9 +159,9 @@ endgenerate
     logic `N(`STORE_ISSUE_BANK_WIDTH+$clog2(`STORE_PIPELINE)) sidx_s2;
 generate
     assign sreq_cancel_s2[0] = 0;
-    assign sreq_cancel_s2[1] = (stlb_io[0].miss & ~stlb_io[0].exception);
+    assign sreq_cancel_s2[1] = (stlb_io[0].miss & ~stlb_io[0].exception) & tlb_lsu_io.sreq_s2[0];
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        assign sreq[i] = stlb_io[i].miss & ~stlb_io[i].exception;
+        assign sreq[i] = stlb_io[i].miss & ~stlb_io[i].exception & tlb_lsu_io.sreq_s2[i];
         always_ff @(posedge clk)begin
             svaddr[i] <= tlb_lsu_io.saddr[i];
             sidx[i] <= tlb_lsu_io.sidx[i];
@@ -188,41 +176,39 @@ generate
     end
 endgenerate
 
-    logic `N(`LOAD_PIPELINE) lreq_cancel_s3, lreq_cancel_s4, lreq_all_s3;
-    logic `N(`STORE_PIPELINE) sreq_cancel_s3, sreq_cancel_s4, sreq_all_s3;
+    logic `N(`LOAD_PIPELINE) lreq_cancel_s3, lreq_cancel_s4;
+    logic `N(`STORE_PIPELINE) sreq_cancel_s3, sreq_cancel_s4;
     always_ff @(posedge clk)begin
-        lreq_cancel_s3 <= lreq_cancel_s2 & {`LOAD_PIPELINE{~flush0}};
-        sreq_cancel_s3 <= sreq_cancel_s2 & {`STORE_PIPELINE{~flush1}};
+        lreq_cancel_s3 <= lreq_cancel_s2;
+        sreq_cancel_s3 <= sreq_cancel_s2;
 `ifdef RVA
-        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | amo_req_s2}}) & {`LOAD_PIPELINE{~flush0}};
-        sreq_cancel_s4 <= sreq_all_s2 & (sreq_cancel_s3 | {`STORE_PIPELINE{amo_req_s2}}) & {`STORE_PIPELINE{~flush1}};
+        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | amo_req_s2 | tlb_lsu_io.flush}});
+        sreq_cancel_s4 <= sreq_all_s2 & (sreq_cancel_s3 | {`STORE_PIPELINE{amo_req_s2 | tlb_lsu_io.flush}});
 `else
-        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2}}) & {`LOAD_PIPELINE{~flush0}};
-        sreq_cancel_s4 <= sreq_all_s2 & sreq_cancel_s3 & {``STORE_PIPELINE{~flush1}};
+        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | tlb_lsu_io.flush}});
+        sreq_cancel_s4 <= sreq_all_s2 & ({`STORE_PIPELINE{tlb_lsu_io.flush}} | sreq_cancel_s3);
 `endif
-        lreq_all_s3 <= lreq_all_s2 & {`LOAD_PIPELINE{~flush0}};
-        sreq_all_s3 <= sreq_all_s2 & {`STORE_PIPELINE{~flush1}};
 `ifdef RVA
-        tlb_l2_io.req <= (sreq_s2 | lreq_s2 | amo_req_s2) & ~flush2;
+        tlb_l2_io.req <= (sreq_s2  | lreq_s2 | amo_req_s2) & ~tlb_lsu_io.flush;
         tlb_l2_io.info.source <= amo_req_s2 ? 2'b11 : sreq_s2 ? 2'b10 : 2'b01;
         tlb_l2_io.info.idx <= sreq_s2 ? sidx_s2 : lidx_s2;
         tlb_l2_io.req_addr <= amo_req_s2 ? amo_vaddr : sreq_s2 ? sreq_addr_s2 : lreq_addr_s2;
 `else
-        tlb_l2_io.req <= (sreq_s2 | lreq_s2) & ~flush2;
+        tlb_l2_io.req <= (sreq_s2 | lreq_s2) & ~tlb_lsu_io.flush;
         tlb_l2_io.info.source <= sreq_s2 ? 2'b10 : 2'b01;
         tlb_l2_io.info.idx <= sreq_s2 ? sidx_s2 : lidx_s2;
         tlb_l2_io.req_addr <= sreq_s2 ? sreq_addr_s2 : lreq_addr_s2;
 `endif
     end
-    assign tlb_lsu_io.lcancel = lreq_cancel_s4 & ~tlb_lsu_io.flush & ~flush2;
-    assign tlb_lsu_io.scancel = sreq_cancel_s4 & ~tlb_lsu_io.flush & ~flush2;
+    assign tlb_lsu_io.lcancel = lreq_cancel_s4;
+    assign tlb_lsu_io.scancel = sreq_cancel_s4;
 
     always_ff @(posedge clk)begin
-        tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & ~flush0 & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
+        tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & ~tlb_lsu_io.flush & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
         tlb_lsu_io.lwb_exception <= {`LOAD_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.lwb_error <= {`LOAD_PIPELINE{tlb_l2_io0.error}};
         tlb_lsu_io.lwb_idx <= {`LOAD_PIPELINE{tlb_l2_io0.info_o.idx[`LOAD_ISSUE_BANK_WIDTH-1: 0]}};
-        tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & ~flush1 & (tlb_l2_io0.info_o.source == 2'b10)}} & swb_pipeline;
+        tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & ~tlb_lsu_io.flush & (tlb_l2_io0.info_o.source == 2'b10)}} & swb_pipeline;
         tlb_lsu_io.swb_exception <= {`STORE_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.swb_error <= {`STORE_PIPELINE{tlb_l2_io0.error}};
         tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx[`STORE_ISSUE_BANK_WIDTH-1: 0]}};
@@ -234,4 +220,81 @@ endgenerate
         tlb_lsu_io.amo_paddr <= ltlb_io[0].paddr;
 `endif
     end
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            fenceState <= IDLE;
+            fenceReq <= 0;
+            fenceWe <= 0;
+            fenceIdx <= 0;
+        end
+        else begin
+            case(fenceState)
+            IDLE: begin
+                if(fenceBus.mmu_flush[1])begin
+                    if(fenceBus.mmu_flush_all[1])begin
+                        fenceIdx <= 0;
+                        fenceWe <= 1'b1;
+                        fenceState <= FENCE_ALL;
+                    end
+                    else begin
+                        fenceReq <= 1'b1;
+                        fenceState <= FENCE;
+                    end
+                end
+            end
+            FENCE: begin
+                fenceWe <= |replace_hit;
+                fenceIdx <= replace_widx;
+                fenceState <= FENCE_END;
+            end
+            FENCE_ALL: begin
+                fenceIdx <= fenceIdx + 1;
+                if(fenceIdx == {{$clog2(`DTLB_SIZE)-1{1'b1}}, 1'b0})begin
+                    fenceState <= FENCE_END;
+                end
+            end
+            FENCE_END:begin
+                fenceWe <= 0;
+                fenceReq <= 0;
+                fenceState <= IDLE;
+            end
+            endcase
+        end
+    end
+
+    always_ff @(posedge clk)begin
+        if(fenceState == IDLE && fenceBus.mmu_flush[1])begin
+            fenceVaddr <= fenceBus.vma_vaddr[1][`VADDR_SIZE-1: `TLB_OFFSET];
+        end
+    end
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            replace_vpn <= '{default: 0};
+            replace_en <= 0;
+            replace_pn_valid <= 0;
+        end
+        else begin
+            if(fenceWe)begin
+                replace_en[fenceIdx] <= 1'b0;
+            end
+            else if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception)begin
+                replace_vpn[tlb_widx] <= tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+                replace_en[tlb_widx] <= 1'b1;
+                replace_pn_valid[tlb_widx] <= tlb_l2_io0.wpn;
+            end
+        end
+    end
+generate
+    assign replace_cmp_vaddr = fenceState == FENCE ? fenceVaddr : tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+    for(genvar i=0; i<`DTLB_SIZE; i++)begin
+        assign replace_hit[i] = replace_en[i] & (&(replace_pn_hits[i] | replace_pn_valid[i]));
+        for(genvar j=0; j<`TLB_PN; j++)begin
+            assign replace_pn_hits[i][j] = replace_vpn[i].vpn[j] == replace_cmp_vaddr.vpn[j];
+        end
+    end
+endgenerate
+    Encoder #(`DTLB_SIZE) encoder_replace_idx (replace_hit, replace_widx);
+    Encoder #(`DTLB_SIZE) encoder_miss_idx (replace_io.miss_way, replace_miss_idx);
+    assign tlb_widx = |replace_hit ? replace_widx : replace_miss_idx;
 endmodule

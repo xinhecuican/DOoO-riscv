@@ -13,10 +13,10 @@ module CPUCore (
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
     ) icache_io();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, `DCACHE_WAY_WIDTH
     ) dcache_io();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH, `DCACHE_WAY_WIDTH
+        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
     ) ducache_io();
     AxiIO #(
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1

@@ -27,7 +27,7 @@ SRC += $(shell find src/soc -name "*.v" -or -name "*.sv" -or -name "*.svh")
 
 WITH_DRAMSIM3 := 1
 EMU_TRACE := 1
-EMU_THREADS := 0
+EMU_THREADS := 4
 TRACE_ARGS := 
 ENABLE_FORK := 0
 ENABLE_DIFF := 1
@@ -38,7 +38,7 @@ ifeq ($(WITH_DRAMSIM3),1)
 	export WITH_DRAMSIM3
 	DEFINES += DRAMSIM3=ON;
 endif
-ifeq ($(EMU_TRACE), 1)
+ifneq (,$(filter $(EMU_TRACE),1 vcd VCD fst FST))
 	export EMU_TRACE
 	TRACE_ARGS = --dump-wave
 endif
@@ -60,6 +60,9 @@ emu:
 emu-run: emu
 	mkdir -p $(LOG_PATH)
 	build/emu -i "${I}" ${DIFF_ARGS} -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH}
+
+sbi:
+	make -C utils/opensbi ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- PLATFORM_RISCV_XLEN=32 PLATFORM=generic FW_PAYLOAD_PATH=${CURDIR}/utils/rv-linux/arch/riscv/boot/Image FW_FDT_PATH=${CURDIR}/utils/opensbi/dts/custom.dtb FW_PAYLOAD_OFFSET=0x400000
 
 convert: build/${TOP}/${TOP}.v
 build/${TOP}/${TOP}.v: ${SRC}

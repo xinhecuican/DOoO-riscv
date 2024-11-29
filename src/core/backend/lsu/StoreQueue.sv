@@ -29,6 +29,7 @@ module StoreQueue(
     CommitBus.mem commitBus,
     input BackendCtrl backendCtrl,
     AxiIO.masterw saxi_io,
+    input logic fence_valid,
     output logic commit_empty,
     output logic `N(`LOAD_PIPELINE) fwd_data_invalid
 );
@@ -248,6 +249,11 @@ endgenerate
     lzc #(`DCACHE_BYTE) lzc_uncache_offset (addr_mask[commitHead][`DCACHE_BYTE-1: 0], uncache_offset, );
     ParallelAdder #(1, `DCACHE_BYTE) adder_uncache_size (addr_mask[commitHead][`DCACHE_BYTE-1: 0], uncache_size_pre);
 
+    RobIdx commitRobIdx;
+    always_ff @(posedge clk)begin
+        commitRobIdx <= commitBus.robIdx;
+    end
+
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             uncacheState <= IDLE;
@@ -265,7 +271,8 @@ endgenerate
             case(uncacheState)
             IDLE:begin
                 if(valid[commitHead] & uncache[commitHead] &
-                (commitBus.robIdx == redirect_robIdxs[commitHead]))begin
+                (commitBus.robIdx == redirect_robIdxs[commitHead]) &
+                ~fence_valid & ~backendCtrl.redirect)begin
                     uncacheState <= LOOKUP;
                     uncache_addr <= {addr_mask[commitHead][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE], uncache_offset};
                     uncache_size <= uncache_size_pre;

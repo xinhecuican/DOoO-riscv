@@ -3,6 +3,7 @@
 
 `define ENABLE_LOG
 `define T_LOG_ALL
+// `define T_BTB
 // `define T_FSQ
 // `define T_TAGE
 // `define T_BR_HIST

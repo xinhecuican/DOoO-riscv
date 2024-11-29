@@ -117,7 +117,7 @@ module LSU(
         .wakeupBus(int_wakeupBus)
     );
     DCache dcache(.*);
-    LoadQueue load_queue(.*, .io(load_queue_io));
+    LoadQueue load_queue(.*, .io(load_queue_io), .fence_valid(fenceBus.valid | commitBus.fence_valid));
     StoreIssueQueue store_issue_queue(.*);
     StoreQueue store_queue(
         .*,
@@ -125,6 +125,7 @@ module LSU(
         .issue_queue_io(store_io),
         .queue_commit_io(store_commit_io),
         .loadFwd(store_queue_fwd),
+        .fence_valid(fenceBus.valid | commitBus.fence_valid),
 `ifdef RVF
         .store_data(store_reg_io.data[`STORE_PIPELINE +: `STORE_PIPELINE * 2]),
 `else
@@ -206,6 +207,7 @@ endgenerate
     logic `N(`LOAD_PIPELINE) tlb_exception_s2, tlb_exception_s2_pre;
     logic `N(`LOAD_PIPELINE) luncache_s2, luncache_s3;
     logic `N(`LOAD_PIPELINE) uncache_full_s3, uncache_full_s4;
+    logic `N(`LOAD_PIPELINE) redirect_clear_s2, redirect_clear_s3;
 `ifdef RVA
     logic amo_req;
     always_ff @(posedge clk)begin
@@ -214,9 +216,9 @@ endgenerate
 `endif
 
     assign tlb_lsu_io.lreq = load_io.en & ~load_io.exception;
+    assign tlb_lsu_io.lreq_s2 = load_en & ~lmisalign_s2 & ~redirect_clear_s2;
     assign tlb_lsu_io.lidx = load_io.issue_idx;
     assign tlb_lsu_io.laddr = loadVAddr;
-    assign tlb_lsu_io.lreq_cancel = lmisalign_s2;
     assign tlb_lsu_io.flush = backendCtrl.redirect;
 
 generate
@@ -258,19 +260,19 @@ generate
             amo_conflict[i] <= amo_older & amo_valid;
         end
         if(i == 0)begin
-            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | tlb_lsu_io.lmiss[i] | amo_req | amo_conflict[i]);
+            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | amo_req | amo_conflict[i]);
             assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
-            assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] & ~amo_req ? 2'b11 : 2'b00;
+            assign load_io.reply_fast[i].reason = 2'b00;
         end
         else begin
-            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | tlb_lsu_io.lmiss[i] | amo_conflict[i]);
+            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | amo_conflict[i]);
             assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
-            assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] ? 2'b11 : 2'b00;
+            assign load_io.reply_fast[i].reason = 2'b00;
         end
 `else
-        assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | tlb_lsu_io.lmiss[i]);
+        assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i]);
         assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
-        assign load_io.reply_fast[i].reason = tlb_lsu_io.lmiss[i] ? 2'b11 : 2'b00;
+        assign load_io.reply_fast[i].reason = 2'b00;
 `endif
     end
 endgenerate
@@ -297,9 +299,9 @@ endgenerate
     logic `N(`LOAD_PIPELINE) leq_en, leq_valid;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_next;
 
-    logic `N(`LOAD_PIPELINE) redirect_clear_s2, redirect_clear_s3;
     logic `N(`LOAD_PIPELINE) lmisalign_s3;
     logic `N(`LOAD_PIPELINE) tlb_exception_s3;
+    logic `N(`LOAD_PIPELINE) tlb_miss_s3;
     logic `N(`LOAD_PIPELINE) rhit;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -313,7 +315,8 @@ generate
         assign redirect_clear_s3[i] = backendCtrl.redirect & older;
     end
 endgenerate
-    assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2 | tlb_exception_s2 | luncache_s2
+    assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2 | tlb_exception_s2 | luncache_s2 |
+                                tlb_lsu_io.lmiss
 `ifdef RVA
     | {{`LOAD_PIPELINE-1{1'b0}}, amo_req} | amo_conflict;
 `endif
@@ -323,7 +326,7 @@ endgenerate
     always_ff @(posedge clk)begin
         lpaddrNext <= lpaddr;
         leq_data <= load_issue_data;
-        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2 & ~tlb_lsu_io.lmiss
+        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2
 `ifdef RVA
         & ~{{`LOAD_PIPELINE-1{1'b0}}, amo_req} & ~amo_conflict;
 `endif
@@ -335,8 +338,9 @@ endgenerate
         luncache_s3 <= luncache_s2 & ~lmisalign_s2 & ~tlb_exception_s2;
         rhit <= rio.hit;
         lvaddr_s3 <= loadAddrNext;
+        tlb_miss_s3 <= tlb_lsu_io.lmiss;
     end
-    assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3 & ~uncache_full_s3;
+    assign leq_valid = leq_en & ~fwd_data_invalid & ~redirect_clear_s3 & ~uncache_full_s3 & ~tlb_miss_s3;
     assign uncache_full_s3 = luncache_s3 & load_queue_io.uncache_full;
     assign load_queue_io.en = leq_valid;
     assign load_queue_io.data = leq_data;
@@ -350,9 +354,10 @@ endgenerate
 
     // reply slow
     logic `N(`LOAD_PIPELINE) fwd_data_invalid_n, lreply_en;
-    logic `N(`LOAD_PIPELINE) lmiss;
+    logic `N(`LOAD_PIPELINE) lmiss, lexception_s4;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx_n2;
     logic `N(`LOAD_PIPELINE) redirect_clear_s4;
+    logic `N(`LOAD_PIPELINE) tlb_miss_s4;
     RobIdx `N(`LOAD_PIPELINE) robIdx_s4;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -369,15 +374,18 @@ endgenerate
         lreply_en <= leq_en & ~redirect_clear_s3;
         issue_idx_n2 <= issue_idx_next;
         lmiss <= ~rhit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
+        lexception_s4 <= lmisalign_s3 | tlb_exception_s3;
         uncache_full_s4 <= uncache_full_s3;
+        tlb_miss_s4 <= tlb_miss_s3;
     end
-    assign load_io.success = lreply_en & ~fwd_data_invalid_n & ~redirect_clear_s4 & ~(lmiss & rio.full) & ~uncache_full_s4;
+    assign load_io.success = lreply_en & ~fwd_data_invalid_n & ~redirect_clear_s4 & ~(lmiss & rio.full) & ~uncache_full_s4 & ~tlb_miss_s4;
     assign load_io.success_idx = issue_idx_n2;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i]) | tlb_lsu_io.lcancel[i] | uncache_full_s4[i]);
+        assign load_io.reply_slow[i].en = lreply_en[i] & (fwd_data_invalid_n[i] | (lmiss[i] & rio.full[i]) | uncache_full_s4[i] | tlb_miss_s4[i] | tlb_lsu_io.lcancel[i]) & ~lexception_s4[i];
         assign load_io.reply_slow[i].issue_idx = issue_idx_n2[i];
-        assign load_io.reply_slow[i].reason = fwd_data_invalid_n ? 2'b10 : 2'b00;
+        assign load_io.reply_slow[i].reason = tlb_miss_s4[i] & ~tlb_lsu_io.lcancel[i] ? 2'b11 :
+                                              fwd_data_invalid_n ? 2'b10 : 2'b00;
     end
 endgenerate
     
@@ -394,7 +402,7 @@ generate
         logic from_pipe;
         RDataGen data_gen (leq_data[i].uext, leq_data[i].size, lpaddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], rdata[i], ldata_shift[i]);
         assign wb_pipeline_en[i] = leq_en[i] & (lmisalign_s3[i] | tlb_exception_s3[i] | 
-                                ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i] & ~luncache_s3[i])) & ~redirect_clear_s3[i];
+                                ((rhit[i] | rdata_valid[i]) & ~fwd_data_invalid[i] & ~luncache_s3[i])) & ~redirect_clear_s3[i] & ~tlb_miss_s3[i];
         assign from_pipe = wb_pipeline_en[i] 
 `ifdef RVF
                           & ~leq_data[i].frd_en;
@@ -510,7 +518,7 @@ endgenerate
 
     assign sissue_idx = store_io.issue_idx;
     assign tlb_lsu_io.sreq = store_io.en & ~store_io.exception;
-    assign tlb_lsu_io.sreq_cancel = smisalign_s2;
+    assign tlb_lsu_io.sreq_s2 = store_en & ~smisalign_s2;
     assign tlb_lsu_io.sidx = sissue_idx;
     assign tlb_lsu_io.saddr = storeVAddr;
 
@@ -521,7 +529,7 @@ endgenerate
     assign store_queue_io.paddr = spaddr;
     assign store_queue_io.mask = smask;
     assign store_queue_io.uncache = suncache_s2 & ~stlb_exception_s2 & ~smisalign_s2;
-    assign store_queue_io.wb_valid = ~(store_en_s4[`STORE_PIPELINE-1] & ~store_redirect_s4[`STORE_PIPELINE-1]);
+    assign store_queue_io.wb_valid = ~(store_en_s4_unexc[`STORE_PIPELINE-1] & ~store_redirect_s4[`STORE_PIPELINE-1]);
 
     // store wb
     // delay two cycle for violation detect
@@ -560,7 +568,7 @@ generate
             stlb_miss_s3[i] <= stlb_miss[i];
             svaddr_s3[i] <= storeAddrNext[i];
             sissue_idx_s3[i] <= sissue_idx_s2[i];
-            store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i];
+            store_en_s4[i] <= store_en_s3[i] & ~store_redirect_s3[i] & ~store_exc_s3[i];
             store_en_s4_unexc[i] <= store_en_s3[i] & ~store_redirect_s3[i] & ~stlb_miss_s3[i];
             store_robIdx_s4[i] <= store_robIdx_s3[i];
             exccode_s4[i] <= exccode_s3[i];
@@ -587,7 +595,7 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign store_io.reply[i].en = store_en_s4[i] & (stlb_miss_s4[i] | tlb_lsu_io.scancel[i]);
-        assign store_io.reply[i].issue_idx = sissue_idx_s4;
+        assign store_io.reply[i].issue_idx = sissue_idx_s4[i];
         assign store_io.reply[i].reason = tlb_lsu_io.scancel[i] ? 2'b00 : 2'b11;
     end
 endgenerate
@@ -597,7 +605,7 @@ endgenerate
     assign load_queue_io.write_violation = violation_io.wdata;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        assign violation_io.wdata[i].en = store_en[i];
+        assign violation_io.wdata[i].en = store_en[i] & ~tlb_lsu_io.smiss[i];
         assign violation_io.wdata[i].addr = spaddr[i];
         assign violation_io.wdata[i].mask = smask[i];
         assign violation_io.wdata[i].lqIdx = store_issue_data[i].lqIdx;
@@ -605,7 +613,7 @@ generate
         assign violation_io.wdata[i].fsqInfo = store_issue_data[i].fsqInfo;
     end
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign violation_io.s1_data[i].en = load_en[i];
+        assign violation_io.s1_data[i].en = load_en[i] & ~tlb_lsu_io.lmiss[i];
         assign violation_io.s1_data[i].addr = lpaddr[i];
         assign violation_io.s1_data[i].mask = lmask[i];
         assign violation_io.s1_data[i].lqIdx = load_issue_data[i].lqIdx;
@@ -653,7 +661,7 @@ generate
     end
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         always_ff @(posedge clk)begin
-            sexc_valid[i] <= store_en_s4[i] & ~store_redirect_s4[i] & (exccode_s4[i] != `EXC_NONE);
+            sexc_valid[i] <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & (exccode_s4[i] != `EXC_NONE);
             sexc_robIdx[i] <= store_robIdx_s4[i];
             sexc_vaddr[i] <= svaddr_s4[i];
         end
@@ -799,7 +807,7 @@ endgenerate
     assign redirect_io.memRedirect.robIdx.idx = fenceBus.fence_end ? fenceBus.preRobIdx.idx : robIdx_p;
     assign redirect_io.memRedirect.robIdx.dir = fenceBus.fence_end ? fenceBus.preRobIdx.dir : robIdx_p[`ROB_WIDTH-1] & ~out.robIdx.idx[`ROB_WIDTH-1] ? ~out.robIdx.dir : out.robIdx.dir;
     assign redirect_io.memRedirect.fsqInfo = fenceBus.fence_end ? fenceBus.fsqInfo : out.fsqInfo;
-    assign redirect_io.memRedirectIdx = fenceBus.fence_end ? fenceBus.preRobIdx : out.robIdx;
+    assign redirect_io.memRedirectIdx = fenceBus.fence_end ? fenceBus.robIdx : out.robIdx;
 endmodule
 
 module ViolationCompare(

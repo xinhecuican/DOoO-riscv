@@ -42,7 +42,7 @@ module AmoQueue(
     logic islr;
     logic `N(`XLEN) rdata;
     logic flush_ready, tlb_ready;
-    logic redirect_older;
+    logic amo_older;
 
     assign dis_amo_io.full = state != IDLE && !(state == WB && wb_ready);
     assign bundle = dis_amo_io.data[0];
@@ -67,7 +67,7 @@ module AmoQueue(
     end
     assign amo_vaddr = rs1_data;
     MisalignDetect misalign_detect (2'b10, rs1_data[1: 0], misalign_pre);
-    LoopCompare #(`ROB_WIDTH) cmp_bigger (backendCtrl.redirectIdx, robIdx, redirect_older);
+    LoopCompare #(`ROB_WIDTH) cmp_bigger (robIdx, backendCtrl.redirectIdx, amo_older);
 
     assign amo_io.paddr = paddr;
     assign amo_io.data = rs2_data;
@@ -120,7 +120,7 @@ module AmoQueue(
                 if(waiting_data)begin
                     datav <= 1'b1;
                 end
-                if(backendCtrl.redirect & redirect_older)begin
+                if(backendCtrl.redirect & ~amo_older)begin
                     state <= IDLE;
                 end
                 else if(datav & ~fence_valid)begin
@@ -150,6 +150,9 @@ module AmoQueue(
                 end
                 else if(tlb_valid)begin
                     tlb_ready <= 1'b1;
+                end
+                else if(backendCtrl.redirect & ~tlb_ready)begin
+                    tlb_req <= 1'b1;
                 end
 
                 if(store_flush & flush_end)begin

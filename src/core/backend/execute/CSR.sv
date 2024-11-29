@@ -45,16 +45,18 @@ module CSR(
     logic `N(`MXL) mepc;
     CAUSE mcause;
     logic `N(`MXL) mtval;
-    logic `ARRAY(2, `MXL) mpfcounter;
+    logic `ARRAY(4, `MXL) mpfcounter;
     logic mpfcounterexc;
     logic `N(`MXL) mpfval; // m performence counter val
     logic `N(5) mpf_offset;
     logic `N(32) mcounteren, mpf_offset_decode;
+    logic `N(32) mcounterinhibit;
+    logic `N(64) menvcfg;
 `ifdef RV32I
     STATUSH mstatush;
     logic `N(`MXL) medelegh;
     // mcycle, minstret
-    logic `ARRAY(2, `MXL) mpfhcounter;
+    logic `ARRAY(4, `MXL) mpfhcounter;
     logic `N(5) mpfh_offset;
     logic `N(`MXL) mpfhval;
 `endif
@@ -179,14 +181,17 @@ endgenerate                                                   \
     `CSR_CMP_DEF(sscratch, sscratch,    24,0, 0             )
     `CSR_CMP_DEF(mcounteren, mcounteren,25,0, `COUNTEREN_MASK)
     `CSR_CMP_DEF(scounteren, scounteren,26,0, `COUNTEREN_MASK)
+    `CSR_CMP_DEF(mcounterinhibit,mcounterinhibit,27,0, `COUNTEREN_MASK)
+    `CSR_CMP_DEF(menvcfg,menvcfg[31: 0],28,0, 0             )
 `ifdef RVF
-    `CSR_CMP_DEF(fflags, fcsr[4: 0],    27,0, 0             )
-    `CSR_CMP_DEF(frm, fcsr[7: 5],       28,0, 0             )
-    `CSR_CMP_DEF(fcsr, fcsr,            29,0, 0             )
+    `CSR_CMP_DEF(fflags, fcsr[4: 0],    `CSR_NORMAL_NUM,0, 0)
+    `CSR_CMP_DEF(frm, fcsr[7: 5],       `CSR_NORMAL_NUM+1,0, 0)
+    `CSR_CMP_DEF(fcsr, fcsr,            `CSR_NORMAL_NUM+2,0, 0)
 `endif
 `ifdef RV32I
-    `CSR_CMP_DEF(mstatush, mstatush,    30,0, 0             )
-    `CSR_CMP_DEF(medelegh, medelegh,    31,0, 0             )
+    `CSR_CMP_DEF(mstatush, mstatush,    `CSR_NORMAL_NUM+3,0, 0)
+    `CSR_CMP_DEF(medelegh, medelegh,    `CSR_NORMAL_NUM+4,0, 0)
+    `CSR_CMP_DEF(menvcfgh, menvcfg[63: 32], `CSR_NORMAL_NUM+5,0, 0)
 `endif
 
     ParallelEQ #(
@@ -202,10 +207,10 @@ endgenerate                                                   \
         .data_o(cmp_rdata_pre[0])
     );
 
-    CSRGroupCmp #(5, 2) group_cmp_mpf (
+    CSRGroupCmp #(5, 2, 4) group_cmp_mpf (
         .csrid(csrid),
         .cmp_csrid({12'hc00, 12'hb00}),
-        .data_i({{`MXL*30{1'b0}}, mpfcounter}),
+        .data_i(mpfcounter),
         .en(cmp_eq[`CSR_NUM+`CSRGROUP_mpf]),
         .offset(mpf_offset),
         .data_o(cmp_rdata_pre[`CSRGROUP_mpf+1])
@@ -232,10 +237,10 @@ endgenerate                                                   \
     assign cmp_rdata_pre[`CSRGROUP_pmpaddr+1] = pmpcfg_t[pmpaddr_offset].a == `PMP_NAPOT ? pmp_cmp_rdata | `PMP_NAPOT_MASK : pmp_cmp_rdata & `PMP_MASK;
 
 `ifdef RV32I
-    CSRGroupCmp #(5) group_cmp_mpfh (
+    CSRGroupCmp #(5, 2, 4) group_cmp_mpfh (
         .csrid(csrid),
-        .cmp_csrid(12'hb80),
-        .data_i({{`MXL*30{1'b0}}, mpfhcounter}),
+        .cmp_csrid({12'hc80, 12'hb80}),
+        .data_i(mpfhcounter),
         .en(cmp_eq[`CSR_NUM+`CSRGROUP_mpfh]),
         .offset(mpfh_offset),
         .data_o(cmp_rdata_pre[`CSRGROUP_mpfh+1])
@@ -301,6 +306,8 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(sscratch,    0,              1, 0, 0)
     `CSR_WRITE_DEF(mcounteren,  0,              1, 0, 0)
     `CSR_WRITE_DEF(scounteren,  0,              1, 0, 0)
+    `CSR_WRITE_DEF(mcounterinhibit, 0,          1, 0, 0)
+    `CSR_WRITE_DEF(menvcfg,     0,              0, 0, 0)
 `ifdef RV32I
     `CSR_WRITE_DEF(mstatush,    0,              1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0)
@@ -343,7 +350,7 @@ endgenerate                                                             \
 
     logic `N(64) mcycle_n, minstret_n;
     assign mcycle_n = {mpfhcounter[0], mpfcounter[0]} + 1;
-    assign minstret_n = {mpfhcounter[1], mpfcounter[1]} + commitBus.num;
+    assign minstret_n = {mpfhcounter[2], mpfcounter[2]} + commitBus.num;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
@@ -360,8 +367,15 @@ endgenerate                                                             \
 `endif
         end
         else begin
-            {mpfhcounter[0], mpfcounter[0]} <= mcycle_n;
-            {mpfhcounter[1], mpfhcounter[1]} <= minstret_n;
+            if(!mcounterinhibit[0])begin
+                {mpfhcounter[0], mpfcounter[0]} <= mcycle_n;
+            end
+            if(!mcounterinhibit[1])begin
+                {mpfhcounter[1], mpfcounter[1]} <= clint_io.mtime;
+            end
+            if(!mcounterinhibit[2])begin
+                {mpfhcounter[2], mpfhcounter[2]} <= minstret_n;
+            end
             if(wen_o[mstatus_id])begin
                 mstatus.sie <= wdata_s2[1];
                 mstatus.mie <= wdata_s2[3];
@@ -695,7 +709,7 @@ endmodule
 module CSRGroupCmp #(
     parameter OFFSET_WIDTH=1,
     parameter CMP_NUM=1,
-    parameter OFFSET_SIZE=(1<<OFFSET_WIDTH)-1
+    parameter OFFSET_SIZE=(1<<OFFSET_WIDTH)
 )(
     input logic `ARRAY(CMP_NUM, 12) cmp_csrid,
     input logic `N(12) csrid,
@@ -709,8 +723,13 @@ generate
     for(genvar i=0; i<CMP_NUM; i++)begin
         assign cmp_en[i] = csrid[11: OFFSET_WIDTH] == cmp_csrid[i][11: OFFSET_WIDTH];
     end
+    if(OFFSET_SIZE == (1 << OFFSET_WIDTH))begin
+        assign data_o = data_i[csrid[OFFSET_WIDTH-1: 0]];
+    end
+    else begin
+        assign data_o = offset >= OFFSET_SIZE ? 0 : data_i[csrid[OFFSET_WIDTH-1: 0]];
+    end
 endgenerate
     assign en = |cmp_en;
     assign offset = csrid[OFFSET_WIDTH-1: 0];
-    assign data_o = data_i[csrid[OFFSET_WIDTH-1: 0]];
 endmodule

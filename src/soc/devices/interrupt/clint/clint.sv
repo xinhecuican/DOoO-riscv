@@ -83,6 +83,7 @@ module apb4_clint (
   always_ff @(posedge clk)begin
     clint.timer_irq <= s_mtime_q >= s_mtimecmp_q;
     clint.soft_irq <= s_msip_q[0];
+    clint.mtime <= s_mtime_q;
   end
   
 

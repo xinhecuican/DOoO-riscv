@@ -204,7 +204,7 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
         assign bigger[i] = (status_ram[i].robIdx.dir ^ backendCtrl.redirectIdx.dir) ^ (backendCtrl.redirectIdx.idx > status_ram[i].robIdx.idx);
-        assign tlbmiss_valid[i] = io.reply_fast.en && (io.reply_fast.reason == 2'b11) & replyfast_decode[i];
+        assign tlbmiss_valid[i] = io.reply_slow.en && (io.reply_slow.reason == 2'b11) & replyslow_decode[i];
     end
 endgenerate
 
@@ -216,6 +216,54 @@ endgenerate
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_replyfast (io.reply_fast.issue_idx, replyfast_decode);
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_replyslow (io.reply_slow.issue_idx, replyslow_decode);
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_tlbbank (io.tlb_bank_idx, tlbbank_decode);
+
+// tlb miss resend
+    logic `N(`LOAD_ISSUE_BANK_SIZE) tlb_reply_en, tlb_reply_valid;
+    logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, 2) repeat_times;
+    logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, 4) tlb_counter;
+    logic `N(4) current_tlb_counter;
+    logic `N(2) current_repeat_times;
+
+    always_comb begin
+        case(current_repeat_times)
+        0: current_tlb_counter = 4'h3;
+        1: current_tlb_counter = 4'h7;
+        2: current_tlb_counter = 4'hb;
+        3: current_tlb_counter = 4'hf;
+        endcase
+    end
+generate
+    for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
+        assign tlb_reply_valid[i] = tlb_reply_en[i] & (tlb_counter[i] == 0);
+    end
+endgenerate
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            repeat_times <= 0;
+            tlb_counter <= 0;
+            tlb_reply_en <= 0;
+        end
+        else begin
+            for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
+                tlb_reply_en[i] <= (tlb_reply_en[i] | io.tlb_en & io.tlb_error & tlbbank_decode[i]) &
+                                   ~backendCtrl.redirect & ~tlb_reply_valid[i];
+            end
+            if(io.tlb_en & io.tlb_error)begin
+                if(repeat_times[io.tlb_bank_idx] < 3)begin
+                    repeat_times[io.tlb_bank_idx] <= repeat_times[io.tlb_bank_idx] + 1;
+                end
+            end
+            for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
+                if(io.tlb_en & io.tlb_error & (i == io.tlb_bank_idx))begin
+                    tlb_counter[i] <= current_tlb_counter;
+                end
+                else if(tlb_counter[i] != 0)begin
+                    tlb_counter[i] <= tlb_counter[i] - 1;
+                end
+            end
+        end
+    end
 
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
@@ -251,12 +299,12 @@ endgenerate
             for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
                 issue[i] <= ((issue[i] & ~(backendCtrl.redirect & (tlbmiss[i] | tlbmiss_valid[i]))) |
                             (((ready[i]) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
-                            ~(io.reply_fast.en & (io.reply_fast.reason != 2'b11) & replyfast_decode[i]) &
-                            ~(io.reply_slow.en & replyslow_decode[i]) &
-                            ~(io.tlb_en & tlbbank_decode[i]) &
+                            ~(io.reply_fast.en & replyfast_decode[i]) &
+                            ~(io.reply_slow.en & (io.reply_slow.reason != 2'b11) & replyslow_decode[i]) &
+                            ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i]) & ~tlb_reply_valid[i] &
                             ~(io.en & free_en[i]);
                 tlbmiss[i] <= (tlbmiss[i] | tlbmiss_valid[i]) &
-                              ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
+                              ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i] | tlb_reply_valid[i]) & ~backendCtrl.redirect;
             end
 
             if(io.tlb_en & io.tlb_exception)begin

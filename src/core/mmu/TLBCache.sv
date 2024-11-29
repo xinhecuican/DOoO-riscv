@@ -46,7 +46,7 @@ module TLBCache(
     logic pn0_fence_end;
     TLBPage #(
         .PN(0),
-        .WAY_NUM(1),
+        .WAY_NUM(`TLB_P0_WAY),
         .META_WIDTH(`TLB_P0_BANK),
         .DEPTH(`TLB_P0_SET),
         .BANK(`TLB_P0_BANK)
@@ -55,7 +55,7 @@ module TLBCache(
     TLBPageIO #(`TLB_P1_BANK, `TLB_P1_BANK) pn1_io();
     TLBPage #(
         .PN(1),
-        .WAY_NUM(1),
+        .WAY_NUM(`TLB_P1_WAY),
         .META_WIDTH(`TLB_P1_BANK),
         .DEPTH(`TLB_P1_SET),
         .BANK(`TLB_P1_BANK)
@@ -87,18 +87,23 @@ module TLBCache(
 
     logic `ARRAY(`TLB_PN, `PADDR_SIZE) paddr;
     PAddrGen gen_paddr0(pn0_entry, req_buf.vaddr, paddr[0]);
-    PAddrGen gen_paddr1(pn1_entry, req_buf.vaddr, paddr[1]);
+    PAddrGen #(1) gen_paddr1(pn1_entry, req_buf.vaddr, paddr[1]);
 
+    logic hit_before;
+    logic ptw_req_before, error_before;
+    assign io.hit = hit_before | ptw_req_before & cache_ptw_io.full;
+    assign io.error = error_before | ptw_req_before & cache_ptw_io.full;
+    assign cache_ptw_io.req = ptw_req_before & ~cache_ptw_io.full;
     always_ff @(posedge clk)begin
-        io.hit <= req_buf.req & ((|(hit_first & (leaf | exception))) | cache_ptw_io.full | req_buf.error) & ~io.flush;
+        hit_before <= req_buf.req & ((|(hit_first & (leaf | exception))) | req_buf.error) & ~io.flush;
+        ptw_req_before <= req_buf.req & (~(|(hit_first & (leaf | exception)))) & ~req_buf.error & ~io.flush;
+        error_before <= req_buf.error;
         io.exception <= |(hit_first & exception);
-        io.error <= (~(|(hit_first & (leaf | exception)))) & cache_ptw_io.full | req_buf.error;
         io.hit_entry <= valid[0] ? pn0_io.entry : pn1_io.entry;
         io.hit_addr <= req_buf.vaddr;
         io.info_o <= req_buf.info;
         io.wpn <= hit_first[1] ? 2'b01 : 2'b00;
 
-        cache_ptw_io.req <= req_buf.req & (~(|(hit_first & (leaf | exception)))) & ~cache_ptw_io.full & ~io.flush;
         cache_ptw_io.info <= req_buf.info;
         cache_ptw_io.vaddr <= req_buf.vaddr;
         cache_ptw_io.valid <= hit_first;
@@ -148,23 +153,27 @@ module TLBPage #(
         .DEPTH(DEPTH),
         .BANK(BANK)
     ) way_io `N(WAY_NUM) ();
+    ReplaceIO #(DEPTH, WAY_NUM) replace_io();
+    PLRU #(DEPTH, WAY_NUM) plru(.*);
 
     typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
     FenceState fenceState;
     logic fenceReq, fenceWe;
     logic `N(ADDR_WIDTH) fenceIdx;
+    logic `N(WAY_NUM) fence_way;
+    logic `N(TAG_WIDTH) fence_tag;
     logic req_n;
-    logic `N(`TLB_P0_TAG) tag;
+    logic `N(TAG_WIDTH) tag;
     logic `N(BANK_WIDTH) offset;
     logic `ARRAY(WAY_NUM, BANK * `PTE_BITS) rdata;
     logic `ARRAY(WAY_NUM, INFO_WIDTH) rtag;
     logic `N(BANK) unaligned;
+
+    assign replace_io.hit_en = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN];
+    assign replace_io.hit_way = replace_io.miss_way;
+    assign replace_io.hit_index = ptw_page_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
+    assign replace_io.miss_index = ptw_page_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
 generate
-    if(WAY_NUM > 1)begin
-        always_comb begin
-            $display("tlb page replace unimpl");
-        end
-    end
     for(genvar j=0; j<BANK; j++)begin
         PTEEntry entry;
         assign entry = ptw_page_io.refill_data[j];
@@ -193,15 +202,15 @@ generate
                                               cache_io.req_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
         assign rdata[i] = way_io[i].rdata;
         assign rtag[i] = way_io[i].tag;
-        assign way_io[i].we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN];
-        assign way_io[i].tag_we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN] | fenceWe;
+        assign way_io[i].we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN] & replace_io.miss_way[i] & ~(fenceReq | fenceWe);
+        assign way_io[i].tag_we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN] & replace_io.miss_way[i] & ~fenceReq | fenceWe & fence_way[i];
         assign way_io[i].wdata = ptw_page_io.refill_data;
         assign way_io[i].wtag = fenceWe ? {INFO_WIDTH{1'b0}} : {1'b1, unaligned, ptw_page_io.refill_addr`TLB_VPN_TBUS(PN, DEPTH, BANK)};
     end
 endgenerate
 
     always_ff @(posedge clk)begin
-        tag <= cache_io.req_addr`TLB_VPN_TBUS(PN, DEPTH, BANK);
+        tag <= fenceReq ? fence_tag : cache_io.req_addr`TLB_VPN_TBUS(PN, DEPTH, BANK);
         offset <= cache_io.req_addr[`TLB_VPN_BASE(PN)+BANK_WIDTH-1: `TLB_VPN_BASE(PN)];
         req_n <= cache_io.req & ~cache_io.flush;
     end
@@ -239,6 +248,8 @@ endgenerate
             fenceWe <= 0;
             fenceIdx <= 0;
             fence_finish <= 0;
+            fence_way <= 0;
+            fence_tag <= 0;
         end
         else begin
             case(fenceState)
@@ -247,18 +258,24 @@ endgenerate
                     if(fenceBus.mmu_flush_all[2])begin
                         fenceIdx <= 0;
                         fenceWe <= 1'b1;
+                        fence_way <= {WAY_NUM{1'b1}};
                         fenceState <= FENCE_ALL;
                     end
                     else begin
                         fenceIdx <= fenceBus.vma_vaddr[2]`TLB_VPN_IBUS(PN, DEPTH, BANK);
                         fenceReq <= 1'b1;
                         fenceState <= FENCE;
+                        fence_tag <= fenceBus.vma_vaddr[2]`TLB_VPN_TBUS(PN, DEPTH, BANK);
                     end
                 end
             end
             FENCE: begin
-                fenceWe <= tag_hits;
-                fenceState <= FENCE_END;
+                fenceReq <= 1'b0;
+                if(!fenceReq)begin
+                    fenceWe <= |tag_hits;
+                    fence_way <= tag_hits;
+                    fenceState <= FENCE_END;
+                end
             end
             FENCE_ALL: begin
                 fenceIdx <= fenceIdx + 1;
@@ -268,7 +285,6 @@ endgenerate
             end
             FENCE_END:begin
                 fenceWe <= 0;
-                fenceReq <= 0;
                 fenceState <= IDLE;
             end
             endcase
@@ -321,24 +337,20 @@ module TLBWay #(
         .ready()
     );
 
-generate
-    for(genvar i=0; i<BANK; i++)begin
-        SPRAM #(
-            .WIDTH(`PTE_BITS),
-            .DEPTH(DEPTH),
-            .READ_LATENCY(1)
-        ) data_ram (
-            .clk(clk),
-            .rst(rst),
-            .en(io.en),
-            .we(io.we),
-            .addr(io.idx),
-            .wdata(io.wdata[i]),
-            .rdata(io.rdata[i]),
-            .ready()
-        );
-    end
-endgenerate
+    SPRAM #(
+        .WIDTH(`PTE_BITS * BANK),
+        .DEPTH(DEPTH),
+        .READ_LATENCY(1)
+    ) data_ram (
+        .clk(clk),
+        .rst(rst),
+        .en(io.en),
+        .we(io.we),
+        .addr(io.idx),
+        .wdata(io.wdata),
+        .rdata(io.rdata),
+        .ready()
+    );
 endmodule
 
 module PAddrGen #(
@@ -349,28 +361,17 @@ module PAddrGen #(
     input `VADDR_BUS vaddr,
     output `PADDR_BUS paddr
 );
-`define PPN_ASSIGN(i) \
-    if(PN >= i)begin \
-        assign ppn.ppn``i = entry.ppn.ppn``i; \
-    end \
-    else begin \
-        assign ppn.ppn``i = vpn.vpn[i]; \
-    end \
-
-
 generate
     if(PN == 0)begin
         assign paddr = {entry.ppn, vaddr[`TLB_OFFSET-1: 0]};
     end
-    else begin
+    else if(PN == 1)begin
         VPNAddr vpn;
         assign vpn = vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
         PPNAddr ppn;
-        `PPN_ASSIGN(0)
-        `PPN_ASSIGN(1)
-        // for(genvar i=0; i<`TLB_PN; i++)begin
-        //     `PPN_ASSIGN(i)
-        // end
+        assign ppn.ppn0 = vpn.vpn[0];
+        assign ppn.ppn1 = entry.ppn.ppn1;
+
         logic leaf;
         if(LEAF == 0)begin
             assign leaf = entry.r | entry.w | entry.x;
@@ -379,7 +380,7 @@ generate
             assign leaf = 1'b1;
         end
         assign paddr = leaf ? {ppn, vaddr[`TLB_OFFSET-1: 0]} :
-                       {entry.ppn, {`TLB_OFFSET-`TLB_VPN-2{1'b0}}, vpn[PN-1], 2'b00};
+                       {entry.ppn, {`TLB_OFFSET-`TLB_VPN-2{1'b0}}, vpn.vpn[0], 2'b00};
     end
 endgenerate
 endmodule

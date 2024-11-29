@@ -14,7 +14,7 @@ module BackendRedirectCtrl (
     BranchRedirectInfo  preBranch;
     LoopCompare #(`ROB_WIDTH) compare_rob (
         io.branchRedirect.robIdx,
-        io.memRedirect.robIdx,
+        io.memRedirectIdx,
         branchOlder
     );
     assign branchValid = (io.branchRedirect.en & branchOlder) | (io.branchRedirect.en & ~io.memRedirect.en);

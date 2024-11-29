@@ -30,7 +30,7 @@ module L2TLB(
         .data_o({tlbCache_io.info, tlbCache_io.req_addr})
     );
     TLBCache tlb_cache (.*, .rst(cache_rst), .io(tlbCache_io), .fenceBus(fenceBus_i.mmu));
-    PTW ptw(.*, .rst(ptw_rst), .flush((ptw_flush | fenceBus.mmu_flush[2])));
+    PTW ptw(.*, .rst(ptw_rst), .flush(ptw_flush), .fence_flush(fenceBus.mmu_flush[2]));
 
     assign dtlb_io.ready = dtlb_ready & ~fence;
     assign itlb_io.ready = itlb_ready & ~fence;

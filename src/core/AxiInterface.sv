@@ -102,7 +102,7 @@ module AxiInterface(
 
     logic `N(`DCACHE_WAY_WIDTH) wway;
     always_ff @(posedge clk)begin
-        wway <= dreq.ar.user;
+        wway <= dcache_io.ar_user;
     end
 
     DCacheCoherence #(
