@@ -95,7 +95,7 @@ endgenerate
                    (tlb_l2_io0.dataValid & tlb_l2_io0.error))begin
                     req_buf.req <= 1'b1;
                 end
-                if(tlb_l2_io0.dataValid & tlb_l2_io0.exception)begin
+                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
                     req_buf.exception[0] <= 1'b1; 
                 end
                 if(tlb_l2_io0.dataValid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
@@ -121,7 +121,7 @@ endgenerate
                 if(tlb_l2_io0.dataValid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
                     req_buf.paddr[1] <= wpaddr;
                 end
-                if(tlb_l2_io0.dataValid & tlb_l2_io0.exception)begin
+                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
                     req_buf.exception[1] <= 1'b1; 
                 end
                 if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error)begin

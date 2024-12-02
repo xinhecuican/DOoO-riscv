@@ -88,7 +88,7 @@ endgenerate
     always_ff @(posedge clk)begin
         enNext <= load_reg_io.en;
         for(int i=0; i<`LOAD_ISSUE_BANK_NUM; i++)begin
-            load_io.en[i] <= enNext[i] & (~backendCtrl.redirect | bigger[i]) & load_reg_io.ready[i];
+            load_io.en[i] <= enNext[i] & (~backendCtrl.redirect | bigger[i]);
         end
     end
 endmodule
@@ -307,7 +307,7 @@ endgenerate
                               ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i] | tlb_reply_valid[i]) & ~backendCtrl.redirect;
             end
 
-            if(io.tlb_en & io.tlb_exception)begin
+            if(io.tlb_en & ~io.tlb_error & io.tlb_exception)begin
                 exception[io.tlb_bank_idx] <= 1'b1;
             end
 

@@ -61,7 +61,7 @@
 interface ClintIO;
     logic timer_irq;
     logic soft_irq;
-    logic `N(64) mtime;
+    logic [63: 0] mtime;
 
     modport clint(output timer_irq, soft_irq, mtime);
     modport cpu(input timer_irq, soft_irq, mtime);

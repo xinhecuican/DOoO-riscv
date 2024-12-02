@@ -29,6 +29,7 @@ module StoreCommitBuffer(
     logic `N(`STORE_PIPELINE) data_we, data_we_combine, weq_combine;
     logic `ARRAY(`STORE_PIPELINE, `STORE_PIPELINE) weq;
     logic `ARRAY(`STORE_PIPELINE, $clog2(`STORE_PIPELINE)) weq_idx;
+    logic `N(`STORE_PIPELINE) write_en;
 
     always_ff @(posedge clk)begin
         if(!io.conflict)begin
@@ -66,11 +67,14 @@ endgenerate
 
 
     logic full;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) free_en;
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_WIDTH) free_idx;
     logic `N(`STORE_PIPELINE) free_valid;
     assign full = &addr_en;
     assign empty = ~(|addr_en);
     `UNPARAM(STORE_PIPELINE, 2, "use encoder & rencoder")
+    PSelector #(`STORE_COMMIT_SIZE) selector_free_en (~addr_en, free_en[0]);
+    PRSelector #(`STORE_COMMIT_SIZE) selector_free_en_rev (~addr_en, free_en[1]);
     PEncoder #(`STORE_COMMIT_SIZE) encoder_free (~addr_en, free_idx[0]);
     PREncoder #(`STORE_COMMIT_SIZE) encoder_free_rev (~addr_en, free_idx[1]);
     assign free_valid[0] = ~full;
@@ -78,6 +82,7 @@ endgenerate
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        assign write_en[i] = wen[i] & ~(hit[i] | weq_combine[i]) & free_valid[i] & ~io.conflict;
         assign conflict[i] = wen[i] & (hit_writing[i] | (~free_valid[i] & ~(hit[i] | weq_combine[i])));
         assign data_we[i] = wen[i] & (hit[i] | weq_combine[i] | free_valid[i]) & ~hit_writing[i];
         assign data_we_combine[i] = data_we[i] & ~io.conflict;
@@ -98,10 +103,18 @@ endgenerate
     logic `N(`VADDR_SIZE) cache_addr, cache_addr_n;
     logic wreq, wreq_n;
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) widx_decode, widx_valid;
-    logic `N(`STORE_COMMIT_SIZE) widx_valid_combine;
+    logic `N(`STORE_COMMIT_SIZE) widx_valid_combine, select_en;
     logic thresh_write;
 generate
-    assign write_ready = ready & addr_en & ~writing;
+    assign write_ready = select_en;
+    DirectionSelector #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) write_selector (
+        .clk(clk),
+        .rst(rst),
+        .en(write_en),
+        .idx(free_en),
+        .ready(ready),
+        .select(select_en)
+    );
     PEncoder #(`STORE_COMMIT_SIZE) encoder_write_ready (write_ready, widx);
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         Decoder #(`STORE_COMMIT_SIZE) decoder_widx (data_io.windex[i], widx_decode[i]);
@@ -109,17 +122,17 @@ generate
     end
     ParallelOR #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) or_widx ( widx_valid, widx_valid_combine);
     for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
-        assign ready[i] = counter[i][0] | thresh_write | flush;
+        assign ready[i] = ((counter[i] == 1) | thresh_write | flush) & addr_en[i] & ~writing[i];
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter[i] <= 1;
             end
             else if(|data_we_combine)begin
                 if(widx_valid_combine[i])begin
-                    counter[i] <= {1'b1, {`STORE_COUNTER_WIDTH-1{1'b0}}};
+                    counter[i] <= {`STORE_COUNTER_WIDTH{1'b1}};
                 end
-                else if(~counter[i][0])begin
-                    counter[i] <= counter[i] >> 1;
+                else if(counter[i] != 1)begin
+                    counter[i] <= counter[i] - 1;
                 end
             end
         end
@@ -193,7 +206,7 @@ endgenerate
         end
         else begin
             for(int i=0; i<`STORE_PIPELINE; i++)begin
-                if(wen[i] & ~(hit[i] | weq_combine[i]) & free_valid[i] & ~io.conflict)begin
+                if(write_en[i])begin
                     addr_en[free_idx[i]] <= 1'b1;
                     addrs[free_idx[i]] <= waddr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH];
                     writing[free_idx[i]] <= 0;

@@ -188,7 +188,7 @@ typedef struct packed {
 
 `define TVEC_MASK {{`MXL-2{1'b1}}, 1'b0, 1'b1}
 
-`define EPC_MASK {{`MXL-2{1'b1}}, 2'b00}
+`define EPC_MASK {{`MXL-`INST_OFFSET{1'b1}}, {`INST_OFFSET{1'b0}}}
 
 `define IP_MASK{{`MXL-14{1'b0}}, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
 `define SIP_MASK{{`MXL-14{1'b0}}, 1'b1, 3'b0, 1'b1, 3'b0, 1'b1, 3'b0, 1'b1, 1'b0}

@@ -41,6 +41,7 @@ generate
         assign fma_wb_io.datas[i].robIdx = ex_status.robIdx;
         assign fma_wb_io.datas[i].res = res;
         assign fma_wb_io.datas[i].exccode = status;
+        assign fma_wb_io.datas[i].irq_enable = 1;
     end
 endgenerate
 

@@ -216,7 +216,11 @@ endgenerate
 `endif
 
     assign tlb_lsu_io.lreq = load_io.en & ~load_io.exception;
-    assign tlb_lsu_io.lreq_s2 = load_en & ~lmisalign_s2 & ~redirect_clear_s2;
+    assign tlb_lsu_io.lreq_s2 = load_en & ~lmisalign_s2 & ~redirect_clear_s2 
+`ifdef RVA
+    & ~amo_conflict
+`endif
+    ;
     assign tlb_lsu_io.lidx = load_io.issue_idx;
     assign tlb_lsu_io.laddr = loadVAddr;
     assign tlb_lsu_io.flush = backendCtrl.redirect;
@@ -251,6 +255,8 @@ endgenerate
     assign rio.ptag = lptag;
 
     // reply fast
+	// amo > lmiss > rio.conflict
+	// lmiss reply in reply_slow
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
 `ifdef RVA
@@ -260,17 +266,17 @@ generate
             amo_conflict[i] <= amo_older & amo_valid;
         end
         if(i == 0)begin
-            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | amo_req | amo_conflict[i]);
+            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] & ~tlb_lsu_io.lmiss[i] | amo_req | amo_conflict[i]);
             assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
             assign load_io.reply_fast[i].reason = 2'b00;
         end
         else begin
-            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] | amo_conflict[i]);
+            assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i] & ~tlb_lsu_io.lmiss[i] | amo_conflict[i]);
             assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
             assign load_io.reply_fast[i].reason = 2'b00;
         end
 `else
-        assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i]);
+        assign load_io.reply_fast[i].en = load_en[i] & (rio.conflict[i]) & ~tlb_lsu_io.lmiss[i];
         assign load_io.reply_fast[i].issue_idx = load_issue_idx[i];
         assign load_io.reply_fast[i].reason = 2'b00;
 `endif
@@ -326,11 +332,11 @@ endgenerate
     always_ff @(posedge clk)begin
         lpaddrNext <= lpaddr;
         leq_data <= load_issue_data;
-        leq_en <= load_en & ~rio.conflict & ~redirect_clear_s2
+        leq_en <= load_en & ((tlb_lsu_io.lmiss | ~rio.conflict)
 `ifdef RVA
-        & ~{{`LOAD_PIPELINE-1{1'b0}}, amo_req} & ~amo_conflict;
+        & ~{{`LOAD_PIPELINE-1{1'b0}}, amo_req} & ~amo_conflict
 `endif
-        ;
+        ) & ~redirect_clear_s2;
         lmaskNext <= lmask;
         issue_idx_next <= load_issue_idx;
         lmisalign_s3 <= lmisalign_s2;
@@ -415,6 +421,7 @@ generate
             pipe_data.we <= leq_data[i].we;
             pipe_data.exccode <= tlb_exception_s3[i] ? `EXC_LPF : 
                            lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
+            pipe_data.irq_enable <= 1;
             pipe_data.res <= ldata_shift[i];
             from_issue[i] <= from_pipe;
         end
@@ -445,6 +452,7 @@ generate
             pipe_data.we <= 1'b1;
             pipe_data.exccode <= tlb_exception_s3[i] ? `EXC_LPF :
                                 lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
+            pipe_data.irq_enable <= 1;
             pipe_data.res <= ldata_shift[i];
             from_pipe <= wb_pipeline_en[i] & leq_data[i].frd_en;
         end
@@ -518,7 +526,7 @@ endgenerate
 
     assign sissue_idx = store_io.issue_idx;
     assign tlb_lsu_io.sreq = store_io.en & ~store_io.exception;
-    assign tlb_lsu_io.sreq_s2 = store_en & ~smisalign_s2;
+    assign tlb_lsu_io.sreq_s2 = store_en & ~smisalign_s2 & ~store_redirect_s2;
     assign tlb_lsu_io.sidx = sissue_idx;
     assign tlb_lsu_io.saddr = storeVAddr;
 
@@ -581,11 +589,14 @@ generate
                 storeWBData[i].en <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] | store_queue_io.wb_req;
                 storeWBData[i].robIdx <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? store_robIdx_s4[i] : store_queue_io.wb_robIdx;
                 storeWBData[i].exccode <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? exccode_s4[i]  : `EXC_NONE;
+                // store queue只有uncache会写回，此时禁止irq
+                storeWBData[i].irq_enable <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i];
             end
             else begin
                 storeWBData[i].en <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i];
                 storeWBData[i].robIdx <= store_robIdx_s4[i];
                 storeWBData[i].exccode <= exccode_s4[i];
+                storeWBData[i].irq_enable <= 1'b1;
             end
         end
     end

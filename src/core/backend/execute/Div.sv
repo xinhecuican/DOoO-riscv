@@ -151,6 +151,7 @@ module DivUnit(
     assign wbData.robIdx = status_o.robIdx;
     assign wbData.res = rem_o ? r : q;
     assign wbData.exccode = `EXC_NONE;
+    assign wbData.irq_enable = 1;
 endmodule
 
 module DivPipe #(
@@ -319,14 +320,14 @@ module qselect (
     wire p_ge_neg3 = p >= -3;
     wire p_ge_neg2 = p >= -2;
 
-    wire p_ge_1 = (|p[4: 0]) & ~p[5];
-    wire p_ge_2 = (|p[4: 1]) & ~p[5];
-    wire p_ge_3 = ((|p[4: 2]) | p[1] & p[0]) & ~p[5];
-    wire p_ge_4 = (|p[4: 2]) & ~p[5];
-    wire p_ge_5 = ((|p[4: 2]) & ~(p[2] & ~p[1] & ~p[0])) & ~p[5];
+    wire p_ge_1 = p >= 1;
+    wire p_ge_2 = p >= 2;
+    wire p_ge_3 = p >= 3;
+    wire p_ge_4 = p >= 4;
+    wire p_ge_5 = p >= 5;
     wire p_ge_6 = p >= 6;
-    wire p_ge_7 = ((|p[4: 3]) | p[2] & p[1] & p[0]) & ~p[5];
-    wire p_ge_8 = (|p[4: 3]) & ~p[5];
+    wire p_ge_7 = p >= 7;
+    wire p_ge_8 = p >= 8;
     wire p_ge_9 = p >= 9;
 
     wire p_ge_10 = p >= 10;
@@ -335,7 +336,7 @@ module qselect (
     wire p_ge_13 = p >= 13;
     wire p_ge_14 = p >= 14;
     wire p_ge_15 = p >= 15;
-    wire p_ge_16 = p[4] & ~p[5];
+    wire p_ge_16 = p >= 16;
     wire p_ge_17 = p >= 17;
     wire p_ge_18 = p >= 18;
     wire p_ge_19 = p >= 19;

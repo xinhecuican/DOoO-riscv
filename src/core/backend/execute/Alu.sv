@@ -45,6 +45,7 @@ module ALU(
     assign wbData.rd = io.status.rd;
     assign wbData.res = io.bundle.intv ? result : branchResult;
     assign wbData.exccode = `EXC_NONE;
+    assign wbData.irq_enable = 1;
 
     assign io.valid = valid;
 endmodule

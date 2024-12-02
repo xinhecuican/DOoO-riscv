@@ -441,6 +441,7 @@ interface WriteBackBus #(
     logic `ARRAY(PORT_NUM, `PREG_WIDTH) rd;
     logic `ARRAY(PORT_NUM, `XLEN) res;
     logic `ARRAY(PORT_NUM, `EXC_WIDTH) exccode;
+    logic `N(PORT_NUM) irq_enable;
 endinterface
 
 interface CommitBus;

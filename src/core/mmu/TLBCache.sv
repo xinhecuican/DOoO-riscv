@@ -43,14 +43,14 @@ module TLBCache(
     assign ptw_page_io.refill_addr = cache_ptw_io.refill_addr;
     assign ptw_page_io.refill_data = cache_ptw_io.refill_data;
     TLBPageIO #(`TLB_P0_BANK, `TLB_P0_BANK) pn0_io();
-    logic pn0_fence_end;
+    logic pn0_fence_end, pn0_fence_valid, pn0_fence_end_n;
     TLBPage #(
         .PN(0),
         .WAY_NUM(`TLB_P0_WAY),
         .META_WIDTH(`TLB_P0_BANK),
         .DEPTH(`TLB_P0_SET),
         .BANK(`TLB_P0_BANK)
-    ) page_pn0 (.*, .page_io(pn0_io), .cache_io(io), .fence_finish(pn0_fence_end));
+    ) page_pn0 (.*, .page_io(pn0_io), .cache_io(io), .fence_finish(pn0_fence_end), .fence_valid(pn0_fence_valid));
 
     TLBPageIO #(`TLB_P1_BANK, `TLB_P1_BANK) pn1_io();
     TLBPage #(
@@ -59,7 +59,7 @@ module TLBCache(
         .META_WIDTH(`TLB_P1_BANK),
         .DEPTH(`TLB_P1_SET),
         .BANK(`TLB_P1_BANK)
-    ) page_pn1 (.*, .page_io(pn1_io), .cache_io(io), .fence_finish()); 
+    ) page_pn1 (.*, .page_io(pn1_io), .cache_io(io), .fence_finish(), .fence_valid()); 
 
     assign fence_end = pn0_fence_end;
     always_ff @(posedge clk)begin
@@ -67,6 +67,7 @@ module TLBCache(
         req_buf.vaddr <= io.req_addr;
         req_buf.info <= io.info;
         req_buf.error <= cache_ptw_io.refill_req;
+        pn0_fence_end_n <= pn0_fence_end;
     end
 
     logic `N(`TLB_PN) hit, hit_first, leaf, exception, valid;
@@ -91,9 +92,10 @@ module TLBCache(
 
     logic hit_before;
     logic ptw_req_before, error_before;
-    assign io.hit = hit_before | ptw_req_before & cache_ptw_io.full;
+    assign io.hit = (hit_before | ptw_req_before & cache_ptw_io.full) & ~io.flush;
     assign io.error = error_before | ptw_req_before & cache_ptw_io.full;
-    assign cache_ptw_io.req = ptw_req_before & ~cache_ptw_io.full;
+    assign cache_ptw_io.req = ptw_req_before & ~cache_ptw_io.full & 
+                              ~pn0_fence_valid & ~pn0_fence_end & ~pn0_fence_end_n;
     always_ff @(posedge clk)begin
         hit_before <= req_buf.req & ((|(hit_first & (leaf | exception))) | req_buf.error) & ~io.flush;
         ptw_req_before <= req_buf.req & (~(|(hit_first & (leaf | exception)))) & ~req_buf.error & ~io.flush;
@@ -146,6 +148,7 @@ module TLBPage #(
     TLBPageIO.page page_io,
     CachePTWIO.page ptw_page_io,
     FenceBus.mmu fenceBus,
+    output logic fence_valid,
     output logic fence_finish
 );
     TLBWayIO #(
@@ -247,6 +250,7 @@ endgenerate
             fenceReq <= 0;
             fenceWe <= 0;
             fenceIdx <= 0;
+            fence_valid <= 0;
             fence_finish <= 0;
             fence_way <= 0;
             fence_tag <= 0;
@@ -267,6 +271,7 @@ endgenerate
                         fenceState <= FENCE;
                         fence_tag <= fenceBus.vma_vaddr[2]`TLB_VPN_TBUS(PN, DEPTH, BANK);
                     end
+                    fence_valid <= 1'b1;
                 end
             end
             FENCE: begin
@@ -286,6 +291,7 @@ endgenerate
             FENCE_END:begin
                 fenceWe <= 0;
                 fenceState <= IDLE;
+                fence_valid <= 1'b0;
             end
             endcase
             fence_finish <= fenceState == FENCE_END;

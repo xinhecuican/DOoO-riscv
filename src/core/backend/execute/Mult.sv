@@ -93,6 +93,7 @@ endgenerate
     assign wbData.rd = status_s2.rd;
     assign wbData.robIdx = status_s2.robIdx;
     assign wbData.exccode = `EXC_NONE;
+    assign wbData.irq_enable = 1;
 
     logic `ARRAY(2, NUM*2) transpose;
 

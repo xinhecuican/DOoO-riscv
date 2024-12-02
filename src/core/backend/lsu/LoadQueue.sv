@@ -474,6 +474,7 @@ module LoadQueueBank #(
     assign fp_wbData.rd = wb_queue_data.rd;
     assign fp_wbData.res = uncache_wb_valid_n ? uncache_wb_data : wb_data;
     assign fp_wbData.exccode = `EXC_NONE;
+    assign fp_wbData.irq_enable = ~uncache_wb_valid_n;
 `endif
     assign int_wbData.en = wb_valid_n
 `ifdef RVF
@@ -486,6 +487,7 @@ module LoadQueueBank #(
     assign int_wbData.rd = wb_queue_data.rd;
     assign int_wbData.res = uncache_wb_valid_n ? uncache_wb_data : wb_data;
     assign int_wbData.exccode = `EXC_NONE;
+    assign int_wbData.irq_enable = ~uncache_wb_valid_n;
 
 // redirect
     always_ff @(posedge clk)begin

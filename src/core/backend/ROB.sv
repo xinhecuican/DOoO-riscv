@@ -61,6 +61,7 @@ module ROB(
     logic `N(`COMMIT_WIDTH) commit_fp;
 `endif
     logic `N(`EXC_WIDTH) exccode `N(`ROB_SIZE);
+    logic `N(`ROB_SIZE) irq_enable;
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
     logic `N(`COMMIT_WIDTH) wbValid, commit_en_pre, commit_en_unexc, commit_en, commit_en_n;
@@ -68,6 +69,7 @@ module ROB(
     logic `N(`COMMIT_WIDTH) excValid, exc_en, exc_mask, exc_en_n;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx;
     logic `ARRAY(`COMMIT_WIDTH, `EXC_WIDTH) rexccode;
+    logic `N(`COMMIT_WIDTH) irq_valid;
     logic `N($clog2(`FETCH_WIDTH)) tail_shift;
     logic `N(`FETCH_WIDTH) data_we;
     logic `ARRAY(`FETCH_WIDTH, `FETCH_WIDTH) data_we_shift, shift_idx_decode, shift_idx_reverse;
@@ -184,7 +186,7 @@ endgenerate
             fence_redirect <= 0;
         end
         else begin
-            if(wb_sfence & ~irqInfo.irq & ~walk_state & ~exc_exist_n & ~exc_exist)begin
+            if(wb_sfence & ~walk_state & ~exc_exist_n & ~exc_exist)begin
                 fence <= 1'b1;
                 fence_redirect <= 1'b1;
             end
@@ -204,7 +206,7 @@ endgenerate
         end
         else begin
             // en[0] is csr issue queue idx and it's in order
-            if(int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx) & ~irqInfo.irq & ~fenceBus.valid)begin
+            if(int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx) & ~fenceBus.valid)begin
                 wb_sfence <= int_wbBus.en[0] & fence_req.req & (int_wbBus.robIdx[0] == fence_req.robIdx);
             end
             else if((|commit_en_n) | exc_exist_n)begin
@@ -223,6 +225,7 @@ generate
         assign commit_store[i] = robData[i].store;
         assign commit_mem[i] = robData[i].mem;
         assign rexccode[i] = exccode[dataRIdx[i]];
+        assign irq_valid[i] = irq_enable[dataRIdx[i]];
 `ifdef RVF
         assign commit_fp[i] = fp_op[dataRIdx[i]];
         assign excValid[i] = commit_fp[i] ? ~rob_fcsr_io.valid : ~(&rexccode[i]);
@@ -241,7 +244,7 @@ generate
             assign commit_en_unexc[i] = (&commit_en_pre[i: 0]) & ~fence & ~wb_sfence;
         end
     end
-    assign exc_en = (excValid | {`COMMIT_WIDTH{irqInfo.irq}});
+    assign exc_en = (excValid | ({`COMMIT_WIDTH{irqInfo.irq}} & irq_valid));
     assign exc_exist = |(commit_en_unexc & exc_en);
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         if(i == 0)begin
@@ -338,15 +341,16 @@ endgenerate
 
     always_ff @(posedge clk)begin
         exc_exist_n <= exc_exist && !walk_state && initReady[0] & ~exc_exist_n;
-        irq_n <= irqInfo.irq;
+        irq_n <= irqInfo.irq & irq_valid[excIdx];
         irq_deleg_n <= irqInfo.deleg;
         excIdx_n <= excIdx;
         exc_robIdx <= dataRIdx[excIdx];
         exc_dir <= head[`ROB_WIDTH-1] & ~dataRIdx[excIdx][`ROB_WIDTH-1] ? ~hdir : hdir;
 `ifdef RVF
-        redirect_exccode <= commit_fp[excIdx] ? `EXC_II : rexccode[excIdx]; 
+        redirect_exccode <= irqInfo.irq & irq_valid[excIdx] ? irqInfo.exccode : 
+                            commit_fp[excIdx] ? `EXC_II : rexccode[excIdx]; 
 `else
-        redirect_exccode <= rexccode[excIdx];
+        redirect_exccode <= irqInfo.irq & irq_valid[excIdx] ? irqInfo.exccode : rexccode[excIdx];
 `endif
     end
     assign rob_redirect_io.fence = fence_redirect;
@@ -418,6 +422,7 @@ endgenerate
                 if(int_wbBus.en[i])begin
                     wb[int_wbBus.robIdx[i].idx] <= 1'b1;
                     exccode[int_wbBus.robIdx[i].idx] <= int_wbBus.exccode[i];
+                    irq_enable[int_wbBus.robIdx[i].idx] <= int_wbBus.irq_enable[i];
                 end
             end
 `ifdef RVF
@@ -425,6 +430,7 @@ endgenerate
                 if(fp_wbBus.en[i])begin
                     wb[fp_wbBus.robIdx[i].idx] <= 1'b1;
                     exccode[fp_wbBus.robIdx[i].idx] <= fp_wbBus.exccode[i];
+                    irq_enable[fp_wbBus.robIdx[i].idx] <= fp_wbBus.irq_enable[i];
                 end
             end
             for(int i=0; i<`FETCH_WIDTH; i++)begin
@@ -437,6 +443,7 @@ endgenerate
                 if(storeWBData[i].en)begin
                     wb[storeWBData[i].robIdx.idx] <= 1'b1;
                     exccode[storeWBData[i].robIdx.idx] <= storeWBData[i].exccode;
+                    irq_enable[storeWBData[i].robIdx.idx] <= storeWBData[i].irq_enable;
                 end
             end
             for(int i=0; i<`FETCH_WIDTH; i++)begin
@@ -629,6 +636,24 @@ endgenerate
         .pc(pc[0]),
         .cycleCnt(cycleCnt),
         .instrCnt(instrCnt)
+    );
+
+    logic diff_irq;
+    logic diff_exc_exist;
+    logic `N(`EXC_WIDTH) diff_exccode;
+    always_ff @(posedge clk)begin
+        diff_irq <= irq_n;
+        diff_exc_exist <= exc_exist_n;
+        diff_exccode <= redirect_exccode;
+    end
+
+    DifftestArchEvent difftest_arch_event (
+        .clock(clk),
+        .coreid(0),
+        .intrNO((diff_exc_exist & diff_irq ? diff_exccode : 0)),
+        .cause((diff_exc_exist & ~diff_irq ? diff_exccode : 0)),
+        .exceptionPC(pc[0]),
+        .exceptionInst(diff_insts[0])
     );
 
     logic `N($clog2(`COMMIT_WIDTH)+1) commitCnt;

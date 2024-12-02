@@ -46,7 +46,7 @@ generate
         assign int_wbBus.rd[i] = wbData.rd;
         assign int_wbBus.res[i] = wbData.res;
         assign int_wbBus.exccode[i] = wbData.exccode;
-
+        assign int_wbBus.irq_enable[i] = wbData.irq_enable;
     end
 endgenerate
 
@@ -62,6 +62,7 @@ generate
         assign int_wbBus.rd[`ALU_SIZE+i] = lsu_wb_io.datas[i].en ? lsu_wb_io.datas[i].rd : fmisc_wb_io.datas[`FMISC_SIZE+i].rd;
         assign int_wbBus.res[`ALU_SIZE+i] = lsu_wb_io.datas[i].en ? lsu_wb_io.datas[i].res : fmisc_wb_io.datas[`FMISC_SIZE+i].res;
         assign int_wbBus.exccode[`ALU_SIZE+i] = lsu_wb_io.datas[i].en ? lsu_wb_io.datas[i].exccode : fmisc_wb_io.datas[`FMISC_SIZE+i].exccode;
+        assign int_wbBus.irq_enable[`ALU_SIZE+i] = lsu_wb_io.datas[i].en ? lsu_wb_io.datas[i].irq_enable : fmisc_wb_io.datas[`FMISC_SIZE+i].irq_enable;
 `else
         assign int_wbBus.en[`ALU_SIZE+i] = lsu_wb_io.datas[i].en;
         assign int_wbBus.we[`ALU_SIZE+i] = lsu_wb_io.datas[i].we;
@@ -69,6 +70,7 @@ generate
         assign int_wbBus.rd[`ALU_SIZE+i] = lsu_wb_io.datas[i].rd;
         assign int_wbBus.res[`ALU_SIZE+i] = lsu_wb_io.datas[i].res;
         assign int_wbBus.exccode[`ALU_SIZE+i] = lsu_wb_io.datas[i].exccode;
+        assign int_wbBus.irq_enable[`ALU_SIZE+i] = lsu_wb_io.datas[i].irq_enable;
 `endif
     end
 endgenerate
@@ -83,6 +85,7 @@ generate
         assign fp_wbBus.rd[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].en ? lsu_wb_io.datas[`LOAD_PIPELINE+i].rd : fmisc_wb_io.datas[i].rd;
         assign fp_wbBus.res[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].en ? lsu_wb_io.datas[`LOAD_PIPELINE+i].res : fmisc_wb_io.datas[i].res;
         assign fp_wbBus.exccode[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].en ? lsu_wb_io.datas[`LOAD_PIPELINE+i].exccode : fmisc_wb_io.datas[i].exccode;
+        assign fp_wbBus.irq_enable[i] = lsu_wb_io.datas[`LOAD_PIPELINE+i].en ? lsu_wb_io.datas[`LOAD_PIPELINE+i].irq_enable : fmisc_wb_io.datas[i].irq_enable;
     end
     for(genvar i=0; i<`FMA_SIZE; i++)begin
         WBData fma_data;
@@ -98,6 +101,7 @@ generate
             assign fp_wbBus.rd[`FMISC_SIZE+i] = fma_data.en ? fma_data.rd : fdiv_wb_io.datas[0].rd;
             assign fp_wbBus.res[`FMISC_SIZE+i] = fma_data.en ? fma_data.res : fdiv_wb_io.datas[0].res;
             assign fp_wbBus.exccode[`FMISC_SIZE+i] = fma_data.en ? fma_data.exccode : fdiv_wb_io.datas[0].exccode;
+            assign fp_wbBus.irq_enable[`FMISC_SIZE+i] = fma_data.en ? fma_data.irq_enable : fdiv_wb_io.datas[0].irq_enable;
         end
         else begin
             assign fp_wbBus.en[`FMISC_SIZE+i] = fma_data.en;
@@ -106,6 +110,7 @@ generate
             assign fp_wbBus.rd[`FMISC_SIZE+i] = fma_data.rd;
             assign fp_wbBus.res[`FMISC_SIZE+i] = fma_data.res;
             assign fp_wbBus.exccode[`FMISC_SIZE+i] = fma_data.exccode;
+            assign fp_wbBus.irq_enable[`FMISC_SIZE+i] = fma_data.irq_enable;
         end
     end
 endgenerate

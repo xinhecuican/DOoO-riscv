@@ -83,7 +83,7 @@ module PTW(
         .MULTI(1)
     ) pn1_buffer (.*, .io(pn1_io));
 
-    assign pn0_io.flush = flush;
+    assign pn0_io.flush = flush | fence_flush;
     assign pn0_io.en = cache_ptw_io.req & cache_ptw_io.valid[1] |
                        (state == WB_PN1 && (~pn1_leaf & ~pn1_exception & ~pn0_io.full & pn1_io.wb_valid & ~flush_q));
     assign pn0_io.tag = cache_ptw_io.req & cache_ptw_io.valid[1] ? 
@@ -99,7 +99,7 @@ module PTW(
     assign pn0_data = pn0_io.data_o;
     assign pn0_wb_data = pn0_io.wb_data;
 
-    assign pn1_io.flush = flush;
+    assign pn1_io.flush = flush | fence_flush;
     assign pn1_io.en = cache_ptw_io.req & (~cache_ptw_io.valid[1] & ~cache_ptw_io.valid[0]);
     assign pn1_io.tag = cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(1)];
     assign pn1_io.data = {cache_ptw_io.vaddr[`TLB_VPN_BASE(1)-1: 0], cache_ptw_io.info};
@@ -157,12 +157,12 @@ module PTW(
         WB_PN1: begin
             ptw_io.wpn = 2'b01;
             ptw_io.exception = pn1_exception;
-            ptw_io.valid = (pn1_leaf | pn1_exception) & ~flush_q;
+            ptw_io.valid = (pn1_leaf | pn1_exception) & ~flush_valid;
         end
         WB_PN0: begin
             ptw_io.wpn = 2'b00;
             ptw_io.exception = pn0_exception;
-            ptw_io.valid = ~flush_q;
+            ptw_io.valid = ~flush_valid;
         end
         default: begin
             ptw_io.wpn = 2'b00;

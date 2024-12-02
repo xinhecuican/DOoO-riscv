@@ -217,7 +217,12 @@ endgenerate
                                redirect_en ? tailIdx + 1 : instNumNext;
     assign pd_ibuffer_io.inst = data_next;
     assign pd_ibuffer_io.fsqIdx = fsqIdx.idx;
+`ifdef RVC
+    // rvc will never raise iam
+    assign pd_ibuffer_io.iam = 0;
+`else
     assign pd_ibuffer_io.iam = stream_next.start_addr[`INST_OFFSET-1: 0] != 0;
+`endif
     assign pd_ibuffer_io.ipf = ipf;
     assign pd_ibuffer_io.shiftIdx = shiftIdx;
 

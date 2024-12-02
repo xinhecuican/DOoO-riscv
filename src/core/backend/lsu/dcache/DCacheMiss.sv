@@ -78,9 +78,12 @@ module DCacheMiss(
     logic `N($clog2(`LOAD_PIPELINE+1)+1) free_num;
 
     logic req_start, req_next;
-    logic req_last, rlast;
+    logic req_last, rlast, data_refilled;
     logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `XLEN) cache_eq_data;
 
+    logic `N(`DCACHE_MISS_SIZE) w_refill_eq, head_decode;
+    logic refill_eq;
+    logic w_invalid;
 
 //load enqueue
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
@@ -154,6 +157,7 @@ endgenerate
     assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
     assign write_remain_valid = remain_count > w_req_order;
     assign whit_combine = |whit | (|rwfree_eq);
+    assign w_invalid = rlast | req_last | refill_eq;
     Encoder #(`DCACHE_MISS_SIZE) encoder_whit(whit, whitIdx);
     PEncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
     assign widx = |whit ? whitIdx : 
@@ -162,10 +166,10 @@ endgenerate
     // 实际上只需要req_last时禁止写入即可，如果CommitBuffer同一时间有多个同一地址的项
     // 那么req_last, rlast, io.refill_en & io.refill_end都需要考虑冲突问题
     always_ff @(posedge clk)begin
-        io.wfull <= io.wen & (req_last | rlast | (~write_remain_valid & ~whit_combine));
+        io.wfull <= io.wen & (w_invalid | (~write_remain_valid & ~whit_combine));
     end
 
-    assign free_en[`LOAD_PIPELINE] = wen & ~req_last & ~rlast & (write_remain_valid & ~whit_combine);
+    assign free_en[`LOAD_PIPELINE] = wen & ~w_invalid & (write_remain_valid & ~whit_combine);
 
     assign read_data = data[widx];
     assign read_mask = mask[widx];
@@ -191,6 +195,10 @@ endgenerate
     assign io.refillAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign io.refillData = data[head];
     assign io.refill_scIdx = scIdxs[head];
+
+    Decoder #(`DCACHE_MISS_SIZE) decoder_head (head, head_decode);
+    assign w_refill_eq = {`DCACHE_MISS_SIZE{data_refilled}} & whit & head_decode;
+    assign refill_eq = |w_refill_eq;
 
 // mshr refill
     `CONSTRAINT(LOAD_REFILL_SIZE, `LOAD_PIPELINE, "LOAD_REFILL_SIZE equal to LOAD_PIPELINE")
@@ -245,7 +253,7 @@ endgenerate
 
     ParallelAdder #(1, `LOAD_PIPELINE+1) adder_free (free_en, free_num);
     always_ff @(posedge clk)begin
-        if(io.wen & ~rlast & ~req_last & (write_remain_valid | whit_combine))begin
+        if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
             data[widx] <= combine_data;
             mask[widx] <= combine_mask;
         end
@@ -269,6 +277,7 @@ endgenerate
             tail <= 0;
             scIdxs <= '{default: 0};
             remain_count <= `DCACHE_MISS_SIZE;
+            data_refilled <= 0;
         end
         else begin
             head <= head + (io.refill_en & io.refill_valid);
@@ -302,13 +311,16 @@ endgenerate
                 end
             end
 
-            if(wen & ~rlast & ~req_last & (write_remain_valid & ~whit_combine))begin
+            if(wen & ~w_invalid & (write_remain_valid & ~whit_combine))begin
                 en[freeIdx[`LOAD_PIPELINE]] <= 1'b1;
                 addr[freeIdx[`LOAD_PIPELINE]] <= io.waddr`DCACHE_BLOCK_BUS;
                 dataValid[freeIdx[`LOAD_PIPELINE]] <= 1'b0;
             end
-            if(io.wen & ~rlast & ~req_last & (write_remain_valid | whit_combine))begin
+            if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
                 scIdxs[widx] <= io.scIdx;
+            end
+            if(rlast)begin
+                data_refilled <= 1'b1;
             end
             if(req_last)begin
                 dataValid[head] <= 1'b1;
@@ -319,6 +331,7 @@ endgenerate
             if(io.refill_en & io.refill_valid)begin
                 refilled[head] <= 1'b1;
                 en[head] <= 1'b0;
+                data_refilled <= 1'b0;
             end
             if(refilled[mshr_head] & ~(mshr_hit_valid))begin
                 refilled[mshr_head] <= 1'b0;
@@ -333,7 +346,7 @@ endgenerate
             amo <= 0;
         end
         else begin
-            if(io.amo_en & ~rlast & ~req_last & (write_remain_valid | whit_combine))begin
+            if(io.amo_en & ~w_invalid & (write_remain_valid | whit_combine))begin
                 amo[widx] <= 1'b1;
             end
             if(io.refill_en & io.refill_valid)begin
@@ -343,7 +356,7 @@ endgenerate
     end
 
     always_ff @(posedge clk)begin
-        io.amo_refill <= io.amo_en & (rlast | req_last | (~write_remain_valid & ~whit_combine)) |
+        io.amo_refill <= io.amo_en & (w_invalid | (~write_remain_valid & ~whit_combine)) |
                       io.refill_en & io.refill_valid & amo[head];
     end
 `endif

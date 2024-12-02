@@ -31,23 +31,24 @@
 //   endgenerate
 // endmodule
 
-// 1 0 0 0  1 1 1 1  1 0 1 1  1 0 0 1
-// 0 1 0 0  0 0 0 0  1 1 1 1  1 1 0 1
-// 0 0 1 0  0 0 0 0  0 0 1 0  1 1 1 1
-// 0 0 0 1  0 0 0 0  0 0 0 1  0 0 0 1
-// bigger[i][j] ready[j] res
-// 0 0 1
-// 0 1 1
-// 1 0 1
-// 1 1 0
+
+// 如果只有一个写端口，那么bigger[i][j] <= (bigger[i][j] & ~(idx[j])) | (idx[i]);
+// 如果有多个写端口，并且第一个端口的输入更老，可以将过程为两个部分
+// 1. 仍然按照之前的模式进行填充，不考虑这两个写端口之间的影响，如下面第2张表和第4张表
+// 2. 构建多个写端口之间的掩码,覆盖在原来的表上
+// 0 0 0 0  1 1 1 1  1 0 1 1  1 0 0 0  1 0 0 0
+// 0 0 0 0  1 1 1 1  1 1 1 1  1 1 0 0  1 1 0 0
+// 0 0 0 0  0 0 0 0  0 0 0 0  1 1 1 1  1 1 1 0
+// 0 0 0 0  0 0 0 0  0 0 0 0  1 1 1 1  1 1 1 1
 module DirectionSelector #(
     parameter DEPTH = 8,
+    parameter WRITE_PORT=1,
     parameter ADDR_WIDTH = $clog2(DEPTH)
 ) (
     input logic clk,
     input logic rst,
-    input logic en,
-    input logic [DEPTH-1:0] idx,
+    input logic [WRITE_PORT-1: 0] en,
+    input logic [WRITE_PORT-1: 0][DEPTH-1:0] idx,
     input logic [DEPTH-1:0] ready,
     output logic [DEPTH-1:0] select
 );
@@ -67,16 +68,43 @@ module DirectionSelector #(
     end
   endgenerate
 
+// for multi write port
+  logic [WRITE_PORT-1: 0][DEPTH-1: 0] older_valid, idx_valid;
+  logic [WRITE_PORT-1: 0][DEPTH-1: 0][DEPTH-1: 0] older_masks;
+  logic [DEPTH-1: 0][DEPTH-1: 0][WRITE_PORT-1: 0] older_masks_reverse;
+  logic [DEPTH-1: 0] idx_combine;
+  logic [DEPTH-1: 0][DEPTH-1: 0] older_mask, bigger_n_pre, bigger_n;
+generate
+  for(genvar i=0; i<WRITE_PORT-1; i++)begin
+    ParallelOR #(DEPTH, WRITE_PORT-1-i) or_older (idx_valid[WRITE_PORT-1: i+1], older_valid[i]);
+  end
+  assign older_valid[WRITE_PORT-1] = {DEPTH{1'b0}};
+  ParallelOR #(DEPTH, WRITE_PORT) or_idx (idx_valid, idx_combine);
+  for(genvar i=0; i<WRITE_PORT; i++)begin
+    assign idx_valid[i] = {DEPTH{en[i]}} & idx[i];
+    for(genvar j=0; j<DEPTH; j++)begin
+      for(genvar k=0; k<DEPTH; k++)begin
+        assign older_masks[i][j][k] = ~(idx_valid[i][j] & older_valid[i][k]);
+        assign older_masks_reverse[j][k][i] = older_masks[i][j][k];
+      end
+    end
+  end
+
+  for(genvar i=0; i<DEPTH; i++)begin
+    for(genvar j=0; j<DEPTH; j++)begin
+      assign older_mask[i][j] = &older_masks_reverse[i][j];
+      assign bigger_n_pre[i][j] = (bigger[i][j] & ~(idx_combine[j])) | (idx_combine[i]);
+      assign bigger_n[i][j] = bigger_n_pre[i][j] & older_mask[i][j];
+    end
+  end
+endgenerate
+
   always_ff @(posedge clk or posedge rst) begin
     if (rst == `RST) begin
       bigger <= 0;
     end else begin
-      if (en) begin
-        for (int i = 0; i < DEPTH; i++) begin
-          for (int j = 0; j < DEPTH; j++) begin
-            bigger[i][j] <= (bigger[i][j] & ~(idx[j])) | (idx[i]);
-          end
-        end
+      if (|en) begin
+        bigger <= bigger_n;
       end
     end
   end

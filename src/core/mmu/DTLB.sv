@@ -216,7 +216,8 @@ endgenerate
         tlb_lsu_io.amo_valid <= amo_req & ~ltlb_io[0].miss | 
                                 (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid;
         tlb_lsu_io.amo_exception <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid ? tlb_l2_io0.exception : ltlb_io[0].exception;
-        tlb_lsu_io.amo_error <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid;
+        // 只要是从l2发过来的并且没有exception就需要标记为error，让amo_queue重发请求
+        tlb_lsu_io.amo_error <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid & (tlb_l2_io0.error | ~tlb_l2_io0.error & ~tlb_l2_io0.exception);
         tlb_lsu_io.amo_paddr <= ltlb_io[0].paddr;
 `endif
     end

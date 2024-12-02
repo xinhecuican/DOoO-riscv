@@ -83,6 +83,7 @@ module AmoQueue(
                             tlb_exc & islr ? `EXC_LPF :
                             tlb_exc & ~islr ? `EXC_SPF : `EXC_NONE;
     assign wbData.res = rdata;
+    assign wbData.irq_enable = 0;
 
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin

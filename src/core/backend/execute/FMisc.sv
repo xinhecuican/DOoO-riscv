@@ -38,6 +38,7 @@ generate
                 fmisc_wb_io.datas[i].we <= 1'b1;
                 fmisc_wb_io.datas[i].rd <= issue_fmisc_io.status[i].rd;
                 fmisc_wb_io.datas[i].exccode <= fstatus;
+                fmisc_wb_io.datas[i].irq_enable <= 1;
                 fmisc_wakeup_io.en[i] <= issue_fmisc_io.en[i] & issue_fmisc_io.bundle[i].flt_we;
                 fmisc_wakeup_io.we[i] <= 1'b1;
                 fmisc_wakeup_io.rd[i] <= issue_fmisc_io.status[i].rd;
@@ -50,6 +51,7 @@ generate
                 fmisc_wb_io.datas[i+`FMISC_SIZE].we <= issue_fmisc_io.status[i].we;
                 fmisc_wb_io.datas[i+`FMISC_SIZE].rd <= issue_fmisc_io.status[i].rd;
                 fmisc_wb_io.datas[i+`FMISC_SIZE].exccode <= fstatus;
+                fmisc_wb_io.datas[i+`FMISC_SIZE].irq_enable <= 1;
                 fmisc_wakeup_io.en[i+`FMISC_SIZE] <= issue_fmisc_io.en[i] & ~issue_fmisc_io.bundle[i].flt_we;
                 fmisc_wakeup_io.we[i+`FMISC_SIZE] <= issue_fmisc_io.status[i].we;
                 fmisc_wakeup_io.rd[i+`FMISC_SIZE] <= issue_fmisc_io.status[i].rd;

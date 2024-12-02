@@ -123,9 +123,9 @@ generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_NUM; i++)begin
         always_ff @(posedge clk)begin
             addr_en_next[i] <= addr_io[i].reg_en;
-            data_en_next[i] <= data_io[i].reg_en;
-            store_io.en[i] <= addr_en_next[i] & (~backendCtrl.redirect | addr_bigger[i]) & store_reg_io.ready[i];
-            store_io.data_en[i] <= data_en_next[i] & (~backendCtrl.redirect | data_bigger[i]) & store_reg_io.ready[`STORE_ISSUE_BANK_NUM+i];
+            data_en_next[i] <= data_io[i].reg_en & data_io[i].reg_ready;
+            store_io.en[i] <= addr_en_next[i] & (~backendCtrl.redirect | addr_bigger[i]);
+            store_io.data_en[i] <= data_en_next[i] & (~backendCtrl.redirect | data_bigger[i]);
         end
     end
 endgenerate
@@ -337,7 +337,7 @@ endgenerate
                               ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i] | tlb_reply_valid[i]) & ~backendCtrl.redirect;                  
             end
 
-            if(io.tlb_en & io.tlb_exception)begin
+            if(io.tlb_en & ~io.tlb_error & io.tlb_exception)begin
                 exception[io.tlb_bank_idx] <= 1'b1;
             end
 

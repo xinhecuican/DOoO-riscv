@@ -461,10 +461,12 @@ endgenerate                                                             \
             end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
-                    scause[`EXC_WIDTH-1: 0] <= {redirect.irq, {`MXL-1-`EXC_WIDTH{1'b1}}, exccode};
+                    scause[`EXC_WIDTH-1: 0] <= exccode;
+                    scause.intr <= redirect.irq;
                 end
                 if(~edelege_valid)begin
-                    mcause[`EXC_WIDTH-1: 0] <= {redirect.irq, {`MXL-1-`EXC_WIDTH{1'b1}}, exccode};
+                    mcause[`EXC_WIDTH-1: 0] <= exccode;
+                    mcause.intr <= redirect.irq;
                 end
             end
             if(redirect.en & ~ret_valid)begin
@@ -519,6 +521,7 @@ endgenerate                                                             \
 `endif
                                         ? `EXC_II :
                                         issue_csr_io.bundle.exc_valid ? issue_csr_io.bundle.exccode : `EXC_NONE;
+    assign csr_wb_io.datas[0].irq_enable = 0;
 
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
@@ -691,8 +694,8 @@ endgenerate
         .stval(stval),
         .mtvec(mtvec),
         .stvec(stvec),
-        .mcause(mcause),
-        .scause(scause),
+        .mcause({mcause[31], 32'h0, mcause[30: 0]}),
+        .scause({scause[31], 32'h0, scause[30: 0]}),
         .satp(satp),
         .mip(mip),
         .mie(mie),

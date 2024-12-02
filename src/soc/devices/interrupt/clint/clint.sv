@@ -34,12 +34,16 @@ module apb4_clint (
   assign apb4.pready     = 1'b1;
   assign apb4.pslverr    = 1'b0;
 
+`ifdef DIFFTEST
+  assign s_rtc_rise_edge = 1'b1;
+`else
   edge_det_re #(2, 1) u_edge_det_re (
       .clk_i  (clk),
       .rst_n_i,
       .dat_i  (rtc_clk),
       .re_o   (s_rtc_rise_edge)
   );
+`endif
 
   assign s_msip_en = s_apb4_wr_hdshk && s_apb4_addr == `CLINT_MSIP;
   assign s_msip_d  = apb4.pwdata[`CLINT_MSIP_WIDTH-1:0];

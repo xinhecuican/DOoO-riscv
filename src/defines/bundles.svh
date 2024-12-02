@@ -417,6 +417,7 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     logic we;
+    logic irq_enable;
     RobIdx robIdx;
     logic `N(`PREG_WIDTH) rd;
     logic `N(`EXC_WIDTH) exccode;
@@ -496,6 +497,7 @@ typedef struct packed {
     logic en;
     RobIdx robIdx;
     logic `N(`EXC_WIDTH) exccode;
+    logic irq_enable;
 } StoreWBData;
 
 typedef struct packed {

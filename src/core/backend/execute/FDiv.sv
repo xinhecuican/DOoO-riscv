@@ -39,6 +39,7 @@ module FDivUnit(
     assign fdiv_wb_io.datas[0].we = '1;
     assign fdiv_wb_io.datas[0].rd = ex_status.rd;
     assign fdiv_wb_io.datas[0].robIdx = ex_status.robIdx;
+    assign fdiv_wb_io.datas[0].irq_enable = 1;
 endmodule
 
 module FDivSlice #(
