@@ -20,7 +20,8 @@ module PTW(
     CachePTWIO.ptw cache_ptw_io,
     CsrL2IO.tlb csr_io,
     AxiIO.masterr axi_io,
-    PTWL2IO.ptw ptw_io
+    PTWL2IO.ptw ptw_io,
+    output logic ptw_wb
 );
     typedef enum  { IDLE, WALK_PN1, WB_PN1, WALK_PN0, WB_PN0 } State;
     typedef struct packed {
@@ -195,6 +196,7 @@ module PTW(
             wb_req <= 0;
             flush_q <= 0;
             fence_flush_q <= 0;
+            ptw_wb <= 1'b0;
         end
         else begin
             if(fence_flush | fence_flush_q)begin
@@ -205,6 +207,16 @@ module PTW(
             end
             else if(cache_ptw_io.refill_ready)begin
                 wb_req <= 1'b0;
+            end
+
+            if(rlast & ~flush_valid)begin
+                ptw_wb <= 1'b1;
+            end
+            else if(state == WB_PN1 && !pn1_leaf && !pn1_exception)begin
+                ptw_wb <= 1'b0;
+            end
+            else if(state != WB_PN1 && state != WB_PN0)begin
+                ptw_wb <= 1'b0;
             end
 
             if((state == WALK_PN1 || state == WALK_PN0))begin

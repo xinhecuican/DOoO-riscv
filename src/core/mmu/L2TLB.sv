@@ -17,23 +17,21 @@ module L2TLB(
     logic cache_flush, ptw_flush;
     logic fence, fence_end;
     logic dtlb_ready, itlb_ready;
-
-    logic cache_rst, ptw_rst;
-    SyncRst rst_cache (clk, rst, cache_rst);
-    SyncRst rst_ptw (clk, rst, ptw_rst);
+    logic cache_req_i, ptw_wb;
 
     Arbiter #(2, `VADDR_SIZE+$bits(TLBInfo)) arbiter_l1tlb (
         .valid({dtlb_io.req, itlb_io.req}),
         .data({{dtlb_io.info, dtlb_io.req_addr}, {itlb_io.info, itlb_io.req_addr}}),
         .ready({dtlb_ready, itlb_ready}),
-        .valid_o(tlbCache_io.req),
+        .valid_o(cache_req_i),
         .data_o({tlbCache_io.info, tlbCache_io.req_addr})
     );
-    TLBCache tlb_cache (.*, .rst(cache_rst), .io(tlbCache_io), .fenceBus(fenceBus_i.mmu));
-    PTW ptw(.*, .rst(ptw_rst), .flush(ptw_flush), .fence_flush(fenceBus.mmu_flush[2]));
+    TLBCache tlb_cache (.*, .io(tlbCache_io), .fenceBus(fenceBus_i.mmu));
+    PTW ptw(.*, .flush(ptw_flush), .fence_flush(fenceBus.mmu_flush[2]));
 
-    assign dtlb_io.ready = dtlb_ready & ~fence;
-    assign itlb_io.ready = itlb_ready & ~fence;
+    assign dtlb_io.ready = dtlb_ready & ~fence & ~ptw_wb;
+    assign itlb_io.ready = itlb_ready & ~fence & ~ptw_wb;
+    assign tlbCache_io.req = cache_req_i & ~ptw_wb;
     assign fenceBus_i.mmu_flush = fenceBus.mmu_flush;
     assign fenceBus_i.mmu_flush_all = fenceBus.mmu_flush_all;
     assign fenceBus_i.vma_vaddr = fenceBus.vma_vaddr;
@@ -51,7 +49,8 @@ module L2TLB(
     end
     assign tlbCache_io.flush = cache_flush | fenceBus.mmu_flush[2];
 
-
+    // tlbcache has higher priority
+    // when ptw wb, tlbcache stop receive request
     logic `N(2) iready, dready;
     Arbiter #(2, `VADDR_SIZE+$bits(TLBInfo)+$bits(PTEEntry)+4) arbiter_itlb (
         .valid({tlbCache_io.hit & (tlbCache_io.info_o.source == 2'b00), ptw_io.valid & (ptw_io.info.source == 2'b00)}),

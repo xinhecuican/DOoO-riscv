@@ -81,6 +81,7 @@ module CSR(
     CAUSE scause;
     SATP satp;
     logic `N(`MXL) scounteren;
+    logic `N(64) senvcfg;
 
     assign mode_m = mode == `M_MODE;
     assign mode_s = mode == `S_MODE;
@@ -183,6 +184,7 @@ endgenerate                                                   \
     `CSR_CMP_DEF(scounteren, scounteren,26,0, `COUNTEREN_MASK)
     `CSR_CMP_DEF(mcounterinhibit,mcounterinhibit,27,0, `COUNTEREN_MASK)
     `CSR_CMP_DEF(menvcfg,menvcfg[31: 0],28,0, 0             )
+    `CSR_CMP_DEF(senvcfg,senvcfg[31: 0],29,0, 0             )
 `ifdef RVF
     `CSR_CMP_DEF(fflags, fcsr[4: 0],    `CSR_NORMAL_NUM,0, 0)
     `CSR_CMP_DEF(frm, fcsr[7: 5],       `CSR_NORMAL_NUM+1,0, 0)
@@ -308,6 +310,7 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(scounteren,  0,              1, 0, 0)
     `CSR_WRITE_DEF(mcounterinhibit, 0,          1, 0, 0)
     `CSR_WRITE_DEF(menvcfg,     0,              0, 0, 0)
+    `CSR_WRITE_DEF(senvcfg,     0,              0, 0, 0)
 `ifdef RV32I
     `CSR_WRITE_DEF(mstatush,    0,              1, 0, 0)
     `CSR_WRITE_DEF(medelegh,    0,              1, 0, 0)
@@ -678,6 +681,7 @@ endgenerate
         csr_l2_io.mpp <= mstatus.mpp;
         csr_l2_io.mprv <= mstatus.mprv;
         csr_l2_io.mode <= mode;
+        csr_l2_io.asid <= satp.asid;
     end
 
 `ifdef DIFFTEST
@@ -686,8 +690,8 @@ endgenerate
         .clock(clk),
         .coreid(mhartid),
         .priviledgeMode(mode),
-        .mstatus({mstatus[31], 32'h0, mstatus[30: 0]}),
-        .sstatus({sstatus[31], 32'h0, sstatus[30: 0]}),
+        .mstatus(mstatus),
+        .sstatus(sstatus),
         .mepc(mepc),
         .sepc(sepc),
         .mtval(mtval),

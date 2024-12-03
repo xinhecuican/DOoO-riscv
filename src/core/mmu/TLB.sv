@@ -48,6 +48,8 @@ module TLB #(
     logic fenceReq, fenceWe;
     logic `N(ADDR_WIDTH) fenceIdx;
     logic `N(`VADDR_SIZE-`TLB_OFFSET) fenceVaddr;
+    logic `N(`TLB_ASID) fence_asid;
+    logic fence_asid_all;
 
 // lookup
     logic `N(DEPTH) hit;
@@ -62,19 +64,27 @@ module TLB #(
     PPNAddr lookup_paddr;
     logic lookup_hit;
     logic mmode;
+    logic `N(`TLB_ASID) lookup_asid;
 generate
     if(FENCEV)begin
         assign lookup_addr = fenceReq ? fenceVaddr : io.vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
+        assign lookup_asid = fenceReq ? fence_asid : csr_tlb_io.asid;
     end
     else begin
         assign lookup_addr = io.vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
+        assign lookup_asid = csr_tlb_io.asid;
     end
 endgenerate
     assign mmode = (csr_tlb_io.mode == 2'b11) | (csr_tlb_io.satp_mode == 0);
 generate
     for(genvar i=0; i<DEPTH; i++)begin
-        // assign asid_hit[i] = en[i] & (entrys[i].asid == csr_tlb_io.asid || entrys[i].g);
-        assign asid_hit[i] = en[i];
+        if(FENCEV)begin
+            assign asid_hit[i] = en[i] & (entrys[i].asid == lookup_asid || entrys[i].g || fenceReq && fence_asid_all);
+        end
+        else begin
+            assign asid_hit[i] = en[i] & (entrys[i].asid == lookup_asid || entrys[i].g);
+        end
+        // assign asid_hit[i] = en[i];
         for(genvar j=0; j<`TLB_PN; j++)begin
             assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == lookup_addr.vpn[j];
         end
@@ -141,6 +151,7 @@ endgenerate
     assign wentry.vpn = io.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign wentry.ppn = io.wentry.ppn;
     assign wentry.uc = pma_uc;
+    assign wentry.asid = csr_tlb_io.asid;
     logic r, w, x;
     assign x = SOURCE == 2'b00;
     assign r = SOURCE == 2'b01;
@@ -214,6 +225,8 @@ generate
         always_ff @(posedge clk)begin
             if(fenceState == IDLE && fenceBus.mmu_flush[SOURCE])begin
                 fenceVaddr <= fenceBus.vma_vaddr[SOURCE][`VADDR_SIZE-1: `TLB_OFFSET];
+                fence_asid <= fenceBus.vma_asid[SOURCE];
+                fence_asid_all <= fenceBus.mmu_asid_all[SOURCE];
             end
         end
         always_ff @(posedge clk, posedge rst)begin

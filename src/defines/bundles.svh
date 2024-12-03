@@ -517,7 +517,7 @@ typedef struct packed {
     logic exc;
     logic uc;
     logic `N(`TLB_PN) size;
-    // logic `N(`TLB_ASID) asid;
+    logic `N(`TLB_ASID) asid;
     VPNAddr vpn;
     PPNAddr ppn;
 } L1TLBEntry;

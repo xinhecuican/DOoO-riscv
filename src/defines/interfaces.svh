@@ -688,10 +688,11 @@ interface CsrL2IO;
     logic mprv;
     logic `N(2) mode;
     logic `N(2) mpp;
+    logic `N(`TLB_ASID) asid;
     PPNAddr ppn;
 
-    modport csr (output sum, mxr, mode, ppn, mprv, mpp);
-    modport tlb (input sum, mxr, mode, ppn, mprv, mpp);
+    modport csr (output sum, mxr, mode, asid, ppn, mprv, mpp);
+    modport tlb (input sum, mxr, mode, asid, ppn, mprv, mpp);
 endinterface
 
 interface CachePTWIO;
@@ -726,6 +727,7 @@ interface FenceBus;
 
     logic `N(3) mmu_flush;
     logic `N(3) mmu_flush_all;
+    logic `N(3) mmu_asid_all;
     logic mmu_flush_end;
     logic `ARRAY(3, `VADDR_SIZE) vma_vaddr;
     logic `ARRAY(3, `TLB_ASID) vma_asid;
@@ -734,17 +736,17 @@ interface FenceBus;
     RobIdx preRobIdx;
     FsqIdxInfo fsqInfo;
 
-    modport csr (output valid, mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, fence_end, robIdx, preRobIdx, fsqInfo, input store_flush_end, mmu_flush_end
+    modport csr (output valid, mmu_flush, mmu_flush_all, mmu_asid_all, vma_vaddr, vma_asid, store_flush, fence_end, robIdx, preRobIdx, fsqInfo, input store_flush_end, mmu_flush_end
 `ifdef EXT_FENCEI
     , output inst_flush, input inst_flush_end
 `endif
     );
-    modport lsu (input valid, mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
+    modport lsu (input valid, mmu_flush, mmu_flush_all, mmu_asid_all, vma_vaddr, vma_asid, store_flush, robIdx, preRobIdx, fsqInfo, fence_end, output store_flush_end);
     modport rob (input fence_end, valid);
     modport dis (input valid);
-    modport mmu (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid);
-    modport l2tlb (input mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, output mmu_flush_end);
-    modport backend (output mmu_flush, mmu_flush_all, vma_vaddr, vma_asid, input mmu_flush_end
+    modport mmu (input mmu_flush, mmu_flush_all, mmu_asid_all, vma_vaddr, vma_asid);
+    modport l2tlb (input mmu_flush, mmu_flush_all, mmu_asid_all, vma_vaddr, vma_asid, output mmu_flush_end);
+    modport backend (output mmu_flush, mmu_flush_all, mmu_asid_all, vma_vaddr, vma_asid, input mmu_flush_end
 `ifdef EXT_FENCEI
     , output inst_flush, input inst_flush_end
 `endif

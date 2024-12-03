@@ -68,7 +68,7 @@ generate
         assign bank_io[i].tlb_bank_idx = tlb_lsu_io.lwb_idx[i];
         assign full[i] = bank_io[i].full;
 
-        assign load_io.dis_en[i] = bank_io[i].en;
+        assign load_io.dis_en[i] = dis_load_io.en[order[i]];
 
         assign load_reg_io.en[i] = bank_io[i].reg_en;
         assign load_reg_io.preg[i] = bank_io[i].rs1;
@@ -217,54 +217,6 @@ endgenerate
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_replyslow (io.reply_slow.issue_idx, replyslow_decode);
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_tlbbank (io.tlb_bank_idx, tlbbank_decode);
 
-// tlb miss resend
-    logic `N(`LOAD_ISSUE_BANK_SIZE) tlb_reply_en, tlb_reply_valid;
-    logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, 2) repeat_times;
-    logic `ARRAY(`LOAD_ISSUE_BANK_SIZE, 4) tlb_counter;
-    logic `N(4) current_tlb_counter;
-    logic `N(2) current_repeat_times;
-
-    always_comb begin
-        case(current_repeat_times)
-        0: current_tlb_counter = 4'h3;
-        1: current_tlb_counter = 4'h7;
-        2: current_tlb_counter = 4'hb;
-        3: current_tlb_counter = 4'hf;
-        endcase
-    end
-generate
-    for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-        assign tlb_reply_valid[i] = tlb_reply_en[i] & (tlb_counter[i] == 0);
-    end
-endgenerate
-
-    always_ff @(posedge clk, posedge rst)begin
-        if(rst == `RST)begin
-            repeat_times <= 0;
-            tlb_counter <= 0;
-            tlb_reply_en <= 0;
-        end
-        else begin
-            for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-                tlb_reply_en[i] <= (tlb_reply_en[i] | io.tlb_en & io.tlb_error & tlbbank_decode[i]) &
-                                   ~backendCtrl.redirect & ~tlb_reply_valid[i];
-            end
-            if(io.tlb_en & io.tlb_error)begin
-                if(repeat_times[io.tlb_bank_idx] < 3)begin
-                    repeat_times[io.tlb_bank_idx] <= repeat_times[io.tlb_bank_idx] + 1;
-                end
-            end
-            for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-                if(io.tlb_en & io.tlb_error & (i == io.tlb_bank_idx))begin
-                    tlb_counter[i] <= current_tlb_counter;
-                end
-                else if(tlb_counter[i] != 0)begin
-                    tlb_counter[i] <= tlb_counter[i] - 1;
-                end
-            end
-        end
-    end
-
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
         io.issue_idx <= selectIdxNext;
@@ -301,10 +253,10 @@ endgenerate
                             (((ready[i]) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
                             ~(io.reply_fast.en & replyfast_decode[i]) &
                             ~(io.reply_slow.en & (io.reply_slow.reason != 2'b11) & replyslow_decode[i]) &
-                            ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i]) & ~tlb_reply_valid[i] &
+                            ~(io.tlb_en & tlbbank_decode[i]) &
                             ~(io.en & free_en[i]);
                 tlbmiss[i] <= (tlbmiss[i] | tlbmiss_valid[i]) &
-                              ~(io.tlb_en & ~io.tlb_error & tlbbank_decode[i] | tlb_reply_valid[i]) & ~backendCtrl.redirect;
+                              ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
             end
 
             if(io.tlb_en & ~io.tlb_error & io.tlb_exception)begin

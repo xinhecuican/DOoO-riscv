@@ -205,7 +205,7 @@ endgenerate
         logic fencei;
 `endif
     } FenceType;
-    logic sfence_vma, vma_clear_all, fence, fencei;
+    logic sfence_vma, vma_clear_all, fence, fencei, asid_clear_all;
     logic fencei_end;
     FsqIdxInfo fence_fsqInfo;
     logic `N(`PREDICTION_WIDTH+1) fsq_offset_n;
@@ -225,6 +225,7 @@ endgenerate
 
     assign fence_fsqInfo.offset = fsq_offset_n[`PREDICTION_WIDTH-1: 0];
     assign vma_clear_all = csr_rdata[0][`VADDR_SIZE-1: 0] == 0;
+    assign asid_clear_all = csr_rdata[0][`TLB_ASID-1: 0] == 0;
 
     LoopSub #(`ROB_WIDTH, 1) sub_rob_idx (1'b1, commitBus.robIdx, preRobIdx);
 
@@ -322,6 +323,7 @@ generate
                 fenceBus.mmu_flush_all[i] <= vma_clear_all;
                 fenceBus.vma_vaddr[i] <= csr_rdata[0][`VADDR_SIZE-1: 0];
                 fenceBus.vma_asid[i] <= csr_rdata[1][`TLB_ASID-1: 0];
+                fenceBus.mmu_asid_all[i] <= asid_clear_all;
             end
         end
     end

@@ -327,7 +327,7 @@ endgenerate
     | {{`LOAD_PIPELINE-1{1'b0}}, amo_req} | amo_conflict;
 `endif
     ;
-    assign rio.req_cancel_s3 = redirect_clear_s3 | rdata_valid;
+    assign rio.req_cancel_s3 = redirect_clear_s3 | rdata_valid | fwd_data_invalid;
 
     always_ff @(posedge clk)begin
         lpaddrNext <= lpaddr;

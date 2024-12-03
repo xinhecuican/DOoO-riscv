@@ -61,6 +61,15 @@ module ROB(
     logic `N(`COMMIT_WIDTH) commit_fp;
 `endif
     logic `N(`EXC_WIDTH) exccode `N(`ROB_SIZE);
+
+    // some instructions take effect before commit(force insts)
+    // eq. mmio load, csr rw, fence
+    // so irq_enable is used to recognize these insts
+    // these insts can commit even irq is high
+    // other insts will cause intrrupt during commit
+	// another way to handle intrrupt is intrrupt after commit
+	// but the last committed inst can't be branch
+	// and signal used to identify irq is sent to force insts
     logic `N(`ROB_SIZE) irq_enable;
     logic `N(`COMMIT_WIDTH) commitValid;
     logic `N($clog2(`COMMIT_WIDTH) + 1) commit_en_num;
@@ -651,7 +660,7 @@ endgenerate
         .clock(clk),
         .coreid(0),
         .intrNO((diff_exc_exist & diff_irq ? diff_exccode : 0)),
-        .cause((diff_exc_exist & ~diff_irq ? diff_exccode : 0)),
+        .cause(0),
         .exceptionPC(pc[0]),
         .exceptionInst(diff_insts[0])
     );

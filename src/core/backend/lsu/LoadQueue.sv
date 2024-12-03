@@ -68,7 +68,7 @@ module LoadQueue(
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign eqIdx[i] = io.data[i].lqIdx.idx[`LOAD_QUEUE_WIDTH-1: $clog2(`LOAD_PIPELINE)];
-        assign full[i] = (load_io.dis_lq_idx[i].idx == head & (load_io.dis_lq_idx[i] ^ hdir));
+        assign full[i] = load_io.dis_en[i] & (load_io.dis_lq_idx[i].idx == head & (load_io.dis_lq_idx[i].dir ^ hdir));
     end
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commitIdx[i] = head + i;
@@ -378,6 +378,7 @@ module LoadQueueBank #(
                 addrValid[dis_lq_idx] <= 1'b0;
                 dataValid[dis_lq_idx] <= 1'b0;
                 uncache[dis_lq_idx] <= 1'b0;
+                miss[dis_lq_idx] <= 1'b0;
             end
             if(en)begin
                 addrValid[eqIdx] <= 1'b1;

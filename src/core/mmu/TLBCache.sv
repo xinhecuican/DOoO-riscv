@@ -126,9 +126,10 @@ interface TLBPageIO #(
 
     logic we;
     logic `N(`VADDR_SIZE) waddr;
+    logic `N(`TLB_ASID) wasid;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) wdata;
 
-    modport page (output hit, meta, entry, input we, waddr, wdata);
+    modport page (output hit, meta, entry, input we, waddr, wdata, wasid);
 endinterface
 
 module TLBPage #(
@@ -140,10 +141,11 @@ module TLBPage #(
     parameter ADDR_WIDTH=$clog2(DEPTH),
     parameter BANK_WIDTH=$clog2(BANK),
     parameter TAG_WIDTH=`TLB_VPN * (`TLB_PN - PN) -ADDR_WIDTH - BANK_WIDTH,
-    parameter INFO_WIDTH=TAG_WIDTH+1+META_WIDTH
+    parameter INFO_WIDTH=TAG_WIDTH+1+META_WIDTH+`TLB_ASID
 )(
     input logic clk,
     input logic rst,
+    CsrL2IO.tlb csr_io,
     TLBCacheIO.cache cache_io,
     TLBPageIO.page page_io,
     CachePTWIO.page ptw_page_io,
@@ -151,6 +153,13 @@ module TLBPage #(
     output logic fence_valid,
     output logic fence_finish
 );
+    typedef struct packed {
+        logic en;
+        logic `N(TAG_WIDTH) tag;
+        logic `N(`TLB_ASID) asid;
+        logic `N(META_WIDTH) meta;
+    } InfoData;
+
     TLBWayIO #(
         .TAG_WIDTH(INFO_WIDTH),
         .DEPTH(DEPTH),
@@ -161,15 +170,18 @@ module TLBPage #(
 
     typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
     FenceState fenceState;
-    logic fenceReq, fenceWe;
+    logic fenceReq, fenceWe, fenceReq_n;
     logic `N(ADDR_WIDTH) fenceIdx;
     logic `N(WAY_NUM) fence_way;
     logic `N(TAG_WIDTH) fence_tag;
+    logic `N(`TLB_ASID) fence_asid;
+    logic fence_asid_all;
     logic req_n;
     logic `N(TAG_WIDTH) tag;
     logic `N(BANK_WIDTH) offset;
     logic `ARRAY(WAY_NUM, BANK * `PTE_BITS) rdata;
-    logic `ARRAY(WAY_NUM, INFO_WIDTH) rtag;
+    InfoData `N(WAY_NUM) rtag;
+    InfoData wtag;
     logic `N(BANK) unaligned;
 
     assign replace_io.hit_en = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN];
@@ -208,8 +220,12 @@ generate
         assign way_io[i].we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN] & replace_io.miss_way[i] & ~(fenceReq | fenceWe);
         assign way_io[i].tag_we = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN] & replace_io.miss_way[i] & ~fenceReq | fenceWe & fence_way[i];
         assign way_io[i].wdata = ptw_page_io.refill_data;
-        assign way_io[i].wtag = fenceWe ? {INFO_WIDTH{1'b0}} : {1'b1, unaligned, ptw_page_io.refill_addr`TLB_VPN_TBUS(PN, DEPTH, BANK)};
+        assign way_io[i].wtag = fenceWe ? {INFO_WIDTH{1'b0}} : wtag;
     end
+    assign wtag.en = 1'b1;
+    assign wtag.meta = unaligned;
+    assign wtag.tag = ptw_page_io.refill_addr`TLB_VPN_TBUS(PN, DEPTH, BANK);
+    assign wtag.asid = csr_io.asid;
 endgenerate
 
     always_ff @(posedge clk)begin
@@ -221,9 +237,12 @@ endgenerate
     logic `N(WAY_NUM) tag_hits;
     logic `ARRAY(BANK, `PTE_BITS) way_data;
     logic `ARRAY(BANK, META_WIDTH/BANK) meta;
+    logic `N(`TLB_ASID) lookup_asid;
+    assign lookup_asid = fenceReq_n ? fence_asid : csr_io.asid;
 generate
     for(genvar i=0; i<WAY_NUM; i++)begin
-        assign tag_hits[i] = way_io[i].tag[INFO_WIDTH-1] & (way_io[i].tag[TAG_WIDTH-1: 0] == tag);
+        assign tag_hits[i] = rtag[i].en & (way_io[i].tag[TAG_WIDTH-1: 0] == tag) &
+                            ((rtag[i].asid == lookup_asid) | fenceReq_n & fence_asid_all);
     end
     
     assign page_io.hit = req_n & (|tag_hits);
@@ -232,18 +251,20 @@ generate
         PEncoder #(WAY_NUM) encoder_hit_idx (tag_hits, hit_way);
         assign way_data = rdata[hit_way];
         assign page_io.entry = way_data[offset];
-        assign meta = rtag[hit_way][INFO_WIDTH-2: TAG_WIDTH];
+        assign meta = rtag[hit_way].meta;
         assign page_io.meta = meta[offset];
     end
     else begin
         assign way_data = rdata;
         assign page_io.entry = way_data[offset];
-        assign meta = rtag[0][INFO_WIDTH-2: TAG_WIDTH];
+        assign meta = rtag[0].meta;
         assign page_io.meta = meta[offset];
     end
 endgenerate
 
-
+    always_ff @(posedge clk)begin
+        fenceReq_n <= fenceReq;
+    end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             fenceState <= IDLE;
@@ -254,6 +275,8 @@ endgenerate
             fence_finish <= 0;
             fence_way <= 0;
             fence_tag <= 0;
+            fence_asid <= 0;
+            fence_asid_all <= 0;
         end
         else begin
             case(fenceState)
@@ -270,13 +293,15 @@ endgenerate
                         fenceReq <= 1'b1;
                         fenceState <= FENCE;
                         fence_tag <= fenceBus.vma_vaddr[2]`TLB_VPN_TBUS(PN, DEPTH, BANK);
+                        fence_asid <= fenceBus.vma_asid[2];
+                        fence_asid_all <= fenceBus.mmu_asid_all[2];
                     end
                     fence_valid <= 1'b1;
                 end
             end
             FENCE: begin
                 fenceReq <= 1'b0;
-                if(!fenceReq)begin
+                if(fenceReq_n)begin
                     fenceWe <= |tag_hits;
                     fence_way <= tag_hits;
                     fenceState <= FENCE_END;

@@ -17,7 +17,7 @@
 `endif \
 )
 
-`define CSR_NORMAL_NUM 29
+`define CSR_NORMAL_NUM 30
 `define CSR_NUM (`CSR_NORMAL_NUM \
 `ifdef RV32I \
     + 3 \
@@ -61,6 +61,7 @@
 `define CSRID_sstatus   12'h100
 `define CSRID_stvec     12'h105
 `define CSRID_scounteren 12'h106
+`define CSRID_senvcfg   12'h10a
 `define CSRID_sip       12'h144
 `define CSRID_sie       12'h104
 `define CSRID_sscratch  12'h140

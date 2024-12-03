@@ -20,10 +20,13 @@ module DTLB(
     Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `STORE_ISSUE_BANK_WIDTH], swb_pipeline);
 
     logic `N(`DTLB_SIZE) replace_en, replace_hit;
+    logic `ARRAY(`DTLB_SIZE, `TLB_ASID+1) replace_asid;
     logic `ARRAY(`DTLB_SIZE, `TLB_PN) replace_pn_valid;
     VPNAddr replace_vpn `N(`DTLB_SIZE);
     logic `ARRAY(`DTLB_SIZE, `TLB_PN) replace_pn_hits;
     VPNAddr replace_cmp_vaddr;
+    logic `N(`TLB_ASID) replace_cmp_asid;
+    logic replace_cmp_g;
     logic `N($clog2(`DTLB_SIZE)) tlb_widx, replace_widx, replace_miss_idx;
 
     typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
@@ -31,6 +34,8 @@ module DTLB(
     logic fenceReq, fenceWe;
     logic `N($clog2(`DTLB_SIZE)) fenceIdx;
     VPNAddr fenceVaddr;
+    logic `N(`TLB_ASID) fence_asid;
+    logic fence_asid_all;
 
     ReplaceIO #(
         .DEPTH(1),
@@ -105,16 +110,17 @@ endgenerate
     TLBRepeater repeater1(.*, .flush(tlb_lsu_io.flush), .in(tlb_l2_io1), .out(tlb_l2_io));
 
 `ifdef RVA
-    logic amo_req, amo_req_s2;
+    logic amo_req, amo_req_s2, amo_req_s3;
     logic `N(`VADDR_SIZE) amo_vaddr;
     always_ff @(posedge clk)begin
         amo_req <= tlb_lsu_io.amo_req;
         amo_vaddr <= tlb_lsu_io.amo_addr;
         amo_req_s2 <= amo_req & ltlb_io[0].miss & ~ltlb_io[0].exception & ~tlb_lsu_io.flush;
+        amo_req_s3 <= amo_req_s2;
     end
 `endif
 
-    logic `N(`LOAD_PIPELINE) lreq, lreq_all_s2, lreq_cancel_s2;
+    logic `N(`LOAD_PIPELINE) lreq, lreq_all_s2, lreq_cancel_s2, lreq_all_s3;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lvaddr;
     logic `N($clog2(`LOAD_PIPELINE)) lreq_idx;
     logic lreq_s2;
@@ -147,10 +153,11 @@ generate
         lreq_addr_s2 <= lvaddr[lreq_idx];
         lidx_s2 <= {lreq_idx, lidx[lreq_idx]};
         lreq_all_s2 <= lreq;
+        lreq_all_s3 <= lreq_all_s2;
     end
 endgenerate
 
-    logic `N(`STORE_PIPELINE) sreq, sreq_all_s2, sreq_cancel_s2;
+    logic `N(`STORE_PIPELINE) sreq, sreq_all_s2, sreq_cancel_s2, sreq_all_s3;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr;
     logic `N($clog2(`STORE_PIPELINE)) sreq_idx;
     logic sreq_s2;
@@ -173,6 +180,7 @@ generate
         sreq_addr_s2 <= svaddr[sreq_idx];
         sreq_all_s2 <= sreq;
         sidx_s2 <= {sreq_idx, sidx[sreq_idx]};
+        sreq_all_s3 <= sreq_all_s2;
     end
 endgenerate
 
@@ -200,8 +208,8 @@ endgenerate
         tlb_l2_io.req_addr <= sreq_s2 ? sreq_addr_s2 : lreq_addr_s2;
 `endif
     end
-    assign tlb_lsu_io.lcancel = lreq_cancel_s4;
-    assign tlb_lsu_io.scancel = sreq_cancel_s4;
+    assign tlb_lsu_io.lcancel = lreq_cancel_s4 | lreq_all_s3 & {`LOAD_PIPELINE{~tlb_l2_io.ready}};
+    assign tlb_lsu_io.scancel = sreq_cancel_s4 | sreq_all_s3 & {`STORE_PIPELINE{~tlb_l2_io.ready}};
 
     always_ff @(posedge clk)begin
         tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & ~tlb_lsu_io.flush & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
@@ -214,10 +222,13 @@ endgenerate
         tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx[`STORE_ISSUE_BANK_WIDTH-1: 0]}};
 `ifdef RVA
         tlb_lsu_io.amo_valid <= amo_req & ~ltlb_io[0].miss | 
+                                amo_req_s3 & ~tlb_l2_io.ready |
                                 (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid;
         tlb_lsu_io.amo_exception <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid ? tlb_l2_io0.exception : ltlb_io[0].exception;
         // 只要是从l2发过来的并且没有exception就需要标记为error，让amo_queue重发请求
-        tlb_lsu_io.amo_error <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid & (tlb_l2_io0.error | ~tlb_l2_io0.error & ~tlb_l2_io0.exception);
+        tlb_lsu_io.amo_error <= (tlb_l2_io0.info_o.source == 2'b11) & tlb_l2_io0.dataValid &
+                                (tlb_l2_io0.error | ~tlb_l2_io0.error & ~tlb_l2_io0.exception) |
+                                amo_req_s3 & ~tlb_l2_io.ready;
         tlb_lsu_io.amo_paddr <= ltlb_io[0].paddr;
 `endif
     end
@@ -267,6 +278,8 @@ endgenerate
     always_ff @(posedge clk)begin
         if(fenceState == IDLE && fenceBus.mmu_flush[1])begin
             fenceVaddr <= fenceBus.vma_vaddr[1][`VADDR_SIZE-1: `TLB_OFFSET];
+            fence_asid <= fenceBus.vma_asid[1];
+            fence_asid_all <= fenceBus.mmu_asid_all[1];
         end
     end
     always_ff @(posedge clk, posedge rst)begin
@@ -283,13 +296,17 @@ endgenerate
                 replace_vpn[tlb_widx] <= tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
                 replace_en[tlb_widx] <= 1'b1;
                 replace_pn_valid[tlb_widx] <= tlb_l2_io0.wpn;
+                replace_asid[tlb_widx] <= {csr_stlb_io.asid, tlb_l2_io0.entry.g};
             end
         end
     end
 generate
     assign replace_cmp_vaddr = fenceState == FENCE ? fenceVaddr : tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+    assign replace_cmp_asid = fenceState == FENCE ? fence_asid : csr_stlb_io.asid;
     for(genvar i=0; i<`DTLB_SIZE; i++)begin
-        assign replace_hit[i] = replace_en[i] & (&(replace_pn_hits[i] | replace_pn_valid[i]));
+        assign replace_hit[i] = (replace_en[i] && 
+                (replace_cmp_asid == replace_asid[i][`TLB_ASID: 1] || replace_asid[i][0] || fence_asid_all && fenceReq)) & 
+                (&(replace_pn_hits[i] | replace_pn_valid[i]));
         for(genvar j=0; j<`TLB_PN; j++)begin
             assign replace_pn_hits[i][j] = replace_vpn[i].vpn[j] == replace_cmp_vaddr.vpn[j];
         end

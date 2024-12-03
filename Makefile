@@ -31,7 +31,8 @@ EMU_THREADS := 4
 TRACE_ARGS := 
 ENABLE_FORK := 0
 ENABLE_DIFF := 1
-DIFF_ARGS :=
+LLVM := 0
+EMU_ARGS :=
 
 export EMU_THREADS
 ifeq ($(WITH_DRAMSIM3),1)
@@ -40,26 +41,29 @@ ifeq ($(WITH_DRAMSIM3),1)
 endif
 ifneq (,$(filter $(EMU_TRACE),1 vcd VCD fst FST))
 	export EMU_TRACE
-	TRACE_ARGS = --dump-wave
+	TRACE_ARGS += --dump-wave
 endif
 ifeq ($(ENABLE_FORK), 1)
 	TRACE_ARGS += --enable-fork
 endif
 ifeq ($(ENABLE_DIFF), 1)
-	DIFF_ARGS := --diff=utils/NEMU/build/riscv64-nemu-interpreter-so
+	TRACE_ARGS += --diff=utils/NEMU/build/riscv64-nemu-interpreter-so
 else
-	DIFF_ARGS := --no-diff
+	TRACE_ARGS += --no-diff
+endif
+ifeq ($(LLVM),1)
+	EMU_ARGS += PGO_WORKLOAD=`realpath config/bench/coremark.riscv.bin` LLVM_PROFDATA=llvm-profdata
 endif
 
 DEFINES += CLK_FREQ=${CLK_FREQ_MHZ};CLK_PERIOD=${CLK_PERIOD};
 
 emu:
 	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "${DEFINES}"
-	make -C utils/difftest emu -j `nproc`
+	make -C utils/difftest emu -j `nproc` $(EMU_ARGS)
 
 emu-run: emu
 	mkdir -p $(LOG_PATH)
-	build/emu -i "${I}" ${DIFF_ARGS} -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH}
+	build/emu -i "${I}" -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH}
 
 sbi:
 	make -C utils/opensbi ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- PLATFORM_RISCV_XLEN=32 PLATFORM=generic FW_PAYLOAD_PATH=${CURDIR}/utils/rv-linux/arch/riscv/boot/Image FW_FDT_PATH=${CURDIR}/utils/opensbi/dts/custom.dtb FW_PAYLOAD_OFFSET=0x400000

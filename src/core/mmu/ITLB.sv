@@ -19,13 +19,14 @@ module ITLB(
     typedef enum {IDLE, WALK_ADDR0, WALK_ADDR1} State;
     State state;
     RequestBuffer req_buf;
+    logic flush_n;
     TLBIO #(`ITLB_SIZE) itlb_io `N(2) ();
     logic miss_end;
     logic `N(2) exception, miss;
     logic `N(`PADDR_SIZE) wpaddr;
 
     TlbL2IO tlb_l2_io0();
-    assign tlb_l2_io0.req = req_buf.req;
+    assign tlb_l2_io0.req = req_buf.req & ~flush_n;
     assign tlb_l2_io0.info = 0;
     assign tlb_l2_io0.req_addr = req_buf.req_addr;
     TLBRepeater #(.FRONT(1)) repeater0(.*, .flush(itlb_cache_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io));
@@ -58,6 +59,9 @@ endgenerate
     assign itlb_cache_io.exception = exception & {2{state == IDLE}};
     assign itlb_cache_io.miss = (|miss) | (state != IDLE);
 
+    always_ff @(posedge clk)begin
+        flush_n <= itlb_cache_io.flush;
+    end
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             state <= IDLE;
@@ -67,6 +71,7 @@ endgenerate
         else if(itlb_cache_io.flush)begin
             state <= IDLE;
             miss_end <= 0;
+            req_buf.req <= 0;
         end
         else begin
             case(state)
