@@ -393,7 +393,9 @@ generate
         loadFwd.mask <= forward_mask_o;
         loadFwd.data <= forward_data_o;
         for(int i=0; i<`LOAD_PIPELINE; i++)begin
-            fwd_data_invalid[i] <= (forward_data_valid_o[i] & forward_mask_o[i]) != forward_mask_o[i];
+            // 当在该次读mask范围内的数据没准备好时
+            fwd_data_invalid[i] <= ((forward_data_valid_o[i] & forward_mask_o[i]) != forward_mask_o[i]) &
+                ~(((forward_data_valid_o[i] & forward_mask_o[i] & loadFwd.fwdData[i].mask)) == loadFwd.fwdData[i].mask);
         end
         
     end
@@ -410,7 +412,7 @@ module ForwardSelect #(
     input logic `ARRAY(DEPTH, `DCACHE_BYTE) mask,
     input logic `ARRAY(DEPTH, `DCACHE_BITS) data,
     input logic `N(DEPTH) dataValid,
-    output logic dir_o,
+    output logic `N(`DCACHE_BYTE) dir_o,
     output logic `N(`DCACHE_BYTE) mask_o,
     output logic `N(`DCACHE_BITS) data_o,
     output logic `N(`DCACHE_BYTE) dataValid_o
@@ -419,7 +421,7 @@ generate
     if(DEPTH == 1)begin
         assign mask_o = mask;
         assign data_o = data;
-        assign dir_o = dir;
+        assign dir_o = {`DCACHE_BYTE{dir}};
     end
     else if(DEPTH == 2)begin
         // 0001 0011 dir = 0
@@ -427,17 +429,17 @@ generate
         // 0 1 10
         logic older;
         assign older = dir[1] ^ dir[0];
-        assign dir_o = (|mask[0]) & older | (~(|mask[1])) ? dir[0] : dir[1];
         for(genvar i=0; i<`DCACHE_BYTE; i++)begin
             logic bigger;
             assign bigger = (mask[0][i] & older) | ~mask[1][i];
-            assign mask_o[i] = bigger ? mask[0][i] : mask[1][i];
+            assign dir_o[i] = bigger ? dir[0] : dir[1];
+            assign mask_o[i] = mask[0][i] | mask[1][i];
             assign data_o[(i+1)*8-1: i*8] = bigger ? data[0][(i+1)*8-1: i*8] : data[1][(i+1)*8-1: i*8];
             assign dataValid_o[i] = bigger ? dataValid[0] : dataValid[1];
         end
     end
     else begin
-        logic `N(2) dir1;
+        logic `ARRAY(2, `DCACHE_BYTE) dir1;
         logic `ARRAY(2, `DCACHE_BYTE) mask1, dataValid1;
         logic `ARRAY(2, `DCACHE_BITS) data1;
         ForwardSelect #(DEPTH/2) select1 (
@@ -461,13 +463,12 @@ generate
             .data_o(data1[1]),
             .dataValid_o(dataValid1[1])
         );
-        logic older;
-        assign older = dir1[1] ^ dir1[0];
-        assign dir_o = (|mask1[0]) & older | (~(|mask1[1])) ? dir1[0] : dir1[1];
         for(genvar i=0; i<`DCACHE_BYTE; i++)begin
-            logic bigger;
+            logic bigger, older;
+            assign older = dir1[1][i] ^ dir1[0][i];
             assign bigger = (mask1[0][i] & older) | ~mask1[1][i];
-            assign mask_o[i] = bigger ? mask1[0][i] : mask1[1][i];
+            assign dir_o[i] = bigger ? dir1[0][i] : dir1[1][i];
+            assign mask_o[i] = mask1[0][i] | mask1[1][i];
             assign data_o[(i+1)*8-1: i*8] = bigger ? data1[0][(i+1)*8-1: i*8] : data1[1][(i+1)*8-1: i*8];
             assign dataValid_o[i] = bigger ? dataValid1[0][i] : dataValid1[1][i];
         end

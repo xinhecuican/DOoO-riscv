@@ -469,6 +469,7 @@ typedef struct packed {
     StoreIdx sqIdx;
     logic `N(`TLB_OFFSET) vaddrOffset;
     logic `N(`TLB_TAG) ptag;
+    logic `N(`DCACHE_BYTE) mask;
 } LoadFwdData;
 
 typedef struct packed {

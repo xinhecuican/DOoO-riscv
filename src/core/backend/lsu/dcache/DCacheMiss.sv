@@ -86,6 +86,10 @@ module DCacheMiss(
     logic w_invalid;
 
 //load enqueue
+    // 有三种情况
+    // 1. 没有命中, 需要mshr_en和en有空闲
+    // 2. 命中，需要mshr_en有空闲
+    // 3. 和前面的请求在同一个缓存行中，需要前一个请求成功并且mshr有空闲
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
     logic `ARRAY(`LOAD_PIPELINE+1, $clog2(`LOAD_PIPELINE+1)) req_order;
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) r_req_order;
@@ -95,7 +99,7 @@ module DCacheMiss(
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) rfree_idx;
 
     CalValidNum #(`LOAD_PIPELINE+1) cal_req_order (free_en, req_order);
-    CalValidNum #(`LOAD_PIPELINE) cal_rorder (io.ren & ~rhit_combine, r_req_order);
+    CalValidNum #(`LOAD_PIPELINE) cal_rorder (io.ren & ~rhit_combine & mshr_remain_valid, r_req_order);
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
@@ -103,7 +107,9 @@ generate
                 assign rfree_eq[i][j] = 0;
             end
             else begin
-                assign rfree_eq[i][j] = io.ren[i] & io.ren[j] & (io.raddr[i]`DCACHE_BLOCK_BUS == io.raddr[j]`DCACHE_BLOCK_BUS);
+                assign rfree_eq[i][j] = io.ren[i] & io.ren[j] & 
+                            (io.raddr[i]`DCACHE_BLOCK_BUS == io.raddr[j]`DCACHE_BLOCK_BUS) &
+                            mshr_remain_valid[i] & mshr_remain_valid[j];
             end
         end
     end
@@ -149,11 +155,11 @@ endgenerate
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign rwfree_eq[i] = io.ren[i] && wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS);
+        assign rwfree_eq[i] = io.ren[i] && wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS) && mshr_remain_valid[i];
     end
 endgenerate
     assign write_req_order = req_order[`LOAD_PIPELINE];
-    assign w_req_order = r_req_order[`LOAD_PIPELINE-1] + (io.ren[`LOAD_PIPELINE-1] & ~rhit_combine[`LOAD_PIPELINE-1]);
+    assign w_req_order = r_req_order[`LOAD_PIPELINE-1] + (io.ren[`LOAD_PIPELINE-1] & ~rhit_combine[`LOAD_PIPELINE-1] & mshr_remain_valid[`LOAD_PIPELINE-1]);
     assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
     assign write_remain_valid = remain_count > w_req_order;
     assign whit_combine = |whit | (|rwfree_eq);

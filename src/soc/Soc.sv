@@ -22,7 +22,7 @@ module Soc(
     ClintIO clint_io();
     logic `N(`IRQ_NUM) irq_source;
     logic uart_irq;
-    logic `N(`NUM_CORE) irq;
+    logic `N(`NUM_CORE) meip, seip;
 
     logic sync_rst_peri, sync_rst_core, core_rst, peri_rst;
     logic peri_rst_s1, core_rst_s1;
@@ -40,10 +40,11 @@ module Soc(
     CPUCore core(
         .clk(clk),
         .rst(core_rst),
-        .ext_irq(irq[0]),
         .axi(core_axi.master),
         .clint_io(clint_io.cpu)
     );
+    assign clint.meip = meip[0];
+    assign clint.seip = seip[0];
 
     localparam AXI_SLAVE_NUM = 2;
 
@@ -199,17 +200,13 @@ module Soc(
     `APB_REQ_ASSIGN(plic_req, plic_apb_io)
     `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
     assign irq_source[0] = uart_irq;
-    apb4_plic_top #(
-        .PADDR_SIZE(`PADDR_SIZE),
-        .PDATA_SIZE(`XLEN),
-        .SOURCES(`IRQ_NUM),
-        .TARGETS(`NUM_CORE)
-    ) plic (
-        .PRESETn(~clint_rst),
-        .PCLK(clk),
+    plic plic_inst (
+        .rstn(~clint_rst),
+        .clk(clk),
         .apb(plic_apb_io),
-        .src(irq_source),
-        .irq(irq)
+        .ints({{32-`IRQ_NUM{1'b0}}, irq_source}),
+        .meip(meip),
+        .seip(seip)
     );
 
 // peri

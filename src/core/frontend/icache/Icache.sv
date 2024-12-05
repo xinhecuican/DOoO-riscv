@@ -120,7 +120,7 @@ endgenerate
     assign abandon_idle = fsq_cache_io.abandon &&
                           fsq_cache_io.fsqIdx == fsq_cache_io.abandonIdx;
 
-    assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall};
+    assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall} & {2{fsq_cache_io.ready}};
     assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
     assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};

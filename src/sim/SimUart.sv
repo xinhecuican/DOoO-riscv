@@ -17,6 +17,8 @@ module SimUart(
     logic tx_fifo_wr;
     logic rx_fifo_rd, fifo_rd_n;
     logic lsr_rd, lsr_rd_n;
+    logic [7: 0] rdata;
+    logic [7: 0] data [15: 0];
 
     assign apb_wr = ~apb.penable && apb.psel &&  apb.pwrite;
     assign apb_rd = ~apb.penable && apb.psel && ~apb.pwrite;
@@ -28,13 +30,25 @@ module SimUart(
     always_ff @(posedge clk)begin
         fifo_rd_n <= rx_fifo_rd;
         lsr_rd_n <= lsr_rd;
+        rdata <= data[apb.paddr[3: 0]];
+    end
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            data <= '{default: 0};
+        end
+        else begin
+            if(apb_wr)begin
+                data[apb.paddr[3: 0]] <= apb.pwdata[7: 0];
+            end
+        end
     end
 
     assign io_uart_out_valid = tx_fifo_wr;
     assign io_uart_out_ch = apb.pwdata[7:0];
     assign io_uart_in_valid = rx_fifo_rd;
     assign apb.prdata = fifo_rd_n ? io_uart_in_ch :
-                        lsr_rd_n ? 8'h60 : 0;
+                        lsr_rd_n ? 8'h60 : rdata;
     assign apb.pslverr = 1'b0;
     assign apb.pready = 1'b1;
 endmodule

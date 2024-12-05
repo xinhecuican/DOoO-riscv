@@ -84,15 +84,18 @@ module SimTop(
 
     ClintIO clint_io();
     logic `N(`IRQ_NUM) irq_source;
-    logic `N(`NUM_CORE) irq;
+    logic `N(`NUM_CORE) meip, seip;
 
     CPUCore core(
         .clk(clock),
         .rst(core_rst),
-        .ext_irq(irq[0]),
         .axi(core_axi.master),
         .clint_io(clint_io.cpu)
     );
+    assign clint_io.meip = meip[0];
+    assign clint_io.seip = seip[0];
+
+
     localparam [2: 0] AXI_SLAVE_NUM = 3;
     localparam xbar_cfg_t crossbar_cfg = '{
         NoSlvPorts: 1,
@@ -209,8 +212,8 @@ module SimTop(
     `AXI_ASSIGN_TO_REQ(irq_req, irq_axi)
     `AXI_ASSIGN_FROM_RESP(irq_axi, irq_resp)
     axi_to_apb #(
-        .NoApbSlaves(`PERIPHERAL_SIZE),
-        .NoRules(`PERIPHERAL_SIZE),
+        .NoApbSlaves(2),
+        .NoRules(2),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
         .AxiIdWidth(`CORE_WIDTH+2),
@@ -252,21 +255,16 @@ module SimTop(
     ApbIO plic_apb_io();
     `APB_REQ_ASSIGN(plic_req, plic_apb_io)
     `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
-    apb4_plic_top #(
-        .PADDR_SIZE(`PADDR_SIZE),
-        .PDATA_SIZE(`XLEN),
-        .SOURCES(`IRQ_NUM),
-        .TARGETS(`NUM_CORE)
-    ) plic (
-        .PRESETn(~peri_rst),
-        .PCLK(clock),
+    plic plic_inst (
+        .rstn(~peri_rst),
+        .clk(clock),
         .apb(plic_apb_io),
-        .src(irq_source),
-        .irq(irq)
+        .ints({{32-`IRQ_NUM{1'b0}}, irq_source}),
+        .meip(meip),
+        .seip(seip)
     );
 
 // peri
-    /* verilator lint_off UNOPTFLAT */
     AxiReq peri_req;
     AxiResp peri_resp;
     ApbReq uart_req;

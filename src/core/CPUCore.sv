@@ -4,7 +4,6 @@
 module CPUCore (
     input logic clk,
     input logic rst,
-    input logic ext_irq,
     AxiIO.master axi,
     ClintIO.cpu clint_io
 );

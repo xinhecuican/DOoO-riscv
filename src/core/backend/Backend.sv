@@ -3,7 +3,6 @@
 module Backend(
     input logic clk,
     input logic rst,
-    input logic ext_irq,
     IfuBackendIO.backend ifu_backend_io,
     FsqBackendIO.backend fsq_back_io,
     CommitBus.rob commitBus_out,

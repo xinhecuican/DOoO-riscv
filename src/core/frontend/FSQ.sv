@@ -571,7 +571,7 @@ endgenerate
     logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) exception_addrs;
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign exception_idxs[i] = exception_head + i;
+        assign exception_idxs[i] = exception_head_n + i;
     end
 endgenerate
     MPRAM #(

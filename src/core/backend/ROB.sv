@@ -649,18 +649,20 @@ endgenerate
 
     logic diff_irq;
     logic diff_exc_exist;
-    logic `N(`EXC_WIDTH) diff_exccode;
+    logic `N(`EXC_WIDTH) diff_exccode, diff_cause;
     always_ff @(posedge clk)begin
         diff_irq <= irq_n;
         diff_exc_exist <= exc_exist_n;
         diff_exccode <= redirect_exccode;
     end
+    assign diff_cause = diff_exc_exist & ~diff_irq &
+        (diff_exccode == `EXC_IPF || diff_exccode == `EXC_LPF || diff_exccode == `EXC_SPF) ? diff_exccode : 0;
 
     DifftestArchEvent difftest_arch_event (
         .clock(clk),
         .coreid(0),
         .intrNO((diff_exc_exist & diff_irq ? diff_exccode : 0)),
-        .cause(0),
+        .cause(diff_cause),
         .exceptionPC(pc[0]),
         .exceptionInst(diff_insts[0])
     );

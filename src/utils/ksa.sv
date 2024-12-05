@@ -8,9 +8,8 @@ module KSA #(parameter PRECISION = 32)
 
     // The total number of P,G levels (k)
     localparam num_steps = $clog2(PRECISION);
-    /* verilator lint_off UNOPTFLAT */
-    wire [num_steps: 0][PRECISION-1:0] generates;
-    wire [num_steps-1: 0][PRECISION-1:0] propagates;
+    wire [num_steps: 0][PRECISION-1:0] generates /*verilator split_var*/;
+    wire [num_steps-1: 0][PRECISION-1:0] propagates /*verilator split_var*/;
 
     genvar k, idx;
     generate

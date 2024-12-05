@@ -15,6 +15,7 @@ module ITLB(
         logic req,req_s2, req_s3;
         logic `N(`VADDR_SIZE) req_addr;
         logic `ARRAY(2, `PADDR_SIZE) paddr;
+        logic `N(`TLB_IDX_SIZE) idx;
     } RequestBuffer;
     typedef enum {IDLE, WALK_ADDR0, WALK_ADDR1} State;
     State state;
@@ -26,9 +27,11 @@ module ITLB(
     logic `N(`PADDR_SIZE) wpaddr;
 
     TlbL2IO tlb_l2_io0();
+    logic tlb_valid;
     assign tlb_l2_io0.req = req_buf.req & ~flush_n;
-    assign tlb_l2_io0.info = 0;
+    assign tlb_l2_io0.info = req_buf.idx;
     assign tlb_l2_io0.req_addr = req_buf.req_addr;
+    assign tlb_valid = tlb_l2_io0.dataValid & tlb_l2_io0.info_o.idx == req_buf.idx;
     TLBRepeater #(.FRONT(1)) repeater0(.*, .flush(itlb_cache_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io));
 
     ReplaceD1IO #(.WAY_NUM(`ITLB_SIZE)) replace_io();
@@ -42,7 +45,7 @@ generate
         assign itlb_io[i].vaddr = itlb_cache_io.vaddr[i];
         assign itlb_io[i].flush = itlb_cache_io.flush;
 
-        assign itlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception & (tlb_l2_io0.info_o.source == 2'b00);
+        assign itlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
         assign itlb_io[i].widx = replace_io.miss_way;
         assign itlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign itlb_io[i].wentry = tlb_l2_io0.entry;
@@ -85,10 +88,12 @@ endgenerate
                     state <= WALK_ADDR0;
                     req_buf.req <= 1'b1;
                     req_buf.req_addr <= req_buf.vaddr[0];
+                    req_buf.idx <= req_buf.idx + 1;
                 end
                 else if(miss[1] & ~(|exception))begin
                     state <= WALK_ADDR1;
                     req_buf.req <= 1'b1;
+                    req_buf.idx <= req_buf.idx + 1;
                     req_buf.req_addr <= req_buf.vaddr[1];
                 end
                 else begin
@@ -97,19 +102,20 @@ endgenerate
             end
             WALK_ADDR0: begin
                 if((req_buf.req_s3 & ~tlb_l2_io0.ready) | 
-                   (tlb_l2_io0.dataValid & tlb_l2_io0.error))begin
+                   (tlb_valid & tlb_l2_io0.error))begin
                     req_buf.req <= 1'b1;
                 end
-                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
+                if(tlb_valid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
                     req_buf.exception[0] <= 1'b1; 
                 end
-                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
+                if(tlb_valid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
                     req_buf.paddr[0] <= wpaddr;
                 end
-                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error)begin
+                if(tlb_valid & ~tlb_l2_io0.error)begin
                     if(req_buf.miss[1])begin
                         state <= WALK_ADDR1;
                         req_buf.req <= 1'b1;
+                        req_buf.idx <= req_buf.idx + 1;
                         req_buf.req_addr <= req_buf.vaddr[1];
                     end
                     else begin
@@ -120,16 +126,16 @@ endgenerate
             end
             WALK_ADDR1: begin
                 if((req_buf.req_s3 & ~tlb_l2_io0.ready) | 
-                   (tlb_l2_io0.dataValid & tlb_l2_io0.error))begin
+                   (tlb_valid & tlb_l2_io0.error))begin
                     req_buf.req <= 1'b1;
                 end
-                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
+                if(tlb_valid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
                     req_buf.paddr[1] <= wpaddr;
                 end
-                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
+                if(tlb_valid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
                     req_buf.exception[1] <= 1'b1; 
                 end
-                if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error)begin
+                if(tlb_valid & ~tlb_l2_io0.error)begin
                     state <= IDLE;
                     miss_end <= 1'b1;
                 end

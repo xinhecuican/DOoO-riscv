@@ -26,7 +26,7 @@ SRC += $(shell find src/core -name "*.v" -or -name "*.sv" -or -name "*.svh")
 SRC += $(shell find src/soc -name "*.v" -or -name "*.sv" -or -name "*.svh")
 
 WITH_DRAMSIM3 := 1
-EMU_TRACE := 1
+EMU_TRACE := fst
 EMU_THREADS := 4
 TRACE_ARGS := 
 ENABLE_FORK := 0

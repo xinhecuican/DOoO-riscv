@@ -31,7 +31,7 @@ module L2TLB(
 
     assign dtlb_io.ready = dtlb_ready & ~fence & ~ptw_wb;
     assign itlb_io.ready = itlb_ready & ~fence & ~ptw_wb;
-    assign tlbCache_io.req = cache_req_i & ~ptw_wb;
+    assign tlbCache_io.req = cache_req_i & ~ptw_wb & ~fence;
     assign fenceBus_i.mmu_flush = fenceBus.mmu_flush;
     assign fenceBus_i.mmu_flush_all = fenceBus.mmu_flush_all;
     assign fenceBus_i.vma_vaddr = fenceBus.vma_vaddr;

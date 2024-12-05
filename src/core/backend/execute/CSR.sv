@@ -4,7 +4,6 @@
 module CSR(
     input logic clk,
     input logic rst,
-    input logic ext_irq,
     input logic `N(`VADDR_SIZE) exc_pc,
     input logic `N(32) trapInst,
     input logic `N(`VADDR_SIZE) exc_vaddr,
@@ -322,7 +321,6 @@ endgenerate                                                             \
     logic `N(`MXL) exccode_decode;
     logic `N(`MXL) edelege;
     logic edelege_valid;
-    /* verilator lint_off UNOPTFLAT */
     logic ret, ret_priv_error, ret_valid;
     assign mvec_pc = mtvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
     assign svec_pc = stvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
@@ -480,24 +478,34 @@ endgenerate                                                             \
                     mepc <= exc_pc;
                 end
             end
-            if(redirect.en & ~ret_valid & ~redirect.irq)begin
-                if(edelege_valid)begin
-                    case(exccode)
-                    `EXC_II: stval <= trapInst;
-                    `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: stval <= exc_pc;
-                    `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
-                    `EXC_LPF, `EXC_SPF: stval <= exc_vaddr;
-                    default: stval <= 0;
-                    endcase
+            if(redirect.en & ~ret_valid)begin
+                if(redirect.irq)begin
+                    if(edelege_valid)begin
+                        stval <= 0;
+                    end
+                    else begin
+                        mtval <= 0;
+                    end
                 end
                 else begin
-                    case(exccode)
-                    `EXC_II: mtval <= trapInst;
-                    `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: mtval <= exc_pc;
-                    `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
-                    `EXC_LPF, `EXC_SPF: mtval <= exc_vaddr;
-                    default: mtval <= 0;
-                    endcase
+                    if(edelege_valid)begin
+                        case(exccode)
+                        `EXC_II: stval <= trapInst;
+                        `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: stval <= exc_pc;
+                        `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
+                        `EXC_LPF, `EXC_SPF: stval <= exc_vaddr;
+                        default: stval <= 0;
+                        endcase
+                    end
+                    else begin
+                        case(exccode)
+                        `EXC_II: mtval <= trapInst;
+                        `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: mtval <= exc_pc;
+                        `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
+                        `EXC_LPF, `EXC_SPF: mtval <= exc_vaddr;
+                        default: mtval <= 0;
+                        endcase
+                    end
                 end
             end
         end
@@ -552,13 +560,13 @@ endgenerate                                                             \
 
 // interrupt
     logic msip, ssip, mtip, stip, meip, seip;
-    logic msip_s1, mtip_s1, meip_s1;
+    logic msip_s1, mtip_s1, meip_s1, seip_s1, seip_s2;
     logic `N(7) deleg_s, irq_enable, irq_valid;
     logic `N(3) irqIdx;
 
     assign mip = '{
         meip: meip,
-        seip: seip,
+        seip: seip | seip_s2,
         msip: msip,
         ssip: ssip,
         mtip: mtip,
@@ -588,19 +596,23 @@ endgenerate
         msip <= msip_s1;
         mtip <= mtip_s1;
         meip <= meip_s1;
+        seip_s2 <= seip_s1;
     end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             msip_s1 <= 0;
             mtip_s1 <= 0;
             meip_s1 <= 0;
+            seip_s1 <= 0;
+            seip <= 0;
             ssip <= 0;
             stip <= 0;
         end
         else begin
             msip_s1 <= clint_io.soft_irq;
             mtip_s1 <= clint_io.timer_irq;
-            meip_s1 <= ext_irq;
+            meip_s1 <= clint_io.meip;
+            seip_s1 <= clint_io.seip;
             if(wen_o[mip_id] | wen_o[sip_id])begin
                 ssip <= wdata_s2[1];
                 stip <= wdata_s2[5];

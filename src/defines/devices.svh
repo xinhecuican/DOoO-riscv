@@ -9,7 +9,7 @@
 `define CLINT_START         `PADDR_SIZE'h08000000
 `define CLINT_END           `PADDR_SIZE'h08010000
 `define PLIC_START          `PADDR_SIZE'h0c000000
-`define PLIC_END            `PADDR_SIZE'h0c001000
+`define PLIC_END            `PADDR_SIZE'h10000000
 
 `define PERIPHERAL_SIZE 1
 `define PERIPHERAL_START    `PADDR_SIZE'h10000000
@@ -162,4 +162,12 @@ typedef struct packed {
     logic       pe;
     logic [7:0] d;
 } rx_d_t;
+
+// plic defines
+`define PLIC_INT_PRIOR   26'h000_0000
+`define PLIC_INT_PEND    26'h000_1000
+`define PLIC_INT_TYPE    26'h000_1080
+`define PLIC_INT_POL     26'h000_1100
+`define PLIC_INT_EN      26'h000_2000
+`define PLIC_PRIOR_TH    26'h020_0000
 `endif

@@ -22,11 +22,10 @@ module InstBuffer (
         logic `N(`IBUF_BANK_WIDTH) rindex;
         logic `ARRAY(WPORT, `IBUF_BANK_WIDTH) windex;
         IBufData `N(WPORT) wdata;
-        IBufData rdata;
     } IBufCtrl;
 
-    /* verilator lint_off UNOPTFLAT */
     IBufCtrl ibuf `N(`IBUF_BANK_NUM);
+    IBufData rdata `N(`IBUF_BANK_NUM);
     logic [$clog2(`IBUF_SIZE): 0] inst_num;
     logic [`BLOCK_INST_SIZE+`IBUF_BANK_SIZE-1: 0] data_valid_shift;
     logic `ARRAY(WPORT, `IBUF_BANK_NUM) inst_buffer_we;
@@ -78,7 +77,7 @@ generate;
             .din   (ibuf[i].wdata  ),
             .waddr (ibuf[i].windex ),
             .raddr (ibuf[i].rindex ),
-            .dout  (ibuf[i].rdata  )
+            .dout  (rdata[i]  )
         );
         logic `N($clog2(`IBUF_BANK_NUM)) writeIdx;
         assign writeIdx = i - tail[$clog2(`IBUF_BANK_NUM)-1: 0];
@@ -93,10 +92,12 @@ generate;
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
         logic `N($clog2(`IBUF_BANK_NUM)) readIdx;
         assign readIdx = head[$clog2(`IBUF_BANK_NUM)-1: 0] + i;
-        assign fetchBundle.fsqInfo[i] = ibuf[readIdx].rdata.fsqInfo;
-        assign fetchBundle.inst[i] = ibuf[readIdx].rdata.inst;
-        assign fetchBundle.iam[i] = ibuf[readIdx].rdata.iam;
-        assign fetchBundle.ipf[i] = ibuf[readIdx].rdata.ipf;
+        IBufData read_data;
+        assign read_data = rdata[readIdx];
+        assign fetchBundle.fsqInfo[i] = read_data.fsqInfo;
+        assign fetchBundle.inst[i] = read_data.inst;
+        assign fetchBundle.iam[i] = read_data.iam;
+        assign fetchBundle.ipf[i] = read_data.ipf;
     end
 endgenerate
     assign fetchBundle.en = out_en_compose;

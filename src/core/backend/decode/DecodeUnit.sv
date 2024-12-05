@@ -4,7 +4,6 @@ module DecodeUnit(
     input logic [31: 0] inst,
     input logic iam,
     input logic ipf,
-    /* verilator lint_off UNOPTFLAT */
     output DecodeInfo info
 );
     logic [4: 0] op;

@@ -73,7 +73,8 @@ endgenerate
             div_robIdx <= 0;
         end
         else begin
-            if(backendCtrl.redirect & div_older | mult_exu_io.div_end |
+            if(backendCtrl.redirect & div_older & ~(enNext[0] & div_s2[0]) | 
+               mult_exu_io.div_end |
                enNext[0] & div_s2[0] & backendCtrl.redirect & ~bigger)begin
                 div_ready <= 1'b1;
             end

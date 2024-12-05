@@ -6,8 +6,7 @@ module BranchPredictor(
 );
     logic `VADDR_BUS pc;
     BranchHistory history;
-    /* verilator lint_off UNOPTFLAT */
-    RedirectCtrl redirect;
+    RedirectCtrl redirect /*verilator split_var*/;
     SquashInfo squashInfo;
     BranchUpdateInfo updateInfo;
     logic squash;

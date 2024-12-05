@@ -39,8 +39,8 @@ generate;
 endgenerate
 
 `ifdef RVC
-    /* verilator lint_off UNOPTFLAT */
-    logic `N(`BLOCK_INST_SIZE) rvc_mask, rvc_en, rvc_en_compress;
+    logic `N(`BLOCK_INST_SIZE) rvc_mask /*verilator split_var*/;
+    logic `N(`BLOCK_INST_SIZE) rvc_en, rvc_en_compress;
     logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx, rvc_offset;
     logic `N(`BLOCK_INST_WIDTH+1) rvc_num;
     logic `N(`PREDICTION_WIDTH) tailIdx_pre, tail_rvi_idx;

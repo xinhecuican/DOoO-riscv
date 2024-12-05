@@ -648,6 +648,7 @@ generate
         assign fwdData[i].sqIdx = load_io.loadIssueData[i].sqIdx;
         assign fwdData[i].vaddrOffset = loadVAddr[i][`TLB_OFFSET-1: 0];
         assign fwdData[i].ptag = lptag[i];
+        assign fwdData[i].mask = lmask[i];
     end
 endgenerate
     assign store_queue_fwd.fwdData = fwdData;

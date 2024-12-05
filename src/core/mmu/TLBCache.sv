@@ -241,7 +241,7 @@ endgenerate
     assign lookup_asid = fenceReq_n ? fence_asid : csr_io.asid;
 generate
     for(genvar i=0; i<WAY_NUM; i++)begin
-        assign tag_hits[i] = rtag[i].en & (way_io[i].tag[TAG_WIDTH-1: 0] == tag) &
+        assign tag_hits[i] = rtag[i].en & (rtag[i].tag == tag) &
                             ((rtag[i].asid == lookup_asid) | fenceReq_n & fence_asid_all);
     end
     

@@ -704,14 +704,11 @@ module LoadUncacheBuffer(
             uncache_addr <= 0;
             uncache_robIdx <= 0;
         end
-        else if(redirect & uncache_bigger & (uncacheState != IDLE))begin
-            uncacheState <= IDLE;
-        end
         else begin
             case(uncacheState)
             IDLE:begin
-                if(uncache_valid &
-                (commitIdx == redirect_robIdxs[uncache_idx_i]) & ~fence_valid | input_en)begin
+                if(((uncache_valid & (commitIdx == redirect_robIdxs[uncache_idx_i])) | input_en) & 
+                    ~redirect & ~fence_valid)begin
                     uncacheState <= LOOKUP;
                     uncache_req <= 1'b1;
                     busyIdx <= uncache_idx_i;

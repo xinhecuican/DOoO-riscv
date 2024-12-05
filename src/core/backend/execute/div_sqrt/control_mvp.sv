@@ -836,7 +836,7 @@ module control_mvp
   logic  [`C_MANT_FP64+1+4:0]                                      Iteration_cell_b_D [3:0];
   logic  [`C_MANT_FP64+1+4:0]                                      Iteration_cell_a_BMASK_D [3:0];
   logic  [`C_MANT_FP64+1+4:0]                                      Iteration_cell_b_BMASK_D [3:0];
-  /* verilator lint_off UNOPTFLAT */
+
   logic                                                           Iteration_cell_carry_D [3:0];
   logic  [`C_MANT_FP64+1+4:0]                                      Iteration_cell_sum_D [3:0];
   logic  [`C_MANT_FP64+1+4:0]                                      Iteration_cell_sum_AMASK_D [3:0];
