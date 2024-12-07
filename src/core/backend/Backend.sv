@@ -137,6 +137,7 @@ module Backend(
     assign fsq_back_io.redirectCsr = backendRedirect.csrOut;
     assign fenceBus_o.mmu_flush = fenceBus.mmu_flush;
     assign fenceBus_o.mmu_flush_all = fenceBus.mmu_flush_all;
+    assign fenceBus_o.mmu_asid_all = fenceBus.mmu_asid_all;
     assign fenceBus_o.vma_vaddr = fenceBus.vma_vaddr;
     assign fenceBus_o.vma_asid = fenceBus.vma_asid;
     assign fenceBus.mmu_flush_end = fenceBus_o.mmu_flush_end;

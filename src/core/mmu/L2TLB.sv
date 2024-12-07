@@ -34,6 +34,7 @@ module L2TLB(
     assign tlbCache_io.req = cache_req_i & ~ptw_wb & ~fence;
     assign fenceBus_i.mmu_flush = fenceBus.mmu_flush;
     assign fenceBus_i.mmu_flush_all = fenceBus.mmu_flush_all;
+    assign fenceBus_i.mmu_asid_all = fenceBus.mmu_asid_all;
     assign fenceBus_i.vma_vaddr = fenceBus.vma_vaddr;
     assign fenceBus_i.vma_asid = fenceBus.vma_asid;
     assign fenceBus.mmu_flush_end = fence_end;

@@ -409,11 +409,12 @@ endgenerate                                                             \
             if((wen_o[fcsr_id] | wen_o[fflags_id]) & (mstatus.fs != 2'b00))begin
                 fcsr[4: 0] <= wdata_s2[4: 0];
             end
-            if(wen_o[mstatus_id] & wdata_s2[14: 12] == 2'b00)begin
-                mstatus.sd <= 1'b0;
+            if((wen_o[mstatus_id] | wen_o[sstatus_id]))begin
+                mstatus.sd <= wdata_s2[14: 13] == 2'b11;
             end
             if(rob_fcsr_io.we)begin
                 mstatus.fs <= 2'b11;
+                mstatus.sd <= 1'b1;
             end
             if(rob_fcsr_io.flag_we)begin
                 fcsr[4: 0] <= rob_fcsr_io.flags;

@@ -714,16 +714,17 @@ endgenerate
     RobIdx exc_robIdx_o;
     logic `N(`VADDR_SIZE) exc_vaddr_o;
 
-    logic ls_exc_older;
+    logic ls_exc_older, lexc_redirect_older, sexc_redirect_older;
     LoopCompare #(`ROB_WIDTH) cmp_ls_exc_older (lexc_robIdx_o, sexc_robIdx_o, ls_exc_older);
-    assign exc_valid_o = lexc_valid_o | sexc_valid_o;
+    LoopCompare #(`ROB_WIDTH) cmp_lexc_older (backendCtrl.redirectIdx, lexc_robIdx_o, lexc_redirect_older);
+    LoopCompare #(`ROB_WIDTH) cmp_sexc_older (backendCtrl.redirectIdx, sexc_robIdx_o, sexc_redirect_older);
+    assign exc_valid_o = lexc_valid_o & (~backendCtrl.redirect | ~lexc_redirect_older) |
+                         sexc_valid_o & (~backendCtrl.redirect | ~sexc_redirect_older);
     assign exc_robIdx_o = lexc_valid_o & ls_exc_older | lexc_valid_o & ~sexc_valid_o ? lexc_robIdx_o : sexc_robIdx_o;
     assign exc_vaddr_o = lexc_valid_o & ls_exc_older | lexc_valid_o & ~sexc_valid_o ? lexc_vaddr_o : sexc_vaddr_o;
 
-    logic exc_redirect_older, exc_pipline_older, exc_redirect_equal, exc_redirect;
-    LoopCompare #(`ROB_WIDTH) cmp_exc_older (backendCtrl.redirectIdx, exc_idx, exc_redirect_older);
-    assign exc_redirect_equal = exc_idx == backendCtrl.redirectIdx;
-    assign exc_redirect = exc_redirect_older | exc_redirect_equal;
+    logic exc_redirect_older, exc_pipline_older;
+    LoopCompare #(`ROB_WIDTH) cmp_exc_older (exc_idx, backendCtrl.redirectIdx, exc_redirect_older);
     LoopCompare #(`ROB_WIDTH) cmp_exc_pipe_older (exc_robIdx_o, exc_idx, exc_pipline_older);
 
     always_ff @(posedge clk, posedge rst)begin
@@ -732,14 +733,16 @@ endgenerate
             exc_idx <= 0;
             exc_vaddr <= 0;
         end
-        else if(backendCtrl.redirect & exc_redirect)begin
-            exc_valid <= 1'b0;
-        end
-        else if(exc_valid_o)begin
-            if(~exc_valid | exc_pipline_older)begin
-                exc_valid <= 1'b1;
-                exc_idx <= exc_robIdx_o;
-                exc_vaddr <= exc_vaddr_o;
+        else begin
+            if(exc_valid_o)begin
+                if(~exc_valid | exc_pipline_older)begin
+                    exc_valid <= 1'b1;
+                    exc_idx <= exc_robIdx_o;
+                    exc_vaddr <= exc_vaddr_o;
+                end
+            end
+            else if(backendCtrl.redirect & ~exc_redirect_older)begin
+                exc_valid <= 0;
             end
         end
     end

@@ -5,6 +5,7 @@ S=0
 E=2000
 WB=0
 WE=0
+T=0
 I ?= utils/NEMU/ready-to-run/microbench.bin
 CONFIG ?= ""
 CLK_FREQ_MHZ ?= 100

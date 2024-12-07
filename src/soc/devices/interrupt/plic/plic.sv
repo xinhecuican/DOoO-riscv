@@ -1,4 +1,5 @@
 `include "../../../../defines/defines.svh"
+`include "../../../../defines/devices.svh"
 
 module plic #(
     parameter INT_NUM = 32
