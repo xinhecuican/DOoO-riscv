@@ -190,8 +190,4 @@ module Backend(
             .redirect(backendRedirect.csrOut),
             .target_pc(exc_pc));
     WriteBack write_back(.*);
-
-// perf
-    `PERF(renameStall, backendCtrl.rename_full)
-    `PERF(disStall, backendCtrl.dis_full)
 endmodule

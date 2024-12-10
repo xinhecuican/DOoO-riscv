@@ -375,7 +375,7 @@ endgenerate                                                             \
                 {mpfhcounter[1], mpfcounter[1]} <= clint_io.mtime;
             end
             if(!mcounterinhibit[2])begin
-                {mpfhcounter[2], mpfhcounter[2]} <= minstret_n;
+                {mpfhcounter[2], mpfcounter[2]} <= minstret_n;
             end
             if(wen_o[mstatus_id])begin
                 mstatus.sie <= wdata_s2[1];
@@ -721,8 +721,10 @@ endgenerate
         .mideleg(mideleg & `MEDELEG_MASK),
         .medeleg(medeleg & `MEDELEG_MASK),
         .mcycle({mpfhcounter[0], mpfcounter[0]}),
-        .minstret({mpfhcounter[1], mpfcounter[1]})
+        .minstret({mpfhcounter[2], mpfcounter[2]})
     );
+    DifftestLogEvent #("cycle") log_event_cycle (clk, 0, {mpfhcounter[0], mpfcounter[0]});
+    DifftestLogEvent #("instret") log_event_instret (clk, 0, {mpfhcounter[2], mpfcounter[2]});
 `endif
 endmodule
 

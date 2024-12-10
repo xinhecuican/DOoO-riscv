@@ -41,4 +41,6 @@ endgenerate
         end
     end
 
+    `PERF(commit_walk_stall, commitWalk.walk & insts.en[0])
+
 endmodule

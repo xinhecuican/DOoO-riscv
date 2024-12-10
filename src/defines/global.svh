@@ -143,6 +143,7 @@ typedef enum logic [1:0] {
 `define ROB_BANK 2
 `define ROB_WIDTH $clog2(`ROB_SIZE)
 `define COMMIT_WIDTH `PIPELINE_WIDTH
+`define WALK_WIDTH (`COMMIT_WIDTH * 2)
 
 // wb
 `define WB_SIZE (`ALU_SIZE+`LSU_SIZE)

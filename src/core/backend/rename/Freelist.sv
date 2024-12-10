@@ -27,10 +27,12 @@ module Freelist #(
     logic `N(`PREG_WIDTH) head, tail, tail_n;
     logic `N($clog2(`FETCH_WIDTH)+1) tail_add_num;
     logic `N(`PREG_WIDTH+1) remainCount;
-    logic `N(`COMMIT_WIDTH) we, walk_we;
+    logic `N(`COMMIT_WIDTH) we;
+    logic `N(`WALK_WIDTH) walk_we;
     logic `ARRAY(`COMMIT_WIDTH, $clog2(`COMMIT_WIDTH)) we_add_idx;
     logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) weIdx;
-    logic `N($clog2(`COMMIT_WIDTH)+1) commit_we_num, walk_we_num;
+    logic `N($clog2(`COMMIT_WIDTH)+1) commit_we_num;
+    logic `N($clog2(`WALK_WIDTH)+1) walk_we_num;
 
 generate
     if(FPV)begin
@@ -44,7 +46,7 @@ generate
 endgenerate
     CalValidNum #(`FETCH_WIDTH) cal_rd_num (we, we_add_idx);
     ParallelAdder #(.DEPTH(`COMMIT_WIDTH), .WIDTH(1)) adder_commit_we_num (we, commit_we_num);
-    ParallelAdder #(.DEPTH(`COMMIT_WIDTH), .WIDTH(1)) adder_walk_we_num (walk_we, walk_we_num);
+    ParallelAdder #(.DEPTH(`WALK_WIDTH), .WIDTH(1)) adder_walk_we_num (walk_we, walk_we_num);
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin : rd_prd
         logic `N(`PREG_WIDTH) prdIdx;

@@ -325,6 +325,9 @@ generate;
         for(genvar i=0; i<READ_PORT; i++)begin
             assign rdata[i] = mem[raddr[i]];
         end
+        for(genvar i=0; i<RW_PORT; i++)begin
+            assign rdata[READ_PORT+i] = mem[waddr[i]];
+        end
     end
     else if(READ_LATENCY == 1)begin
         if(RESET)begin

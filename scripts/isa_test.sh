@@ -54,38 +54,38 @@ for arg in "${args[@]}"; do
     case $arg in
         rv32i)
             for test in "${rv32i[@]}"; do
-                selected_tests+=("${rv32i_prefix}${test}.bin")
+                selected_tests+=("${test}:${rv32i_prefix}${test}.bin")
             done
             ;;
         rv32m)
             for test in "${rv32m[@]}"; do
-                selected_tests+=("${rv32m_prefix}${test}.bin")
+                selected_tests+=("${test}:${rv32m_prefix}${test}.bin")
             done
             ;;
         rv32s)
             for test in "${rv32s[@]}"; do
-                selected_tests+=("${rv32s_prefix}${test}.bin")
+                selected_tests+=("${test}:${rv32s_prefix}${test}.bin")
             done
             ;;
         rv32a)
             for test in "${rv32a[@]}"; do
-                selected_tests+=("${rv32a_prefix}${test}.bin")
+                selected_tests+=("${test}:${rv32a_prefix}${test}.bin")
             done
             ;;
         rv32f)
             for test in "${rv32f[@]}"; do
-                selected_tests+=("${rv32f_prefix}${test}.bin")
+                selected_tests+=("${test}:${rv32f_prefix}${test}.bin")
             done
             ;;
         benchmarks)
             for test in "${benchmarks[@]}"; do
-                selected_tests+=("${benchmarks_prefix}${test}.riscv.bin")
+                selected_tests+=("${test}:${benchmarks_prefix}${test}.riscv.bin")
             done
             ;;
         *)
             # Check if the argument is in the benchmarks array
             if [[ " ${benchmarks[@]} " =~ " ${arg} " ]]; then
-                selected_tests+=("${benchmarks_prefix}${arg}.riscv.bin")
+                selected_tests+=("${arg}:${benchmarks_prefix}${arg}.riscv.bin")
             else
                 echo "未知的参数: $arg"
             fi
@@ -93,6 +93,10 @@ for arg in "${args[@]}"; do
     esac
 done
 
+current_time=log/$(date +"%Y-%m-%d_%H-%M-%S")
 for test in "${selected_tests[@]}"; do
-    make emu-run S=0 E=0 I=$test EMU_TRACE=0
+    test_name=$(echo "$test" | cut -d ':' -f 1)
+    test_path=$(echo "$test" | cut -d ':' -f 2)
+    make emu-run S=0 E=0 I=$test_path EMU_TRACE=0 LOG_PATH=${current_time}/
+    mv ${current_time}/perf_0.log ${current_time}/${test_name}.log
 done

@@ -53,10 +53,10 @@ generate
     ParallelOR #(PREG_SIZE, `FETCH_WIDTH) or_dis_valid (dis_valids, dis_valid);
 endgenerate
 
-    logic `ARRAY(`COMMIT_WIDTH, PREG_SIZE) walk_valids;
+    logic `ARRAY(`WALK_WIDTH, PREG_SIZE) walk_valids;
     logic `N(PREG_SIZE) walk_valid;
 generate
-    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+    for(genvar i=0; i<`WALK_WIDTH; i++)begin
         logic `N(PREG_SIZE) rd_decode;
         Decoder #(PREG_SIZE) decoder_rd (commitWalk.prd[i], rd_decode);
         if(FPV)begin
@@ -67,7 +67,7 @@ generate
                                     & commitWalk.we[i] & ~commitWalk.fp_we[i]}});
         end
     end
-    ParallelOR #(PREG_SIZE, `COMMIT_WIDTH) or_walk_valid (walk_valids, walk_valid);
+    ParallelOR #(PREG_SIZE, `WALK_WIDTH) or_walk_valid (walk_valids, walk_valid);
 endgenerate
 
     always_ff @(posedge clk or posedge rst)begin

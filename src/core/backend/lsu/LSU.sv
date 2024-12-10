@@ -747,6 +747,8 @@ endgenerate
         end
     end
 
+    `PERF(load_conflict, |rio.conflict)
+
 endmodule
 
 interface ViolationIO;

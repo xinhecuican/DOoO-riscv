@@ -97,15 +97,16 @@ module ROB(
 
     logic `N(`FETCH_WIDTH) dis_en;
     logic `N(`FETCH_WIDTH * 2) dis_en_shift;
-    localparam ROB_ADD_WIDTH = $clog2(`FETCH_WIDTH) + 1; 
+    localparam ROB_ADD_WIDTH = $clog2(`WALK_WIDTH) + 1; 
     logic `N(ROB_ADD_WIDTH) dis_validNum, addNum, subNum;
     logic `N(`FETCH_WIDTH) initReady;
     logic `N(`COMMIT_WIDTH) commit_store, commit_mem;
 
     logic `N(`ROB_WIDTH + 1) walk_remainCount_n, ext_tail, walk_remain_count;
-    logic `N(`FETCH_WIDTH) walk_en;
-    logic `N($clog2(`COMMIT_WIDTH)+1) walk_num, walk_normal_num, redirect_num;
-    logic skip_current, walk_skip, walk_skip_exist;
+    logic `N(`WALK_WIDTH) walk_en;
+    logic `N($clog2(`WALK_WIDTH)+1) walk_num, walk_normal_num, redirect_num;
+    logic skip_current, walk_skip, walk_skip_exist, walk_skip_redirect;
+    RobIdx walk_robIdx;
 
     logic exc_exist_n;
     logic `N($clog2(`COMMIT_WIDTH)) excIdx_n;
@@ -114,7 +115,8 @@ module ROB(
     logic `N(`EXC_WIDTH) redirect_exccode;
     logic irq_n, irq_deleg_n;
 
-    RobData `N(`FETCH_WIDTH) robData_pre, robData, rob_wdata_pre, rob_wdata;
+    RobData `N(`FETCH_WIDTH) rob_wdata_pre, rob_wdata;
+    RobData `N(`WALK_WIDTH) robData_pre, robData;
     `CONSTRAINT(COMMIT_WIDTH, `FETCH_WIDTH, "commit width and fetch width must be same")
 generate
     for(genvar i=0; i<`FETCH_WIDTH; i++)begin
@@ -151,21 +153,26 @@ generate
             assign shift_ridx_reverse[i][j] = shift_ridx_decode[j][i];
         end
         assign data_we_shift[i] = shift_idx_decode[i] & {`FETCH_WIDTH{dis_en[i]}};
-        `SIG_N(robData_pre[shift_ridx], robData[i])
+        logic `N($clog2(`FETCH_WIDTH*2)) shift_widx_global, shift_ridx_global;
+        assign shift_widx_global = {1'b1, shift_idx};
+        assign shift_ridx_global = {1'b0, shift_ridx};
+        `SIG_N(robData_pre[shift_ridx_global], robData[i])
+        `SIG_N(robData_pre[shift_widx_global], robData[`FETCH_WIDTH+i])
         assign rob_wdata[i] = rob_wdata_pre[shift_widx_in];
         MPRAM #(
             .WIDTH($bits(RobData)),
             .DEPTH(`ROB_SIZE / `FETCH_WIDTH),
             .READ_PORT(1),
-            .WRITE_PORT(1),
+            .WRITE_PORT(0),
+            .RW_PORT(1),
             .READ_LATENCY(0),
             .RESET(1)
         ) rob_data_ram (
             .clk(clk),
             .rst(rst),
-            .en(1),
+            .en(2'b11),
             .raddr(data_ridx[i]),
-            .rdata(robData_pre[i]),
+            .rdata({robData_pre[`FETCH_WIDTH+i], robData_pre[i]}),
             .we(data_we[i]),
             .waddr(data_widx[i]),
             .wdata(rob_wdata[i]),
@@ -280,18 +287,23 @@ generate
         assign commitBus.fsqInfo[i] = robData[i].fsqInfo;
         assign commitBus.vrd[i] = robData[i].vrd;
         assign commitBus.prd[i] = robData[i].prd;
+`ifdef RVC
+        assign commitBus.rvc[i] = robData[i].rvc;
+`endif
+`ifdef RVF
+        assign commitBus.fp_we[i] = robData[i].fp_we;
+`else
+        assign commitBus.fp_we[i] = 0;
+`endif
+    end
+    for(genvar i=0; i<`WALK_WIDTH; i++)begin
         assign commitWalk.vrd[i] = robData[i].vrd;
         assign commitWalk.prd[i] = robData[i].prd;
         assign commitWalk.old_prd[i] = robData[i].old_prd;
         assign commitWalk.we[i] = robData[i].we;
 `ifdef RVF
-        assign commitBus.fp_we[i] = robData[i].fp_we;
         assign commitWalk.fp_we[i] = robData[i].fp_we;
 `else
-`ifdef RVC
-        assign commitBus.rvc[i] = robData[i].rvc;
-`endif
-        assign commitBus.fp_we[i] = 0;
         assign commitWalk.fp_we[i] = 0;
 `endif
     end
@@ -469,14 +481,14 @@ endgenerate
     assign ext_tail = {tdir ^ backendRedirect.robIdx.dir, tail};
     assign walk_remainCount_n = ext_tail - backendRedirect.robIdx.idx - skip_current;
     assign walk_remain_count = backendRedirect.en ? walk_remainCount_n : walkInfo.remainCount;
-    assign redirect_num = (|walk_remainCount_n[`ROB_WIDTH: $clog2(`COMMIT_WIDTH)]) ? `COMMIT_WIDTH : walk_remainCount_n;
-    assign walk_normal_num =  (|walkInfo.remainCount[`ROB_WIDTH: $clog2(`COMMIT_WIDTH)]) ? `COMMIT_WIDTH : walkInfo.remainCount;
+    assign redirect_num = (|walk_remainCount_n[`ROB_WIDTH: $clog2(`WALK_WIDTH)]) ? `WALK_WIDTH : walk_remainCount_n;
+    assign walk_normal_num =  (|walkInfo.remainCount[`ROB_WIDTH: $clog2(`WALK_WIDTH)]) ? `WALK_WIDTH : walkInfo.remainCount;
     assign walk_num = backendRedirect.en ? redirect_num : walk_normal_num;
     assign walk_en = backendRedirect.en ? (1 << redirect_num) - 1 : (1 << walk_normal_num) - 1;
     // TODO: dataWIdx改为rw port，walk使用widx，从而walk和commit同时进行
-    logic `N(`COMMIT_WIDTH) commit_walk_en;
+    logic `N(`WALK_WIDTH) commit_walk_en;
     logic walk;
-    logic `N($clog2(`COMMIT_WIDTH) + 1) commit_walk_num;
+    logic `N($clog2(`WALK_WIDTH) + 1) commit_walk_num;
     logic walk_start;
     assign commitWalk.en = commit_walk_en;
     assign commitWalk.walk = walk;
@@ -486,12 +498,14 @@ endgenerate
         if(rst == `RST)begin
             walk_state <= 1'b0;
             walkInfo <= '{default: 0};
-            commit_walk_en <= `COMMIT_WIDTH'b0;
+            commit_walk_en <= 0;
             walk <= 1'b0;
             commit_walk_num <= 0;
             walk_start <= 0;
             walk_skip <= 0;
             walk_skip_exist <= 0;
+            walk_robIdx <= 0;
+            walk_skip_redirect <= 0;
             for(int i=0; i<`COMMIT_WIDTH; i++)begin
                 dataRIdx[i] <= i;
             end
@@ -519,11 +533,12 @@ endgenerate
                 walk <= 1'b1;
                 walk_start <= 1'b1;
                 walk_skip <= ~skip_current;
-                walk_skip_exist <= ~skip_current;
             end
 
             if(backendRedirect.en)begin
                 walk_skip_exist <= walk_skip_exist | ~skip_current;
+                walk_robIdx <= backendRedirect.robIdx.idx;
+                walk_skip_redirect <= skip_current;
             end
             if(walk_state && walk_remain_count == 0) begin
                 walk_skip_exist <= 1'b0;
@@ -532,31 +547,24 @@ endgenerate
             if(walk_state && walk_remain_count == 0)begin
                 for(int i=0; i<`COMMIT_WIDTH; i++)begin
                     dataRIdx[i] <= head + i;
+                    dataWIdx[i] <= walk_robIdx + i + walk_skip_redirect;
                 end
             end
             else if(walk_state)begin
                 for(int i=0; i<`COMMIT_WIDTH; i++)begin
                     dataRIdx[i] <= dataRIdx[i] - walk_num;
+                    dataWIdx[i] <= dataWIdx[i] - walk_num;
                 end
             end
             else if(backendRedirect.en)begin
                 for(int i=0; i<`COMMIT_WIDTH; i++)begin
                     dataRIdx[i] <= tail - i - 1;
+                    dataWIdx[i] <= tail - i - `COMMIT_WIDTH - 1;
                 end
             end
             else begin
                 for(int i=0; i<`COMMIT_WIDTH; i++)begin
                     dataRIdx[i] <= dataRIdx[i] + commitNum;
-                end
-            end
-
-            if(backendRedirect.en)begin
-                for(int i=0; i<`FETCH_WIDTH; i++)begin
-                    dataWIdx[i] <= backendRedirect.robIdx.idx + i + skip_current;
-                end
-            end
-            else begin
-                for(int i=0; i<`FETCH_WIDTH; i++)begin
                     dataWIdx[i] <= dataWIdx[i] + dis_validNum;
                 end
             end

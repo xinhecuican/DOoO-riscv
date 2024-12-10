@@ -653,6 +653,7 @@ module LoadUncacheBuffer(
     logic full_pre;
     logic uncache_uext;
     logic input_cache;
+    logic redirect_eq;
 
     PSelector #(`LOAD_UNCACHE_SIZE) selector_free_en(~valid, free_en);
     Encoder #(`LOAD_UNCACHE_SIZE) encoder_free_idx(free_en, freeIdx);
@@ -683,7 +684,7 @@ module LoadUncacheBuffer(
     assign input_eq = data.robIdx == commitIdx;
     assign input_en = input_eq & en;
     assign full_pre = &valid;
-    assign full = full_pre & ~input_eq;
+    assign full = full_pre & ~input_eq | redirect & redirect_eq;
     assign uncache_wb_valid = uncacheState == WRITEBACK;
 
     always_ff @(posedge clk)begin
@@ -692,6 +693,7 @@ module LoadUncacheBuffer(
         end
     end
     LoopCompare #(`ROB_WIDTH) cmp_uncache_bigger (redirectIdx, uncache_robIdx, uncache_bigger);
+    assign redirect_eq = commitIdx == redirectIdx;
 
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
@@ -708,7 +710,7 @@ module LoadUncacheBuffer(
             case(uncacheState)
             IDLE:begin
                 if(((uncache_valid & (commitIdx == redirect_robIdxs[uncache_idx_i])) | input_en) & 
-                    ~redirect & ~fence_valid)begin
+                    ~(redirect & redirect_eq) & ~fence_valid)begin
                     uncacheState <= LOOKUP;
                     uncache_req <= 1'b1;
                     busyIdx <= uncache_idx_i;

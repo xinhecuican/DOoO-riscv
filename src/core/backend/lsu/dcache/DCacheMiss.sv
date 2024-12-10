@@ -456,4 +456,6 @@ endgenerate
 
     assign r_axi_io.r_ready = 1'b1;
 
+    `PERF(load_miss, rlast & (|mshr_hit_combine))
+
 endmodule

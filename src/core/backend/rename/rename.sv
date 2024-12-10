@@ -264,4 +264,6 @@ generate;
         assign rename_io.rename_prd[i] = prd[i];
     end
 endgenerate
+
+    `PERF(rename_full, (|rd_en) & fl_io.full)
 endmodule

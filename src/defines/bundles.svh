@@ -575,13 +575,13 @@ typedef struct packed {
     logic walk;
     logic walkStart;
 
-    logic `N(`COMMIT_WIDTH) en;
-    logic `N(`COMMIT_WIDTH) we;
-    logic `N(`COMMIT_WIDTH) fp_we;
-    logic `N($clog2(`COMMIT_WIDTH) + 1) num;
-    logic `ARRAY(`COMMIT_WIDTH, 5) vrd;
-    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) prd;
-    logic `ARRAY(`COMMIT_WIDTH, `PREG_WIDTH) old_prd;
+    logic `N(`WALK_WIDTH) en;
+    logic `N(`WALK_WIDTH) we;
+    logic `N(`WALK_WIDTH) fp_we;
+    logic `N($clog2(`WALK_WIDTH) + 1) num;
+    logic `ARRAY(`WALK_WIDTH, 5) vrd;
+    logic `ARRAY(`WALK_WIDTH, `PREG_WIDTH) prd;
+    logic `ARRAY(`WALK_WIDTH, `PREG_WIDTH) old_prd;
 } CommitWalk;
 
 `define DIRECTORY_ENTRY_DEF(NUM_ENTRY)  \

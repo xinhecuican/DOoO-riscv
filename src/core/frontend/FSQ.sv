@@ -681,6 +681,10 @@ endgenerate
     `Log(DLog::Debug, T_FSQ, bpu_fsq_io.update, $sformatf("update BP%4d. [%8h %4d]->%8h %8h %b", commit_head, logStream.start_addr, logStream.size, logStream.target, update_target_pc, logError))
     `Log(DLog::Debug, T_FSQ, bpu_fsq_io.squash, $sformatf("squash BP [%d %d].", redirect_idx, redirect_n))
 
+    `PERF(pred_error, commitValid & pred_error & ~commitWBInfo.exception)
+    `PERF(front_redirect_direct, pd_redirect.en & pd_redirect.direct)
+    `PERF(front_redirect_nobranch, pd_redirect.en & ~pd_redirect.direct)
+
 //     logic `N(6) dbg_commit_idx, dbg_commit_head;
 //     logic `ARRAY(64, `FSQ_WIDTH) dbg_fsq_idxs;
 //     logic `ARRAY(`COMMIT_WIDTH, 6) dbg_commit_idxs;
