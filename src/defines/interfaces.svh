@@ -61,7 +61,7 @@ interface BpuRASIO(
     input BranchUpdateInfo updateInfo
 );
     logic request;
-    RasType ras_type;
+    logic [1: 0] ras_type;
     logic en;
     logic `VADDR_BUS target;
     RasEntry entry;
@@ -79,6 +79,7 @@ interface BpuFsqIO;
     logic lastStage;
     logic `N(`FSQ_WIDTH) lastStageIdx;
     PredictionMeta lastStageMeta;
+    PredictionResult lastStagePred;
     logic en;
     logic redirect; // s2 redirect s1
     logic squash; // backend redirect
@@ -86,9 +87,12 @@ interface BpuFsqIO;
     logic stall;
     logic update;
     BranchUpdateInfo updateInfo;
+    logic `N(`VADDR_SIZE) ras_addr; // last stage
 
-    modport fsq (input en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, output stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
-    modport bpu (output en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, input stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
+    modport fsq (input en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, lastStagePred, ras_addr, 
+                output stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
+    modport bpu (output en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, lastStagePred, ras_addr, 
+                input stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
 endinterface
 
 interface FsqCacheIO;
@@ -206,11 +210,15 @@ interface PreDecodeRedirect;
     logic direct;
     FsqIdx fsqIdx;
     FetchStream stream;
+    BranchType br_type;
+    logic [1: 0] ras_type;
     logic `N(`PREDICTION_WIDTH) size;
     logic `N(`PREDICTION_WIDTH) last_offset;
+    logic `N(`FSQ_WIDTH) fsqIdx_pre;
+    logic `N(`VADDR_SIZE) ras_addr;
 
-    modport predecode(output en, exc_en, direct, fsqIdx, stream, size, last_offset);
-    modport redirect(input en, exc_en, direct, fsqIdx, stream, size, last_offset);
+    modport predecode(output en, exc_en, direct, fsqIdx, stream, size, last_offset, br_type, ras_type, fsqIdx_pre, input ras_addr);
+    modport redirect(input en, exc_en, direct, fsqIdx, stream, size, last_offset, br_type, ras_type, fsqIdx_pre, output ras_addr);
 endinterface
 
 interface PreDecodeIBufferIO;
@@ -348,7 +356,7 @@ interface IssueAluIO;
     IntIssueBundle bundle;
     FetchStream stream;
     logic `N(`VADDR_SIZE) vaddr;
-    RasType ras_type;
+    logic [1: 0] ras_type;
     BranchType br_type;
 
     modport alu (input en, rs1_data, rs2_data, status, bundle, stream, vaddr, ras_type, br_type, output valid);

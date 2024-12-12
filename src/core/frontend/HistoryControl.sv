@@ -43,7 +43,7 @@ endgenerate
     assign history.ghistIdx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
                        prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
     assign history.tage_history = tage_history;
-    parameter [8: 0] tage_hist_length `N(`TAGE_BANK) = {9'd8, 9'd13, 9'd32, 9'd119};
+    parameter [6: 0] tage_hist_length `N(`TAGE_BANK) = {7'd8, 7'd13, 7'd32, 7'd119};
 generate;
     for(genvar i=0; i<`TAGE_BANK; i++)begin
         logic [`SLOT_NUM-1: 0] reverse_dir;

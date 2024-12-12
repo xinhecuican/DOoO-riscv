@@ -50,7 +50,7 @@ endfunction
 `define PREDICTION_WIDTH $clog2(`BLOCK_INST_SIZE)
 `define SLOT_NUM 2
 
-`define GHIST_SIZE 256
+`define GHIST_SIZE 128
 `define GHIST_WIDTH $clog2(`GHIST_SIZE)
 `define PHIST_SIZE 32 // path hist
 

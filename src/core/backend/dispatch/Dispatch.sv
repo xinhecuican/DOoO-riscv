@@ -61,7 +61,7 @@ generate
         logic push, pop;
         logic `N(`PREG_WIDTH) rd, rs;
         logic `N(`BRANCHOP_WIDTH) op;
-        RasType ras_type, ras_type_all;
+        logic [1: 0] ras_type, ras_type_all;
         BranchType br_type;
         assign rd = di.rd;
         assign rs = di.rs1;
@@ -81,7 +81,12 @@ generate
                 br_type = DIRECT;
             end
             else if(op == `BRANCH_JALR)begin
-                br_type = INDIRECT;
+                if(push | pop)begin
+                    br_type = CALL;
+                end
+                else begin
+                    br_type = INDIRECT;
+                end
             end
             else begin
                 br_type = CONDITION;
@@ -90,7 +95,7 @@ generate
         IntIssueBundle bundle;
         assign bundle = '{intv: di.intv, branchv: di.branchv, uext: di.uext, immv: di.immv,
                         intop: di.intop, branchop: di.branchop, imm: di.imm,
-                        br_type: br_type, ras_type: ras_type,
+                        br_type: br_type, ras_type: ras_type_all,
                         fsqInfo: rename_dis_io.op[i].fsqInfo
 `ifdef RVC
                         , rvc: di.rvc

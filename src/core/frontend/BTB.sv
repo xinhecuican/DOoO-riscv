@@ -43,8 +43,8 @@ module BTB (
     localparam INDEX_POS = `BTB_SET_WIDTH+1+$clog2(`BTB_WAY);
     BTBIndexGen index_gen(btb_io.pc, index);
     BTBIndexGen update_index_gen(btb_io.updateInfo.start_addr, updateIdx);
-    Decoder #(`BTB_WAY) decoder_bank(btb_io.pc[1+$clog2(`BTB_WAY): 2], bank_en);
-    Decoder #(`BTB_WAY) decoder_we(btb_io.updateInfo.start_addr[1+$clog2(`BTB_WAY): 2], bank_we);
+    Decoder #(`BTB_WAY) decoder_bank(btb_io.pc[`INST_OFFSET+$clog2(`BTB_WAY)-1: `INST_OFFSET], bank_en);
+    Decoder #(`BTB_WAY) decoder_we(btb_io.updateInfo.start_addr[`INST_OFFSET+$clog2(`BTB_WAY)-1: `INST_OFFSET], bank_we);
     BTBTagGen #(
         `BTB_SET_WIDTH + `INST_OFFSET + $clog2(`BTB_WAY), 
         `BTB_TAG_SIZE
@@ -79,7 +79,7 @@ module BTB (
 
     always_ff @(posedge clk)begin
         if(~btb_io.redirect.stall)begin
-            s2_bank <= btb_io.pc[1+$clog2(`BTB_WAY): `INST_OFFSET];
+            s2_bank <= btb_io.pc[`INST_OFFSET+$clog2(`BTB_WAY)-1: `INST_OFFSET];
         end
     end
 

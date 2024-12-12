@@ -77,10 +77,10 @@ module FSQ (
         .clk(clk),
         .rst(rst),
         .en(1'b1),
-        .we(queue_we),
-        .waddr(write_tail),
+        .we(bpu_fsq_io.lastStage),
+        .waddr(bpu_fsq_io.lastStageIdx),
         .raddr(squashIdx),
-        .wdata(bpu_fsq_io.prediction.redirect_info),
+        .wdata(bpu_fsq_io.lastStagePred.redirect_info),
         .rdata(u_redirectInfo),
         .ready()
     );
@@ -119,6 +119,24 @@ module FSQ (
         .we(bpu_fsq_io.lastStage),
         .waddr(bpu_fsq_io.lastStageIdx),
         .wdata(bpu_fsq_io.lastStageMeta),
+        .ready()
+    );
+
+    // for predecode redirect
+    MPRAM #(
+        .WIDTH($bits(`VADDR_SIZE)),
+        .DEPTH(`FSQ_SIZE),
+        .READ_PORT(1),
+        .WRITE_PORT(1)
+    ) ras_addr_ram (
+        .clk(clk),
+        .rst(rst),
+        .en(1'b1),
+        .raddr(pd_redirect.fsqIdx_pre),
+        .rdata(pd_redirect.ras_addr),
+        .we(bpu_fsq_io.lastStage),
+        .waddr(bpu_fsq_io.lastStageIdx),
+        .wdata(bpu_fsq_io.ras_addr),
         .ready()
     );
 
@@ -263,8 +281,8 @@ endgenerate
 
     CondPredInfo squash_pred_info;
     BranchType squash_br_type;
-    RasType squash_ras_type;
-    logic squash_redirect_en, squsah_pd_en;
+    logic [1: 0] squash_ras_type;
+    logic squash_redirect_en, squash_pd_en;
     logic `VADDR_BUS pd_start_addr;
     logic `N(`PREDICTION_WIDTH) squash_offset;
     assign n_commit_head = commitValid ? commit_head + 1 : commit_head;
@@ -275,10 +293,11 @@ endgenerate
     assign bpu_fsq_io.squashInfo.target_pc = memRedirectValid ? searchStream.target : squash_target_pc;
     assign bpu_fsq_io.squashInfo.predInfo = squash_pred_info;
     assign bpu_fsq_io.squashInfo.br_type = squash_br_type;
-    assign bpu_fsq_io.squashInfo.ras_type = squash_ras_type;
+    assign bpu_fsq_io.squashInfo.ras_type = memRedirectValid ? u_redirectInfo.rasInfo.ras_type : squash_ras_type;
+    assign bpu_fsq_io.squashInfo.squash_front = ~squash_redirect_en & squash_pd_en;
     always_ff @(posedge clk)begin
         squash_redirect_en <= fsq_back_io.redirectBr.en;
-        squsah_pd_en <= pd_redirect.en;
+        squash_pd_en <= pd_redirect.en;
         pd_start_addr <= pd_redirect.stream.start_addr;
         memRedirectValid <= fsq_back_io.redirect.en & ~fsq_back_io.redirectBr.en & ~fsq_back_io.redirectCsr.en;
         bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirect.en;
@@ -287,8 +306,8 @@ endgenerate
                             fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.target : 
                                                         pd_redirect.stream.target;
         squash_pred_info <= fsq_back_io.redirectBr.en | fsq_back_io.redirectCsr.en ? redirectCondInfo : pd_condInfo;
-        squash_br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : DIRECT;
-        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : NONE;
+        squash_br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : pd_redirect.br_type;
+        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : pd_redirect.ras_type;
         squash_offset <= fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.offset : pd_redirect.stream.size;
     end
 `ifdef RVC
@@ -416,7 +435,7 @@ endgenerate
         logic `N(`PREDICTION_WIDTH) size;
 `endif
         BranchType br_type;
-        RasType ras_type;
+        logic [1: 0] ras_type;
         logic `N(`VADDR_SIZE) target;
         logic `N(`PREDICTION_WIDTH) offset;
     } WBInfo;
@@ -440,7 +459,8 @@ endgenerate
 `ifdef RVC
                 pd_redirect.stream.rvc, pd_redirect.size,
 `endif
-                DIRECT, NONE, pd_redirect.stream.target, pd_redirect.stream.size};
+                pd_redirect.br_type, pd_redirect.ras_type, 
+                pd_redirect.stream.target, pd_redirect.stream.size};
             end
             if(rd.en | cr.en)begin
                 wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {cr.en, rd.taken, 
@@ -522,13 +542,12 @@ endgenerate
         .allocSlot(allocSlot)
     );
 
-    logic update_taken;
+    logic update_taken, update_tail_taken;
     logic `N(`VADDR_SIZE) update_start_addr;
     logic `N(`VADDR_SIZE) update_target_pc;
     BTBUpdateInfo update_btb_entry; 
     logic `N(`SLOT_NUM) update_real_taken;
     logic `N(`SLOT_NUM) update_alloc_slot;
-    assign bpu_fsq_io.updateInfo.redirectInfo = u_redirectInfo;
     assign bpu_fsq_io.updateInfo.meta = updateMeta;
     assign bpu_fsq_io.updateInfo.taken = update_taken;
     assign bpu_fsq_io.updateInfo.start_addr = update_start_addr;
@@ -536,6 +555,8 @@ endgenerate
     assign bpu_fsq_io.updateInfo.btbEntry = update_btb_entry;
     assign bpu_fsq_io.updateInfo.realTaken = update_real_taken;
     assign bpu_fsq_io.updateInfo.allocSlot = update_alloc_slot;
+    assign bpu_fsq_io.updateInfo.tailTaken = update_tail_taken;
+    assign bpu_fsq_io.updateInfo.fsqIdx = commit_head;
     always_ff @(posedge clk)begin
         bpu_fsq_io.update <= commitValid;
         update_taken <= commitWBInfo.taken;
@@ -544,6 +565,8 @@ endgenerate
         update_btb_entry <= pred_error ? commitUpdateEntry : oldEntry;
         update_real_taken <= realTaken;
         update_alloc_slot <= allocSlot;
+        update_tail_taken <= pred_error ? commitWBInfo.br_type != CONDITION :
+                            ~(|u_predInfo.condHist) & commitStream.taken;
     end
 
     logic `N(`FSQ_WIDTH) exception_head, exception_head_n;
@@ -737,7 +760,7 @@ module BTBEntryGen(
     input FsqIdxInfo fsqInfo,
     input logic `N(`PREDICTION_WIDTH) normalOffset,
     input BranchType br_type,
-    input RasType ras_type,
+    input logic [1: 0] ras_type,
     input logic pred_error,
     input logic exception,
 `ifdef RVC

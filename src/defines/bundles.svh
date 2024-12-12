@@ -22,7 +22,7 @@ typedef struct packed {
     logic rvc;
 `endif
     BranchType br_type;
-    RasType ras_type;
+    logic [1: 0] ras_type;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `N(`JALR_OFFSET) target;
     TargetState tar_state;
@@ -57,6 +57,8 @@ typedef struct packed {
 } TageEntry;
 
 typedef struct packed {
+    logic `ARRAY(`TAGE_BANK, `TAGE_SET_WIDTH) idxs;
+    logic `ARRAY(`TAGE_BANK, `TAGE_TAG_SIZE) tags;
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_CTR_SIZE) tage_ctrs;
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_U_SIZE) u;
     logic `ARRAY(`TAGE_BASE_CTR, `SLOT_NUM) base_ctr;
@@ -100,6 +102,7 @@ typedef struct packed {
     logic `N(`RAS_WIDTH) rasBottom;
     logic ras_tdir;
     logic ras_bdir;
+    logic [1: 0] ras_type; // for mem redirect
 } RasRedirectInfo;
 
 typedef struct packed {
@@ -118,9 +121,10 @@ typedef struct packed {
 
 typedef struct packed {
     logic en;
+    logic btb_hit;
     FetchStream stream;
     BranchType br_type;
-    RasType ras_type;
+    logic [1: 0] ras_type;
     BTBUpdateInfo btbEntry;
     logic `N(`PREDICT_STAGE-1) redirect;
     logic `N(2) cond_num;
@@ -138,7 +142,9 @@ typedef struct packed {
 `endif
     logic branch;
     logic direct;
+    logic jump;
     logic `VADDR_BUS target;
+    logic [1: 0] ras_type;
 } PreDecodeBundle;
 
 typedef struct packed {
@@ -158,22 +164,26 @@ typedef struct packed {
 `ifdef RVC
     logic rvc;
 `endif
+    logic squash_front;
     logic `VADDR_BUS start_addr;
     logic `N(`PREDICTION_WIDTH) offset;
     logic `VADDR_BUS target_pc;
     RedirectInfo redirectInfo;
     CondPredInfo predInfo;
     BranchType br_type;
-    RasType ras_type;
+    logic [1: 0] ras_type;
 } SquashInfo;
 
 typedef struct packed {
     logic taken;
+    logic tailTaken;
+`ifdef DIFFTEST
+    logic `N(`FSQ_WIDTH) fsqIdx;
+`endif
     logic `N(`SLOT_NUM) realTaken;
     logic `N(`SLOT_NUM) allocSlot;
     logic `VADDR_BUS start_addr;
     logic `VADDR_BUS target_pc;
-    RedirectInfo redirectInfo;
     BTBUpdateInfo btbEntry;
     PredictionMeta meta;
 } BranchUpdateInfo;
@@ -290,7 +300,7 @@ typedef struct packed {
     logic `N(`BRANCHOP_WIDTH) branchop;
     logic `N(`DEC_IMM_WIDTH) imm;
     BranchType br_type;
-    RasType ras_type;
+    logic [1: 0] ras_type;
     FsqIdxInfo fsqInfo;
 } IntIssueBundle;
 
@@ -370,7 +380,7 @@ typedef struct packed {
     logic taken;
     logic `N(`VADDR_SIZE) target;
     BranchType br_type;
-    RasType ras_type;
+    logic [1: 0] ras_type;
 } BranchRedirectInfo;
 
 typedef struct packed {
@@ -394,7 +404,7 @@ typedef struct packed {
     logic rvc;
 `endif
     logic `N(`VADDR_SIZE) target;
-    RasType ras_type;
+    logic [1: 0] ras_type;
     BranchType br_type;
 } BranchUnitRes;
 

@@ -5,11 +5,8 @@ module Tage(
     input logic rst,
     BpuTageIO.tage tage_io
 );
-`ifdef DIFFTEST
+
 	typedef struct packed {
-`else
-	typedef struct {
-`endif
 		logic en;
 		logic `N(`TAGE_SET_WIDTH) lookup_idx;
 		logic `N(`TAGE_TAG_SIZE) lookup_tag;
@@ -31,6 +28,8 @@ module Tage(
 	logic `N(`SLOT_NUM) prediction `N(`TAGE_BANK);
 	logic `ARRAY(`SLOT_NUM, `TAGE_ALT_CTR) altCtr;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) provider;
+	logic `ARRAY(`TAGE_BANK, `TAGE_SET_WIDTH) lookup_idx_n;
+	logic `ARRAY(`TAGE_BANK, `TAGE_TAG_SIZE) lookup_tag_n;
 	parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd2048, 13'd2048, 13'd2048, 13'd2048};
     generate;
         for(genvar i=0; i<`TAGE_BANK; i++)begin
@@ -59,6 +58,10 @@ module Tage(
 				.compress2(tage_io.history.tage_history.fold_tag2[i]),
 				.tag(bank_ctrl[i].lookup_tag)
 			);
+			always_ff @(posedge clk)begin
+				lookup_idx_n[i] <= bank_ctrl[i].lookup_idx;
+				lookup_tag_n[i] <= bank_ctrl[i].lookup_tag;
+			end
 			assign bank_ctrl[i].en = 1'b1;
 			TageTable #(
 				.HEIGHT(SET_SIZE)
@@ -125,6 +128,8 @@ module Tage(
 	assign tage_io.meta.provider = provider;
 	assign tage_io.meta.base_ctr = base_ctr;
 	assign tage_io.meta.predTaken = tage_prediction;
+	assign tage_io.meta.idxs = lookup_idx_n;
+	assign tage_io.meta.tags = lookup_tag_n;
 
 	// update
 	logic `N(`SLOT_NUM) predError, predTaken;
@@ -193,31 +198,8 @@ generate
 		assign bank_ctrl[i].update_u = update_u;
 		assign bank_ctrl[i].update_u_en = update_u_en;
 		assign bank_ctrl[i].update_origin_ctr = u_ctrs[i];
-		localparam SET_SIZE = tage_set_size[i];
-		GetIndex #(
-			.COMPRESS_LENGTH(`TAGE_SET_WIDTH),
-			.INDEX_SIZE($clog2(SET_SIZE)),
-			.BANK(i)
-		)get_index(
-			.pc(tage_io.updateInfo.start_addr),
-			// .path_hist(tage_io.history.phist),
-			.compress(tage_io.updateInfo.redirectInfo.tage_history.fold_idx[i]),
-			.index(bank_ctrl[i].update_idx)
-		);
-		GetTag #(
-			.COMPRESS1_LENGTH(12),
-			.COMPRESS2_LENGTH(10),
-			.INDEX_SIZE(`TAGE_SET_WIDTH),
-			.TAG_SIZE(`TAGE_TAG_SIZE)
-		) get_tag(
-			.pc(tage_io.updateInfo.start_addr),
-			// .path_hist(tage_io.history.phist),
-			.compress_index1(i == 0 ? `TAGE_SET_WIDTH'b0 : tage_io.updateInfo.redirectInfo.tage_history.fold_idx[i-1]),
-			.compress_index2(tage_io.updateInfo.redirectInfo.tage_history.fold_idx[i]),
-			.compress1(tage_io.updateInfo.redirectInfo.tage_history.fold_tag1[i]),
-			.compress2(tage_io.updateInfo.redirectInfo.tage_history.fold_tag2[i]),
-			.tag(bank_ctrl[i].update_tag)
-		);
+		assign bank_ctrl[i].update_idx = meta.idxs[i];
+		assign bank_ctrl[i].update_tag = meta.tags[i];
 	end
 endgenerate
 

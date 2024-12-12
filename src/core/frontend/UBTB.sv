@@ -128,9 +128,10 @@ endgenerate
 
     always_comb begin
         ubtb_io.result.en = ~ubtb_io.redirect.flush & ~ubtb_io.redirect.s2_redirect & ubtb_io.redirect.tage_ready;
+        ubtb_io.result.btb_hit = lookup_hit;
         ubtb_io.result.stream.taken = lookup_hit & ((|br_takens) | (tail_taken));
         ubtb_io.result.br_type = |br_takens ? CONDITION : lookup_entry.tailSlot.br_type;
-        ubtb_io.result.ras_type = NONE;
+        ubtb_io.result.ras_type = |br_takens ? NONE : lookup_entry.tailSlot.ras_type;
         ubtb_io.result.stream.start_addr = ubtb_io.pc;
 
         ubtb_io.result.stream.target = ~(lookup_hit) ? ubtb_io.pc + `BLOCK_SIZE :

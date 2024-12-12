@@ -64,7 +64,7 @@ module BranchModel(
     input logic `N(`VADDR_SIZE) vaddr,
     input logic `N(`PREDICTION_WIDTH) offset,
     input BranchType br_type,
-    input RasType ras_type,
+    input logic [1: 0] ras_type,
     output BranchUnitRes branchRes,
     output logic `N(`XLEN) result
 );

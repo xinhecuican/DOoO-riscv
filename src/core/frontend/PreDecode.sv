@@ -185,10 +185,12 @@ endgenerate
 `else
     assign nobranch_error = (stream_valid & stream_next.taken & (~bundles_next[tailIdx].branch));
 `endif
+    logic `N(`VADDR_SIZE) ras_addr;
+    assign ras_addr = pd_redirect.ras_addr;
 
     assign jump_error = jump_en & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
                             (stream_next.taken & ((tailIdx != selectIdx) |
-                            (bundles_next[tailIdx].direct & (stream_next.target != bundles_next[tailIdx].target)))));
+                            (bundles_next[tailIdx].jump & (stream_next.target != bundles_next[tailIdx].target)))));
 
     assign redirect_en = jump_error | nobranch_error;
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
@@ -197,9 +199,13 @@ endgenerate
                               nobranch_error ? tailIdx : tailIdx + shiftIdx;
     assign pd_redirect.direct = jump_en;
     assign pd_redirect.fsqIdx = fsqIdx;
+    assign pd_redirect.fsqIdx_pre = cache_pd_io.fsqIdx.idx;
     assign pd_redirect.stream.taken = ~nobranch_error;
     assign pd_redirect.stream.start_addr = start_addr_n;
-    assign pd_redirect.stream.target = jump_en ? bundles_next[selectIdx].target : next_pc;
+    assign pd_redirect.stream.target = jump_en ? (bundles_next[selectIdx].ras_type == POP ? 
+                                        ras_addr : bundles_next[selectIdx].target) : next_pc;
+    assign pd_redirect.br_type = jump_en & bundles_next[selectIdx].ras_type != NONE ? CALL : DIRECT;
+    assign pd_redirect.ras_type = jump_en ? bundles_next[selectIdx].ras_type : NONE;
 `ifdef RVC
     assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : 0;
     assign pd_redirect.last_offset = jump_en ? rvc_offset[selectIdx] + shiftOffset :
@@ -252,9 +258,10 @@ module PreDecoder(
     assign op = inst[6: 0];
     assign rs = inst[19: 15];
     assign rd = inst[11: 7];
+    assign push = rd == 1 || rd == 5;
+    assign pop = rs == 1 || rs == 5;
 
     logic jal, jalr, branch;
-    RasType ras_type;
     assign jal = op[6] & op[5] & ~op[4] & op[3] & op[2] & op[1] & op[0];
     assign jalr = op[6] & op[5] & ~op[4] & ~op[3] & op[2] & op[1] & op[0];
     assign branch = op[6] & op[5] & ~op[4] & ~op[3] & ~op[2] & op[1] & op[0];
@@ -275,6 +282,8 @@ module PreDecoder(
     assign sign1 = ~cinst[1] & cinst[0];
     assign sign2 = cinst[1] & ~cinst[0];
     assign normal = cinst[1] & cinst[0];
+    assign full_rd = cinst[11: 7];
+    assign full_rs2 = cinst[6: 2];
     assign funct3_0 = ~funct3[2] & ~funct3[1] & ~funct3[0];
     assign funct3_1 = ~funct3[2] & ~funct3[1] & funct3[0];
     assign funct3_2 = ~funct3[2] & funct3[1] & ~funct3[0];
@@ -301,10 +310,15 @@ module PreDecoder(
     assign pdBundle.rvc = ~normal;
     assign pdBundle.branch = jal | jalr | branch | cj | cjal | cjr | cjalr | cbeqz | cbnez;
     assign pdBundle.target = addr + offset_o;
-    assign pdBundle.direct = jal | cj | cjal;
+    assign pdBundle.direct = jal | cj | cjal | jalr & pop | cjr | cjalr;
+    assign pdBundle.jump = jal | cj | cjal;
+    assign pdBundle.ras_type = {(jal | jalr) & push | cjal | cjalr,
+                                jalr & pop | cjr | cjalr};
 `else
     assign pdBundle.branch = jal | jalr | branch;
     assign pdBundle.target = addr + offset;
-    assign pdBundle.direct = jal;
+    assign pdBundle.direct = jal | jalr & pop;
+    assign pdBudnle.jump = jal;
+    assign pdBundle.ras_type = {(jal | jalr) & push, jalr & pop};
 `endif
 endmodule
