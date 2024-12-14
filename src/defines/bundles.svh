@@ -4,6 +4,12 @@
 `include "opcode.svh"
 `include "csr_defines.svh"
 
+`define LOOP_PTR_DEFINE(NAME, WIDTH) \
+typedef struct packed { \
+    logic [WIDTH-1: 0] idx; \
+    logic dir; \
+} NAME;
+
 typedef struct packed {
     logic en;
     logic carry;
@@ -56,6 +62,9 @@ typedef struct packed {
     logic `N(`TAGE_CTR_SIZE) ctr;
 } TageEntry;
 
+`LOOP_PTR_DEFINE(RasIdx, `RAS_WIDTH)
+`LOOP_PTR_DEFINE(RasInflightIdx, `RAS_INFLIGHT_WIDTH)
+
 typedef struct packed {
     logic `ARRAY(`TAGE_BANK, `TAGE_SET_WIDTH) idxs;
     logic `ARRAY(`TAGE_BANK, `TAGE_TAG_SIZE) tags;
@@ -97,6 +106,14 @@ typedef struct packed {
     logic `ARRAY(`TAGE_BANK, `TAGE_TAG_COMPRESS2) fold_tag2;
 } TageFoldHistory;
 
+`ifdef FEAT_LINKRAS
+typedef struct packed {
+    RasInflightIdx rasTop;
+    RasInflightIdx listTop;
+    RasIdx inflightTop;
+    logic [1: 0] ras_type; // for mem redirect
+} RasRedirectInfo;
+`else
 typedef struct packed {
     logic `N(`RAS_WIDTH) rasTop;
     logic `N(`RAS_WIDTH) rasBottom;
@@ -104,6 +121,7 @@ typedef struct packed {
     logic ras_bdir;
     logic [1: 0] ras_type; // for mem redirect
 } RasRedirectInfo;
+`endif
 
 typedef struct packed {
     logic `N(`GHIST_WIDTH) ghistIdx;

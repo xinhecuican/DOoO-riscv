@@ -1,10 +1,190 @@
 `include "../../defines/defines.svh"
 
+// 当推测更新ras时，如果先执行pop再push会导致ras中的一项被覆盖
+// 即使redirect更新指针也无法修正其中的值
+// 一种方法为在commit时写入来修复错误，但是在squash后commit前这一段时间读取会导致错误
+// 并且commit会影响推测更新的结果    
+// 下面是另一种方法，记录所有inflight的push地址，这样当redirect时不会因为pop-push操作导致覆盖
+`ifdef FEAT_LINKRAS
+module LinkRAS(
+    input logic clk,
+    input logic rst,
+    BpuRASIO.ras ras_io
+);
+    RasInflightIdx top, listTop, listBottom;
+    logic `N(`RAS_WIDTH) commitTop, inflightTop;
+    RasInflightIdx top_p1, top_n1, listTop_n1, rtop_p1, rtop_n1, rlistTop_n1, listBottom_n1, listBottom_p1, list_p1;
+    RasInflightIdx `N(`RAS_INFLIGHT_SIZE) topList;
+    logic `ARRAY(`RAS_INFLIGHT_SIZE, `RAS_WIDTH) commitTopList;
+
+    logic [1: 0] squashType;
+    RasRedirectInfo r;
+    BTBUpdateInfo btbEntry;
+
+    logic we, commit_we;
+    RasInflightIdx raddr;
+    logic `N(`RAS_WIDTH) commit_raddr;
+    logic `N(`RAS_INFLIGHT_WIDTH) waddr;
+    logic `N(`RAS_WIDTH) commit_waddr;
+    RasEntry entry, commitEntry, updateEntry, commitUpdateEntry;
+    logic `VADDR_BUS squash_target;
+
+    logic select_commit, commit_older;
+    logic commit_update;
+
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_top_n1 (1, top, top_n1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_top_p1 (1, top, top_p1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listtop_n1 (1, listTop, listTop_n1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_rtop_p1 (1, r.rasTop, rtop_p1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rlisttop_n1 (1, r.listTop, rlistTop_n1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rtop_n1 (1, r.rasTop, rtop_n1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listbottom_n1 (1, listBottom, listBottom_n1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_bottom_p1 (1, listBottom, listBottom_p1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_p1 (1, topList[top_p1], list_p1);
+    LoopCompare #(`RAS_INFLIGHT_WIDTH) cmp_commit_older (raddr, listBottom, commit_older);
+
+    assign squashType = ras_io.squashInfo.ras_type;
+    assign r = ras_io.squashInfo.redirectInfo.rasInfo;
+    assign btbEntry = ras_io.updateInfo.btbEntry;
+
+    assign we = ~ras_io.squash & ras_io.request & ras_io.ras_type[1] |
+                ras_io.squash & squashType[1];
+    assign waddr = ras_io.squash ? r.listTop.idx : listTop.idx;
+    assign raddr = ras_io.request & ras_io.ras_type[1] ? listTop :
+                   ras_io.request & ras_io.ras_type[0] ? list_p1 : top_p1;
+    assign commit_raddr = commitTopList[raddr.idx];
+    assign commit_waddr = btbEntry.tailSlot.ras_type == POP_PUSH ? commitTop - 1 : commitTop;
+
+    always_ff @(posedge clk)begin
+        select_commit <= commit_older;
+    end
+
+`ifdef RVC
+    assign squash_target = ras_io.squashInfo.start_addr + {ras_io.squashInfo.offset, {`INST_OFFSET{1'b0}}} + {~ras_io.squashInfo.rvc, ras_io.squashInfo.rvc, 1'b0};
+    assign commitUpdateEntry.pc = ras_io.updateInfo.start_addr + {btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} + {~btbEntry.tailSlot.rvc, btbEntry.tailSlot.rvc, 1'b0};
+`else
+    assign squash_target = ras_io.squashInfo.start_addr + {ras_io.squashInfo.offset, {`INST_OFFSET{1'b0}}} + 4;
+    assign commitUpdateEntry.pc = ras_io.updateInfo.start_addr + {btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} + 4;
+`endif
+
+    assign updateEntry.pc = ras_io.squash ? squash_target : ras_io.target;
+    assign commit_update = ras_io.update & ras_io.updateInfo.tailTaken & (btbEntry.tailSlot.br_type == CALL);
+    assign commit_we = ras_io.update & ras_io.updateInfo.tailTaken & 
+                        (btbEntry.tailSlot.br_type == CALL) &
+                        btbEntry.tailSlot.ras_type[1];
+
+    assign ras_io.en = 1'b1;
+    assign ras_io.rasInfo.rasTop = top;
+    assign ras_io.rasInfo.listTop = listTop;
+    assign ras_io.rasInfo.inflightTop = inflightTop;
+    assign ras_io.entry = select_commit ? commitEntry : entry;
+
+    MPRAM #(
+        .WIDTH($bits(RasEntry)),
+        .DEPTH(`RAS_INFLIGHT_SIZE),
+        .READ_PORT(1),
+        .WRITE_PORT(1)
+    ) inflight_ras (
+        .clk(clk),
+        .rst(rst),
+        .en(1'b1),
+        .we(we),
+        .waddr(waddr),
+        .raddr(raddr.idx),
+        .wdata(updateEntry),
+        .rdata(entry),
+        .ready()
+    );
+    MPRAM #(
+        .WIDTH($bits(RasEntry)),
+        .DEPTH(`RAS_SIZE),
+        .READ_PORT(1),
+        .WRITE_PORT(1)
+    ) commit_ras (
+        .clk,
+        .rst,
+        .en(1'b1),
+        .we(commit_we),
+        .waddr(commit_waddr),
+        .raddr(commit_raddr),
+        .wdata(commitUpdateEntry),
+        .rdata(commitEntry),
+        .ready()
+    );
+
+    always_ff @(posedge clk, posedge rst)begin
+        if(rst == `RST)begin
+            top <= 0;
+            listTop <= 0;
+            listBottom <= 0;
+            topList <= 0;
+            commitTop <= 0;
+            commitTopList <= 0;
+            inflightTop <= 0;
+        end
+        else begin
+            if(ras_io.squash)begin
+                if(squashType[1])begin
+                    topList[r.listTop.idx] <= r.rasTop;
+                    commitTopList[r.listTop.idx] <= r.inflightTop;
+                    listTop <= rlistTop_n1;
+                    top <= rlistTop_n1;
+                end
+                else if(squashType[0])begin
+                    listTop <= r.listTop;
+                    top <= topList[rtop_p1.idx];
+                end
+                else begin
+                    listTop <= r.listTop;
+                    top <= r.rasTop;
+                end
+
+                if(squashType == PUSH)begin
+                    inflightTop <= r.inflightTop + 1;
+                end
+                else if(squashType == POP)begin
+                    inflightTop <= r.inflightTop - 1;
+                end
+                else begin
+                    inflightTop <= r.inflightTop;
+                end
+            end
+            else if(ras_io.request)begin
+                if(ras_io.ras_type[1])begin
+                    topList[listTop.idx] <= top;
+                    commitTopList[listTop.idx] <= inflightTop;
+                    listTop <= listTop_n1;
+                    top <= listTop_n1;
+                end
+                else if(ras_io.ras_type[0]) begin
+                    top <= topList[top_p1.idx];
+                end
+                
+                if(ras_io.ras_type == PUSH)begin
+                    inflightTop <= inflightTop + 1;
+                end
+                else if(ras_io.ras_type == POP)begin
+                    inflightTop <= inflightTop - 1;
+                end
+            end
+
+            if(commit_update)begin
+                if(btbEntry.tailSlot.ras_type == POP)begin
+                    commitTop <= commitTop - 1;
+                end
+                else if(btbEntry.tailSlot.ras_type == PUSH)begin
+                    commitTop <= commitTop + 1;
+                    listBottom <= listBottom_n1;
+                end
+            end
+        end
+    end
+
+endmodule
+`else
 module RAS(
     input logic clk,
     input logic rst,
-    input logic lastStage,
-    input logic `N(`FSQ_WIDTH) lastStageIdx,
     BpuRASIO.ras ras_io
 );
     logic `N(`RAS_WIDTH) top, top_p1, top_n1;
@@ -109,10 +289,6 @@ module RAS(
         .ready()
     );
 
-    // 当推测更新ras时，如果先执行pop再push会导致ras中的一项被覆盖
-    // 即使redirect更新指针也无法修正其中的值
-    // 一种方法为在commit时写入来修复错误，但是在squash后commit前这一段时间读取会导致错误
-    // 并且commit会影响推测更新的结果    
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             top <= 0;
@@ -218,8 +394,8 @@ module RAS(
     always_ff @(posedge clk)begin
         update_n <= ras_io.update;
         fsqIdx <= ras_io.updateInfo.fsqIdx;
-        if(lastStage)begin
-            lookup_idx[lastStageIdx] <= top;
+        if(ras_io.lastStage)begin
+            lookup_idx[ras_io.lastStageIdx] <= top;
         end
     end
     `Log(DLog::Debug, T_DEBUG, update_n && (commit_top != lookup_idx[fsqIdx]),
@@ -227,3 +403,4 @@ module RAS(
 `endif
 
 endmodule
+`endif

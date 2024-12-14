@@ -66,9 +66,22 @@ interface BpuRASIO(
     logic `VADDR_BUS target;
     RasEntry entry;
     RasRedirectInfo rasInfo;
+`ifdef T_DEBUG
+    logic lastStage;
+    logic `N(`FSQ_WIDTH) lastStageIdx;
+`endif
 
-    modport ras (input request, ras_type, target, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasInfo);
-    modport control(input en, entry, rasInfo, output request, ras_type, target);
+    modport ras (input request, ras_type, target, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasInfo
+`ifdef T_DEBUG
+    , input lastStage, lastStageIdx
+`endif
+    );
+    modport control(input en, entry, rasInfo, output request, ras_type, target
+`ifdef T_DEBUG
+    , input lastStage, lastStageIdx
+`endif
+    );
+
 
 endinterface
 

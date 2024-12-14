@@ -51,7 +51,15 @@ module BranchPredictor(
     assign ubtb_io.fsqDir = bpu_fsq_io.stream_dir;
     UBTB ubtb(.*);
 
-    RAS ras(.*, .lastStage(s2_result_out.en  & ~redirect.flush), .lastStageIdx(s2_result_out.stream_idx));
+`ifdef T_DEBUG
+    assign ras_io.lastStage = s2_result_out.en  & ~redirect.flush;
+    assign ras_io.lastStageIdx = s2_result_out.stream_idx;
+`endif
+`ifdef FEAT_LINKRAS
+    LinkRAS ras(.*);
+`else
+    RAS ras(.*);
+`endif
     
     assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect[0];
     assign redirect.tage_ready = tage_io.ready;

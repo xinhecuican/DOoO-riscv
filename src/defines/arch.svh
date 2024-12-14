@@ -10,6 +10,8 @@
 
 `define EXT_FENCEI
 
+`define FEAT_LINKRAS
+
 // `define SYNTH_VIVADO
 
 `include "predefine.svh"

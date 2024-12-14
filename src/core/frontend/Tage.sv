@@ -26,6 +26,7 @@ module Tage(
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) table_hits_reorder;
 	logic `N(`SLOT_NUM) table_u `N(`TAGE_BANK);
 	logic `N(`SLOT_NUM) prediction `N(`TAGE_BANK);
+	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) pred_reverse;
 	logic `ARRAY(`SLOT_NUM, `TAGE_ALT_CTR) altCtr;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) provider;
 	logic `ARRAY(`TAGE_BANK, `TAGE_SET_WIDTH) lookup_idx_n;
@@ -118,9 +119,10 @@ module Tage(
 		for(genvar br=0; br<`SLOT_NUM; br++)begin
 			for(genvar bank=0; bank<`TAGE_BANK; bank++)begin
 				assign table_hits_reorder[br][bank] = table_hits[bank][br];
+				assign pred_reverse[br][bank] = prediction[bank][br];
 			end
 			PSelector #(`TAGE_BANK) selector_provider(table_hits_reorder[br], provider[br]);
-			assign tage_prediction[br] = |provider[br] ? |(prediction[br] & provider[br]) : base_ctr[br][`TAGE_BASE_CTR-1];
+			assign tage_prediction[br] = |provider[br] ? |(pred_reverse[br] & provider[br]) : base_ctr[br][`TAGE_BASE_CTR-1];
 			assign tage_io.prediction[br] = tage_prediction[br];
 			assign tage_io.meta.altPred[br] = base_ctr[br][`TAGE_BASE_CTR-1];
 		end
@@ -166,9 +168,9 @@ generate
 	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: `INST_OFFSET] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * `INST_OFFSET + 1 : `TAGE_BASE_WIDTH + `INST_OFFSET];
 
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
-		assign u_slot_en[i] = tage_io.update & tage_io.updateInfo.allocSlot[i] & ~btbEntry.slots[i].carry;
+		assign u_slot_en[i] = tage_io.update & btbEntry.slots[i].en & ~btbEntry.slots[i].carry;
 	end
-	assign u_slot_en[`SLOT_NUM-1] = tage_io.update & tage_io.updateInfo.allocSlot[`SLOT_NUM-1] & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
+	assign u_slot_en[`SLOT_NUM-1] = tage_io.update & btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
 		logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
 		assign bank_u = update_u_origin[i];
