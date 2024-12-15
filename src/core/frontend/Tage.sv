@@ -11,13 +11,12 @@ module Tage(
 		logic `N(`TAGE_SET_WIDTH) lookup_idx;
 		logic `N(`TAGE_TAG_SIZE) lookup_tag;
 		logic `N(`SLOT_NUM) update_en;
-		logic `N(`SLOT_NUM) realTaken;
 		logic `N(`SLOT_NUM) update_u_en;
 		logic `N(`SLOT_NUM) provider;
 		logic `N(`SLOT_NUM) alloc;
 		logic `N(`SLOT_NUM) predError;
 		logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) update_u;
-		logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_origin_ctr;
+		logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr;
 		logic `N(`TAGE_TAG_SIZE) update_tag;
 		logic `N(`TAGE_SET_WIDTH) update_idx;
 	} BankCtrl;
@@ -70,7 +69,6 @@ module Tage(
 				.clk(clk),
 				.rst(rst),
 				.en(bank_ctrl[i].en & ~tage_io.redirect.stall),
-				.realTaken(bank_ctrl[i].realTaken),
 				.update_en(bank_ctrl[i].update_en),
 				.lookup_idx(bank_ctrl[i].lookup_idx),
 				.lookup_tag(bank_ctrl[i].lookup_tag),
@@ -79,7 +77,7 @@ module Tage(
 				.predError(bank_ctrl[i].predError),
 				.update_u_en(bank_ctrl[i].update_u_en),
 				.update_u(bank_ctrl[i].update_u),
-				.update_origin_ctr(bank_ctrl[i].update_origin_ctr),
+				.update_ctr(bank_ctrl[i].update_ctr),
 				.update_idx(bank_ctrl[i].update_idx),
 				.update_tag(bank_ctrl[i].update_tag),
 				.lookup_match(table_hits[i]),
@@ -91,9 +89,9 @@ module Tage(
         end
     endgenerate
 
-	logic base_we;
+	logic base_we, base_commit_en;
 	logic `N($clog2(`TAGE_BASE_SIZE)) base_lookup_idx, base_update_idx;
-	logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr, base_update_ctr, base_ctr_inc;
+	logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr, base_update_ctr, base_ctr_inc, base_commit_ctr;
 	assign base_lookup_idx = tage_io.pc[`TAGE_BASE_WIDTH+1: `INST_OFFSET] ^ tage_io.pc[`TAGE_BASE_WIDTH * `INST_OFFSET + 1 : `TAGE_BASE_WIDTH + `INST_OFFSET];
 	MPRAM #(
 		.WIDTH((`TAGE_BASE_CTR * `SLOT_NUM)),
@@ -158,17 +156,33 @@ module Tage(
 	assign update_en = u_slot_en;
 	assign altPred = meta.altPred;
 	assign dec_use = altPred ^ predTaken;
-	assign u_ctrs = meta.tage_ctrs;
+
+	CAMQueue #(
+		`TAGE_COMMIT_SIZE, 
+		`TAGE_BASE_WIDTH, 
+		`TAGE_BASE_CTR * `SLOT_NUM
+	) base_cam (
+		.clk,
+		.rst,
+		.we(base_we),
+		.wtag(base_update_idx),
+		.wdata(base_update_ctr),
+		.rtag(base_update_idx),
+		.rhit(base_commit_en),
+		.rdata(base_commit_ctr)
+	);
 generate
 	for(genvar i=0; i<`SLOT_NUM; i++)begin
-		UpdateCounter #(`TAGE_BASE_CTR) updateCounter (meta.base_ctr[i], tage_io.updateInfo.realTaken[i], base_ctr_inc[i]);
-		assign base_update_ctr[i] = u_slot_en[i] ? base_ctr_inc[i] : meta.base_ctr[i];
+		logic `N(`TAGE_BASE_CTR) base_ctr_i;
+		assign base_ctr_i = base_commit_en ? base_commit_ctr[i] : meta.base_ctr[i];
+		UpdateCounter #(`TAGE_BASE_CTR) updateCounter (base_ctr_i, tage_io.updateInfo.realTaken[i], base_ctr_inc[i]);
+		assign base_update_ctr[i] = u_slot_en[i] ? base_ctr_inc[i] : base_ctr_i;
 	end
 	assign base_we = |u_slot_en;
 	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: `INST_OFFSET] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * `INST_OFFSET + 1 : `TAGE_BASE_WIDTH + `INST_OFFSET];
 
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
-		assign u_slot_en[i] = tage_io.update & btbEntry.slots[i].en & ~btbEntry.slots[i].carry;
+		assign u_slot_en[i] = tage_io.update & tage_io.updateInfo.allocSlot[i] & btbEntry.slots[i].en & ~btbEntry.slots[i].carry;
 	end
 	assign u_slot_en[`SLOT_NUM-1] = tage_io.update & btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
@@ -192,14 +206,42 @@ generate
 
 
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
+		logic bank_commit_en;
+		logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) bank_commit_ctr;
+		logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr, update_ctr_provider;
+		logic `N(`SLOT_NUM) bank_alloc;
+		CAMQueue #(
+			`TAGE_COMMIT_SIZE, 
+			`TAGE_SET_WIDTH, 
+			`TAGE_CTR_SIZE * `SLOT_NUM
+		) bank_cam (
+			.clk,
+			.rst,
+			.we((|(update_en & (bank_ctrl[i].provider | bank_ctrl[i].alloc)))),
+			.wtag(meta.idxs[i]),
+			.wdata(update_ctr),
+			.rtag(meta.idxs[i]),
+			.rhit(bank_commit_en),
+			.rdata(bank_commit_ctr)
+		);
+		assign u_ctrs[i] = bank_commit_en ? bank_commit_ctr : meta.tage_ctrs[i];
+		for(genvar j=0; j<`SLOT_NUM; j++)begin
+			assign bank_alloc[j] = alloc[j][i];
+			assign update_ctr[j] = !update_en[j] ? u_ctrs[j] : 
+									bank_alloc[j] & ~bank_commit_en ? 
+										(tage_io.updateInfo.realTaken[j] ? 
+										(1 << (`TAGE_CTR_SIZE - 1)) : 
+										(1 << (`TAGE_CTR_SIZE - 1)) - 1) : 
+									update_ctr_provider[j];
+			UpdateCounter #(`TAGE_CTR_SIZE) updateCtr (u_ctrs[j], tage_io.updateInfo.realTaken[j], update_ctr_provider[j]);
+		end
 		assign bank_ctrl[i].update_en = update_en;
 		assign bank_ctrl[i].provider = {u_provider[1][i], u_provider[0][i]};
-		assign bank_ctrl[i].alloc = {alloc[1][i], alloc[0][i]};
+		assign bank_ctrl[i].alloc = bank_alloc;
 		assign bank_ctrl[i].predError = predError;
-		assign bank_ctrl[i].realTaken = tage_io.updateInfo.realTaken;
 		assign bank_ctrl[i].update_u = update_u;
 		assign bank_ctrl[i].update_u_en = update_u_en;
-		assign bank_ctrl[i].update_origin_ctr = u_ctrs[i];
+		assign bank_ctrl[i].update_ctr = update_ctr;
 		assign bank_ctrl[i].update_idx = meta.idxs[i];
 		assign bank_ctrl[i].update_tag = meta.tags[i];
 	end
@@ -220,13 +262,12 @@ module TageTable #(
 	input logic `N(ADDR_WIDTH) lookup_idx,
 	input logic `N(`TAGE_TAG_SIZE) lookup_tag,
 	input logic `N(`SLOT_NUM) update_en,
-	input logic `N(`SLOT_NUM) realTaken,
 	input logic `N(`SLOT_NUM) provider,
 	input logic `N(`SLOT_NUM) alloc,
 	input logic `N(`SLOT_NUM) predError,
 	input logic `N(`SLOT_NUM) update_u_en,
 	input logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) update_u,
-	input logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_origin_ctr,
+	input logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr,
 	input logic `N(`TAGE_TAG_SIZE) update_tag,
 	input logic `N(ADDR_WIDTH) update_idx,
 	output logic `N(`SLOT_NUM) lookup_match,
@@ -243,14 +284,11 @@ module TageTable #(
 		end
 	end
 	logic `ARRAY(`SLOT_NUM, `TAGE_TAG_SIZE) search_tag;
-	logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr, update_ctr_provider;
 	generate;
 		for(genvar i=0; i<`SLOT_NUM; i++)begin
 			assign lookup_match[i] = search_tag[i] == match_tag[i];
 			assign u[i] = lookup_u[i] != 0;
 			assign taken[i] = lookup_ctr[i][`TAGE_CTR_SIZE-1];
-			assign update_ctr[i] = alloc[i] ? (realTaken[i] ? (1 << (`TAGE_CTR_SIZE - 1)) : (1 << (`TAGE_CTR_SIZE - 2))) : update_ctr_provider[i];
-			UpdateCounter #(`TAGE_CTR_SIZE) updateCtr (update_origin_ctr[i], realTaken[i], update_ctr_provider[i]);
 		end
 	endgenerate
 

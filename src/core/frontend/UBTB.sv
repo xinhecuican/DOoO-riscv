@@ -171,18 +171,37 @@ endgenerate
 
     UBTBMeta meta;
     logic `N(`SLOT_NUM) update_carry, update_en;
-    logic `ARRAY(`SLOT_NUM, 2) u_ctr;
+    logic `ARRAY(`SLOT_NUM, 2) u_ctr, commit_ctr, ctr_i, cam_ctr;
+    logic commit_ctr_hit;
     assign meta = ubtb_io.updateInfo.meta.ubtb;
+
+    CAMQueue #(
+        .DEPTH(`UBTB_COMMIT_SIZE),
+        .TAG_WIDTH(`UBTB_WIDTH),
+        .DATA_WIDTH(`SLOT_NUM * 2) 
+    ) ctr_cam (
+        .clk,
+        .rst,
+        .we(|update_en),
+        .wtag(updateSelectIdx),
+        .wdata(cam_ctr),
+        .rtag(updateSelectIdx),
+        .rhit(commit_ctr_hit),
+        .rdata(commit_ctr)
+    );
+
+    assign ctr_i = commit_ctr_hit ? commit_ctr : meta.ctr;
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
-        UpdateCounter #(2) updateCounter (meta.ctr[i], ubtb_io.updateInfo.realTaken[i], u_ctr[i]);
+        UpdateCounter #(2) updateCounter (ctr_i[i], ubtb_io.updateInfo.realTaken[i], u_ctr[i]);
+        assign cam_ctr[i] = update_en[i] ? u_ctr[i] : ctr_i[i];
     end
     for(genvar i=0; i<`SLOT_NUM-1; i++)begin
         assign update_carry[i] = ubtb_io.updateInfo.btbEntry.slots[i].carry;
-        assign update_en[i] = ubtb_io.updateInfo.btbEntry.slots[i].en;
+        assign update_en[i] = ubtb_io.updateInfo.btbEntry.slots[i].en & ubtb_io.updateInfo.allocSlot[i];
     end
     assign update_carry[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.carry;
-    assign update_en[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.en && ubtb_io.updateInfo.btbEntry.tailSlot.br_type == CONDITION;
+    assign update_en[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.en && ubtb_io.updateInfo.btbEntry.tailSlot.br_type == CONDITION & ubtb_io.updateInfo.allocSlot[`SLOT_NUM-1];
 endgenerate
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin

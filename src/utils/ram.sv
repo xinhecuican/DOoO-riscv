@@ -7,6 +7,7 @@ module SPRAM#(
     parameter READ_LATENCY = 0,
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
+    parameter RESET_VALUE = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
@@ -78,7 +79,7 @@ module SPRAM#(
     logic resetState;
     if(RESET)begin
         assign resetAddr = resetState ? counter : addr;
-        assign resetData = resetState ? 0 : wdata;
+        assign resetData = resetState ? RESET_VALUE : wdata;
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter <= 0;
@@ -137,6 +138,7 @@ module SDPRAM#(
     parameter READ_LATENCY = 0,
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
+    parameter RESET_VALUE = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
@@ -215,7 +217,7 @@ module SDPRAM#(
     logic resetState;
     if(RESET)begin
         assign resetAddr = resetState ? counter : addr0;
-        assign resetData = resetState ? 0 : wdata;
+        assign resetData = resetState ? RESET_VALUE : wdata;
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter <= 0;
@@ -273,6 +275,7 @@ module MPREG #(
     parameter READ_LATENCY = 1,
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
+    parameter RESET_VALUE = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
@@ -294,7 +297,7 @@ module MPREG #(
 generate
     if(RESET)begin
         assign resetAddr = resetState ? counter : waddr[0];
-        assign resetData = resetState ? 0 : wdata[0];
+        assign resetData = resetState ? RESET_VALUE : wdata[0];
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter <= 0;
@@ -405,6 +408,7 @@ module MPRAMInner #(
     parameter READ_LATENCY = 1,
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
+    parameter RESET_VALUE = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
@@ -425,7 +429,8 @@ generate
             .READ_LATENCY(READ_LATENCY),
             .BYTE_WRITE(BYTE_WRITE),
             .BYTES(BYTES),
-            .RESET(RESET)
+            .RESET(RESET),
+            .RESET_VALUE(RESET_VALUE)
         ) spram (
             .*,
             .addr(waddr)
@@ -438,7 +443,8 @@ generate
             .READ_LATENCY(READ_LATENCY),
             .BYTE_WRITE(BYTE_WRITE),
             .BYTES(BYTES),
-            .RESET(RESET)
+            .RESET(RESET),
+            .RESET_VALUE(RESET_VALUE)
         ) sdpram (
             .*,
             .addr0(waddr),
@@ -499,7 +505,8 @@ generate
             .READ_LATENCY(READ_LATENCY),
             .BYTE_WRITE(BYTE_WRITE),
             .BYTES(BYTES),
-            .RESET(RESET)
+            .RESET(RESET),
+            .RESET_VALUE(RESET_VALUE)
         ) regs (.*);
     end
 endgenerate
@@ -523,6 +530,7 @@ module MPRAM #(
     parameter READ_LATENCY = 1,
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
+    parameter RESET_VALUE = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
@@ -588,7 +596,7 @@ generate
         for(genvar i=0; i<WRITE_PORT+RW_PORT; i++)begin
             if(RESET && i == 0)begin
                 assign waddr_bank[i] = resetState ? counter : waddr[i][ADDR_WIDTH-$clog2(BANK_ALL)-1: 0];
-                assign wdata_bank[i] = resetState ? 0 : wdata[i];
+                assign wdata_bank[i] = resetState ? RESET_VALUE : wdata[i];
             end
             else begin
                 assign waddr_bank[i] = waddr[i][ADDR_WIDTH-$clog2(BANK_ALL)-1: 0];
@@ -690,11 +698,67 @@ generate
             .READ_LATENCY(READ_LATENCY),
             .BYTE_WRITE(BYTE_WRITE),
             .BYTES(BYTES),
-            .RESET(RESET)
+            .RESET(RESET),
+            .RESET_VALUE(RESET_VALUE)
         ) ram (
             .*
         );
     end
 endgenerate
+
+endmodule
+
+module CAMQueue #(
+	parameter DEPTH=4,
+	parameter TAG_WIDTH=1,
+	parameter DATA_WIDTH=1,
+	parameter ADDR_WIDTH=$clog2(DEPTH)
+)(
+	input logic clk,
+	input logic rst,
+	input logic we,
+	input logic [TAG_WIDTH-1: 0] wtag,
+	input logic [DATA_WIDTH-1: 0] wdata,
+	input logic [TAG_WIDTH-1: 0] rtag,
+	output logic rhit,
+	output logic [DATA_WIDTH-1: 0] rdata
+);
+	logic [DEPTH-1: 0][TAG_WIDTH-1: 0] tags;
+	logic [DEPTH-1: 0][DATA_WIDTH-1: 0] datas;
+	logic [ADDR_WIDTH-1: 0] tail;
+	logic [DEPTH-1: 0] tail_mask, tag_eq, near_hit, far_hit, hit_mask;
+	logic select_hit;
+
+generate
+	for(genvar i=0; i<DEPTH; i++)begin
+		assign tag_eq[i] = tags[i] == rtag;
+	end
+endgenerate
+	MaskGen #(DEPTH) mask_gen_tail (tail, tail_mask);
+	PSelector #(DEPTH) selector_near (tag_eq & tail_mask, near_hit);
+	PSelector #(DEPTH) selector_far (tag_eq, far_hit);
+	assign hit_mask = |(tag_eq & tail_mask) ? near_hit : far_hit;
+	assign rhit = |tag_eq;
+	FairSelect #(DEPTH, DATA_WIDTH) selector (
+		hit_mask,
+		datas,
+		select_hit,
+		rdata
+	);
+
+	always_ff @(posedge clk, posedge rst)begin
+		if(rst == `RST)begin
+			tail <= 0;
+			tags <= 0;
+			datas <= 0;
+		end
+		else begin
+			if(we)begin
+				tags[tail] <= wtag;
+				datas[tail] <= wdata;
+				tail <= tail + 1;
+			end
+		end
+	end
 
 endmodule

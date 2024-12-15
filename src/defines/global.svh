@@ -59,6 +59,7 @@ endfunction
 
 `define UBTB_TAG_SIZE 14
 `define UBTB_SIZE 64
+`define UBTB_COMMIT_SIZE 8
 `define UBTB_WIDTH $clog2(`UBTB_SIZE)
 
 `define BTB_TAG_SIZE 8
@@ -70,6 +71,7 @@ endfunction
 `define TAGE_TAG_SIZE 8
 `define TAGE_U_SIZE 2
 `define TAGE_CTR_SIZE 3
+`define TAGE_COMMIT_SIZE 8
 `define TAGE_BANK 4
 `define TAGE_TAG_COMPRESS1 12
 `define TAGE_TAG_COMPRESS2 10
