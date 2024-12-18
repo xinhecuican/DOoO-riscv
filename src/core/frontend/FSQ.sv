@@ -911,8 +911,8 @@ endgenerate
     logic `ARRAY(`SLOT_NUM, `SLOT_NUM) slotOldAlloc;
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
-        assign predAlloc[i] = ~free[i] & (normalOffset > offsets[i]);
-        assign predOldAlloc[i] = ~free[i] & (fsqInfo.offset > offsets[i]);
+        assign predAlloc[i] = ~free[i] & ((normalOffset > offsets[i]) | equal[i]);
+        assign predOldAlloc[i] = ~free[i] & ((fsqInfo.offset > offsets[i]) | equal[i]);
         for(genvar j=0; j<`SLOT_NUM; j++)begin
             if(i == j)begin
                 assign slotOldAlloc[i][j] = equal[i];

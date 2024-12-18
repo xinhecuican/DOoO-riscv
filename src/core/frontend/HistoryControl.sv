@@ -24,34 +24,36 @@ module HistoryControl(
     assign prediction_redirect = redirect.s2_redirect;
     assign squashCondNum = squashInfo.predInfo.condNum;
     assign condNum = squash ? squashCondNum : result.cond_num;
-    assign taken = squash ? squashInfo.predInfo.taken : result.taken;
+    assign taken = squash ? squashInfo.predInfo.taken : |result.predTaken;
     assign ghist_we[0] = (squash & (|squashCondNum)) | 
                         (~squash & result.en & (|result.cond_num));
     assign ghist_we[1] = (squash & squashCondNum[1]) | 
                         (~squash & result.en & result.cond_num[1]);
     assign we_idx[0] =  redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
-                        prediction_redirect ? result.redirect_info.ghistIdx : pos;
+                                        result.redirect_info.ghistIdx;
     assign we_idx[1] = redirect.flush ? squashInfo.redirectInfo.ghistIdx + 1 : 
-                        prediction_redirect ? result.redirect_info.ghistIdx + 1 : pos + 1;
+                                        result.redirect_info.ghistIdx + 1;
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
         assign cond_result[i] = (condNum == (i+1)) & taken;
     end
 endgenerate
     assign tage_input_history = redirect.flush ? squashInfo.redirectInfo.tage_history :
-                           prediction_redirect ? result.redirect_info.tage_history : tage_history;
-    assign history.ghistIdx = redirect.flush ? squashInfo.redirectInfo.ghistIdx : 
-                       prediction_redirect ? result.cond_num + result.redirect_info.ghistIdx : pos;
+                                                 result.redirect_info.tage_history;
+    assign history.ghistIdx = pos;
     assign history.tage_history = tage_history;
-    parameter [6: 0] tage_hist_length `N(`TAGE_BANK) = {7'd8, 7'd13, 7'd32, 7'd119};
+    localparam [`TAGE_BANK*16-1: 0] tage_hist_length = `TAGE_HIST_LENGTH;
 generate;
     for(genvar i=0; i<`TAGE_BANK; i++)begin
         logic [`SLOT_NUM-1: 0] reverse_dir;
-        assign reverse_dir[0] = ghist[history.ghistIdx-tage_hist_length[i]];
-        assign reverse_dir[1] = ghist[history.ghistIdx-tage_hist_length[i]+1];
+        logic `ARRAY(`SLOT_NUM, `GHIST_WIDTH) reverse_idx;
+        for(genvar j=0; j<`SLOT_NUM; j++)begin
+            assign reverse_idx[j] = history.ghistIdx-tage_hist_length[i*16 +: 16] + j;
+            assign reverse_dir[j] = ghist[reverse_idx[j]];
+        end
         CompressHistory #(
             .COMPRESS_LENGTH(`TAGE_SET_WIDTH),
-            .ORIGIN_LENGTH(tage_hist_length[i]),
+            .ORIGIN_LENGTH(tage_hist_length[i*16 +: 16]),
             .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_index(
             .origin(tage_input_history.fold_idx[i]),
@@ -62,7 +64,7 @@ generate;
         );
         CompressHistory #(
             .COMPRESS_LENGTH(`TAGE_TAG_COMPRESS1),
-            .ORIGIN_LENGTH(tage_hist_length[i]),
+            .ORIGIN_LENGTH(tage_hist_length[i*16 +: 16]),
             .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_tag1(
             .origin(tage_input_history.fold_tag1[i]),
@@ -73,7 +75,7 @@ generate;
         );
         CompressHistory #(
             .COMPRESS_LENGTH(`TAGE_TAG_COMPRESS2),
-            .ORIGIN_LENGTH(tage_hist_length[i]),
+            .ORIGIN_LENGTH(tage_hist_length[i*16 +: 16]),
             .HIST_SIZE(`SLOT_NUM)
         ) compress_tage_tag2(
             .origin(tage_input_history.fold_tag2[i]),
@@ -135,12 +137,27 @@ module CompressHistory #(
 	input logic [HIST_SIZE-1: 0] reverse_dir,
 	output logic [COMPRESS_LENGTH-1: 0] out
 );
-    always_comb begin
-        if(condNum == 1)begin
-            out = (origin << 1) ^ dir ^ (reverse_dir << OUTPUT_POINT) ^ origin[0];
-        end
-        else begin
-            out = (origin << 2) ^ dir ^ (reverse_dir << OUTPUT_POINT) ^ origin[1: 0];
+generate
+    if(ORIGIN_LENGTH < COMPRESS_LENGTH)begin
+        always_comb begin
+            if(condNum == 1)begin
+                out = (origin << 1) | dir;
+            end
+            else begin
+                out = (origin << 2) | dir;
+            end
         end
     end
+    else begin
+        always_comb begin
+            if(condNum == 1)begin
+                out = ((origin << 1) | dir) ^ {reverse_dir, {OUTPUT_POINT{1'b0}}} ^ origin[COMPRESS_LENGTH-1];
+            end
+            else begin
+                out = ((origin << 2) | dir) ^ {reverse_dir, {OUTPUT_POINT{1'b0}}} ^ origin[COMPRESS_LENGTH-1: COMPRESS_LENGTH-2];
+            end
+        end
+    end
+endgenerate
+
 endmodule

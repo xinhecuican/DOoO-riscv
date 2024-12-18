@@ -59,8 +59,10 @@ module Tage(
 				.tag(bank_ctrl[i].lookup_tag)
 			);
 			always_ff @(posedge clk)begin
-				lookup_idx_n[i] <= bank_ctrl[i].lookup_idx;
-				lookup_tag_n[i] <= bank_ctrl[i].lookup_tag;
+				if(~tage_io.redirect.stall)begin
+					lookup_idx_n[i] <= bank_ctrl[i].lookup_idx;
+					lookup_tag_n[i] <= bank_ctrl[i].lookup_tag;
+				end
 			end
 			assign bank_ctrl[i].en = 1'b1;
 			TageTable #(
@@ -92,7 +94,8 @@ module Tage(
 	logic base_we, base_commit_en;
 	logic `N($clog2(`TAGE_BASE_SIZE)) base_lookup_idx, base_update_idx;
 	logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr, base_update_ctr, base_ctr_inc, base_commit_ctr;
-	assign base_lookup_idx = tage_io.pc[`TAGE_BASE_WIDTH+1: `INST_OFFSET] ^ tage_io.pc[`TAGE_BASE_WIDTH * `INST_OFFSET + 1 : `TAGE_BASE_WIDTH + `INST_OFFSET];
+	assign base_lookup_idx = tage_io.pc[`TAGE_BASE_WIDTH+`INST_OFFSET-1: `INST_OFFSET] ^
+							 tage_io.pc[`VADDR_SIZE-1: `VADDR_SIZE-`TAGE_BASE_WIDTH];
 	MPRAM #(
 		.WIDTH((`TAGE_BASE_CTR * `SLOT_NUM)),
 		.DEPTH(`TAGE_BASE_SIZE),
@@ -179,7 +182,8 @@ generate
 		assign base_update_ctr[i] = u_slot_en[i] ? base_ctr_inc[i] : base_ctr_i;
 	end
 	assign base_we = |u_slot_en;
-	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+1: `INST_OFFSET] ^ tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH * `INST_OFFSET + 1 : `TAGE_BASE_WIDTH + `INST_OFFSET];
+	assign base_update_idx = tage_io.updateInfo.start_addr[`TAGE_BASE_WIDTH+`INST_OFFSET-1: `INST_OFFSET] ^
+							 tage_io.updateInfo.start_addr[`VADDR_SIZE-1: `VADDR_SIZE-`TAGE_BASE_WIDTH];
 
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
 		assign u_slot_en[i] = tage_io.update & tage_io.updateInfo.allocSlot[i] & btbEntry.slots[i].en & ~btbEntry.slots[i].carry;

@@ -110,7 +110,7 @@ typedef struct packed {
 typedef struct packed {
     RasInflightIdx rasTop;
     RasInflightIdx listTop;
-    RasIdx inflightTop;
+    logic `N(`RAS_WIDTH) inflightTop;
     logic [1: 0] ras_type; // for mem redirect
 } RasRedirectInfo;
 `else
@@ -149,6 +149,7 @@ typedef struct packed {
     logic `N(`SLOT_NUM) cond_valid;
     logic `N(`SLOT_NUM) predTaken;
     logic taken;
+    logic tail_taken;
     logic `N(`FSQ_WIDTH) stream_idx;
     logic stream_dir;
     RedirectInfo redirect_info;

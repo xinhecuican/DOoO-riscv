@@ -12,21 +12,9 @@ module UBTB(
     BTBEntry lookup_entry;
     logic `ARRAY(`SLOT_NUM, 2) lookup_ctr;
     logic `N(`UBTB_SIZE) lookup_hits, updateHits;
-    logic `N(`SLOT_NUM) lookup_carry;
     logic `N($clog2(`UBTB_SIZE)) lookup_index, updateIdx, updateSelectIdx;
     logic `N(`UBTB_TAG_SIZE) lookup_tag, update_tag;
-    logic `N(`SLOT_NUM) br_takens;
-    logic tail_taken;
-    logic `N(`JAL_OFFSET) br_offset, br_offset_normal;
-    logic `N(`PREDICTION_WIDTH+1) fthOffset;
-    logic [`VADDR_SIZE-`JAL_OFFSET-2: 0] br_target_high;
-    logic [`VADDR_SIZE-`JALR_OFFSET-2: 0] tail_target_high;
-    logic `VADDR_BUS tail_target, br_target;
-    TargetState br_tar_state, tail_tar_state, br_tar_state_normal;
-    logic `N(`PREDICTION_WIDTH) br_size, tail_size, br_size_normal;
     logic lookup_hit, updateHit;
-    logic [1: 0] br_num;
-    logic `N(`SLOT_NUM) isBr, cond_valid;
     logic `N(`SLOT_NUM) cond_history;
     logic older;
 `ifdef RVC
@@ -49,38 +37,6 @@ module UBTB(
     assign updateSelectIdx = updateHit ? updateIdx : replace_io.miss_way;
     assign lookup_entry = entrys[lookup_index];
     assign lookup_ctr = ctrs[lookup_index];
-    assign tail_tar_state = lookup_entry.tailSlot.tar_state;
-    assign tail_target_high = tail_tar_state == TAR_OV ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
-                            tail_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
-                                                     ubtb_io.pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
-    assign tail_taken = lookup_entry.tailSlot.en && lookup_entry.tailSlot.br_type != CONDITION;
-`ifdef RVC
-    assign fthOffset = lookup_entry.fthAddr + {~lookup_entry.fth_rvc, lookup_entry.fth_rvc};
-`else
-    assign fthOffset = lookup_entry.fthAddr + 1;
-`endif
-    assign tail_target = tail_taken ? {tail_target_high, lookup_entry.tailSlot.target, 1'b0} : 
-                         {fthOffset, {`INST_OFFSET{1'b0}}} + ubtb_io.pc;
-    assign tail_size = tail_taken ? lookup_entry.tailSlot.offset : lookup_entry.fthAddr;
-    PMux2 #(`JAL_OFFSET) pmux2_br_offset(br_takens, 
-                                        lookup_entry.slots[0].target,lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0],
-                                        br_offset_normal);
-    PMux2 #(`PREDICTION_WIDTH) pmux2_br_size(br_takens, 
-                                        lookup_entry.slots[0].offset,lookup_entry.tailSlot.offset,
-                                        br_size_normal);
-`ifdef RVC
-    PMux2 #(1) pmux2_br_rvc(br_takens,
-                            lookup_entry.slots[0].rvc, lookup_entry.tailSlot.rvc,
-                            br_rvc_normal);
-`endif
-    PMux2 #(2) pmux2_br_tar(br_takens,
-                            lookup_entry.slots[0].tar_state, lookup_entry.tailSlot.tar_state,
-                            br_tar_state_normal);
-    assign br_target_high = br_tar_state == TAR_OV ? ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1] + 1 :
-                            br_tar_state == TAR_UN ? ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1] - 1 :
-                                                     ubtb_io.pc[`VADDR_SIZE-1: `JAL_OFFSET+1];
-    assign br_target = {br_target_high, br_offset, 1'b0};
-    assign older = lookup_entry.slots[0].offset < lookup_entry.tailSlot.offset;
     BTBTagGen #(
         `INST_OFFSET,
         `UBTB_TAG_SIZE
@@ -90,75 +46,43 @@ generate;
         assign lookup_hits[i] = entrys[i].en && entrys[i].tag == lookup_tag;
         assign updateHits[i] = entrys[i].en && entrys[i].tag == update_tag;
     end
-    for(genvar br=0; br<`SLOT_NUM-1; br++)begin
-        assign isBr[br] = lookup_entry.slots[br].en;
-        assign lookup_carry[br] = lookup_entry.slots[br].carry;
-    end
     for(genvar br=0; br<`SLOT_NUM; br++)begin
         assign cond_history[br] = lookup_ctr[br][1];
     end
-    assign isBr[`SLOT_NUM-1] = lookup_entry.tailSlot.en &&
-                                lookup_entry.tailSlot.br_type == CONDITION;
-    assign lookup_carry[`SLOT_NUM-1] = lookup_entry.tailSlot.carry;
-    assign br_takens = isBr & (cond_history | lookup_carry);
 endgenerate
 
+    PredictionResult result_i, result_o;
+    BTBUpdateInfo lookup_entry_i;
+    assign lookup_entry_i = lookup_entry[$bits(BTBUpdateInfo)-1: 0];
     always_comb begin
-        if(br_takens[1] & ~older)begin
-            br_num = 2'b1;
-            cond_valid = 2'b10;
-            br_offset = lookup_entry.tailSlot.target[`JAL_OFFSET-1: 0];
-            br_size = lookup_entry.tailSlot.offset;
-            br_tar_state = lookup_entry.tailSlot.tar_state;
+        result_i = 0;
+        result_i.en = ~ubtb_io.redirect.flush & ~ubtb_io.redirect.s2_redirect & ubtb_io.redirect.tage_ready;
+        result_i.stream.start_addr = ubtb_io.pc;
+        result_i.stream_idx = ubtb_io.fsqIdx;
+        result_i.stream_dir = ubtb_io.fsqDir;
+        result_i.redirect_info.ghistIdx = ubtb_io.history.ghistIdx;
+        result_i.redirect_info.tage_history = ubtb_io.history.tage_history;
+        result_i.redirect_info.rasInfo = 0;
+        result_i.stream.target = ubtb_io.pc + `BLOCK_SIZE;
 `ifdef RVC
-            br_rvc = lookup_entry.tailSlot.rvc;
-`endif
-        end
-        else begin
-            br_num = isBr[0] + isBr[1];
-            cond_valid = isBr;
-            br_offset = br_offset_normal;
-            br_size = br_size_normal;
-            br_tar_state = br_tar_state_normal;
-`ifdef RVC
-            br_rvc = br_rvc_normal;
-`endif
-        end
-    end
-
-    always_comb begin
-        ubtb_io.result.en = ~ubtb_io.redirect.flush & ~ubtb_io.redirect.s2_redirect & ubtb_io.redirect.tage_ready;
-        ubtb_io.result.btb_hit = lookup_hit;
-        ubtb_io.result.stream.taken = lookup_hit & ((|br_takens) | (tail_taken));
-        ubtb_io.result.br_type = |br_takens ? CONDITION : lookup_entry.tailSlot.br_type;
-        ubtb_io.result.ras_type = |br_takens ? NONE : lookup_entry.tailSlot.ras_type;
-        ubtb_io.result.stream.start_addr = ubtb_io.pc;
-
-        ubtb_io.result.stream.target = ~(lookup_hit) ? ubtb_io.pc + `BLOCK_SIZE :
-                                |br_takens ? br_target : tail_target;
-`ifdef RVC
-        ubtb_io.result.stream.rvc = ~lookup_hit ? 0 :
-                                    |br_takens ? br_rvc :
-                                    tail_taken ? lookup_entry.tailSlot.rvc : lookup_entry.fth_rvc;
-        ubtb_io.result.stream.size = ~(lookup_hit) ? `BLOCK_INST_SIZE - 2 :
-                                    |br_takens ? br_size : tail_size;
+        result_i.stream.size = `BLOCK_INST_SIZE - 2;
 `else
-        ubtb_io.result.stream.size = ~(lookup_hit) ? `BLOCK_INST_SIZE - 1 :
-                                    |br_takens ? br_size : tail_size;
+        result_i.stream.size = `BLOCK_INST_SIZE - 1;
 `endif
-        ubtb_io.result.redirect = 0;
-        ubtb_io.result.cond_num = ~lookup_hit ? 0 : br_num;
-        ubtb_io.result.cond_valid = cond_valid;
-        ubtb_io.result.taken = (|br_takens) | tail_taken;
-        ubtb_io.result.predTaken = br_takens;
-        ubtb_io.result.stream_idx = ubtb_io.fsqIdx;
-        ubtb_io.result.stream_dir = ubtb_io.fsqDir;
-        ubtb_io.result.redirect_info.ghistIdx = ubtb_io.history.ghistIdx;
-        ubtb_io.result.redirect_info.tage_history = ubtb_io.history.tage_history;
-        ubtb_io.result.redirect_info.rasInfo = 0;
-        ubtb_io.result.btbEntry = (|lookup_hits) ? lookup_entry[$bits(BTBUpdateInfo)-1: 0] : 0;
         ubtb_io.meta.ctr = lookup_ctr;
     end
+
+    PredictionResultGen result_gen (
+        .pc(ubtb_io.pc),
+        .hit((|lookup_hits)),
+        .entry(lookup_entry_i),
+        .prediction(cond_history),
+        .ras_addr(),
+        .rasInfo(),
+        .result_i,
+        .result_o
+    );
+    assign ubtb_io.result = result_o;
 
     RandomReplaceD1 #(
         .DEPTH(1),

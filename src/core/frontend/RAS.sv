@@ -13,9 +13,9 @@ module LinkRAS(
 );
     RasInflightIdx top, listTop, listBottom;
     logic `N(`RAS_WIDTH) commitTop, inflightTop;
-    RasInflightIdx top_p1, top_n1, listTop_n1, rtop_p1, rtop_n1, rlistTop_n1, listBottom_n1, listBottom_p1, list_p1;
+    RasInflightIdx top_p1, top_n1, listTop_n1, rtop_p1, rtop_n1;
+    RasInflightIdx rlistTop_n1, listBottom_n1, listBottom_p1, list_p1;
     RasInflightIdx `N(`RAS_INFLIGHT_SIZE) topList;
-    logic `ARRAY(`RAS_INFLIGHT_SIZE, `RAS_WIDTH) commitTopList;
 
     logic [1: 0] squashType;
     RasRedirectInfo r;
@@ -30,6 +30,8 @@ module LinkRAS(
     logic `VADDR_BUS squash_target;
 
     logic select_commit, commit_older;
+    logic select_bypass; // push then pop in the next cycle
+    RasEntry bypassEntry;
     logic commit_update;
 
     LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_top_n1 (1, top, top_n1);
@@ -50,13 +52,14 @@ module LinkRAS(
     assign we = ~ras_io.squash & ras_io.request & ras_io.ras_type[1] |
                 ras_io.squash & squashType[1];
     assign waddr = ras_io.squash ? r.listTop.idx : listTop.idx;
-    assign raddr = ras_io.request & ras_io.ras_type[1] ? listTop :
-                   ras_io.request & ras_io.ras_type[0] ? list_p1 : top_p1;
-    assign commit_raddr = commitTopList[raddr.idx];
+    assign raddr = ras_io.request & ras_io.ras_type[0] ? list_p1 : top_p1;
+    assign commit_raddr = ras_io.request && ras_io.ras_type == POP ? inflightTop - 2 : inflightTop - 1;
     assign commit_waddr = btbEntry.tailSlot.ras_type == POP_PUSH ? commitTop - 1 : commitTop;
 
     always_ff @(posedge clk)begin
         select_commit <= commit_older;
+        select_bypass <= ras_io.request & ras_io.ras_type[1];
+        bypassEntry.pc <= ras_io.target;
     end
 
 `ifdef RVC
@@ -77,7 +80,8 @@ module LinkRAS(
     assign ras_io.rasInfo.rasTop = top;
     assign ras_io.rasInfo.listTop = listTop;
     assign ras_io.rasInfo.inflightTop = inflightTop;
-    assign ras_io.entry = select_commit ? commitEntry : entry;
+    assign ras_io.entry = select_bypass ? bypassEntry :
+                          select_commit ? commitEntry : entry;
 
     MPRAM #(
         .WIDTH($bits(RasEntry)),
@@ -119,14 +123,17 @@ module LinkRAS(
             listBottom <= 0;
             topList <= 0;
             commitTop <= 0;
-            commitTopList <= 0;
             inflightTop <= 0;
         end
         else begin
             if(ras_io.squash)begin
                 if(squashType[1])begin
-                    topList[r.listTop.idx] <= r.rasTop;
-                    commitTopList[r.listTop.idx] <= r.inflightTop;
+                    if(squashType[0])begin
+                        topList[r.listTop.idx] <= topList[rtop_p1.idx];
+                    end
+                    else begin
+                        topList[r.listTop.idx] <= r.rasTop;
+                    end
                     listTop <= rlistTop_n1;
                     top <= rlistTop_n1;
                 end
@@ -151,8 +158,12 @@ module LinkRAS(
             end
             else if(ras_io.request)begin
                 if(ras_io.ras_type[1])begin
-                    topList[listTop.idx] <= top;
-                    commitTopList[listTop.idx] <= inflightTop;
+                    if(ras_io.ras_type[0])begin
+                        topList[listTop.idx] <= topList[top_p1.idx];
+                    end
+                    else begin
+                        topList[listTop.idx] <= top;
+                    end
                     listTop <= listTop_n1;
                     top <= listTop_n1;
                 end
