@@ -10,7 +10,7 @@ module StoreCommitBuffer(
     output logic empty
 );
 
-    logic `N(`STORE_COMMIT_SIZE) addr_en, writing;
+    logic `N(`STORE_COMMIT_SIZE) addr_en, data_valid, writing;
     logic `N(`DCACHE_BLOCK_SIZE) addrs `N(`STORE_COMMIT_SIZE);
     // write back counter info
     logic `N(`STORE_COUNTER_WIDTH) counter `N(`STORE_COMMIT_SIZE);
@@ -19,24 +19,28 @@ module StoreCommitBuffer(
     SCDataModule data_module (.*, .io(data_io));
 
 // write
-    logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) whit, whit_writing;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) whit;
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_WIDTH) whit_idx;
-    logic `N(`STORE_PIPELINE) hit, hit_writing, wen;
+    logic `N(`STORE_PIPELINE) hit, wen, wen_pre;
     logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE-`DCACHE_BYTE_WIDTH) waddr;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) wmask;
     logic `ARRAY(`STORE_PIPELINE, `DCACHE_BITS) wdata;
     logic `N(`STORE_PIPELINE) conflict;
     logic `N(`STORE_PIPELINE) data_we, data_we_combine, weq_combine;
-    logic `ARRAY(`STORE_PIPELINE, `STORE_PIPELINE) weq;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_PIPELINE) weq, weq_pre;
     logic `ARRAY(`STORE_PIPELINE, $clog2(`STORE_PIPELINE)) weq_idx;
+    logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) free_we;
+    logic `N(`STORE_COMMIT_SIZE) free_we_combine;
     logic `N(`STORE_PIPELINE) write_en;
 
+    assign wen_pre = io.en & ~io.uncache;
     always_ff @(posedge clk)begin
         if(!io.conflict)begin
-            wen <= io.en & ~io.uncache;
+            wen <= wen_pre;
             waddr <= io.addr;
             wmask <= io.mask;
             wdata <= io.data;
+            weq <= weq_pre;
         end
     end
 
@@ -44,24 +48,22 @@ generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         for(genvar j=0; j<`STORE_COMMIT_SIZE; j++)begin
             assign whit[i][j] = addr_en[j] & (addrs[j] == waddr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH]);
-            assign whit_writing[i][j] = whit[i][j] & addr_en[j] & writing[j];
         end
         Encoder #(`STORE_COMMIT_SIZE) encoder_whit (whit[i], whit_idx[i]);
     end
 
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-            assign hit[i] = |whit[i];
-            assign hit_writing[i] = |whit_writing[i];
-            for(genvar j=0; j<`STORE_PIPELINE; j++)begin
-                if(i <= j)begin
-                    assign weq[i][j] = 0;
-                end
-                else begin
-                    assign weq[i][j] = wen[i] & wen[j] & (waddr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH] == waddr[j][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH]);
-                end
+        assign hit[i] = |whit[i];
+        for(genvar j=0; j<`STORE_PIPELINE; j++)begin
+            if(i <= j)begin
+                assign weq_pre[i][j] = 0;
             end
-            assign weq_combine[i] = |weq[i];
-            Encoder #(`STORE_PIPELINE) encoder_weq (weq[i], weq_idx[i]);
+            else begin
+                assign weq_pre[i][j] = wen_pre[i] & wen_pre[j] & (io.addr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH] == io.addr[j][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH]);
+            end
+        end
+        assign weq_combine[i] = |weq[i];
+        Encoder #(`STORE_PIPELINE) encoder_weq (weq[i], weq_idx[i]);
     end
 endgenerate
 
@@ -83,8 +85,9 @@ endgenerate
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         assign write_en[i] = wen[i] & ~(hit[i] | weq_combine[i]) & free_valid[i] & ~io.conflict;
-        assign conflict[i] = wen[i] & (hit_writing[i] | (~free_valid[i] & ~(hit[i] | weq_combine[i])));
-        assign data_we[i] = wen[i] & (hit[i] | weq_combine[i] | free_valid[i]) & ~hit_writing[i];
+        assign free_we[i] = {`STORE_COMMIT_SIZE{write_en[i]}} & free_en[i];
+        assign conflict[i] = wen[i] & ((~free_valid[i] & ~(hit[i] | weq_combine[i])));
+        assign data_we[i] = wen[i] & (hit[i] | weq_combine[i] | free_valid[i]);
         assign data_we_combine[i] = data_we[i] & ~io.conflict;
         assign data_io.wen[i] = data_we_combine[i];
         assign data_io.we_new[i] = ~(hit[i]);
@@ -95,6 +98,7 @@ generate
         assign data_io.wmask[i] = wmask[i];
     end
 endgenerate
+    ParallelOR #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) or_free (free_we, free_we_combine);
     assign io.conflict = |conflict;
 
 // write to dcache
@@ -105,6 +109,7 @@ endgenerate
     logic `ARRAY(`STORE_PIPELINE, `STORE_COMMIT_SIZE) widx_decode, widx_valid;
     logic `N(`STORE_COMMIT_SIZE) widx_valid_combine, select_en;
     logic thresh_write;
+    logic `N(`STORE_COMMIT_SIZE) conflictIdx_decode, refillIdx_decode;
 generate
     assign write_ready = select_en;
     DirectionSelector #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) write_selector (
@@ -115,14 +120,14 @@ generate
         .ready(ready),
         .select(select_en)
     );
-    PEncoder #(`STORE_COMMIT_SIZE) encoder_write_ready (write_ready, widx);
+    Encoder #(`STORE_COMMIT_SIZE) encoder_write_ready (write_ready, widx);
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         Decoder #(`STORE_COMMIT_SIZE) decoder_widx (data_io.windex[i], widx_decode[i]);
         assign widx_valid[i] = widx_decode[i] & {`STORE_COMMIT_SIZE{data_io.wen[i]}};
     end
     ParallelOR #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) or_widx ( widx_valid, widx_valid_combine);
     for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
-        assign ready[i] = ((counter[i] == 1) | thresh_write | flush) & addr_en[i] & ~writing[i];
+        assign ready[i] = ((counter[i] == 1) | thresh_write | flush) & addr_en[i] & data_valid[i] & ~writing[i];
         always_ff @(posedge clk or posedge rst)begin
             if(rst == `RST)begin
                 counter[i] <= 1;
@@ -160,6 +165,8 @@ endgenerate
     assign wio.paddr = cache_addr_n;
     assign wio.data = data_io.cacheData;
     assign wio.mask = data_io.cacheMask;
+    Decoder #(`STORE_COMMIT_SIZE) decoder_conflictIdx (wio.conflictIdx, conflictIdx_decode);
+    Decoder #(`STORE_COMMIT_SIZE) decoder_refillIdx (wio.refillIdx, refillIdx_decode);
 
 // forward
     logic `ARRAY(`LOAD_PIPELINE, `STORE_COMMIT_SIZE) offset_vec, fwd_offset_vec;
@@ -203,13 +210,12 @@ endgenerate
         if(rst == `RST)begin
             addr_en <= 0;
             writing <= 0;
+            data_valid <= 0;
         end
         else begin
             for(int i=0; i<`STORE_PIPELINE; i++)begin
                 if(write_en[i])begin
-                    addr_en[free_idx[i]] <= 1'b1;
                     addrs[free_idx[i]] <= waddr[i][`PADDR_SIZE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BANK_WIDTH];
-                    writing[free_idx[i]] <= 0;
                 end
             end
 
@@ -222,11 +228,20 @@ endgenerate
             end
 
             if(wio.success)begin
-                addr_en[wio.conflictIdx] <= 1'b0;
+                writing[wio.conflictIdx] <= 1'b0;
             end
 
             if(wio.refill)begin
-                addr_en[wio.refillIdx] <= 1'b0;
+                writing[wio.refillIdx] <= 1'b0;
+            end
+
+            for(int i=0; i<`STORE_COMMIT_SIZE; i++)begin
+                addr_en[i] <= ((addr_en[i] & ~(~data_valid[i] & ~writing[i])) 
+                                | widx_valid_combine[i]);
+                data_valid[i] <= (((data_valid[i] & ~(write_ready[i] & wio.valid) &
+                                    ~(addr_en[i] & ~data_valid[i] & ~writing[i]))) | 
+                                  widx_valid_combine[i] |
+                                  wio.conflict & conflictIdx_decode[i]);
             end
         end
     end

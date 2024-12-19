@@ -704,6 +704,9 @@ endgenerate
     `Log(DLog::Debug, T_FSQ, bpu_fsq_io.update, $sformatf("update BP%4d. [%8h %4d]->%8h %8h %b", commit_head, logStream.start_addr, logStream.size, logStream.target, update_target_pc, logError))
     `Log(DLog::Debug, T_FSQ, bpu_fsq_io.squash, $sformatf("squash BP [%d %d].", redirect_idx, redirect_n))
 
+    `PERF(pred_error_cond, commitValid & pred_error & ~commitWBInfo.exception & commitWBInfo.br_type == CONDITION)
+    `PERF(pred_error_ind, commitValid & pred_error & ~commitWBInfo.exception & commitWBInfo.br_type == INDIRECT)
+    `PERF(pred_error_call, commitValid & pred_error & ~commitWBInfo.exception & commitWBInfo.br_type == CALL)
     `PERF(pred_error, commitValid & pred_error & ~commitWBInfo.exception)
     `PERF(front_redirect_direct, pd_redirect.en & pd_redirect.direct)
     `PERF(front_redirect_nobranch, pd_redirect.en & ~pd_redirect.direct)
