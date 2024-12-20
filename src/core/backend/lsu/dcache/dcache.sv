@@ -8,7 +8,7 @@ module DCache(
 `ifdef RVA
     DCacheAmoIO.dcache amo_io,
 `endif
-    AxiIO.master axi_io,
+    CacheBus.master axi_io,
     NativeSnoopIO.master snoop_io,
     input BackendCtrl backendCtrl
 );
@@ -65,15 +65,10 @@ module DCache(
     logic sc_match;
 `endif
 
-    logic miss_rst, replace_rst, cache_rst;
-    SyncRst rst_miss(clk, rst, miss_rst);
-    SyncRst rst_replace(clk, rst, replace_rst);
-    SyncRst rst_cache(clk, rst, cache_rst);
-
 
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
-    AxiIO #(
+    CacheBus #(
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, `DCACHE_WAY_WIDTH
     ) dcache_axi_io();
     ReplaceIO #(
@@ -81,15 +76,15 @@ module DCache(
         .WAY_NUM(`DCACHE_WAY),
         .READ_PORT(`LOAD_PIPELINE)
     ) replace_io();
-    DCacheMiss dcache_miss(.*, .rst(miss_rst), .io(miss_io), .r_axi_io(dcache_axi_io.masterr));
+    DCacheMiss dcache_miss(.*, .io(miss_io), .r_axi_io(dcache_axi_io.masterr));
     PLRU #(
         .DEPTH(`DCACHE_SET),
         .WAY_NUM(`DCACHE_WAY),
         .READ_PORT(`LOAD_PIPELINE)
-    ) plru(.*, .rst(cache_rst));
-    ReplaceQueue replace_queue(.*, .rst(replace_rst), .io(replace_queue_io), .w_axi_io(dcache_axi_io.masterw));
-    `AXI_ASSIGN_REQ_INTF(axi_io, dcache_axi_io)
-    `AXI_ASSIGN_RESP_INTF(dcache_axi_io, axi_io)
+    ) plru(.*);
+    ReplaceQueue replace_queue(.*, .io(replace_queue_io), .w_axi_io(dcache_axi_io.masterw));
+    `CACHE_ASSIGN_REQ_INTF(axi_io, dcache_axi_io)
+    `CACHE_ASSIGN_RESP_INTF(dcache_axi_io, axi_io)
 
 // read
     logic `N(`LOAD_PIPELINE) r_req, r_req_s3;
@@ -152,7 +147,7 @@ endgenerate
 
     DCacheData cache_data (
         .clk,
-        .rst(cache_rst),
+        .rst,
         .tagv_en,
         .tagv_we,
         .tagv_index(tagvIdx),
@@ -204,13 +199,14 @@ endgenerate
 
     LoadIdx `N(`LOAD_PIPELINE) lqIdx;
     RobIdx `N(`LOAD_PIPELINE) robIdx;
-    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) miss_addr;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) miss_addr, rpaddr;
     logic `N(`LOAD_PIPELINE) rhit;
     logic `N(`LOAD_PIPELINE) load_refill_conflict;
     logic `N(`LOAD_PIPELINE) load_refill_reply;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign req_cancel[i] = req_bank_conflict & ~rio.oldest[i];
+        assign rpaddr[i] = {rio.ptag[i], rvaddr[i][11: 0]};
         always_ff @(posedge clk)begin
             rio.conflict[i] <= write_valid[i] | req_cancel[i];
         end
@@ -234,18 +230,21 @@ endgenerate
     assign miss_io.lqIdx = lqIdx;
     assign miss_io.robIdx = robIdx;
     assign miss_io.raddr = miss_addr;
+    assign miss_io.raddr_pre = rpaddr;
     
     logic replace_hit;
     logic `N(`DCACHE_WAY_WIDTH) replace_hit_way;
     logic `N(`DCACHE_SET_WIDTH) replace_idx;
+    logic `N(`DCACHE_SET_WIDTH) miss_req_addr;
     always_ff @(posedge clk)begin
         `UNPARAM(LOAD_PIPELINE, 2, "replace reuse hit port")
+        miss_req_addr <= miss_io.req_addr`DCACHE_SET_BUS;
         replace_io.hit_en[0] <= r_req_s3[0] & rio.hit[0] | cache_wreq;
-        replace_io.hit_en[1] <= r_req_s3[1] & rio.hit[1] | refill_en_n;
+        replace_io.hit_en[1] <= r_req_s3[1] & rio.hit[1] | miss_req_n & miss_io.req_success;
         replace_io.hit_way[0] <= cache_wreq ? cache_wway : wayHit[0];
-        replace_io.hit_way[1] <= refill_en_n ? refill_way_n : wayHit[1];
+        replace_io.hit_way[1] <= miss_req_n & miss_io.req_success ? replace_io.miss_way : wayHit[1];
         replace_io.hit_index[0] <= cache_wreq ? waddr_n`DCACHE_SET_BUS : miss_io.raddr[0]`DCACHE_SET_BUS;
-        replace_io.hit_index[1] <= refill_en_n ? refill_addr_n`DCACHE_SET_BUS : miss_io.raddr[1]`DCACHE_SET_BUS;
+        replace_io.hit_index[1] <= miss_req_n & miss_io.req_success ? miss_req_addr : miss_io.raddr[1]`DCACHE_SET_BUS;
     end
 
     assign rio.lq_en = miss_io.lq_en;
@@ -316,6 +315,7 @@ endgenerate
     Encoder #(`DCACHE_WAY) encoder_miss_way (replace_io.miss_way, missWay_encode);
     assign miss_io.wen = ~whit & wreq_n;
     assign miss_io.waddr = waddr_n;
+    assign miss_io.waddr_pre = waddr;
     assign miss_io.wdata = wdata_n;
     assign miss_io.wmask = wmask_n;
     assign miss_io.req_success = ~snoop_req & miss_req_n & 

@@ -3,17 +3,13 @@
 module AxiInterface(
     input logic clk,
     input logic rst,
-    AxiIO.slaver icache_io,
-    AxiIO.slaver tlb_io,
-    AxiIO.slave dcache_io,
-    AxiIO.slave ducache_io,
+    CacheBus.slaver icache_io,
+    CacheBus.slaver tlb_io,
+    CacheBus.slave dcache_io,
+    CacheBus.slave ducache_io,
     AxiIO.master axi,
     NativeSnoopIO.slave dcache_snoop_io
 );
-
-    logic mux_rst, coherence_rst;
-    SyncRst rst_mux (clk, rst, mux_rst);
-    SyncRst rst_coherence (clk, rst, coherence_rst);
 
     typedef logic [`PADDR_SIZE-1: 0] addr_t;
     typedef logic [`CORE_WIDTH-1: 0] id_t;
@@ -21,26 +17,26 @@ module AxiInterface(
     typedef logic [`CORE_WIDTH+2-1: 0] mst_id_t;
     typedef logic [`XLEN-1: 0] data_t;
     typedef logic [`XLEN/8-1: 0] strb_t;
-    `AXI_TYPEDEF_AW_CHAN_T(AxiAW, addr_t, id_t, user_t)
-    `AXI_TYPEDEF_W_CHAN_T(AxiW, data_t, strb_t, user_t)
-    `AXI_TYPEDEF_B_CHAN_T(AxiB, id_t, user_t)
-    `AXI_TYPEDEF_AR_CHAN_T(AxiAR, addr_t, id_t, user_t)
-    `AXI_TYPEDEF_R_CHAN_T(AxiR, data_t, id_t, user_t)
-    `AXI_TYPEDEF_REQ_T(AxiReq, AxiAW, AxiW, AxiAR)
-    `AXI_TYPEDEF_RESP_T(AxiResp, AxiB, AxiR)
+    `CACHE_TYPEDEF_AW_CHAN_T(AxiAW, addr_t, id_t, user_t)
+    `CACHE_TYPEDEF_W_CHAN_T(AxiW, data_t, strb_t, user_t)
+    `CACHE_TYPEDEF_B_CHAN_T(AxiB, id_t, user_t)
+    `CACHE_TYPEDEF_AR_CHAN_T(AxiAR, addr_t, id_t, user_t)
+    `CACHE_TYPEDEF_R_CHAN_T(AxiR, data_t, id_t, user_t)
+    `CACHE_TYPEDEF_REQ_T(AxiReq, AxiAW, AxiW, AxiAR)
+    `CACHE_TYPEDEF_RESP_T(AxiResp, AxiB, AxiR)
 
-    `AXI_TYPEDEF_AW_CHAN_T(AxiMAW, addr_t, mst_id_t, user_t)
-    `AXI_TYPEDEF_B_CHAN_T(AxiMB, mst_id_t, user_t)
-    `AXI_TYPEDEF_AR_CHAN_T(AxiMAR, addr_t, mst_id_t, user_t)
-    `AXI_TYPEDEF_R_CHAN_T(AxiMR, data_t, mst_id_t, user_t)
-    `AXI_TYPEDEF_REQ_T(AxiMReq, AxiMAW, AxiW, AxiMAR)
-    `AXI_TYPEDEF_RESP_T(AxiMResp, AxiMB, AxiMR)
+    `CACHE_TYPEDEF_AW_CHAN_T(AxiMAW, addr_t, mst_id_t, user_t)
+    `CACHE_TYPEDEF_B_CHAN_T(AxiMB, mst_id_t, user_t)
+    `CACHE_TYPEDEF_AR_CHAN_T(AxiMAR, addr_t, mst_id_t, user_t)
+    `CACHE_TYPEDEF_R_CHAN_T(AxiMR, data_t, mst_id_t, user_t)
+    `CACHE_TYPEDEF_REQ_T(AxiMReq, AxiMAW, AxiW, AxiMAR)
+    `CACHE_TYPEDEF_RESP_T(AxiMResp, AxiMB, AxiMR)
     AxiReq ireq, dreq, du_req, tlb_req;
     AxiResp iresp, dresp, du_resp, tlb_resp;
     AxiMReq req_o, co_req_o;
     AxiMResp resp_i, co_resp_i;
 
-    `AXI_ASSIGN_TO_AR(ireq.ar, icache_io)
+    `CACHE_ASSIGN_TO_AR(ireq.ar, icache_io)
     assign ireq.ar_valid = icache_io.ar_valid;
     assign ireq.r_ready = icache_io.r_ready;
     assign ireq.aw = 0;
@@ -48,11 +44,11 @@ module AxiInterface(
     assign ireq.aw_valid = 0;
     assign ireq.w_valid = 0;
     assign ireq.b_ready = 0;
-    `AXI_ASSIGN_FROM_R(icache_io, iresp.r)
+    `CACHE_ASSIGN_FROM_R(icache_io, iresp.r)
     assign icache_io.ar_ready = iresp.ar_ready;
     assign icache_io.r_valid = iresp.r_valid;
 
-    `AXI_ASSIGN_TO_AR(tlb_req.ar, tlb_io)
+    `CACHE_ASSIGN_TO_AR(tlb_req.ar, tlb_io)
     assign tlb_req.ar_valid = tlb_io.ar_valid;
     assign tlb_req.r_ready = icache_io.r_ready;
     assign tlb_req.aw = 0;
@@ -60,18 +56,49 @@ module AxiInterface(
     assign tlb_req.aw_valid = 0;
     assign tlb_req.w_valid = 0;
     assign tlb_req.b_ready = 0;
-    `AXI_ASSIGN_FROM_R(tlb_io, tlb_resp.r)
+    `CACHE_ASSIGN_FROM_R(tlb_io, tlb_resp.r)
     assign tlb_io.ar_ready = tlb_resp.ar_ready;
     assign tlb_io.r_valid = tlb_resp.r_valid;
 
-    `AXI_ASSIGN_TO_REQ(dreq, dcache_io)
-    `AXI_ASSIGN_FROM_RESP(dcache_io, dresp)
+    `CACHE_ASSIGN_TO_REQ(dreq, dcache_io)
+    `CACHE_ASSIGN_FROM_RESP(dcache_io, dresp)
 
-    `AXI_ASSIGN_TO_REQ(du_req, ducache_io)
-    `AXI_ASSIGN_FROM_RESP(ducache_io, du_resp)
+    `CACHE_ASSIGN_TO_REQ(du_req, ducache_io)
+    `CACHE_ASSIGN_FROM_RESP(ducache_io, du_resp)
 
-    `AXI_ASSIGN_FROM_REQ(axi, co_req_o)
-    `AXI_ASSIGN_TO_RESP(co_resp_i, axi)
+    `__CACHE_TO_W(assign, axi.w, _, co_req_o.w, .)
+    assign axi.ar_valid = co_req_o.ar_valid;
+    assign axi.w_valid = co_req_o.w_valid;
+    assign axi.b_ready = co_req_o.b_ready;
+    assign axi.r_ready = co_req_o.r_ready;
+    assign axi.aw_valid = co_req_o.aw_valid;
+    assign axi.ar_id = co_req_o.ar.id;
+    assign axi.ar_addr = co_req_o.ar.addr;
+    assign axi.ar_len = co_req_o.ar.len;
+    assign axi.ar_size = co_req_o.ar.size;
+    assign axi.ar_burst = co_req_o.ar.burst;
+    assign axi.ar_user = co_req_o.ar.user;
+    assign axi.aw_id = co_req_o.aw.id;
+    assign axi.aw_addr = co_req_o.aw.addr;
+    assign axi.aw_len = co_req_o.aw.len;
+    assign axi.aw_size = co_req_o.aw.size;
+    assign axi.aw_burst = co_req_o.aw.burst;
+    assign axi.aw_user = co_req_o.aw.user;
+    assign axi.aw_cache = 0;
+    assign axi.aw_prot = 0;
+    assign axi.aw_qos = 0;
+    assign axi.aw_region = 0;
+    assign axi.ar_cache = 0;
+    assign axi.ar_prot = 0;
+    assign axi.ar_qos = 0;
+    assign axi.ar_region = 0;
+    `__CACHE_TO_B(assign, co_resp_i.b, ., axi.b, _)
+    `__CACHE_TO_R(assign, co_resp_i.r, ., axi.r, _)
+    assign co_resp_i.aw_ready = axi.aw_ready;
+    assign co_resp_i.ar_ready = axi.ar_ready;
+    assign co_resp_i.w_ready = axi.w_ready;
+    assign co_resp_i.b_valid = axi.b_valid;
+    assign co_resp_i.r_valid = axi.r_valid;
 
     axi_mux #(
         .SlvAxiIDWidth(`CORE_WIDTH),
@@ -92,7 +119,7 @@ module AxiInterface(
         .NoSlvPorts(4)
     ) axi_mux_inst(
         .clk_i(clk),
-        .rst_ni(~mux_rst),
+        .rst_ni(~rst),
         .test_i(1'b0),
         .slv_reqs_i({dreq, du_req, tlb_req, ireq}),
         .slv_resps_o({dresp, du_resp, tlb_resp, iresp}),
@@ -115,7 +142,7 @@ module AxiInterface(
         .axi_resp_t(AxiMResp)
     ) dcache_coherence (
         .clk,
-        .rst(coherence_rst),
+        .rst(rst),
         .wway_i(wway),
         .slv_req_i(req_o),
         .slv_resp_o(resp_i),
@@ -169,13 +196,14 @@ module DCacheCoherence #(
     logic `N(`DCACHE_REPLACE_SIZE) replace_hits, replace_clear_hits;
     logic `N(`DCACHE_REPLACE_WIDTH) replace_idx, replace_clear_idx;
     logic replace_hit, replace_clear_en;
-    logic aw_writeEvict;
+    logic aw_writeEvict, ar_makeUnique;
 
     axi_req_t slv_req_i_s2;
     axi_resp_t slv_resp_o_s2;
 
     assign w_valid = (slv_resp_o.r.last & slv_resp_o.r_valid & slv_req_i.r_ready & 
-                     (slv_resp_o.r.id[`CORE_WIDTH+1: `CORE_WIDTH] == 2'b11));
+                     (slv_resp_o.r.id[`CORE_WIDTH+1: `CORE_WIDTH] == 2'b11)) |
+                     ar_makeUnique;
     Decoder #(`DCACHE_WAY) decoder_way (w_way_idx, w_way);
     MPRAM #(
         .WIDTH(`DCACHE_WAY * (`DCACHE_TAG+1)),
@@ -218,8 +246,10 @@ endgenerate
         rtag <= slv_req_i.ar.addr`DCACHE_TAG_BUS;
         ac_addr <= slv_req_i.ar.addr;
         r_dcache <= slv_req_i.ar.id[`CORE_WIDTH+1: `CORE_WIDTH] == 2'b11;
-        aw_writeEvict <= slv_req_i.aw_valid & ~slv_req_i.aw.user & 
+        aw_writeEvict <= slv_req_i.aw_valid & (slv_req_i.aw.snoop == `ACEOP_WRITE_EVICT) & 
                          (slv_req_i.aw.id[`CORE_WIDTH+1: `CORE_WIDTH] == 2'b11);
+        ar_makeUnique <= slv_req_i.ar_valid & (slv_req_i.ar.snoop == `ACEOP_MAKE_UNIQUE) &
+                        (slv_req_i.ar.id[`CORE_WIDTH+1: `CORE_WIDTH] == 2'b11);
         if(slv_req_i.ar_valid & (slv_req_i.ar.id[`CORE_WIDTH+1: `CORE_WIDTH] == 2'b11))begin
             wtag <= slv_req_i.ar.addr`DCACHE_TAG_BUS;
             widx <= slv_req_i.ar.addr`DCACHE_SET_BUS;
@@ -283,11 +313,13 @@ endgenerate
     assign mst_req_o.w_valid = slv_req_i_s2.w_valid;
     assign mst_req_o.b_ready = slv_req_i_s2.b_ready;
     assign mst_req_o.ar = slv_req_i_s2.ar;
-    assign mst_req_o.ar_valid = (~replace_hit & ~tagv_hit | r_dcache) & slv_req_i_s2.ar_valid;
+    assign mst_req_o.ar_valid = (~replace_hit & ~tagv_hit | r_dcache) & ~ar_makeUnique & slv_req_i_s2.ar_valid;
     assign mst_req_o.r_ready = slv_req_i_s2.r_ready;
 
     assign slv_resp_o_s2.aw_ready = mst_resp_i.aw_ready | aw_writeEvict;
-    assign slv_resp_o_s2.ar_ready = (~replace_hit & ~tagv_hit | r_dcache) ? mst_resp_i.ar_ready : dcache_snoop_io.ac_ready;
+    assign slv_resp_o_s2.ar_ready = ar_makeUnique ? 1'b1 : 
+             (~replace_hit & ~tagv_hit | r_dcache) ? mst_resp_i.ar_ready :
+                                                     dcache_snoop_io.ac_ready;
     assign slv_resp_o_s2.w_ready = mst_resp_i.w_ready;
     assign slv_resp_o_s2.b_valid = mst_resp_i.b_valid;
     assign slv_resp_o_s2.b = mst_resp_i.b;

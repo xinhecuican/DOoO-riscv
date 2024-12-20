@@ -3,12 +3,14 @@
 interface DCacheMissIO;
     logic `N(`LOAD_PIPELINE) ren;
     logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) raddr;
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) raddr_pre;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) lqIdx;
     RobIdx `N(`LOAD_PIPELINE) robIdx;
     logic `N(`LOAD_PIPELINE) rfull;
 
     logic wen;
     logic `N(`PADDR_SIZE) waddr;
+    logic `N(`PADDR_SIZE) waddr_pre;
     logic `N(`STORE_COMMIT_WIDTH) scIdx;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) wdata;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask;
@@ -37,7 +39,7 @@ interface DCacheMissIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
     modport miss (input ren, raddr, lqIdx, robIdx, req_success, replaceWay, refill_valid,
-                        wen, waddr, scIdx, wdata, wmask,
+                        wen, waddr, scIdx, wdata, wmask, raddr_pre, waddr_pre,
 `ifdef RVA
                   input amo_en, output amo_refill,
 `endif
@@ -51,7 +53,7 @@ module DCacheMiss(
     input logic rst,
     DCacheMissIO.miss io,
     ReplaceQueueIO.miss replace_queue_io,
-    AxiIO.masterr r_axi_io,
+    CacheBus.masterr r_axi_io,
     input BackendCtrl backendCtrl
 );
     typedef struct packed {
@@ -68,6 +70,7 @@ module DCacheMiss(
     logic `N(`DCACHE_REPLACE_WIDTH) replace_idx `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`DCACHE_MISS_SIZE);
+    logic `N(`DCACHE_MISS_SIZE) data_valid_all, wvalid;
     logic `N(`STORE_COMMIT_WIDTH) scIdxs `N(`DCACHE_MISS_SIZE);
 
     logic `N(`DCACHE_MISS_WIDTH) mshr_head, head, tail;
@@ -78,6 +81,7 @@ module DCacheMiss(
     logic `N($clog2(`LOAD_PIPELINE+1)+1) free_num;
 
     logic req_start, req_next;
+    logic req_valid_all, req_wvalid;
     logic req_last, rlast, data_refilled;
     logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `XLEN) cache_eq_data;
 
@@ -95,7 +99,7 @@ module DCacheMiss(
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) r_req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
     logic `N(`LOAD_PIPELINE) mshr_remain_valid, rhit_combine, remain_valid;
-    logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) rfree_eq;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) rfree_eq, raddr_eq_pre, raddr_eq;
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) rfree_idx;
 
     CalValidNum #(`LOAD_PIPELINE+1) cal_req_order (free_en, req_order);
@@ -105,14 +109,16 @@ generate
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
             if(i <= j)begin
                 assign rfree_eq[i][j] = 0;
+                assign raddr_eq_pre[i][j] = 0;
             end
             else begin
-                assign rfree_eq[i][j] = io.ren[i] & io.ren[j] & 
-                            (io.raddr[i]`DCACHE_BLOCK_BUS == io.raddr[j]`DCACHE_BLOCK_BUS) &
+                assign raddr_eq_pre[i][j] = (io.raddr_pre[i]`DCACHE_BLOCK_BUS == io.raddr_pre[j]`DCACHE_BLOCK_BUS);
+                assign rfree_eq[i][j] = io.ren[i] & io.ren[j] & raddr_eq[i][j] &
                             mshr_remain_valid[i] & mshr_remain_valid[j];
             end
         end
     end
+    `SIG_N(raddr_eq_pre, raddr_eq)
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign freeIdx[i] = tail + req_order[i];
         for(genvar j=0; j<`DCACHE_MISS_SIZE; j++)begin
@@ -143,9 +149,10 @@ endgenerate
     logic `N(`DCACHE_MISS_WIDTH) widx, whitIdx;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) read_data, combine_data;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) read_mask, combine_mask;
-    logic `N(`LOAD_PIPELINE) rwfree_eq;
+    logic `N(`LOAD_PIPELINE) rwfree_eq, rwaddr_eq_pre, rwaddr_eq;
     logic `N($clog2(`LOAD_PIPELINE)) rwfree_idx;
     logic wen;
+    logic `N(`DCACHE_BYTE) wmask_all;
 
 `ifdef RVA
     assign wen = io.wen | io.amo_en;
@@ -155,9 +162,11 @@ endgenerate
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign rwfree_eq[i] = io.ren[i] && wen && (io.raddr[i]`DCACHE_BLOCK_BUS == io.waddr`DCACHE_BLOCK_BUS) && mshr_remain_valid[i];
+        assign rwaddr_eq_pre[i] = io.raddr_pre[i]`DCACHE_BLOCK_BUS == io.waddr_pre`DCACHE_BLOCK_BUS;
+        assign rwfree_eq[i] = io.ren[i] && wen && rwaddr_eq[i] && mshr_remain_valid[i];
     end
 endgenerate
+    `SIG_N(rwaddr_eq_pre, rwaddr_eq)
     assign write_req_order = req_order[`LOAD_PIPELINE];
     assign w_req_order = r_req_order[`LOAD_PIPELINE-1] + (io.ren[`LOAD_PIPELINE-1] & ~rhit_combine[`LOAD_PIPELINE-1] & mshr_remain_valid[`LOAD_PIPELINE-1]);
     assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
@@ -166,6 +175,7 @@ endgenerate
     assign w_invalid = rlast | req_last | refill_eq;
     Encoder #(`DCACHE_MISS_SIZE) encoder_whit(whit, whitIdx);
     PEncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
+    ParallelAND #(`DCACHE_BYTE, `DCACHE_BANK) or_wmask (io.wmask, wmask_all);
     assign widx = |whit ? whitIdx : 
                   |rwfree_eq ? freeIdx[rwfree_idx] : freeIdx[`LOAD_PIPELINE];
     // note: 因为现在CommitBuffer同一时间只允许一个cacheline，所以不存在冲突问题
@@ -284,6 +294,8 @@ endgenerate
             scIdxs <= '{default: 0};
             remain_count <= `DCACHE_MISS_SIZE;
             data_refilled <= 0;
+            data_valid_all <= 0;
+            wvalid <= 0;
         end
         else begin
             head <= head + (io.refill_en & io.refill_valid);
@@ -324,11 +336,13 @@ endgenerate
             end
             if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
                 scIdxs[widx] <= io.scIdx;
+                data_valid_all[widx] <= &wmask_all;
+                wvalid[widx] <= 1'b1;
             end
             if(rlast)begin
                 data_refilled <= 1'b1;
             end
-            if(req_last)begin
+            if(req_last | r_axi_io.ar_valid & r_axi_io.ar_ready & req_valid_all)begin
                 dataValid[head] <= 1'b1;
             end
             if(req_next & io.req_success)begin
@@ -338,6 +352,8 @@ endgenerate
                 refilled[head] <= 1'b1;
                 en[head] <= 1'b0;
                 data_refilled <= 1'b0;
+                data_valid_all[head] <= 1'b0;
+                wvalid[head] <= 1'b0;
             end
             if(refilled[mshr_head] & ~(mshr_hit_valid))begin
                 refilled[mshr_head] <= 1'b0;
@@ -400,6 +416,8 @@ endgenerate
             cacheIdx <= 0;
             way <= '{default: 0};
             req_way <= 0;
+            req_valid_all <= 0;
+            req_wvalid <= 0;
         end
         else begin
             if(io.req)begin
@@ -418,6 +436,8 @@ endgenerate
                 req_cache <= 1'b1;
                 cache_addr <= io.req_addr;
                 req_way <= io.replaceWay;
+                req_valid_all <= data_valid_all[head];
+                req_wvalid <= wvalid[head];
             end
 
             if(req_next & io.req_success)begin
@@ -447,12 +467,9 @@ endgenerate
     assign r_axi_io.ar_len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign r_axi_io.ar_size = $clog2(`DATA_BYTE);
     assign r_axi_io.ar_burst = 2'b01;
-    assign r_axi_io.ar_lock = 2'b00;
-    assign r_axi_io.ar_cache = 4'b0;
-    assign r_axi_io.ar_prot = 3'b0;
-    assign r_axi_io.ar_qos = 0;
-    assign r_axi_io.ar_region = 0;
     assign r_axi_io.ar_user = req_way;
+    assign r_axi_io.ar_snoop = req_valid_all ? `ACEOP_MAKE_UNIQUE :
+                               req_wvalid ? `ACEOP_READ_UNIQUE : `ACEOP_READ_SHARED;
 
     assign r_axi_io.r_ready = 1'b1;
 

@@ -32,7 +32,7 @@ rv32f=(
 rv32f_prefix="utils/riscv-tests/isa/rv32uf-p-"
 
 benchmarks=(
-    "median" "memcpy" "multiply" "qsort" "rsort" "uart" "towers" "spmv"
+    "median" "memcpy" "multiply" "qsort" "rsort" "dhrystone" "towers" "spmv"
     "mt-matmul" "mt-memcpy" "mm" "coremark"
 )
 benchmarks_prefix="utils/riscv-tests/benchmarks/"

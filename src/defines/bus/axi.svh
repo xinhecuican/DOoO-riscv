@@ -1,6 +1,6 @@
 `ifndef AXI_SVH
 `define AXI_SVH
-`include "global.svh"
+`include "../global.svh"
 
 // axi
 

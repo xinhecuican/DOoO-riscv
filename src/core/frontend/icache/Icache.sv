@@ -5,7 +5,7 @@ module ICache(
     input logic rst,
     FsqCacheIO.cache fsq_cache_io,
     CachePreDecodeIO.cache cache_pd_io,
-    AxiIO.masterr axi_io,
+    CacheBus.masterr axi_io,
     TlbL2IO.tlb itlb_io,
     CsrTlbIO.tlb csr_itlb_io,
     FenceBus.mmu fenceBus
@@ -270,13 +270,9 @@ endgenerate
     assign axi_io.ar_len = {3'b0, len};
     assign axi_io.ar_size = $clog2(`ICACHE_BYTE);
     assign axi_io.ar_burst = 2'b01;
-    assign axi_io.ar_lock = 0;
-    assign axi_io.ar_cache = 0;
-    assign axi_io.ar_prot = 0;
     assign axi_io.ar_valid = main_state == MISS;
-    assign axi_io.ar_qos = 0;
-    assign axi_io.ar_region = 0;
     assign axi_io.ar_user = 0;
+    assign axi_io.ar_snoop = `ACEOP_READ_SHARED;
     assign axi_io.r_ready = 1'b1;
 
 `define REQ_DEF \

@@ -38,7 +38,7 @@ module LoadQueue(
     CommitBus.mem commitBus,
     input BackendCtrl backendCtrl,
     DCacheLoadIO.queue rio,
-    AxiIO.masterr laxi_io,
+    CacheBus.masterr laxi_io,
     input logic fence_valid
 );
     localparam BANK_SIZE = `LOAD_QUEUE_SIZE / `LOAD_PIPELINE;
@@ -220,12 +220,8 @@ endgenerate
     end
     assign laxi_io.ar_len = 0;
     assign laxi_io.ar_burst = 0;
-    assign laxi_io.ar_lock = 0;
-    assign laxi_io.ar_cache = 0;
-    assign laxi_io.ar_prot = 0;
-    assign laxi_io.ar_qos = 0;
-    assign laxi_io.ar_region = 0;
     assign laxi_io.ar_user = 0;
+    assign laxi_io.ar_snoop = `ACEOP_READ_ONCE;
 
     assign laxi_io.ar_valid = |uncache_arvalid;
     assign laxi_io.r_ready = 1'b1;

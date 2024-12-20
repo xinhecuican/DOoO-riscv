@@ -19,7 +19,7 @@ module PTW(
     input logic fence_flush,
     CachePTWIO.ptw cache_ptw_io,
     CsrL2IO.tlb csr_io,
-    AxiIO.masterr axi_io,
+    CacheBus.masterr axi_io,
     PTWL2IO.ptw ptw_io,
     output logic ptw_wb
 );
@@ -135,11 +135,6 @@ module PTW(
     assign axi_io.ar_len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign axi_io.ar_size = $clog2(`DATA_BYTE);
     assign axi_io.ar_burst = 2'b01;
-    assign axi_io.ar_lock = 2'b00;
-    assign axi_io.ar_cache = 4'b0;
-    assign axi_io.ar_prot = 3'b0;
-    assign axi_io.ar_qos = 0;
-    assign axi_io.ar_region = 0;
     assign axi_io.ar_user = 0;
     assign axi_io.r_ready = 1'b1;
 

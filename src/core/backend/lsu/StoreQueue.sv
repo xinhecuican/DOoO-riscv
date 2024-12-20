@@ -28,7 +28,7 @@ module StoreQueue(
     LoadForwardIO.queue loadFwd,
     CommitBus.mem commitBus,
     input BackendCtrl backendCtrl,
-    AxiIO.masterw saxi_io,
+    CacheBus.masterw saxi_io,
     input logic fence_valid,
     output logic commit_empty,
     output logic `N(`LOAD_PIPELINE) fwd_data_invalid
@@ -227,13 +227,8 @@ endgenerate
     assign saxi_io.aw_len = 0;
     assign saxi_io.aw_size = uncache_size;
     assign saxi_io.aw_burst = 0;
-    assign saxi_io.aw_lock = 0;
-    assign saxi_io.aw_cache = 0;
-    assign saxi_io.aw_prot = 0;
-    assign saxi_io.aw_qos = 0;
-    assign saxi_io.aw_region = 0;
     assign saxi_io.aw_user = 0;
-    assign saxi_io.aw_atop = 0;
+    assign saxi_io.aw_snoop = `ACEOP_WRITE_UNIQUE;
     assign saxi_io.w_data = uncache_data;
     assign saxi_io.w_strb = uncache_strb;
     assign saxi_io.w_last = 1'b1;

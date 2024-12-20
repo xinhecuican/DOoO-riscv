@@ -28,7 +28,7 @@ module ReplaceQueue(
     input logic clk,
     input logic rst,
     ReplaceQueueIO.queue io,
-    AxiIO.masterw w_axi_io,
+    CacheBus.masterw w_axi_io,
     NativeSnoopIO.master snoop_io
 );
     localparam TRANSFER_BANK = `DCACHE_LINE / `DATA_BYTE;
@@ -187,13 +187,8 @@ endgenerate
     assign w_axi_io.aw_len = ~aw_dirty ? 0 : `DCACHE_LINE / `DATA_BYTE - 1;
     assign w_axi_io.aw_size = $clog2(`DATA_BYTE);
     assign w_axi_io.aw_burst = 2'b01;
-    assign w_axi_io.aw_lock = 2'b0;
-    assign w_axi_io.aw_cache = 4'b0;
-    assign w_axi_io.aw_prot = 0;
-    assign w_axi_io.aw_qos = 0;
-    assign w_axi_io.aw_region = 0;
     assign w_axi_io.aw_user = aw_dirty;
-    assign w_axi_io.aw_atop = 0;
+    assign w_axi_io.aw_snoop = aw_dirty ? `ACEOP_WRITE_BACK : `ACEOP_WRITE_EVICT;
 
     assign w_axi_io.w_data = processEntry.data[widx];
     assign w_axi_io.w_strb = {`DATA_BYTE{1'b1}};

@@ -247,18 +247,6 @@ endinterface
     int  DcacheLineWidth;
   } ccu_cfg_t;
 
-  // transaction type
-  typedef enum logic[2:0] {
-    READ_NO_SNOOP,
-    READ_ONCE,
-    READ_SHARED,
-    READ_UNIQUE,
-    CLEAN_UNIQUE,
-    WRITE_NO_SNOOP,
-    WRITE_BACK,
-    WRITE_UNIQUE
-  } ace_trs_t;
-
   typedef struct packed {
     logic        wasUnique;
     logic        isShared;
@@ -267,17 +255,26 @@ endinterface
     logic        dataTransfer;
   } crresp_t;
 
-  `define ACEOP_READ_ONCE = 4'b0000;
-  `define ACEOP_READ_SHARED = 4'b0001;
-  `define ACEOP_READ_CLEAN = 4'b0010;
-  `define ACEOP_READ_NOT_SHARED_DIRTY = 4'b0011;
-  `define ACEOP_READ_UNIQUE = 4'b0111;
-  `define ACEOP_CLEAN_SHARED = 4'b1000;
-  `define ACEOP_CLEAN_INVALID = 4'b1001;
-  `define ACEOP_CLEAN_UNIQUE = 4'b1011;
-  `define ACEOP_MAKE_INVALID = 4'b1101;
-  `define ACEOP_DVM_COMPLETE = 4'b1110;
-  `define ACEOP_DVM_MESSAGE = 4'b1111;
+  `define ACEOP_READ_ONCE  4'b0000
+  `define ACEOP_READ_SHARED 4'b0001
+  `define ACEOP_READ_CLEAN 4'b0010
+  `define ACEOP_READ_NOT_SHARED_DIRTY 4'b0011
+  `define ACEOP_READ_UNIQUE 4'b0111
+  `define ACEOP_MAKE_UNIQUE 4'b1100
+  `define ACEOP_CLEAN_SHARED 4'b1000
+  `define ACEOP_CLEAN_INVALID 4'b1001
+  `define ACEOP_CLEAN_UNIQUE 4'b1011
+  `define ACEOP_MAKE_INVALID 4'b1101
+  `define ACEOP_DVM_COMPLETE 4'b1110
+  `define ACEOP_DVM_MESSAGE 4'b1111
+
+  `define ACEOP_WRITE_UNIQUE      3'b000
+  `define ACEOP_WRITE_LINE_UNIQUE 3'b001
+  `define ACEOP_WRITE_CLEAN       3'b010
+  `define ACEOP_WRITE_BACK        3'b011
+  `define ACEOP_EVICT             3'b100
+  `define ACEOP_WRITE_EVICT       3'b101
+
 
 `define ACE_TYPEDEF_AW_CHAN_T(aw_chan_t, addr_t, id_t, user_t)  \
   typedef struct packed {                                       \

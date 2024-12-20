@@ -1,6 +1,6 @@
 `ifndef __APB_SVH__
 `define __APB_SVH__
-`include "global.svh"
+`include "../global.svh"
 typedef struct packed {
     logic `N(`PADDR_SIZE) paddr;   // same as AXI4-Lite
     logic [2: 0] pprot;   // same as AXI4-Lite, specification is the same

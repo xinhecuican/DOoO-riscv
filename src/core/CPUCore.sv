@@ -8,16 +8,16 @@ module CPUCore (
     ClintIO.cpu clint_io
 );
 
-    AxiIO #(
+    CacheBus #(
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
     ) icache_io();
-    AxiIO #(
+    CacheBus #(
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, `DCACHE_WAY_WIDTH
     ) dcache_io();
-    AxiIO #(
+    CacheBus #(
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
     ) ducache_io();
-    AxiIO #(
+    CacheBus #(
         `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
     ) tlb_io();
     NativeSnoopIO #(
