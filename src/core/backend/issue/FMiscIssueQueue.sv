@@ -126,6 +126,7 @@ module FMiscIssueBank #(
     ) data_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .addr0(freeIdx),
         .addr1(selectIdx),

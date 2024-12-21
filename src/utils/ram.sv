@@ -8,10 +8,12 @@ module SPRAM#(
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
     parameter RESET_VALUE = 0,
+    parameter ENABLE_SYNC_RST = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
     input logic rst,
+    input logic rst_sync,
     input logic en,
     input logic `N(ADDR_WIDTH) addr,
     input logic [BYTES-1: 0] we,
@@ -81,7 +83,8 @@ module SPRAM#(
         assign resetAddr = resetState ? counter : addr;
         assign resetData = resetState ? RESET_VALUE : wdata;
         always_ff @(posedge clk or posedge rst)begin
-            if(rst == `RST)begin
+            if(rst == `RST ||
+               ENABLE_SYNC_RST && rst_sync)begin
                 counter <= 0;
                 resetState <= 1'b1;
                 ready <= 1'b0;
@@ -139,10 +142,12 @@ module SDPRAM#(
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
     parameter RESET_VALUE = 0,
+    parameter ENABLE_SYNC_RST = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
     input logic rst,
+    input logic rst_sync,
     input logic en,
     input logic `N(ADDR_WIDTH) addr0,
     input logic `N(ADDR_WIDTH) addr1,
@@ -219,7 +224,8 @@ module SDPRAM#(
         assign resetAddr = resetState ? counter : addr0;
         assign resetData = resetState ? RESET_VALUE : wdata;
         always_ff @(posedge clk or posedge rst)begin
-            if(rst == `RST)begin
+            if(rst == `RST ||
+               ENABLE_SYNC_RST && rst_sync)begin
                 counter <= 0;
                 resetState <= 1'b1;
                 ready <= 1'b0;
@@ -276,10 +282,12 @@ module MPREG #(
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
     parameter RESET_VALUE = 0,
+    parameter ENABLE_SYNC_RST = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
     input logic rst,
+    input logic rst_sync,
     input logic `N(READ_PORT+RW_PORT) en,
     input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
     input logic `ARRAY(WRITE_PORT+RW_PORT, ADDR_WIDTH) waddr,
@@ -299,7 +307,8 @@ generate
         assign resetAddr = resetState ? counter : waddr[0];
         assign resetData = resetState ? RESET_VALUE : wdata[0];
         always_ff @(posedge clk or posedge rst)begin
-            if(rst == `RST)begin
+            if(rst == `RST ||
+               ENABLE_SYNC_RST && rst_sync)begin
                 counter <= 0;
                 resetState <= 1'b1;
                 ready <= 1'b0;
@@ -409,10 +418,12 @@ module MPRAMInner #(
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
     parameter RESET_VALUE = 0,
+    parameter ENABLE_SYNC_RST = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
     input logic rst,
+    input logic rst_sync,
     input logic `N(READ_PORT+RW_PORT) en,
     input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
     input logic `ARRAY(WRITE_PORT+RW_PORT, ADDR_WIDTH) waddr,
@@ -430,7 +441,8 @@ generate
             .BYTE_WRITE(BYTE_WRITE),
             .BYTES(BYTES),
             .RESET(RESET),
-            .RESET_VALUE(RESET_VALUE)
+            .RESET_VALUE(RESET_VALUE),
+            .ENABLE_SYNC_RST(ENABLE_SYNC_RST)
         ) spram (
             .*,
             .addr(waddr)
@@ -444,7 +456,8 @@ generate
             .BYTE_WRITE(BYTE_WRITE),
             .BYTES(BYTES),
             .RESET(RESET),
-            .RESET_VALUE(RESET_VALUE)
+            .RESET_VALUE(RESET_VALUE),
+            .ENABLE_SYNC_RST(ENABLE_SYNC_RST)
         ) sdpram (
             .*,
             .addr0(waddr),
@@ -506,7 +519,8 @@ generate
             .BYTE_WRITE(BYTE_WRITE),
             .BYTES(BYTES),
             .RESET(RESET),
-            .RESET_VALUE(RESET_VALUE)
+            .RESET_VALUE(RESET_VALUE),
+            .ENABLE_SYNC_RST(ENABLE_SYNC_RST)
         ) regs (.*);
     end
 endgenerate
@@ -531,10 +545,12 @@ module MPRAM #(
     parameter BYTE_WRITE = 0,
     parameter RESET = 0,
     parameter RESET_VALUE = 0,
+    parameter ENABLE_SYNC_RST = 0,
     parameter BYTES = BYTE_WRITE == 1 ? WIDTH / 8 : 1
 )(
     input logic clk,
     input logic rst,
+    input logic rst_sync,
     input logic `N(READ_PORT+RW_PORT) en,
     input logic `ARRAY(READ_PORT, ADDR_WIDTH) raddr,
     input logic `ARRAY(WRITE_PORT+RW_PORT, ADDR_WIDTH) waddr,
@@ -565,7 +581,8 @@ generate
 
         if(RESET)begin
             always_ff @(posedge clk or posedge rst)begin
-                if(rst == `RST)begin
+                if(rst == `RST ||
+                   ENABLE_SYNC_RST && rst_sync)begin
                     counter <= 0;
                     resetState <= 1'b1;
                     ready <= 1'b0;
@@ -651,10 +668,12 @@ generate
                 .READ_LATENCY(READ_LATENCY),
                 .BYTE_WRITE(BYTE_WRITE),
                 .BYTES(BYTES),
+                .ENABLE_SYNC_RST(ENABLE_SYNC_RST),
                 .RESET(0)
             ) ram (
                 .clk,
                 .rst,
+                .rst_sync,
                 .en((en & bank_en[i])),
                 .raddr(raddr_bank),
                 .waddr(waddr_bank),
@@ -674,10 +693,12 @@ generate
                 .READ_LATENCY(READ_LATENCY),
                 .BYTE_WRITE(BYTE_WRITE),
                 .BYTES(BYTES),
+                .ENABLE_SYNC_RST(ENABLE_SYNC_RST),
                 .RESET(0)
             ) ram (
                 .clk,
                 .rst,
+                .rst_sync,
                 .en((en & bank_en[BANK])),
                 .raddr(raddr_bank),
                 .waddr(waddr_bank),

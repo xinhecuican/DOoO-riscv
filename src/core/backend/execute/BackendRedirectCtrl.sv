@@ -42,4 +42,7 @@ module BackendRedirectCtrl (
     assign io.branchOut.ras_type = preBranch.ras_type;
     assign io.csrOut = rob_redirect_io.csrInfo;
     assign redirectIdx = rob_redirect_io.csrRedirect.en ? rob_redirect_io.csrRedirect.robIdx : preRedirectIdx;
+
+    `PERF(redirect_mem, io.out.en & ~rob_redirect_io.csrRedirect.en & ~branchValid_n)
+    `PERF(redirect_csr, io.out.en & rob_redirect_io.csrRedirect.en)
 endmodule

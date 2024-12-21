@@ -32,6 +32,7 @@ generate
         ) tagv_ram (
             .clk(clk),
             .rst(rst),
+            .rst_sync(0),
             .en(tagv_en[i]),
             .addr(tagv_index[i]),
             .rdata(tagv[i]),
@@ -64,6 +65,7 @@ generate
         ) bank (
             .clk(clk),
             .rst(rst),
+            .rst_sync(0),
             .en(en[i]),
             .addr(index[i]),
             .we(we[i]),

@@ -411,6 +411,7 @@ module LoadQueueBank #(
     ) load_queue_data (
         .clk,
         .rst,
+        .rst_sync(0),
         .en(1'b1),
         .raddr(wbIdx),
         .rdata(wb_queue_data),
@@ -434,6 +435,7 @@ module LoadQueueBank #(
     ) load_data_mask_ram (
         .clk,
         .rst,
+        .rst_sync(0),
         .en(cache_en),
         .raddr(cache_lqIdx),
         .rdata({mask_data, refillData}),
@@ -450,6 +452,7 @@ module LoadQueueBank #(
     ) load_wb_data (
         .clk,
         .rst,
+        .rst_sync(0),
         .en(1'b1),
         .raddr(wbIdx),
         .rdata(wb_data),
@@ -667,6 +670,7 @@ module LoadUncacheBuffer(
     ) data_ram (
         .clk,
         .rst,
+        .rst_sync(0),
         .en(1'b1),
         .raddr(uncache_idx_i),
         .rdata(data_o),

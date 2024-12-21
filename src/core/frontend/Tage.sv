@@ -30,10 +30,14 @@ module Tage(
 	logic `ARRAY(`SLOT_NUM, `TAGE_BANK) provider;
 	logic `ARRAY(`TAGE_BANK, `TAGE_SET_WIDTH) lookup_idx_n;
 	logic `ARRAY(`TAGE_BANK, `TAGE_TAG_SIZE) lookup_tag_n;
-	parameter [12: 0] tage_set_size `N(`TAGE_BANK) = {13'd2048, 13'd2048, 13'd2048, 13'd2048};
+	logic `N(`SLOT_NUM) reset_u;
+	logic `ARRAY(`SLOT_NUM, `TAGE_RESETU_CTR+1) resetu_ctrs;
+	logic `ARRAY(`SLOT_NUM, $clog2(`TAGE_BANK)+1) update_u_cnt;
+
+	parameter [`TAGE_BANK*16-1: 0] tage_set_size  = `TAGE_SET_SIZE;
     generate;
         for(genvar i=0; i<`TAGE_BANK; i++)begin
-			localparam SET_SIZE = tage_set_size[i];
+			localparam SET_SIZE = tage_set_size[i * 16 +: 16];
 			GetIndex #(
 				.COMPRESS_LENGTH(`TAGE_SET_WIDTH),
 				.INDEX_SIZE($clog2(SET_SIZE)),
@@ -79,6 +83,7 @@ module Tage(
 				.predError(bank_ctrl[i].predError),
 				.update_u_en(bank_ctrl[i].update_u_en),
 				.update_u(bank_ctrl[i].update_u),
+				.reset_u(reset_u),
 				.update_ctr(bank_ctrl[i].update_ctr),
 				.update_idx(bank_ctrl[i].update_idx),
 				.update_tag(bank_ctrl[i].update_tag),
@@ -106,6 +111,7 @@ module Tage(
 	) base_table (
 		.clk(clk),
 		.rst(rst),
+		.rst_sync(0),
 		.en(!tage_io.redirect.stall),
 		.we(base_we),
 		.waddr(base_update_idx),
@@ -197,7 +203,11 @@ generate
 		end
 	end
 	for(genvar i=0; i<`SLOT_NUM; i++)begin
-		PRSelector #(`TAGE_BANK) selector_alloc (~update_u_valid[i], alloc[i]);
+		logic `N(`TAGE_BANK) provider_mask_low, provider_mask;
+		LowMaskGen #(`TAGE_BANK) low_mask_provider (u_provider[i], provider_mask_low);
+		assign provider_mask = ~(|u_provider[i]) ? {`TAGE_BANK{1'b1}} : provider_mask_low;
+		ParallelAdder #(1, `TAGE_BANK) adder_update_u (update_u_valid[i], update_u_cnt[i]);
+		PRSelector #(`TAGE_BANK) selector_alloc (~update_u_valid[i] & provider_mask, alloc[i]);
 		assign alloc_combine[i] = (|alloc);
 		for(genvar j=0; j<`TAGE_BANK; j++)begin
 			logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
@@ -205,6 +215,29 @@ generate
 			UpdateCounter #(`TAGE_U_SIZE) updateCounter (bank_u[i], alloc_combine[i], update_u[j][i]);
 			assign update_u_en[j][i] = (~(alloc_combine[i]) & predError[i]) |
 									   (u_provider[i][j] & dec_use[i]);
+		end
+	end
+
+	always_ff @(posedge clk, posedge rst)begin
+		if(rst == `RST)begin
+			reset_u <= 0;
+			resetu_ctrs <= 0;
+		end
+		else begin
+			for(int i=0; i<`SLOT_NUM; i++)begin
+				if(resetu_ctrs[i] == {`TAGE_RESETU_CTR{1'b1}})begin
+					resetu_ctrs[i] <= 0;
+				end
+				else if(update_en[i] & predError[i])begin
+					if(update_u_cnt[i] < `TAGE_BANK / 2)begin
+						resetu_ctrs[i] <= resetu_ctrs[i] - 1;
+					end
+					else begin
+						resetu_ctrs[i] <= resetu_ctrs[i] + 1;
+					end
+				end
+				reset_u <= resetu_ctrs[i] == {`TAGE_RESETU_CTR{1'b1}};
+			end
 		end
 	end
 
@@ -270,6 +303,7 @@ module TageTable #(
 	input logic `N(`SLOT_NUM) alloc,
 	input logic `N(`SLOT_NUM) predError,
 	input logic `N(`SLOT_NUM) update_u_en,
+	input logic `N(`SLOT_NUM) reset_u,
 	input logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) update_u,
 	input logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr,
 	input logic `N(`TAGE_TAG_SIZE) update_tag,
@@ -307,6 +341,7 @@ module TageTable #(
 		)tage_bank(
 			.clk(clk),
 			.rst(rst),
+			.rst_sync(0),
 			.en(en),
 			.we(update_en[i] & (provider[i] | alloc[i])),
 			.waddr(update_idx),
@@ -322,10 +357,12 @@ module TageTable #(
 			.READ_PORT(1),
 			.WRITE_PORT(1),
 			.BANK_SIZE(`TAGE_SLICE),
-			.RESET(1)
+			.RESET(1),
+			.ENABLE_SYNC_RST(1)
 		) u_bank (
 			.clk(clk),
 			.rst(rst),
+			.rst_sync(reset_u[i]),
 			.en(en),
 			.we(update_en[i] & (update_u_en[i] | alloc[i])),
 			.waddr(update_idx),
@@ -334,7 +371,7 @@ module TageTable #(
 			.wdata(update_u[i]),
 			.ready()
 		);
-		end
+	end
 
 endmodule
 

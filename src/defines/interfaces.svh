@@ -1,9 +1,10 @@
 `ifndef INTERFACES_SVH
 `define INTERFACES_SVH
 `include "bundles.svh"
-`include "axi.svh"
-`include "apb.svh"
-`include "ace.svh"
+`include "bus/axi.svh"
+`include "bus/apb.svh"
+`include "bus/ace.svh"
+`include "bus/mem.svh"
 
 interface BpuBtbIO#(
     parameter TAG_SIZE=1

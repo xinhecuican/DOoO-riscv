@@ -115,7 +115,7 @@ generate
     
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign tagv_en[i] = rio.req[i];
-        assign tagvIdx[i] = miss_io.refill_en ? miss_io.refillAddr`DCACHE_SET_BUS :
+        assign tagvIdx[i] = miss_io.refill_en & miss_io.refill_valid ? miss_io.refillAddr`DCACHE_SET_BUS :
                             loadIdx[i];
     end
     assign tagv_en[`LOAD_PIPELINE] = wreq | miss_io.refill_en;
@@ -182,16 +182,14 @@ generate
             r_req[i] <= rio.req[i] & ~write_valid[i] & ~rio.req_cancel[i] & ~req_cancel[i];
         end
         assign rio.hit[i] = |wayHit[i];
-    end
-endgenerate
-    // load conflict detect
-generate
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        assign write_valid[i] = miss_io.refill_en |
+
+        logic `N(`DCACHE_BYTE) load_wmask;
+        assign load_wmask = wmask_n[loadOffset[i]];
+        assign write_valid[i] = miss_io.refill_en & ~(cache_wreq & (|w_wayhit)) & ~wio.req |
                                 snoop_req |
-                                cache_wreq & (|w_wayhit) & (|wmask_n[rio.vaddr[i]`DCACHE_BANK_BUS])
+                                cache_wreq & (|w_wayhit) & (|load_wmask)
 `ifdef RVA
-                                | amo_en[rio.vaddr[i]`DCACHE_BANK_BUS];
+                                | amo_en[loadOffset[i]]
 `endif
                                 ;
     end

@@ -55,6 +55,7 @@ module FSQ (
     ) fs_queue(
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en({cache_req_ok | fsq_back_io.redirect.en, {(`ALU_SIZE+1){1'b1}}}),
         .we((queue_we | pd_redirect.en)),
         .waddr(write_index),
@@ -76,6 +77,7 @@ module FSQ (
     ) redirect_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .we(bpu_fsq_io.lastStage),
         .waddr(bpu_fsq_io.lastStageIdx),
@@ -94,6 +96,7 @@ module FSQ (
     ) btb_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .raddr(n_commit_head),
         .rdata(oldEntry),
@@ -113,6 +116,7 @@ module FSQ (
     ) meta_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .raddr(commit_head),
         .rdata(updateMeta),
@@ -131,6 +135,7 @@ module FSQ (
     ) ras_addr_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .raddr(pd_redirect.fsqIdx_pre),
         .rdata(pd_redirect.ras_addr),
@@ -605,6 +610,7 @@ endgenerate
     ) exception_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en({`COMMIT_WIDTH{1'b1}}),
         .raddr(exception_idxs),
         .rdata(exception_addrs),
@@ -621,6 +627,7 @@ endgenerate
     ) stream_size_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .raddr(n_commit_head),
         .rdata(commitSize),
@@ -649,6 +656,7 @@ endgenerate
     ) stream_last_ram (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en({`ALU_SIZE{1'b1}}),
         .raddr(fsq_back_io.fsqIdx),
         .rdata(stream_lasts),

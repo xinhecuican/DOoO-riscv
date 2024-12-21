@@ -170,6 +170,7 @@ generate
         ) rob_data_ram (
             .clk(clk),
             .rst(rst),
+            .rst_sync(0),
             .en(2'b11),
             .raddr(data_ridx[i]),
             .rdata({robData_pre[`FETCH_WIDTH+i], robData_pre[i]}),

@@ -91,6 +91,7 @@ module LinkRAS(
     ) inflight_ras (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .we(we),
         .waddr(waddr),
@@ -107,6 +108,7 @@ module LinkRAS(
     ) commit_ras (
         .clk,
         .rst,
+        .rst_sync(0),
         .en(1'b1),
         .we(commit_we),
         .waddr(commit_waddr),
@@ -273,6 +275,7 @@ module RAS(
     ) ras (
         .clk(clk),
         .rst(rst),
+        .rst_sync(0),
         .en(1'b1),
         .we(we),
         .waddr(waddr),
@@ -291,6 +294,7 @@ module RAS(
     ) commit_ras (
         .clk,
         .rst,
+        .rst_sync(0),
         .en(1'b1),
         .we(commit_we),
         .waddr(commit_waddr),

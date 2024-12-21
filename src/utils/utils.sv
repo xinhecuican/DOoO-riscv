@@ -436,6 +436,35 @@ generate
 endgenerate
 endmodule
 
+module LowMaskGen #(
+	parameter WIDTH = 4
+)(
+	input logic [WIDTH-1: 0] in,
+	output logic [WIDTH-1: 0] out
+);
+generate
+	if(WIDTH == 1)begin
+		assign out = in;
+	end
+	else if(WIDTH == 2)begin
+		assign out[0] = in[0];
+		assign out[1] = in[0] | in[1];
+	end
+	else begin
+		logic [WIDTH/2-1: 0] out1;
+		logic [WIDTH-WIDTH/2-1: 0] out2;
+		LowMaskGen #(WIDTH/2) low_mask_gen1 (
+			in[WIDTH/2-1: 0], out1
+		);
+		LowMaskGen #(WIDTH/2) low_mask_gen2 (
+			in[WIDTH-1: WIDTH/2], out2
+		);
+		assign out[WIDTH/2-1: 0] = out1;
+		assign out[WIDTH-1: WIDTH/2] = {WIDTH-WIDTH/2{|in[WIDTH/2-1: 0]}} | out2;
+	end
+endgenerate
+endmodule
+
 // in1 older if bigger set
 module LoopCompare #(
 	parameter WIDTH=4
