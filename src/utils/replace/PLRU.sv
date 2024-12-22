@@ -1,4 +1,4 @@
-`include "defines.svh"
+`include "../../defines/defines.svh"
 
 // only support 4-way
 module PLRU#(

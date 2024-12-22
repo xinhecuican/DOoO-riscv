@@ -16,9 +16,9 @@ module Dispatch(
 `ifdef RVA
     DisIssueIO.dis dis_amo_io,
 `endif
-    input WakeupBus int_wakeupBus,
+    WakeupBus.in int_wakeupBus,
 `ifdef RVF
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
     DisIssueIO.dis dis_fmisc_io,
     DisIssueIO.dis dis_fma_io,
     DisIssueIO.dis dis_fdiv_io,

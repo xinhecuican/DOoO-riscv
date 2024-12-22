@@ -6,7 +6,7 @@ module FMAIssueQueue (
     DisIssueIO.issue dis_fma_io,
     IssueRegIO.issue fma_reg_io,
     IssueFMAIO.issue issue_fma_io,
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
     input BackendCtrl backendCtrl
 );
     localparam BANK_SIZE = `FMA_ISSUE_SIZE / `FMA_SIZE;
@@ -44,7 +44,6 @@ generate
                                       bundle.fltop != `FLT_MUL;
         assign bank_io[i].status = dis_fma_io.status[order[i]];
         assign bank_io[i].data = dis_fma_io.data[order[i]];
-        assign bank_io[i].ready = ~fma_reg_io.ready[i];
         assign bank_io[i].type_ready[0] = ~(enNext[i] & type_o[i][1] | 
                                           bank_en_s4[i] & madd_s4[i]);
         assign bank_io[i].type_ready[1] = ~(issue_fma_io.en[i] & madd_s3[i]);

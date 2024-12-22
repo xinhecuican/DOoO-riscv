@@ -160,12 +160,12 @@ module Backend(
         .*,
         .dis_issue_io(dis_int_io),
         .issue_exu_io(int_exu_io),
-        .wakeupBus(int_wakeupBus)
+        .wakeupBus(int_wakeupBus.in)
     );
     CsrIssueQueue csr_issue_queue(.*,
                                   .commitStreamSize(fsq_back_io.commitStreamSize));
 `ifdef RVM
-    MultIssueQueue mult_issue_queue(.*, .wakeupBus(int_wakeupBus));
+    MultIssueQueue mult_issue_queue(.*, .wakeupBus(int_wakeupBus.in));
 `endif
 `ifdef RVF
     FMiscIssueQueue fmisc_issue_queue(.*);

@@ -11,9 +11,9 @@ module ROB(
     RenameDisIO.rob dis_io,
     ROBRenameIO.rob rob_rename_io,
     RobRedirectIO.rob rob_redirect_io,
-    input WriteBackBus int_wbBus,
+    WriteBackBus.in int_wbBus,
 `ifdef RVF
-    input WriteBackBus fp_wbBus,
+    WriteBackBus.in fp_wbBus,
     RobFCsrIO.rob rob_fcsr_io,
 `endif
     CommitBus.rob commitBus,

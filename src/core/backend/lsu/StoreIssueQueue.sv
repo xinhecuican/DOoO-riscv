@@ -38,9 +38,9 @@ module StoreIssueQueue(
     input logic rst,
     DisIssueIO.issue dis_store_io,
     IssueRegIO.issue store_reg_io,
-    input WakeupBus int_wakeupBus,
+    WakeupBus.in int_wakeupBus,
 `ifdef RVF
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
 `endif
     input BackendCtrl backendCtrl,
     StoreUnitIO.store store_io,
@@ -158,7 +158,7 @@ module StoreAddrBank(
     input logic clk,
     input logic rst,
     StoreAddrBankIO.bank io,
-    input WakeupBus wakeupBus,
+    WakeupBus.in wakeupBus,
     input BackendCtrl backendCtrl
 );
     typedef struct packed {
@@ -178,6 +178,7 @@ module StoreAddrBank(
     logic `ARRAY(`STORE_ISSUE_BANK_SIZE, `INT_WAKEUP_PORT) rs1_cmp;
     logic [1: 0] size;
     RobIdx select_robIdx;
+    logic `N(`STORE_ISSUE_BANK_SIZE) selectIdx_decode, reply_decode, replyslow_decode, tlbbank_decode;
 
     assign size = io.data.memop == `MEM_SW ? 2'b10 :
                   io.data.memop == `MEM_SH ? 2'b01 : 2'b00;
@@ -240,8 +241,6 @@ endgenerate
 
     logic `N(`STORE_ISSUE_BANK_SIZE) success_idx_decode;
     Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
-
-    logic `N(`STORE_ISSUE_BANK_SIZE) selectIdx_decode, reply_decode, replyslow_decode, tlbbank_decode;
     Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_select_idx (selectIdx, selectIdx_decode);
     Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_reply (io.reply.issue_idx, reply_decode);
     Decoder #(`STORE_ISSUE_BANK_SIZE) decoder_tlbbank (io.tlb_bank_idx, tlbbank_decode);
@@ -331,9 +330,9 @@ module StoreDataBank(
     input logic clk,
     input logic rst,
     StoreDataBankIO.bank io,
-    input WakeupBus int_wakeupBus,
+    WakeupBus.in int_wakeupBus,
 `ifdef RVF
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
 `endif
     input BackendCtrl backendCtrl
 );

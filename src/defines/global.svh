@@ -330,10 +330,8 @@ typedef enum logic [1:0] {
 `define TLB_P1_BANK (`DCACHE_BANK)
 `define TLB_P1_SET_WIDTH $clog2(`TLB_P1_SET)
 `define TLB_P1_TAG `TLB_TAG - $clog2(`TLB_P1_BANK) - `TLB_P1_SET_WIDTH - `TLB_VPN
-`define TLB_VPN_IBUS(i, SET,
-                     BANK) [`TLB_VPN * i + `TLB_OFFSET + $clog2(BANK) + $clog2(SET) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(BANK)]
-`define TLB_VPN_TBUS(i, SET,
-                     BANK) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(SET) + $clog2(BANK)]
+`define TLB_VPN_IBUS(i, SET,BANK) [`TLB_VPN * i + `TLB_OFFSET + $clog2(BANK) + $clog2(SET) - 1 : `TLB_VPN * i + `TLB_OFFSET + $clog2(BANK)]
+`define TLB_VPN_TBUS(i, SET,BANK) [`VADDR_SIZE-1: `TLB_VPN * i + `TLB_OFFSET + $clog2(SET) + $clog2(BANK)]
 
 `define TLB_PTB0_SIZE 8
 `define TLB_PTB1_SIZE 4

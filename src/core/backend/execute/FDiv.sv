@@ -43,7 +43,7 @@ module FDivUnit(
 endmodule
 
 module FDivSlice #(
-    parameter fp_format_e fp_fmt = 0
+    parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0
 ) (
     input logic clk,
     input logic rst,

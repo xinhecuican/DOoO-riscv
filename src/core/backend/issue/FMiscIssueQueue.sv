@@ -6,8 +6,8 @@ module FMiscIssueQueue (
     DisIssueIO.issue dis_fmisc_io,
     IssueRegIO.issue fmisc_reg_io,
     IssueFMiscIO.issue issue_fmisc_io,
-    input WakeupBus int_wakeupBus,
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in int_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
     input BackendCtrl backendCtrl
 );
     localparam BANK_SIZE = `FMISC_ISSUE_SIZE / `FMISC_SIZE;
@@ -87,8 +87,8 @@ module FMiscIssueBank #(
     input logic bank_en,
     input IssueStatusBundle status,
     input FMiscIssueBundle bundle,
-    input WakeupBus int_wakeupBus,
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in int_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
     input logic reg_ready,
     input logic issue_end,
     input logic stall,

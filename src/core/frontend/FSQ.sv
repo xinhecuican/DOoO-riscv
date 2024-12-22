@@ -561,7 +561,9 @@ endgenerate
     assign bpu_fsq_io.updateInfo.realTaken = update_real_taken;
     assign bpu_fsq_io.updateInfo.allocSlot = update_alloc_slot;
     assign bpu_fsq_io.updateInfo.tailTaken = update_tail_taken;
+`ifdef DIFFTEST
     assign bpu_fsq_io.updateInfo.fsqIdx = commit_head;
+`endif
     always_ff @(posedge clk)begin
         bpu_fsq_io.update <= commitValid;
         update_taken <= commitWBInfo.taken;

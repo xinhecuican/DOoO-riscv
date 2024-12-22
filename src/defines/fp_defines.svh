@@ -71,22 +71,22 @@ localparam fp_encoding_t [`NUM_FP_FORMATS-1: 0] FP_ENCODINGS = '{
 };
 
   // Returns the bias value for a given format (as per IEEE 754-2008)
-  function automatic int unsigned fp_bias(fp_format_e fmt);
+  function automatic int unsigned fp_bias(logic [`FP_FORMAT_BITS-1:0] fmt);
     return unsigned'(2**(FP_ENCODINGS[fmt].exp_bits-1)-1); // symmetrical bias
   endfunction
 
 // Returns the number of expoent bits for a format
-function automatic int unsigned exp_bits(fp_format_e fmt);
+function automatic int unsigned exp_bits(logic [`FP_FORMAT_BITS-1:0] fmt);
     return FP_ENCODINGS[fmt].exp_bits;
 endfunction
 
 // Returns the number of mantissa bits for a format
-function automatic int unsigned man_bits(fp_format_e fmt);
+function automatic int unsigned man_bits(logic [`FP_FORMAT_BITS-1:0] fmt);
     return FP_ENCODINGS[fmt].man_bits;
 endfunction
 
 // Returns the width of an INT format by index
-function automatic int unsigned int_width(int_format_e ifmt);
+function automatic int unsigned int_width(logic [`INT_FORMAT_BITS-1:0] ifmt);
     unique case (ifmt)
         INT8:  return 8;
         INT16: return 16;
@@ -130,7 +130,7 @@ endfunction
     return res;
   endfunction
 
-  function automatic int unsigned fp_width(fp_format_e fmt);
+  function automatic int unsigned fp_width(logic [`FP_FORMAT_BITS-1:0] fmt);
     return FP_ENCODINGS[fmt].exp_bits + FP_ENCODINGS[fmt].man_bits + 1;
   endfunction
 

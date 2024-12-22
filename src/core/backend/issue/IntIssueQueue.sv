@@ -8,7 +8,7 @@ module IntIssueQueue(
     IssueWakeupIO.issue int_wakeup_io,
     IntIssueExuIO.issue issue_exu_io,
     FsqBackendIO.backend fsq_back_io,
-    input WakeupBus wakeupBus,
+    WakeupBus.in wakeupBus,
     input BackendCtrl backendCtrl
 );
 

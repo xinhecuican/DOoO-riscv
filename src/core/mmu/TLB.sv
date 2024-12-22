@@ -169,22 +169,6 @@ generate
 endgenerate
 
 
-    always_ff @(posedge clk or posedge rst)begin
-        if(rst == `RST)begin
-            en <= 0;
-            entrys <= '{default: 0};
-        end
-        else begin
-            if(fenceWe)begin
-                en[fenceIdx] <= 1'b0;
-            end
-            else if(io.we)begin
-                entrys[io.widx] <= wentry;
-                en[io.widx] <= 1'b1;
-            end
-        end
-    end
-
 generate
     if(FENCEV)begin
         always_ff @(posedge clk, posedge rst)begin

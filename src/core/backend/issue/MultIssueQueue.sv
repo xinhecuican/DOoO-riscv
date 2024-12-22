@@ -6,7 +6,7 @@ module MultIssueQueue(
     DisIssueIO.issue dis_mult_io,
     IssueRegIO.issue mult_reg_io,
     IssueMultIO.issue mult_exu_io,
-    input WakeupBus wakeupBus,
+    WakeupBus.in wakeupBus,
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl
 );

@@ -472,7 +472,7 @@ generate
             .ADDR_WIDTH_B(ADDR_WIDTH),               // DECIMAL
             .BYTE_WRITE_WIDTH_A(WIDTH),        // DECIMAL
             .CLOCKING_MODE("common_clock"), // String
-            .MEMORY_INIT_FILE(""),      // String
+            .MEMORY_INIT_FILE("none"),      // String
             .MEMORY_INIT_PARAM("0"),        // String
             .MEMORY_OPTIMIZATION("true"),   // String
             .MEMORY_SIZE(WIDTH * DEPTH),             // DECIMAL

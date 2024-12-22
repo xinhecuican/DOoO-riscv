@@ -13,12 +13,12 @@ module Wakeup(
     IssueWakeupIO.wakeup mult_wakeup_io,
     IssueWakeupIO.wakeup div_wakeup_io,
 `endif
-    output WakeupBus int_wakeupBus,
+    WakeupBus.out int_wakeupBus,
 `ifdef RVF
     IssueWakeupIO.wakeup fmisc_wakeup_io,
     IssueWakeupIO.wakeup fma_wakeup_io,
     IssueWakeupIO.wakeup fdiv_wakeup_io,
-    output WakeupBus fp_wakeupBus,
+    WakeupBus.out fp_wakeupBus,
 `endif
     IssueWakeupIO.wakeup int_wakeup_io,
     IssueWakeupIO.wakeup load_wakeup_io,

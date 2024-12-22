@@ -42,7 +42,7 @@ module IssueBank #(
     input logic clk,
     input logic rst,
     IssueBankIO.bank io,
-    input WakeupBus wakeupBus,
+    WakeupBus.in wakeupBus,
     input BackendCtrl backendCtrl
 );
     logic `N(DEPTH) en;

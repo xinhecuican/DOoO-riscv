@@ -1,4 +1,4 @@
-`include "../../../defines/defines.svh"
+`include "../../../../defines/defines.svh"
 
 module AmoALU(
     input logic `N(`XLEN) mem_data,

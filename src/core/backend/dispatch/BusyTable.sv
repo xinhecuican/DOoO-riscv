@@ -20,7 +20,7 @@ module BusyTable #(
     input logic clk,
     input logic rst,
     BusyTableIO.busytable io,
-    input WakeupBus wakeupBus,
+    WakeupBus.in wakeupBus,
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl
 );

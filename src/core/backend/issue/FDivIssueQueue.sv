@@ -3,10 +3,10 @@
 module FDivIssueQueue (
     input logic clk,
     input logic rst,
-    input DisIssueIO.issue dis_fdiv_io,
+    DisIssueIO.issue dis_fdiv_io,
     IssueRegIO.issue fdiv_reg_io,
     IssueFDivIO.issue issue_fdiv_io,
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
     input BackendCtrl backendCtrl
 );
     localparam BANK_SIZE = `FDIV_ISSUE_SIZE / `FDIV_SIZE;

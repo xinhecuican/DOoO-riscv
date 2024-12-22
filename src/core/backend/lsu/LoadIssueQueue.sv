@@ -28,7 +28,7 @@ module LoadIssueQueue(
     input logic rst,
     DisIssueIO.issue dis_load_io,
     IssueRegIO.issue load_reg_io,
-    input WakeupBus wakeupBus,
+    WakeupBus.in wakeupBus,
     LoadUnitIO.load load_io,
     DTLBLsuIO.lq tlb_lsu_io,
     input BackendCtrl backendCtrl
@@ -123,7 +123,7 @@ module LoadIssueBank(
     input logic clk,
     input logic rst,
     LoadIssueBankIO.bank io,
-    input WakeupBus wakeupBus,
+    WakeupBus.in wakeupBus,
     input BackendCtrl backendCtrl
 );
     typedef struct packed {
@@ -145,6 +145,7 @@ module LoadIssueBank(
     logic [1: 0] size;
     logic reg_en;
     RobIdx select_robIdx;
+    logic `N(`LOAD_ISSUE_BANK_SIZE) selectIdx_decode, replyfast_decode, replyslow_decode, tlbbank_decode;
 
     assign size = io.data.memop == `MEM_LW ? 2'b10 :
                   io.data.memop == `MEM_LH ? 2'b01 : 2'b00;
@@ -211,8 +212,6 @@ endgenerate
 
     logic `N(`LOAD_ISSUE_BANK_SIZE) success_idx_decode;
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_success_idx (io.success_idx, success_idx_decode);
-
-    logic `N(`LOAD_ISSUE_BANK_SIZE) selectIdx_decode, replyfast_decode, replyslow_decode, tlbbank_decode;
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_select_idx (selectIdx, selectIdx_decode);
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_replyfast (io.reply_fast.issue_idx, replyfast_decode);
     Decoder #(`LOAD_ISSUE_BANK_SIZE) decoder_replyslow (io.reply_slow.issue_idx, replyslow_decode);

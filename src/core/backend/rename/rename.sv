@@ -6,7 +6,7 @@ module Rename(
     DecodeRenameIO.rename dec_rename_io,
     RenameDisIO.rename rename_dis_io,
     ROBRenameIO.rename rob_rename_io,
-    input CommitBus commitBus,
+    CommitBus.in commitBus,
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl,
     output logic full
@@ -183,7 +183,7 @@ module RenameImpl #(
     output logic `TENSOR(SRC_NUM, `FETCH_WIDTH, `PREG_WIDTH) psrc,
     output logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) prd,
     output logic `ARRAY(`FETCH_WIDTH, `PREG_WIDTH) old_prd,
-    input CommitBus commitBus,
+    CommitBus.in commitBus,
     input CommitWalk commitWalk,
     input BackendCtrl backendCtrl,
     output logic full

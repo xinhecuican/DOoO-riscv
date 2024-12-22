@@ -40,9 +40,9 @@ module LSU(
     IssueRegIO.issue load_reg_io,
     IssueRegIO.issue store_reg_io,
     IssueWakeupIO.issue load_wakeup_io,
-    input WakeupBus int_wakeupBus,
+    WakeupBus.in int_wakeupBus,
 `ifdef RVF
-    input WakeupBus fp_wakeupBus,
+    WakeupBus.in fp_wakeupBus,
 `endif
     WriteBackIO.fu lsu_wb_io,
     CommitBus.mem commitBus,

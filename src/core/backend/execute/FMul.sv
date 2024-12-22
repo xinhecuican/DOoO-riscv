@@ -3,7 +3,7 @@
 `include "../../../defines/mult_define.svh"
 
 module FMul #(
-    parameter fp_format_e fp_fmt = 0,
+    parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
     parameter int unsigned EXP_BITS = exp_bits(fp_fmt),
     parameter int unsigned MAN_BITS = man_bits(fp_fmt)
 )(

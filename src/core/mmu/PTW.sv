@@ -42,6 +42,7 @@ module PTW(
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) rdata;
     logic `N($clog2(`DCACHE_BANK)) ridx;
     logic rlast;
+    logic ar_valid;
     logic flush_q, fence_flush_q, flush_valid;
 
     logic pn1_exception, pn0_exception;
@@ -171,7 +172,7 @@ module PTW(
     logic `N(`VADDR_SIZE) refill_vaddr;
     logic `N(`TLB_PN) refill_pn;
     logic wb_req;
-    logic ar_valid;
+
     assign cache_ptw_io.full = pn0_io.full | pn1_io.full;
     assign cache_ptw_io.refill_req = wb_req;
     assign cache_ptw_io.refill_pn = refill_pn;

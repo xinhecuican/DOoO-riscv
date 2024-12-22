@@ -15,9 +15,9 @@ module WriteBack(
     WriteBackIO.wb fma_wb_io,
     WriteBackIO.wb fdiv_wb_io,
 `endif
-    output WriteBackBus int_wbBus
+    WriteBackBus.out int_wbBus
 `ifdef RVF
-    ,output WriteBackBus fp_wbBus
+    ,WriteBackBus.out fp_wbBus
 `endif
 );
 generate

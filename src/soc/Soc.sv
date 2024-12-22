@@ -43,8 +43,8 @@ module Soc(
         .axi(core_axi.master),
         .clint_io(clint_io.cpu)
     );
-    assign clint.meip = meip[0];
-    assign clint.seip = seip[0];
+    assign clint_io.meip = meip[0];
+    assign clint_io.seip = seip[0];
 
     localparam AXI_SLAVE_NUM = 2;
 
@@ -260,7 +260,7 @@ module Soc(
     `APB_RESP_ASSIGN(uart_resp, uart_io)
     apb_uart uart_inst(
         .CLK(clk),
-        .RESETN(~peri_rst),
+        .RSTN(~peri_rst),
         .apb(uart_io),
         .irq_o(uart_irq),
         .rx_i(rxd),

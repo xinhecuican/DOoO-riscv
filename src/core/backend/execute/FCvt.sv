@@ -2,8 +2,8 @@
 `include "../../../defines/fp_defines.svh"
 
 module F2I #(
-    parameter fp_format_e fp_fmt = 0,
-    parameter int_format_e int_fmt = 0
+    parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
+    parameter logic [`INT_FORMAT_BITS-1:0] int_fmt = 0
 )(
     input logic uext,
     input logic `N(`XLEN) src,
@@ -106,8 +106,8 @@ module F2I #(
 endmodule
 
 module I2F #(
-    parameter fp_format_e fp_fmt = 0,
-    parameter int_format_e int_fmt = 0,
+    parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
+    parameter logic [`INT_FORMAT_BITS-1:0] int_fmt = 0,
     parameter int INT_WIDTH = int_width(int_fmt)
 )(
     input logic uext,

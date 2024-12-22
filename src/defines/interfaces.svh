@@ -452,6 +452,9 @@ interface WakeupBus #(
     logic `N(PORT_NUM) en;
     logic `N(PORT_NUM) we;
     logic `ARRAY(PORT_NUM, `PREG_WIDTH) rd;
+
+    modport out(output en, we, rd);
+    modport in(input en, we, rd);
 endinterface
 
 interface WriteBackBus #(
@@ -464,6 +467,9 @@ interface WriteBackBus #(
     logic `ARRAY(PORT_NUM, `XLEN) res;
     logic `ARRAY(PORT_NUM, `EXC_WIDTH) exccode;
     logic `N(PORT_NUM) irq_enable;
+
+    modport out(output en, we, robIdx, rd, res, exccode, irq_enable);
+    modport in(input en, we, robIdx, rd, res, exccode, irq_enable);
 endinterface
 
 interface CommitBus;

@@ -14,12 +14,12 @@ module RegfileWrapper(
     IssueRegIO.regfile amo_reg_io,
 `endif
 `ifdef RVF
-    input WriteBackBus fp_wbBus,
+    WriteBackBus.in fp_wbBus,
     IssueRegIO.regfile fmisc_reg_io,
     IssueRegIO.regfile fma_reg_io,
     IssueRegIO.regfile fdiv_reg_io,
 `endif
-    input WriteBackBus int_wbBus
+    WriteBackBus.in int_wbBus
 `ifdef DIFFTEST
     ,DiffRAT.regfile diff_int_rat
 `ifdef RVF
