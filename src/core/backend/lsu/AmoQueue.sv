@@ -46,7 +46,7 @@ module AmoQueue(
 
     assign dis_amo_io.full = state != IDLE && !(state == WB && wb_ready);
     assign bundle = dis_amo_io.data[0];
-    assign amo_valid = state != IDLE;
+    assign amo_valid = state != IDLE || dis_amo_io.en;
     assign amo_idx = robIdx;
 
     assign amo_reg_io.en[0] = state == LOOKUP && commitBus.robIdx == robIdx && !waiting_data && !datav;

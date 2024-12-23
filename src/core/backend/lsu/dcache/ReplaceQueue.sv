@@ -67,7 +67,7 @@ module ReplaceQueue(
             dirty <= 0;
         end
         else begin
-            if(io.en & ~(|hit) & ~full)begin
+            if(io.en & ~(|hit) & ~(&en))begin
                 en[freeIdx] <= 1'b1;
             end
             if(io.en & (|hit))begin

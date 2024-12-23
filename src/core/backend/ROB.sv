@@ -136,7 +136,7 @@ generate
         assign rob_wdata_pre[i].old_prd = dis_io.old_prd[i];
 `ifdef DIFFTEST
         assign rob_wdata_pre[i].sim_trap = dis_io.op[i].di.sim_trap;
-        assign rob_wdata_pre[i].trapCode = dis_io.op[i].di.imm;
+        assign rob_wdata_pre[i].trapCode = dis_io.op[i].di.imm[10: 8];
 `endif
 
         logic `N($clog2(`FETCH_WIDTH)) shift_idx, shift_ridx, shift_widx_in, shift_ridx_in;
@@ -547,7 +547,7 @@ endgenerate
 
             if(walk_state && walk_remain_count == 0)begin
                 for(int i=0; i<`COMMIT_WIDTH; i++)begin
-                    dataRIdx[i] <= head + i;
+                    dataRIdx[i] <= head_n + i;
                     dataWIdx[i] <= walk_robIdx + i + walk_skip_redirect;
                 end
             end
