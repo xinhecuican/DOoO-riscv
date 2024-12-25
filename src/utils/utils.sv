@@ -401,7 +401,22 @@ generate
 	end
 	else begin
 		always_comb begin
-			$display("unimpl UpdateCounter");
+			if(dir)begin
+				if(origin == {WIDTH{1'b1}})begin
+					out = origin;
+				end
+				else begin
+					out = origin + 1;
+				end
+			end
+			else begin
+				if(origin == 0)begin
+					out = 0;
+				end
+				else begin
+					out = origin - 1;
+				end
+			end
 		end
 	end
 endgenerate

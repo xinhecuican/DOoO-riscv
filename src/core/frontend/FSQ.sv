@@ -66,24 +66,24 @@ module FSQ (
     );
 
 
-    RedirectInfo u_redirectInfo;
+    RedirectInfo u_redirectInfo, commit_redictInfo;
     assign squashIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx.idx;
     MPRAM #(
         .WIDTH($bits(RedirectInfo)),
         .DEPTH(`FSQ_SIZE),
-        .READ_PORT(1),
+        .READ_PORT(2),
         .WRITE_PORT(1),
         .RESET(1)
     ) redirect_ram (
         .clk(clk),
         .rst(rst),
         .rst_sync(0),
-        .en(1'b1),
+        .en(2'b11),
         .we(bpu_fsq_io.lastStage),
         .waddr(bpu_fsq_io.lastStageIdx),
-        .raddr(squashIdx),
+        .raddr({commit_head, squashIdx}),
         .wdata(bpu_fsq_io.lastStagePred.redirect_info),
-        .rdata(u_redirectInfo),
+        .rdata({commit_redictInfo, u_redirectInfo}),
         .ready()
     );
 
@@ -561,6 +561,7 @@ endgenerate
     assign bpu_fsq_io.updateInfo.realTaken = update_real_taken;
     assign bpu_fsq_io.updateInfo.allocSlot = update_alloc_slot;
     assign bpu_fsq_io.updateInfo.tailTaken = update_tail_taken;
+    assign bpu_fsq_io.updateInfo.redirectInfo = commit_redictInfo;
 `ifdef DIFFTEST
     assign bpu_fsq_io.updateInfo.fsqIdx = commit_head;
 `endif

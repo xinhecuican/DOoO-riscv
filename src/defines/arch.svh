@@ -11,6 +11,7 @@
 `define EXT_FENCEI
 
 `define FEAT_LINKRAS
+`define FEAT_SC
 
 // `define SYNTH_VIVADO
 

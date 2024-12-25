@@ -56,13 +56,15 @@ endgenerate
     assign lookup_entry_i = lookup_entry[$bits(BTBUpdateInfo)-1: 0];
     always_comb begin
         result_i = 0;
-        result_i.en = ~ubtb_io.redirect.flush & ~ubtb_io.redirect.s2_redirect & ubtb_io.redirect.tage_ready;
+        result_i.en = ubtb_io.redirect.tage_ready & ~ubtb_io.redirect.stall;
         result_i.stream.start_addr = ubtb_io.pc;
         result_i.stream_idx = ubtb_io.fsqIdx;
         result_i.stream_dir = ubtb_io.fsqDir;
         result_i.redirect_info.ghistIdx = ubtb_io.history.ghistIdx;
         result_i.redirect_info.tage_history = ubtb_io.history.tage_history;
         result_i.redirect_info.rasInfo = 0;
+        result_i.redirect_info.sc_ghist = ubtb_io.history.sc_ghist;
+        result_i.redirect_info.imli = ubtb_io.history.imli;
         result_i.stream.target = ubtb_io.pc + `BLOCK_SIZE;
 `ifdef RVC
         result_i.stream.size = `BLOCK_INST_SIZE - 2;

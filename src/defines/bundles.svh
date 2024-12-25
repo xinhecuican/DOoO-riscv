@@ -66,8 +66,6 @@ typedef struct packed {
 `LOOP_PTR_DEFINE(RasInflightIdx, `RAS_INFLIGHT_WIDTH)
 
 typedef struct packed {
-    logic `ARRAY(`TAGE_BANK, `TAGE_SET_WIDTH) idxs;
-    logic `ARRAY(`TAGE_BANK, `TAGE_TAG_SIZE) tags;
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_CTR_SIZE) tage_ctrs;
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_U_SIZE) u;
     logic `ARRAY(`TAGE_BASE_CTR, `SLOT_NUM) base_ctr;
@@ -81,8 +79,16 @@ typedef struct packed {
 } UBTBMeta;
 
 typedef struct packed {
+    logic `TENSOR(`SC_TABLE_NUM, `SLOT_NUM, `SC_CTR_SIZE) ctr;
+    logic `ARRAY(`SLOT_NUM, `SC_THRESH_CTR) thresh_ctr;
+    logic `N(`SLOT_NUM) predTaken;
+    logic `N(`SLOT_NUM) thresh_update;
+} SCMeta;
+
+typedef struct packed {
     TageMeta tage;
     UBTBMeta ubtb;
+    SCMeta sc;
 } PredictionMeta;
 
 typedef struct packed {
@@ -127,6 +133,8 @@ typedef struct packed {
     logic `N(`GHIST_WIDTH) ghistIdx;
     TageFoldHistory tage_history;
     RasRedirectInfo rasInfo;
+    logic `N(`SC_GHIST_WIDTH) sc_ghist;
+    logic `N(`SC_IMLI_WIDTH) imli;
     // logic `N(`RAS_CTR_SIZE) ras_ctr;
 } RedirectInfo;
 
@@ -134,6 +142,8 @@ typedef struct packed {
     logic `N(`GHIST_WIDTH) ghistIdx;
     // logic `N(`GHIST_SIZE) ghist;
     // logic `N(`PHIST_SIZE) phist;
+    logic `N(`SC_GHIST_WIDTH) sc_ghist;
+    logic `N(`SC_IMLI_WIDTH) imli;
     TageFoldHistory tage_history;
 } BranchHistory;
 
@@ -144,7 +154,7 @@ typedef struct packed {
     BranchType br_type;
     logic [1: 0] ras_type;
     BTBUpdateInfo btbEntry;
-    logic `N(`PREDICT_STAGE-1) redirect;
+    logic redirect;
     logic `N(2) cond_num;
     logic `N(`SLOT_NUM) cond_valid;
     logic `N(`SLOT_NUM) predTaken;
@@ -169,7 +179,7 @@ typedef struct packed {
 typedef struct packed {
     logic tage_ready;
     logic s2_redirect;
-    // logic s3_redirect;
+    logic s3_redirect;
     logic flush;
     logic stall;
 } RedirectCtrl;
@@ -203,6 +213,7 @@ typedef struct packed {
     logic `N(`SLOT_NUM) allocSlot;
     logic `VADDR_BUS start_addr;
     logic `VADDR_BUS target_pc;
+    RedirectInfo redirectInfo;
     BTBUpdateInfo btbEntry;
     PredictionMeta meta;
 } BranchUpdateInfo;

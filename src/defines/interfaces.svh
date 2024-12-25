@@ -49,10 +49,27 @@ interface BpuTageIO(
     logic ready;
     logic `VADDR_BUS pc;
     logic `N(`SLOT_NUM) prediction;
+    logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) provider_ctr;
     TageMeta meta;
 
-    modport tage (input pc, history, redirect, update, updateInfo, output prediction, meta, ready);
+    modport tage (input pc, history, redirect, update, updateInfo, output prediction, provider_ctr, meta, ready);
 endinterface
+
+interface BpuSCIO(
+    input BranchHistory history,
+    input RedirectCtrl redirect,
+    input logic update,
+    input BranchUpdateInfo updateInfo
+);
+    logic `VADDR_BUS pc;
+    SCMeta meta;
+    logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) tage_ctrs;
+    logic `N(`SLOT_NUM) tage_prediction;
+    logic `N(`SLOT_NUM) prediction;
+
+    modport sc (input pc, history, redirect, update, updateInfo, tage_ctrs, tage_prediction, 
+                output prediction, meta);
+endinterface //BpuSCIO
 
 interface BpuRASIO(
     input RedirectCtrl redirect,
@@ -67,17 +84,13 @@ interface BpuRASIO(
     logic `VADDR_BUS target;
     RasEntry entry;
     RasRedirectInfo rasInfo;
+    RasRedirectInfo linfo; // lookup
 `ifdef T_DEBUG
     logic lastStage;
     logic `N(`FSQ_WIDTH) lastStageIdx;
 `endif
 
-    modport ras (input request, ras_type, target, redirect, squash, squashInfo, update, updateInfo, output en, entry, rasInfo
-`ifdef T_DEBUG
-    , input lastStage, lastStageIdx
-`endif
-    );
-    modport control(input en, entry, rasInfo, output request, ras_type, target
+    modport ras (input request, ras_type, target, redirect, squash, squashInfo, update, updateInfo, linfo, output en, entry, rasInfo
 `ifdef T_DEBUG
     , input lastStage, lastStageIdx
 `endif

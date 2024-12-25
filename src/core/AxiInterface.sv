@@ -219,7 +219,7 @@ module DCacheCoherence #(
         .clk,
         .rst,
         .rst_sync(0),
-        .en({slv_resp_o.r.last, slv_req_i.ar_valid}),
+        .en({w_valid, slv_req_i.ar_valid}),
         .we(w_way & {`DCACHE_WAY{w_valid}}),
         .raddr(slv_req_i.ar.addr`DCACHE_SET_BUS),
         .rdata({w_tagv, tagv}),

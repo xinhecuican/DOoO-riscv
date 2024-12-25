@@ -35,8 +35,8 @@ module LinkRAS(
     logic commit_update;
 
     LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_top_n1 (1, top, top_n1);
-    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_top_p1 (1, top, top_p1);
-    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listtop_n1 (1, listTop, listTop_n1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_top_p1 (1, ras_io.linfo.rasTop, top_p1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listtop_n1 (1, ras_io.linfo.listTop, listTop_n1);
     LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_rtop_p1 (1, r.rasTop, rtop_p1);
     LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rlisttop_n1 (1, r.listTop, rlistTop_n1);
     LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rtop_n1 (1, r.rasTop, rtop_n1);
@@ -51,7 +51,7 @@ module LinkRAS(
 
     assign we = ~ras_io.squash & ras_io.request & ras_io.ras_type[1] |
                 ras_io.squash & squashType[1];
-    assign waddr = ras_io.squash ? r.listTop.idx : listTop.idx;
+    assign waddr = ras_io.squash ? r.listTop.idx : ras_io.linfo.listTop.idx;
     assign raddr = ras_io.request & ras_io.ras_type[0] ? list_p1 : top_p1;
     assign commit_raddr = ras_io.request && ras_io.ras_type == POP ? inflightTop - 2 : inflightTop - 1;
     assign commit_waddr = btbEntry.tailSlot.ras_type == POP_PUSH ? commitTop - 1 : commitTop;
@@ -161,23 +161,31 @@ module LinkRAS(
             else if(ras_io.request)begin
                 if(ras_io.ras_type[1])begin
                     if(ras_io.ras_type[0])begin
-                        topList[listTop.idx] <= topList[top_p1.idx];
+                        topList[ras_io.linfo.listTop.idx] <= topList[top_p1.idx];
                     end
                     else begin
-                        topList[listTop.idx] <= top;
+                        topList[ras_io.linfo.listTop.idx] <= top;
                     end
                     listTop <= listTop_n1;
                     top <= listTop_n1;
                 end
                 else if(ras_io.ras_type[0]) begin
+                    listTop <= ras_io.linfo.listTop;
                     top <= topList[top_p1.idx];
+                end
+                else begin
+                    listTop <= ras_io.linfo.listTop;
+                    top <= ras_io.linfo.rasTop;
                 end
                 
                 if(ras_io.ras_type == PUSH)begin
-                    inflightTop <= inflightTop + 1;
+                    inflightTop <= ras_io.linfo.inflightTop + 1;
                 end
                 else if(ras_io.ras_type == POP)begin
-                    inflightTop <= inflightTop - 1;
+                    inflightTop <= ras_io.linfo.inflightTop - 1;
+                end
+                else begin
+                    inflightTop <= ras_io.linfo.inflightTop;
                 end
             end
 

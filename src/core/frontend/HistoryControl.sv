@@ -11,6 +11,8 @@ module HistoryControl(
 );
     logic `N(`GHIST_SIZE) ghist;
     TageFoldHistory tage_history, tage_input_history, tage_update_history;
+    logic `N(`SC_GHIST_WIDTH) sc_ghist, sc_ghist_red;
+    logic `N(`SC_IMLI_WIDTH) imli, imli_red;
     logic `N(`GHIST_WIDTH) pos;
     logic `ARRAY(`SLOT_NUM, `GHIST_WIDTH) we_idx;
     logic `N(`SLOT_NUM) ghist_we;
@@ -21,7 +23,7 @@ module HistoryControl(
     logic `N(2) condNum;
     logic taken;
 
-    assign prediction_redirect = redirect.s2_redirect;
+    assign prediction_redirect = redirect.s2_redirect | redirect.s3_redirect;
     assign squashCondNum = squashInfo.predInfo.condNum;
     assign condNum = squash ? squashCondNum : result.cond_num;
     assign taken = squash ? squashInfo.predInfo.taken : |result.predTaken;
@@ -33,6 +35,8 @@ module HistoryControl(
                                         result.redirect_info.ghistIdx;
     assign we_idx[1] = redirect.flush ? squashInfo.redirectInfo.ghistIdx + 1 : 
                                         result.redirect_info.ghistIdx + 1;
+    assign sc_ghist_red = result.en & result.redirect ? result.redirect_info.sc_ghist : sc_ghist;
+    assign imli_red = result.en & result.redirect ? result.redirect_info.imli : imli;
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
         assign cond_result[i] = (condNum == (i+1)) & taken;
@@ -42,6 +46,8 @@ endgenerate
                                                  result.redirect_info.tage_history;
     assign history.ghistIdx = pos;
     assign history.tage_history = tage_history;
+    assign history.sc_ghist = sc_ghist;
+    assign history.imli = imli;
     localparam [`TAGE_BANK*16-1: 0] tage_hist_length = `TAGE_HIST_LENGTH;
 generate;
     for(genvar i=0; i<`TAGE_BANK; i++)begin
@@ -92,6 +98,8 @@ endgenerate
             ghist <= 0;
             pos <= 0;
             tage_history <= 0;
+            sc_ghist <= 0;
+            imli <= 0;
         end
         else begin
             pos <= squash ? squashCondNum + squashInfo.redirectInfo.ghistIdx :
@@ -103,6 +111,30 @@ endgenerate
             for(int i=0; i<`SLOT_NUM; i++)begin
                 if(ghist_we[i])begin
                     ghist[we_idx[i]] <= cond_result[i];
+                end
+            end
+            if(squash)begin
+                if(squashCondNum == 2)begin
+                    sc_ghist <= {squashInfo.redirectInfo.sc_ghist[`SC_GHIST_WIDTH-3: 0], 1'b0, squashInfo.predInfo.taken};
+                    imli <= squashInfo.predInfo.taken;
+                end
+                else if(squashCondNum == 1)begin
+                    sc_ghist <= {squashInfo.redirectInfo.sc_ghist[`SC_GHIST_WIDTH-2: 0], squashInfo.predInfo.taken};
+                    imli <= squashInfo.predInfo.taken ? squashInfo.redirectInfo.imli + 1 : 0;
+                end
+                else begin
+                    sc_ghist <= squashInfo.redirectInfo.sc_ghist;
+                    imli <= squashInfo.redirectInfo.imli;
+                end
+            end
+            else if(result.en)begin
+                if(result.cond_num == 2)begin
+                    sc_ghist <= {sc_ghist_red[`SC_GHIST_WIDTH-3: 0], 1'b0, |result.predTaken};
+                    imli <= |result.predTaken;
+                end
+                else if(result.cond_num == 1)begin
+                    sc_ghist <= {sc_ghist_red[`SC_GHIST_WIDTH-2: 0], |result.predTaken};
+                    imli <= |result.predTaken ? imli_red + 1 : 0;
                 end
             end
         end

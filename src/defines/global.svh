@@ -35,7 +35,7 @@ endfunction
 `define RESET_PC `VADDR_SIZE'h80000000
 
 // BranchPrediction
-`define PREDICT_STAGE 2
+`define PREDICT_STAGE 3
 `define BLOCK_SIZE 32 // max bytes for an instruction block/fetch stream
 `ifdef RVC
 `define INST_BYTE 2
@@ -85,6 +85,26 @@ endfunction
 `define TAGE_BASE_CTR 2
 `define TAGE_ALT_CTR 7
 `define TAGE_SET_WIDTH 11
+
+`define SC_GHIST_WIDTH 16
+`define SC_IMLI_WIDTH 8
+`define SC_CTR_SIZE 6
+`define SC_HIST_NUM 4
+`define SC_SET_WIDTH 9
+`define SC_COMMIT_SIZE 8
+`define SC_HIST_DEPTH 64'h0200_0200_0200_0200
+`define SC_HIST_LENGTH 64'h000f_000b_0008_0004
+`define SC_HIST_THRESH_DEPTH 64'h0020_0020_0020_0020
+`define SC_HIST_INIT 6'b100000
+`define SC_IMLI_NUM 0
+`define SC_IMLI_DEPTH 16'h0200
+`define SC_IMLI_THRESH_DEPTH 16'h0020
+`define SC_IMLI_INIT 6'b100000
+`define SC_TABLE_NUM (`SC_HIST_NUM+`SC_IMLI_NUM)
+`define SC_THRESH_DEPTH 64
+`define SC_THRESH_CTR 8
+`define SC_GTHRESH_CTR 9
+`define SC_GTHRESH_INIT 'd35
 typedef enum logic [1:0] {
     DIRECT,
     CONDITION,

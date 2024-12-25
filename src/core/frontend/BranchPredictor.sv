@@ -16,13 +16,17 @@ module BranchPredictor(
     BpuTageIO tage_io(.*);
     BpuUBtbIO ubtb_io(.*);
     BpuRASIO ras_io(.*);
+    BpuSCIO sc_io(.*);
 
     PredictionResult s1_result;
     PredictionResult s2_result_in, s2_result_out;
     PredictionResult redirect_result;
     PredictionMeta s1_meta;
     PredictionMeta s2_meta_in, s2_meta_out;
-    // PredictionResult s3_result_in, s3_result_out;
+    PredictionMeta s3_meta_in, s3_meta_out;
+    PredictionResult s3_result_in, s3_result_out;
+    logic `VADDR_BUS ras_addr_s3;
+    RasRedirectInfo ras_info_s3;
 
     assign squash = bpu_fsq_io.squash;
     assign squashInfo = bpu_fsq_io.squashInfo;
@@ -33,6 +37,10 @@ module BranchPredictor(
     BTB btb(.*);
     assign tage_io.pc = pc;
     Tage tage(.*);
+    assign sc_io.pc = pc;
+    assign sc_io.tage_prediction = tage_io.prediction;
+    assign sc_io.tage_ctrs = tage_io.provider_ctr;
+    SC sc(.*, .io(sc_io));
 
     HistoryControl history_control(
         .*,
@@ -61,10 +69,11 @@ module BranchPredictor(
     RAS ras(.*);
 `endif
     
-    assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect[0];
+    assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect;
+    assign redirect.s3_redirect = s3_result_out.en && s3_result_out.redirect;
     assign redirect.tage_ready = tage_io.ready;
     assign redirect.flush = bpu_fsq_io.squash;
-    assign redirect.stall = bpu_fsq_io.stall & ~redirect.s2_redirect | ~tage_io.ready;
+    assign redirect.stall = bpu_fsq_io.stall | ~tage_io.ready;
     assign stall_normal = bpu_fsq_io.stall | ~tage_io.ready;
     assign redirect_result = s2_result_out;
     always_ff @(posedge clk)begin
@@ -73,6 +82,9 @@ module BranchPredictor(
         end
         else if(redirect.flush)begin
             pc <= squashInfo.target_pc;
+        end
+        else if(redirect.s3_redirect)begin
+            pc <= s3_result_out.stream.target;
         end
         else if(redirect.s2_redirect)begin
             pc <= s2_result_out.stream.target;
@@ -85,51 +97,94 @@ module BranchPredictor(
             s2_result_in <= 0;
             s2_meta_in <= 0;
         end
-        else if(redirect.flush)begin
+        else if(redirect.flush | redirect.s2_redirect | redirect.s3_redirect)begin
             s2_result_in.en <= 1'b0;
         end
-        else if(~stall_normal | redirect.s2_redirect)begin
+        else begin
             s2_result_in <= s1_result;
             s2_meta_in <= s1_meta;
         end
 
-        // if(rst == `RST || redirect.flush)begin
-        //     s3_result_in <= '{default: 0};
-        // end
-        // else if(!redirect.stall)begin
-        //     s3_result_in <= s2_result_out;
-        // end
+        if(rst == `RST)begin
+            s3_result_in <= 0;
+            s3_meta_in <= 0;
+        end
+        else if(redirect.flush | redirect.s3_redirect)begin
+            s3_result_in.en <= 1'b0;
+        end
+        else begin
+            s3_result_in <= s2_result_out;
+            s3_meta_in <= s2_meta_out;
+        end
+        ras_addr_s3 <= ras_io.entry.pc;
+        ras_info_s3 <= ras_io.rasInfo;
     end
 
     assign bpu_fsq_io.en = bpu_fsq_io.prediction.en & ~redirect.flush;
-    assign bpu_fsq_io.prediction = redirect.s2_redirect ? s2_result_out : s1_result;
-    assign bpu_fsq_io.redirect = redirect.s2_redirect & ~redirect.flush;
-    assign bpu_fsq_io.lastStage = s2_result_out.en  & ~redirect.flush;
-    assign bpu_fsq_io.lastStageIdx = s2_result_out.stream_idx;
-    assign bpu_fsq_io.lastStageMeta = s2_meta_out;
-    assign bpu_fsq_io.lastStagePred = s2_result_out;
-    assign bpu_fsq_io.ras_addr = ras_io.entry.pc;
+    assign bpu_fsq_io.prediction = redirect.s3_redirect ? s3_result_out : 
+                                   redirect.s2_redirect ? s2_result_out : s1_result;
+    assign bpu_fsq_io.redirect = (redirect.s3_redirect | redirect.s2_redirect) & ~redirect.flush;
+    assign bpu_fsq_io.lastStage = s3_result_out.en  & ~redirect.flush;
+    assign bpu_fsq_io.lastStageIdx = s3_result_out.stream_idx;
+    assign bpu_fsq_io.lastStageMeta = s3_meta_out;
+    assign bpu_fsq_io.lastStagePred = s3_result_out;
+    assign bpu_fsq_io.ras_addr = ras_addr_s3;
+
+    assign ras_io.request = s2_result_out.en & s2_result_out.btb_hit & 
+                            s2_result_out.tail_taken & (s2_result_out.br_type == CALL) |
+                            s3_result_out.en & s3_result_out.redirect & 
+                            ((s3_result_out.br_type == CALL) != (s3_result_in.br_type == CALL));
+    assign ras_io.ras_type = s3_result_out.en & s3_result_out.redirect ? s3_result_out.btbEntry.tailSlot.ras_type : 
+                            s2_result_out.btbEntry.tailSlot.ras_type;
+    assign ras_io.linfo = s3_result_out.en & s3_result_out.redirect ? ras_info_s3 : ras_io.rasInfo;
+`ifdef RVC
+    assign ras_io.target = s3_result_out.en & s3_result_out.redirect ?
+        s3_result_in.stream.start_addr + {s3_result_out.btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} +
+        {~s3_result_out.btbEntry.tailSlot.rvc, s3_result_out.btbEntry.tailSlot.rvc, 1'b0} :
+        s2_result_in.stream.start_addr + {s2_result_out.btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} +
+        {~s2_result_out.btbEntry.tailSlot.rvc, s2_result_out.btbEntry.tailSlot.rvc, 1'b0};
+`else
+    assign ras_io.target = s3_result_out.en & s3_result_out.redirect ?
+        s3_result_in.stream.start_addr + {s3_result_out.btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} + 4 :
+        s2_result_in.stream.start_addr + {s2_result_out.btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} + 4;
+`endif
+
     S2Control s2_control(
-        .stall(stall_normal),
         .pc(s2_result_in.stream.start_addr),
         .entry(btb_io.entry),
         .tag(btb_io.tag),
         .prediction(tage_io.prediction),
-        .ras_io(ras_io.control),
+        .ras_addr(ras_io.entry.pc),
+        .ras_info(ras_io.rasInfo),
         .result_i(s2_result_in),
         .result_o(s2_result_out)
     );
-    assign s1_meta.ubtb = ubtb_io.meta;
-    assign s1_meta.tage = 0;
-    assign s2_meta_out.ubtb = s2_meta_in.ubtb;
-    assign s2_meta_out.tage = tage_io.meta;
+    always_comb begin
+        s1_meta = 0;
+        s1_meta.ubtb = ubtb_io.meta;
+        s2_meta_out = s2_meta_in;
+        s2_meta_out.tage = tage_io.meta;
+        s3_meta_out = s3_meta_in;
+        s3_meta_out.sc = sc_io.meta;
+    end
+
+    S3Control s3_control(
+        .pc(s3_result_in.stream.start_addr),
+        .prediction(sc_io.prediction),
+        .ras_addr(ras_addr_s3),
+        .ras_info(ras_info_s3),
+        .result_i(s3_result_in),
+        .result_o(s3_result_out)
+    );
 
 
 endmodule
 
 module PredictionResultGen #(
     parameter RASV=0,
-    parameter REDIRECTV=0
+    parameter REDIRECTV=0,
+    parameter INDV = 1,
+    parameter BTBV = 1
 )(
     input logic `VADDR_BUS pc,
     input logic hit,
@@ -239,8 +294,13 @@ endgenerate
 
     always_comb begin
         if(REDIRECTV)begin
-            result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
+            if(INDV)begin
+                result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
                     tail_taken & (tail_indirect_target != result_i.stream.target));
+            end
+            else begin
+                result_o.redirect = hit & (predTaken != result_i.predTaken);
+            end
         end
         else begin
             result_o.redirect = 0;
@@ -262,8 +322,13 @@ endgenerate
         result_o.taken = (|br_takens) | tail_taken;
         result_o.tail_taken = ~(|br_takens) & tail_taken;
         result_o.predTaken = predTaken;
-        result_o.btbEntry = ~hit ? 0 : entry;
-        result_o.btbEntry.en = hit & entry.en;
+        if(BTBV)begin
+            result_o.btbEntry = ~hit ? 0 : entry;
+            result_o.btbEntry.en = hit & entry.en;
+        end
+        else begin
+            result_o.btbEntry = result_i.btbEntry;
+        end
         result_o.en = result_i.en;
         result_o.stream.start_addr = result_i.stream.start_addr;
         result_o.stream_idx = result_i.stream_idx;
@@ -277,12 +342,12 @@ endgenerate
 endmodule
 
 module S2Control(
-    input logic stall,
     input logic `VADDR_BUS pc,
     input logic `N(`BTB_TAG_SIZE) tag,
     input BTBUpdateInfo entry,
     input logic `N(`SLOT_NUM) prediction,
-    BpuRASIO.control ras_io,
+    input logic `VADDR_BUS ras_addr,
+    input RasRedirectInfo ras_info,
     input PredictionResult result_i,
     output PredictionResult result_o
 );
@@ -322,20 +387,35 @@ module S2Control(
         .hit(btb_hit),
         .entry(entry_i),
         .prediction,
-        .ras_addr(ras_io.entry.pc),
-        .rasInfo(ras_io.rasInfo),
+        .ras_addr(ras_addr),
+        .rasInfo(ras_info),
         .result_i,
         .result_o
     );
 
-    assign ras_io.request = result_i.en & (~stall | result_o.redirect) & btb_hit & 
-                            result_o.tail_taken & (result_o.br_type == CALL);
-    assign ras_io.ras_type = entry_i.tailSlot.ras_type;
-`ifdef RVC
-    assign ras_io.target = pc + {entry_i.tailSlot.offset, {`INST_OFFSET{1'b0}}} +
-                            {~entry_i.tailSlot.rvc, entry_i.tailSlot.rvc, 1'b0};
-`else
-    assign ras_io.target = pc + {entry_i.tailSlot.offset, {`INST_OFFSET{1'b0}}} + 4;
-`endif
+endmodule
 
+module S3Control(
+    input logic `VADDR_BUS pc,
+    input logic `N(`SLOT_NUM) prediction,
+    input logic `VADDR_BUS ras_addr,
+    input RasRedirectInfo ras_info,
+    input PredictionResult result_i,
+    output PredictionResult result_o
+);
+    PredictionResultGen #(
+        .REDIRECTV(1),
+        .INDV(0),
+        .BTBV(0),
+        .RASV(1)
+    ) result_gen (
+        .pc,
+        .hit(result_i.btb_hit & result_i.en),
+        .entry(result_i.btbEntry),
+        .prediction,
+        .ras_addr,
+        .rasInfo(ras_info),
+        .result_i,
+        .result_o
+    );
 endmodule
