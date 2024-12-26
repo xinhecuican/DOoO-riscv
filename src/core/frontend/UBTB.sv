@@ -12,7 +12,8 @@ module UBTB(
     BTBEntry lookup_entry;
     logic `ARRAY(`SLOT_NUM, 2) lookup_ctr;
     logic `N(`UBTB_SIZE) lookup_hits, updateHits;
-    logic `N($clog2(`UBTB_SIZE)) lookup_index, updateIdx, updateSelectIdx;
+    logic `N($clog2(`UBTB_SIZE)) lookup_index, updateIdx, updateSelectIdx, replaceIdx;
+    logic `N(`UBTB_SIZE) update_way;
     logic `N(`UBTB_TAG_SIZE) lookup_tag, update_tag;
     logic lookup_hit, updateHit;
     logic `N(`SLOT_NUM) cond_history;
@@ -22,19 +23,28 @@ module UBTB(
     logic br_rvc_normal;
 `endif
 
-    ReplaceD1IO #(.WAY_NUM(`UBTB_SIZE)) replace_io();
+    UBTBMeta meta;
+    logic `N(`SLOT_NUM) update_carry, update_en;
+    logic `ARRAY(`SLOT_NUM, 2) u_ctr, commit_ctr, ctr_i, cam_ctr;
+    logic commit_ctr_hit;
+
+    ReplaceIO #(.DEPTH(1), .WAY_NUM(`UBTB_SIZE)) replace_io();
 
     Encoder #(`UBTB_SIZE) encoder_lookup(lookup_hits, lookup_index);
     Encoder #(`UBTB_SIZE) encoder_update(updateHits, updateIdx);
+    Encoder #(`UBTB_SIZE) encoder_replace(replace_io.miss_way, replaceIdx);
     BTBTagGen #(
         `INST_OFFSET,
         `UBTB_TAG_SIZE
     )gen_tag(ubtb_io.pc, lookup_tag);
-    assign replace_io.hit_en = 0;
-    assign replace_io.hit_way = 0;
+    assign replace_io.hit_en = result_i.en | ubtb_io.update & ubtb_io.updateInfo.btbEntry.en;
+    assign replace_io.hit_index = 0;
+    assign replace_io.hit_way = ubtb_io.update & ubtb_io.updateInfo.btbEntry.en ? update_way : lookup_hits;
+    assign replace_io.miss_index = 0;
     assign lookup_hit = |lookup_hits;
     assign updateHit = |updateHits;
-    assign updateSelectIdx = updateHit ? updateIdx : replace_io.miss_way;
+    assign updateSelectIdx = updateHit ? updateIdx : replaceIdx;
+    assign update_way = updateHit ? updateHits : replace_io.miss_way;
     assign lookup_entry = entrys[lookup_index];
     assign lookup_ctr = ctrs[lookup_index];
     BTBTagGen #(
@@ -86,19 +96,15 @@ endgenerate
     );
     assign ubtb_io.result = result_o;
 
-    RandomReplaceD1 #(
+    PLRU #(
         .DEPTH(1),
         .WAY_NUM(`UBTB_SIZE)
     ) replace (
-        .clk(clk),
-        .rst(rst),
-        .replace_io(replace_io)
+        .clk,
+        .rst,
+        .replace_io
     );
 
-    UBTBMeta meta;
-    logic `N(`SLOT_NUM) update_carry, update_en;
-    logic `ARRAY(`SLOT_NUM, 2) u_ctr, commit_ctr, ctr_i, cam_ctr;
-    logic commit_ctr_hit;
     assign meta = ubtb_io.updateInfo.meta.ubtb;
 
     CAMQueue #(
@@ -136,7 +142,11 @@ endgenerate
         end
         else begin
             if(ubtb_io.update & ubtb_io.updateInfo.btbEntry.en)begin
-                entrys[updateSelectIdx] <= {update_tag, ubtb_io.updateInfo.btbEntry};
+                for(int i=0; i<`UBTB_SIZE; i++)begin
+                    if(update_way[i])begin
+                        entrys[i] <= {update_tag, ubtb_io.updateInfo.btbEntry};
+                    end
+                end
                 for(int i=0; i<`SLOT_NUM; i++)begin
                     if(update_en[i])begin
                         if(~update_carry[i])begin

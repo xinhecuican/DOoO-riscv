@@ -16,6 +16,8 @@ module LinkRAS(
     RasInflightIdx top_p1, top_n1, listTop_n1, rtop_p1, rtop_n1;
     RasInflightIdx rlistTop_n1, listBottom_n1, listBottom_p1, list_p1;
     RasInflightIdx `N(`RAS_INFLIGHT_SIZE) topList;
+    logic `N(`RAS_INFLIGHT_SIZE) topInvalid;
+    logic preTopInvalid;
 
     logic [1: 0] squashType;
     RasRedirectInfo r;
@@ -29,10 +31,17 @@ module LinkRAS(
     RasEntry entry, commitEntry, updateEntry, commitUpdateEntry;
     logic `VADDR_BUS squash_target;
 
-    logic select_commit, commit_older;
+    logic select_commit;
     logic select_bypass; // push then pop in the next cycle
     RasEntry bypassEntry;
     logic commit_update;
+
+    function inRange(RasInflightIdx raddr);
+        logic bottom, top;
+        bottom = (listBottom.dir ^ raddr.dir) ^ (raddr.idx < listBottom.idx);
+        top = (listTop.dir ^ raddr.dir) ^ (raddr.idx < listTop.idx);
+        return ~bottom & top;
+    endfunction
 
     LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_top_n1 (1, top, top_n1);
     LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_top_p1 (1, ras_io.linfo.rasTop, top_p1);
@@ -42,8 +51,7 @@ module LinkRAS(
     LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rtop_n1 (1, r.rasTop, rtop_n1);
     LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listbottom_n1 (1, listBottom, listBottom_n1);
     LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_bottom_p1 (1, listBottom, listBottom_p1);
-    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_p1 (1, topList[top_p1], list_p1);
-    LoopCompare #(`RAS_INFLIGHT_WIDTH) cmp_commit_older (raddr, listBottom, commit_older);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_p1 (1, topList[top_p1.idx], list_p1);
 
     assign squashType = ras_io.squashInfo.ras_type;
     assign r = ras_io.squashInfo.redirectInfo.rasInfo;
@@ -57,7 +65,8 @@ module LinkRAS(
     assign commit_waddr = btbEntry.tailSlot.ras_type == POP_PUSH ? commitTop - 1 : commitTop;
 
     always_ff @(posedge clk)begin
-        select_commit <= commit_older;
+        select_commit <= ~inRange(raddr) | preTopInvalid | 
+                        (ras_io.request & (ras_io.ras_type == POP) & topInvalid[top_p1.idx]);
         select_bypass <= ras_io.request & ras_io.ras_type[1];
         bypassEntry.pc <= ras_io.target;
     end
@@ -80,6 +89,7 @@ module LinkRAS(
     assign ras_io.rasInfo.rasTop = top;
     assign ras_io.rasInfo.listTop = listTop;
     assign ras_io.rasInfo.inflightTop = inflightTop;
+    assign ras_io.rasInfo.topInvalid = preTopInvalid;
     assign ras_io.entry = select_bypass ? bypassEntry :
                           select_commit ? commitEntry : entry;
 
@@ -126,6 +136,8 @@ module LinkRAS(
             topList <= 0;
             commitTop <= 0;
             inflightTop <= 0;
+            topInvalid <= 0;
+            preTopInvalid <= 0;
         end
         else begin
             if(ras_io.squash)begin
@@ -136,16 +148,26 @@ module LinkRAS(
                     else begin
                         topList[r.listTop.idx] <= r.rasTop;
                     end
+                    topInvalid[r.listTop.idx] <= r.topInvalid;
+                    preTopInvalid <= 1'b0;
                     listTop <= rlistTop_n1;
                     top <= rlistTop_n1;
                 end
                 else if(squashType[0])begin
                     listTop <= r.listTop;
-                    top <= topList[rtop_p1.idx];
+                    if(inRange(topList[rtop_p1.idx]) & ~topInvalid[rtop_p1.idx] & ~r.topInvalid)begin
+                        top <= topList[rtop_p1.idx];
+                        preTopInvalid <= r.topInvalid;
+                    end
+                    else begin
+                        top <= r.rasTop;
+                        preTopInvalid <= 1'b1;
+                    end
                 end
                 else begin
                     listTop <= r.listTop;
                     top <= r.rasTop;
+                    preTopInvalid <= r.topInvalid;
                 end
 
                 if(squashType == PUSH)begin
@@ -166,12 +188,20 @@ module LinkRAS(
                     else begin
                         topList[ras_io.linfo.listTop.idx] <= top;
                     end
+                    topInvalid[ras_io.linfo.listTop.idx] <= preTopInvalid;
+                    preTopInvalid <= 1'b0;
                     listTop <= listTop_n1;
                     top <= listTop_n1;
                 end
                 else if(ras_io.ras_type[0]) begin
                     listTop <= ras_io.linfo.listTop;
-                    top <= topList[top_p1.idx];
+                    if(inRange(topList[top_p1.idx]) & ~topInvalid[top_p1.idx] & ~preTopInvalid)begin
+                        top <= topList[top_p1.idx];
+                    end
+                    else begin
+                        top <= ras_io.linfo.rasTop;
+                        preTopInvalid <= 1'b1;
+                    end
                 end
                 else begin
                     listTop <= ras_io.linfo.listTop;

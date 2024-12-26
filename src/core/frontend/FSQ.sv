@@ -433,6 +433,9 @@ endgenerate
 
 // wb & commit
     typedef struct packed {
+`ifdef DIFFTEST
+        logic front;
+`endif
         logic exception;
         logic taken;
 `ifdef RVC
@@ -460,7 +463,11 @@ endgenerate
         end
         else begin
             if(pd_redirect.en & pd_redirect.direct)begin
-                wbInfos[pd_redirect.fsqIdx.idx] <= {1'b0, 1'b1, 
+                wbInfos[pd_redirect.fsqIdx.idx] <= {
+`ifdef DIFFTEST
+                1'b1,
+`endif    
+                1'b0, 1'b1, 
 `ifdef RVC
                 pd_redirect.stream.rvc, pd_redirect.size,
 `endif
@@ -468,7 +475,11 @@ endgenerate
                 pd_redirect.stream.target, pd_redirect.stream.size};
             end
             if(rd.en | cr.en)begin
-                wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {cr.en, rd.taken, 
+                wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {
+`ifdef DIFFTEST
+                1'b0,
+`endif
+                cr.en, rd.taken, 
 `ifdef RVC
                 fsq_back_io.redirect.rvc, fsq_back_io.redirect.fsqInfo.size,
 `endif
@@ -717,7 +728,7 @@ endgenerate
 
     `PERF(pred_error_cond, commitValid & pred_error & ~commitWBInfo.exception & commitWBInfo.br_type == CONDITION)
     `PERF(pred_error_ind, commitValid & pred_error & ~commitWBInfo.exception & commitWBInfo.br_type == INDIRECT)
-    `PERF(pred_error_call, commitValid & pred_error & ~commitWBInfo.exception & commitWBInfo.br_type == CALL)
+    `PERF(pred_error_call, commitValid & pred_error & ~commitWBInfo.exception & ~commitWBInfo.front & commitWBInfo.br_type == CALL)
     `PERF(pred_error, commitValid & pred_error & ~commitWBInfo.exception)
     `PERF(front_redirect_direct, pd_redirect.en & pd_redirect.direct)
     `PERF(front_redirect_nobranch, pd_redirect.en & ~pd_redirect.direct)
@@ -879,8 +890,8 @@ endgenerate
                 updateEntry.slots[i].offset = we[i] ? fsqInfo.offset : 
                                               oldEntry.slots[i].en ? oldEntry.slots[i].offset :
                                               `BLOCK_INST_SIZE - 1;
-                updateEntry.slots[i].target = we[i] ? target[`JAL_OFFSET: 1] : oldEntry.slots[i].target;
-                updateEntry.slots[i].tar_state = we[i] ? tarState : oldEntry.slots[i].tar_state;
+                updateEntry.slots[i].target = we[i] & taken ? target[`JAL_OFFSET: 1] : oldEntry.slots[i].target;
+                updateEntry.slots[i].tar_state = we[i] & taken ? tarState : oldEntry.slots[i].tar_state;
 `ifdef RVC
                 updateEntry.slots[i].rvc = we[i] ? rvc : oldEntry.slots[i].rvc;
 `endif

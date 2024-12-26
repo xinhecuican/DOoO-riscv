@@ -298,12 +298,14 @@ module PreDecoder(
     assign cjal_imm = {{`VADDR_SIZE-12{cinst[12]}}, cinst[12], cinst[8], cinst[10: 9], cinst[6], cinst[7], cinst[2], cinst[11], cinst[5: 3], 1'b0};
 
     logic cj, cjal, cjr, cjalr, cbeqz, cbnez;
+    logic cpop;
     assign cjal = sign1 & funct3_1;
     assign cj = sign1 & funct3_5;
     assign cbeqz = sign1 & funct3_6;
     assign cbnez = sign1 & funct3_7;
     assign cjr = sign2 & funct3_4 & ~cinst[12] & ~full_rd_0 & full_rs2_0;
     assign cjalr = sign2 & funct3_4 & cinst[12] & ~full_rd_0 & full_rs2_0;
+    assign cpop = full_rd == 1 || full_rd == 5;
 
     logic `VADDR_BUS offset_o;
     assign offset_o = normal ? offset : cjal_imm;
@@ -313,7 +315,7 @@ module PreDecoder(
     assign pdBundle.direct = jal | cj | cjal | jalr & pop | cjr | cjalr;
     assign pdBundle.jump = jal | cj | cjal;
     assign pdBundle.ras_type = {(jal | jalr) & push | cjal | cjalr,
-                                jalr & pop | cjr | cjalr};
+                                jalr & pop | cjr | cjalr & cpop};
 `else
     assign pdBundle.branch = jal | jalr | branch;
     assign pdBundle.target = addr + offset;

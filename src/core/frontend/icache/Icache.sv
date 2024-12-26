@@ -217,10 +217,11 @@ endgenerate
     assign replace_way = replace_io.miss_way;
 
 
-    assign fsq_cache_io.ready = ((main_state == IDLE && (abandon_idle || (!fsq_cache_io.stall))) ||
-                                (main_state == LOOKUP && (((!(|cache_miss) &&
-                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) && !fsq_cache_io.stall) || 
-                                (abandon_lookup || abandon_idle && fsq_cache_io.en))))
+    assign fsq_cache_io.ready = ((main_state == IDLE && ((!fsq_cache_io.stall))) ||
+                                (main_state == LOOKUP && (((!(|cache_miss) && 
+                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) && 
+                                !fsq_cache_io.stall) || (abandon_lookup))) ||
+                                (abandon_idle && fsq_cache_io.en))
 `ifdef EXT_FENCEI
                                 & ~fenceValid
 `endif

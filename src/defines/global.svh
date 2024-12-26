@@ -120,7 +120,7 @@ typedef enum logic [1:0] {
 
 `define RAS_SIZE 32
 `define RAS_WIDTH $clog2(`RAS_SIZE)
-`define RAS_INFLIGHT_SIZE 8
+`define RAS_INFLIGHT_SIZE 16
 `define RAS_INFLIGHT_WIDTH $clog2(`RAS_INFLIGHT_SIZE)
 `define RAS_CTR_SIZE 8
 typedef enum logic [1:0] {

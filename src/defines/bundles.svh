@@ -117,6 +117,7 @@ typedef struct packed {
     RasInflightIdx rasTop;
     RasInflightIdx listTop;
     logic `N(`RAS_WIDTH) inflightTop;
+    logic topInvalid;
     logic [1: 0] ras_type; // for mem redirect
 } RasRedirectInfo;
 `else
