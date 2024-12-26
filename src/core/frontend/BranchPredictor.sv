@@ -130,12 +130,12 @@ module BranchPredictor(
     assign bpu_fsq_io.lastStagePred = s3_result_out;
     assign bpu_fsq_io.ras_addr = ras_addr_s3;
 
-    assign ras_io.request = s2_result_out.en & s2_result_out.btb_hit & 
+    assign ras_io.request = s2_result_out.en & s2_result_out.btb_hit & ~redirect.s3_redirect &
                             s2_result_out.tail_taken & (s2_result_out.br_type == CALL) |
                             s3_result_out.en & s3_result_out.redirect & 
                             ((s3_result_out.br_type == CALL) != (s3_result_in.br_type == CALL));
-    assign ras_io.ras_type = s3_result_out.en & s3_result_out.redirect ? s3_result_out.btbEntry.tailSlot.ras_type : 
-                            s2_result_out.btbEntry.tailSlot.ras_type;
+    assign ras_io.ras_type = s3_result_out.en & s3_result_out.redirect ? s3_result_out.ras_type : 
+                            s2_result_out.ras_type;
     assign ras_io.linfo = s3_result_out.en & s3_result_out.redirect ? ras_info_s3 : ras_io.rasInfo;
 `ifdef RVC
     assign ras_io.target = s3_result_out.en & s3_result_out.redirect ?
@@ -308,7 +308,7 @@ endgenerate
         result_o.stream.taken = hit & ((|br_takens) | tail_taken);
         result_o.btb_hit = hit;
         result_o.br_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
-        result_o.ras_type = entry.tailSlot.ras_type;
+        result_o.ras_type = |br_takens ? 0 : entry.tailSlot.ras_type;
         result_o.stream.size = ~hit ? result_i.stream.size : 
                                |br_takens ? br_size : tail_size;
 `ifdef RVC

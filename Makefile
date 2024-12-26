@@ -6,6 +6,7 @@ E=2000
 WB=0
 WE=0
 T=0
+CYCLES=0
 I ?= utils/NEMU/ready-to-run/microbench.bin
 CONFIG ?= ""
 CLK_FREQ_MHZ ?= 100
@@ -44,6 +45,9 @@ endif
 ifneq (,$(filter $(EMU_TRACE),1 vcd VCD fst FST))
 	export EMU_TRACE
 	TRACE_ARGS += --dump-wave
+endif
+ifneq ($(CYCLES), 0)
+	TRACE_ARGS += -C $(CYCLES)
 endif
 ifeq ($(ENABLE_FORK), 1)
 	TRACE_ARGS += --enable-fork

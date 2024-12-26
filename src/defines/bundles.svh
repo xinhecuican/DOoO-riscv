@@ -175,6 +175,8 @@ typedef struct packed {
     logic jump;
     logic `VADDR_BUS target;
     logic [1: 0] ras_type;
+    logic `N(12) jalr_offset;
+    logic jalrv; // jalr && offset != 0
 } PreDecodeBundle;
 
 typedef struct packed {

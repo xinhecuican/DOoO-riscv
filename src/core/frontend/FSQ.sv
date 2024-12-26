@@ -29,21 +29,27 @@ module FSQ (
     logic `N(`FSQ_SIZE) directionTable;
     logic tdir, hdir, shdir;
     logic `N(`FSQ_WIDTH) searchIdx;
-    FetchStream commitStream, searchStream, writeStream;
+    FetchStream commitStream, searchStream, writeStream, redirectStream;
     logic `N(`PREDICTION_WIDTH) commitSize;
     logic initReady;
     logic commitValid;
     FetchStream `N(`ALU_SIZE) back_streams;
+    BranchRedirectInfo rd_br;
+    CSRRedirectInfo rd_csr;
+    logic rd_br_en;
+    logic `N(`FSQ_WIDTH) rd_br_idx;
 
     assign tail_n1 = tail + 1;
     assign search_head_n1 = search_head + 1;
     assign write_tail = bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
     assign queue_we = bpu_fsq_io.en & (~full | bpu_fsq_io.redirect);
     assign last_stage_we = bpu_fsq_io.lastStage & (~full | bpu_fsq_io.redirect);
-    assign write_index = pd_redirect.en ? pd_redirect.fsqIdx.idx :
+    assign write_index = rd_br_en ? rd_br_idx :
+                         pd_redirect.en ? pd_redirect.fsqIdx.idx :
                          bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
     assign searchIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : search_head;
-    assign writeStream = pd_redirect.en ? pd_redirect.stream :
+    assign writeStream = rd_br_en ? redirectStream : 
+                         pd_redirect.en ? pd_redirect.stream :
                             bpu_fsq_io.prediction.stream;
     // read ports: cache, wb, commit
     MPRAM #(
@@ -57,7 +63,7 @@ module FSQ (
         .rst(rst),
         .rst_sync(0),
         .en({cache_req_ok | fsq_back_io.redirect.en, {(`ALU_SIZE+1){1'b1}}}),
-        .we((queue_we | pd_redirect.en)),
+        .we((queue_we | pd_redirect.en | rd_br_en)),
         .waddr(write_index),
         .raddr({searchIdx, fsq_back_io.fsqIdx, n_commit_head}),
         .wdata(writeStream),
@@ -67,7 +73,7 @@ module FSQ (
 
 
     RedirectInfo u_redirectInfo, commit_redictInfo;
-    assign squashIdx = fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx.idx;
+    assign squashIdx = rd_br.en | rd_csr.en ? fsq_back_io.redirect.fsqInfo.idx : pd_redirect.fsqIdx.idx;
     MPRAM #(
         .WIDTH($bits(RedirectInfo)),
         .DEPTH(`FSQ_SIZE),
@@ -278,7 +284,9 @@ endgenerate
 // squash
     logic `N(`VADDR_SIZE) squash_target_pc;
     logic `N(`FSQ_WIDTH) pd_redirect_n1, bpu_fsq_redirect_n1, redirect_n1;
-    logic memRedirectValid;
+    logic rd_br_taken;
+    logic `VADDR_BUS rd_br_target;
+    logic `N(`PREDICTION_WIDTH) rd_br_offset;
 
     assign pd_redirect_n1 = pd_redirect.fsqIdx.idx + 1;
     assign bpu_fsq_redirect_n1 = bpu_fsq_io.prediction.stream_idx + 1;
@@ -295,31 +303,43 @@ endgenerate
     assign bpu_fsq_io.squashInfo.redirectInfo = u_redirectInfo;
     assign bpu_fsq_io.squashInfo.start_addr = squash_redirect_en ? searchStream.start_addr : pd_start_addr;
     assign bpu_fsq_io.squashInfo.offset = squash_offset;
-    assign bpu_fsq_io.squashInfo.target_pc = memRedirectValid ? searchStream.target : squash_target_pc;
+    assign bpu_fsq_io.squashInfo.target_pc = squash_target_pc;
     assign bpu_fsq_io.squashInfo.predInfo = squash_pred_info;
     assign bpu_fsq_io.squashInfo.br_type = squash_br_type;
-    assign bpu_fsq_io.squashInfo.ras_type = memRedirectValid ? u_redirectInfo.rasInfo.ras_type : squash_ras_type;
+    assign bpu_fsq_io.squashInfo.ras_type = squash_ras_type;
     assign bpu_fsq_io.squashInfo.squash_front = ~squash_redirect_en & squash_pd_en;
     always_ff @(posedge clk)begin
-        squash_redirect_en <= fsq_back_io.redirectBr.en;
+        squash_redirect_en <= rd_br.en | rd_csr.en;
         squash_pd_en <= pd_redirect.en;
         pd_start_addr <= pd_redirect.stream.start_addr;
-        memRedirectValid <= fsq_back_io.redirect.en & ~fsq_back_io.redirectBr.en & ~fsq_back_io.redirectCsr.en;
-        bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirect.en;
+        bpu_fsq_io.squash <= pd_redirect.en | fsq_back_io.redirect.en & (rd_br.en | rd_csr.en);
         // bpu_fsq_io.squashInfo.redirectInfo <= u_redirectInfo;
-        squash_target_pc <= fsq_back_io.redirectCsr.en ? fsq_back_io.redirectCsr.exc_pc :
-                            fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.target : 
+        squash_target_pc <= rd_csr.en ? fsq_back_io.redirectCsr.exc_pc :
+                            rd_br.en ? fsq_back_io.redirectBr.target : 
                                                         pd_redirect.stream.target;
-        squash_pred_info <= fsq_back_io.redirectBr.en | fsq_back_io.redirectCsr.en ? redirectCondInfo : pd_condInfo;
-        squash_br_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.br_type : pd_redirect.br_type;
-        squash_ras_type <= fsq_back_io.redirectBr.en ? fsq_back_io.redirectBr.ras_type : pd_redirect.ras_type;
-        squash_offset <= fsq_back_io.redirect.en ? fsq_back_io.redirect.fsqInfo.offset : pd_redirect.stream.size;
+        squash_pred_info <= rd_br.en | rd_csr.en ? redirectCondInfo : pd_condInfo;
+        squash_br_type <= rd_br.en ? fsq_back_io.redirectBr.br_type : 
+                          rd_csr.en ? DIRECT : pd_redirect.br_type;
+        squash_ras_type <= rd_br.en ? fsq_back_io.redirectBr.ras_type : 
+                           rd_csr.en ? NONE : pd_redirect.ras_type;
+        squash_offset <= rd_br.en | rd_csr.en ? fsq_back_io.redirect.fsqInfo.offset : pd_redirect.stream.size;
+        rd_br_taken <= rd_br.taken;
+        rd_br_target <= fsq_back_io.redirectBr.target;
+        rd_br_offset <= fsq_back_io.redirect.fsqInfo.offset;
+        rd_br_en <= fsq_back_io.redirect.en & rd_br.en;
+        rd_br_idx <= fsq_back_io.redirect.fsqInfo.idx;
     end
+    assign redirectStream.taken = rd_br_taken;
+    assign redirectStream.start_addr = searchStream.start_addr;
+    assign redirectStream.target = rd_br_target;
+    assign redirectStream.size = rd_br_offset;
 `ifdef RVC
-    logic squash_rvc;
+    logic squash_rvc, rd_br_rvc;
     assign bpu_fsq_io.squashInfo.rvc = squash_rvc;
+    assign redirectStream.rvc = rd_br_rvc;
     always_ff @(posedge clk)begin
-        squash_rvc <= fsq_back_io.redirect.en ? fsq_back_io.redirect.rvc : pd_redirect.stream.rvc;
+        rd_br_rvc <= fsq_back_io.redirect.rvc;
+        squash_rvc <= rd_br.en | rd_csr.en ? fsq_back_io.redirect.rvc : pd_redirect.stream.rvc;
     end
 `endif
 
@@ -359,7 +379,7 @@ endgenerate
                 search_head <= search_head_n1;
             end
 
-            if(fsq_back_io.redirect.en)begin
+            if(fsq_back_io.redirect.en & (rd_br.en | rd_csr.en))begin
                 tail <= redirect_n1;
             end
             else if(pd_redirect.en)begin
@@ -387,7 +407,7 @@ endgenerate
             directionTable <= '{default: 0};
         end
         else begin
-            if(fsq_back_io.redirect.en)begin
+            if(fsq_back_io.redirect.en & (rd_br.en | rd_csr.en))begin
                 tdir <= redirect_dir_idx[`FSQ_WIDTH-1] & ~redirect_n1[`FSQ_WIDTH-1] ? ~directionTable[redirect_dir_idx] : directionTable[redirect_dir_idx];
             end
             else if(pd_redirect.en)begin
@@ -452,10 +472,9 @@ endgenerate
     WBInfo commitWBInfo;
     logic `N(`FSQ_SIZE) pred_error_en;
     logic pred_error;
-    BranchRedirectInfo rd;
-    CSRRedirectInfo cr;
-    assign rd = fsq_back_io.redirectBr;
-    assign cr = fsq_back_io.redirectCsr;
+
+    assign rd_br = fsq_back_io.redirectBr;
+    assign rd_csr = fsq_back_io.redirectCsr;
     always_ff @(posedge clk or posedge rst)begin
         if(rst == `RST)begin
             wbInfos <= '{default: 0};
@@ -474,22 +493,22 @@ endgenerate
                 pd_redirect.br_type, pd_redirect.ras_type, 
                 pd_redirect.stream.target, pd_redirect.stream.size};
             end
-            if(rd.en | cr.en)begin
+            if(rd_br.en | rd_csr.en)begin
                 wbInfos[fsq_back_io.redirect.fsqInfo.idx] <= {
 `ifdef DIFFTEST
                 1'b0,
 `endif
-                cr.en, rd.taken, 
+                rd_csr.en, rd_br.taken, 
 `ifdef RVC
                 fsq_back_io.redirect.rvc, fsq_back_io.redirect.fsqInfo.size,
 `endif
-                rd.br_type, rd.ras_type, rd.target, fsq_back_io.redirect.fsqInfo.offset};
+                rd_br.br_type, rd_br.ras_type, rd_br.target, fsq_back_io.redirect.fsqInfo.offset};
             end
             if(queue_we)begin
                 pred_error_en[write_index] <= 1'b0;
             end
-            if(fsq_back_io.redirect.en)begin
-                pred_error_en[fsq_back_io.redirect.fsqInfo.idx] <= rd.en | cr.en;
+            if(fsq_back_io.redirect.en & (rd_br.en | rd_csr.en))begin
+                pred_error_en[fsq_back_io.redirect.fsqInfo.idx] <= 1'b1;
             end
             if(pd_redirect.en & pd_redirect.direct)begin
                 pred_error_en[pd_redirect.fsqIdx.idx] <= 1'b1;

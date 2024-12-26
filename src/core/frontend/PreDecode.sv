@@ -190,7 +190,7 @@ endgenerate
 
     assign jump_error = jump_en & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
                             (stream_next.taken & ((tailIdx != selectIdx) |
-                            (bundles_next[tailIdx].jump & (stream_next.target != bundles_next[tailIdx].target)))));
+                            (bundles_next[tailIdx].jump & ((stream_next.target != bundles_next[tailIdx].target) | bundles_next[tailIdx].jalrv)))));
 
     assign redirect_en = jump_error | nobranch_error;
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
@@ -202,8 +202,9 @@ endgenerate
     assign pd_redirect.fsqIdx_pre = cache_pd_io.fsqIdx.idx;
     assign pd_redirect.stream.taken = ~nobranch_error;
     assign pd_redirect.stream.start_addr = start_addr_n;
-    assign pd_redirect.stream.target = jump_en ? (bundles_next[selectIdx].ras_type == POP ? 
-                                        ras_addr : bundles_next[selectIdx].target) : next_pc;
+    assign pd_redirect.stream.target = jump_en ? (bundles_next[selectIdx].ras_type[0] ? 
+        ras_addr + {{`XLEN-12{bundles_next[selectIdx].jalr_offset[11]}}, bundles_next[selectIdx].jalr_offset} : 
+                                        bundles_next[selectIdx].target) : next_pc;
     assign pd_redirect.br_type = jump_en & bundles_next[selectIdx].ras_type != NONE ? CALL : DIRECT;
     assign pd_redirect.ras_type = jump_en ? bundles_next[selectIdx].ras_type : NONE;
 `ifdef RVC
@@ -323,4 +324,6 @@ module PreDecoder(
     assign pdBudnle.jump = jal;
     assign pdBundle.ras_type = {(jal | jalr) & push, jalr & pop};
 `endif
+    assign pdBundle.jalrv = jalr & pop & (|inst[31: 20]);
+    assign pdBundle.jalr_offset = jalr & pop ? inst[31: 20] : 0;
 endmodule
