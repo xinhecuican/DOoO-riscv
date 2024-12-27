@@ -29,7 +29,6 @@ module AluBranchCtrl(
         io.branchInfo.taken = bundle_o.res.direction;
         io.branchInfo.target = bundle_o.res.target;
         io.branchInfo.br_type = bundle_o.res.br_type;
-        io.branchInfo.ras_type = bundle_o.res.ras_type;
     end
 endmodule
 

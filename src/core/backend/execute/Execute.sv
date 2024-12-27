@@ -41,7 +41,6 @@ generate
         assign issue_alu_io.bundle = int_exu_io.bundle[i];
         assign issue_alu_io.stream = int_exu_io.streams[i];
         assign issue_alu_io.vaddr = int_exu_io.vaddrs[i];
-        assign issue_alu_io.ras_type = int_exu_io.bundle[i].ras_type;
         assign issue_alu_io.br_type = int_exu_io.bundle[i].br_type;
         assign int_exu_io.valid[i] = issue_alu_io.valid;
         ALU alu(

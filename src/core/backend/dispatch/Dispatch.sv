@@ -61,41 +61,44 @@ generate
         logic push, pop;
         logic `N(`PREG_WIDTH) rd, rs;
         logic `N(`BRANCHOP_WIDTH) op;
-        logic [1: 0] ras_type, ras_type_all;
+        logic jal, jalr;
         BranchType br_type;
         assign rd = di.rd;
         assign rs = di.rs1;
         assign op = di.branchop;
         assign push = rd == 5'h1 || rd == 5'h5;
-        assign pop = rs == 5'h1 || rs == 5'h5;
+        assign pop = (rs == 5'h1 || rs == 5'h5) && (rs != rd);
+        assign jal = op == `BRANCH_JAL;
+        assign jalr = op == `BRANCH_JALR;
         always_comb begin
-            case({push, pop})
-            2'b00: ras_type = NONE;
-            2'b01: ras_type = POP;
-            2'b10: ras_type = PUSH;
-            2'b11: ras_type = POP_PUSH;
-            endcase
-            ras_type_all = (op == `BRANCH_JAL) & push ? PUSH :
-                        (op == `BRANCH_JALR) ? ras_type : NONE;
-            if(op == `BRANCH_JAL)begin
-                br_type = DIRECT;
-            end
-            else if(op == `BRANCH_JALR)begin
-                if(push | pop)begin
-                    br_type = CALL;
+            if(di.branchv)begin
+                if(~(jal | jalr))begin
+                    br_type = CONDITION;
+                end
+                else if(jalr)begin
+                    case({push, pop})
+                    2'b00: br_type = INDIRECT;
+                    2'b01: br_type = POP;
+                    2'b10: br_type = INDIRECT_CALL;
+                    2'b11: br_type = POP_PUSH;
+                    endcase
                 end
                 else begin
-                    br_type = INDIRECT;
+                    if(push)begin
+                        br_type = PUSH;
+                    end
+                    else begin
+                        br_type = DIRECT;
+                    end
                 end
             end
             else begin
-                br_type = CONDITION;
+                br_type = DIRECT;
             end
         end
         IntIssueBundle bundle;
         assign bundle = '{intv: di.intv, branchv: di.branchv, uext: di.uext, immv: di.immv,
-                        intop: di.intop, branchop: di.branchop, imm: di.imm,
-                        br_type: br_type, ras_type: ras_type_all,
+                        intop: di.intop, branchop: di.branchop, imm: di.imm, br_type: br_type,
                         fsqInfo: rename_dis_io.op[i].fsqInfo
 `ifdef RVC
                         , rvc: di.rvc

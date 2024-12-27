@@ -35,7 +35,6 @@ module ALU(
         .vaddr(io.vaddr),
         .offset(io.bundle.fsqInfo.offset),
         .br_type(io.br_type),
-        .ras_type(io.ras_type),
         .branchRes(branchRes),
         .result(branchResult)
     );
@@ -64,7 +63,6 @@ module BranchModel(
     input logic `N(`VADDR_SIZE) vaddr,
     input logic `N(`PREDICTION_WIDTH) offset,
     input BranchType br_type,
-    input logic [1: 0] ras_type,
     output BranchUnitRes branchRes,
     output logic `N(`XLEN) result
 );
@@ -126,7 +124,6 @@ module BranchModel(
     assign branchRes.error = op == `BRANCH_JALR ? indirectError :
                         op != `BRANCH_JAL ? branchError : 0;
     assign branchRes.br_type = br_type;
-    assign branchRes.ras_type = ras_type;
 `ifdef RVC
     assign branchRes.rvc = rvc;
 `endif

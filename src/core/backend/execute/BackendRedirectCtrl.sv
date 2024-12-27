@@ -39,7 +39,6 @@ module BackendRedirectCtrl (
     assign io.branchOut.taken = preBranch.taken;
     assign io.branchOut.target = preBranch.target;
     assign io.branchOut.br_type = preBranch.br_type;
-    assign io.branchOut.ras_type = preBranch.ras_type;
     assign io.csrOut = rob_redirect_io.csrInfo;
     assign redirectIdx = rob_redirect_io.csrRedirect.en ? rob_redirect_io.csrRedirect.robIdx : preRedirectIdx;
 

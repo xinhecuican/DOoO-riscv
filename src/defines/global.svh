@@ -10,9 +10,6 @@
         name_n <= name; \
     end
 
-function automatic integer idxWidth(input integer num_idx);
-    return (num_idx > 32'd1) ?$clog2(num_idx) : 32'd1;
-endfunction
 
 `define NUM_CORE 1
 `define CORE_WIDTH $clog2(`NUM_CORE + 1)
@@ -105,11 +102,14 @@ endfunction
 `define SC_THRESH_CTR 8
 `define SC_GTHRESH_CTR 9
 `define SC_GTHRESH_INIT 'd35
-typedef enum logic [1:0] {
+typedef enum logic [2:0] {
     DIRECT,
     CONDITION,
     INDIRECT,
-    CALL
+    INDIRECT_CALL, // push
+    PUSH,
+    POP,
+    POP_PUSH
 } BranchType;
 
 typedef enum logic [1:0] {
@@ -123,12 +123,6 @@ typedef enum logic [1:0] {
 `define RAS_INFLIGHT_SIZE 16
 `define RAS_INFLIGHT_WIDTH $clog2(`RAS_INFLIGHT_SIZE)
 `define RAS_CTR_SIZE 8
-typedef enum logic [1:0] {
-    NONE,
-    POP,
-    PUSH,
-    POP_PUSH
-} RasType;
 
 `define FSQ_SIZE 32
 `define FSQ_WIDTH $clog2(`FSQ_SIZE)

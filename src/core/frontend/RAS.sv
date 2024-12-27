@@ -19,7 +19,8 @@ module LinkRAS(
     logic `N(`RAS_INFLIGHT_SIZE) topInvalid;
     logic preTopInvalid;
 
-    logic [1: 0] squashType;
+    logic [1: 0] squashType, lookupType, commitType;
+    logic commitValid;
     RasRedirectInfo r;
     BTBUpdateInfo btbEntry;
 
@@ -53,21 +54,26 @@ module LinkRAS(
     LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_bottom_p1 (1, listBottom, listBottom_p1);
     LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_p1 (1, topList[top_p1.idx], list_p1);
 
-    assign squashType = ras_io.squashInfo.ras_type;
+    always_comb begin
+        squashType = getRasType(ras_io.squashInfo.br_type);
+        lookupType = getRasType(ras_io.br_type);
+        commitType = getRasType(btbEntry.tailSlot.br_type);
+        commitValid = rasValid(btbEntry.tailSlot.br_type);
+    end
     assign r = ras_io.squashInfo.redirectInfo.rasInfo;
     assign btbEntry = ras_io.updateInfo.btbEntry;
 
-    assign we = ~ras_io.squash & ras_io.request & ras_io.ras_type[1] |
+    assign we = ~ras_io.squash & ras_io.request & lookupType[1] |
                 ras_io.squash & squashType[1];
     assign waddr = ras_io.squash ? r.listTop.idx : ras_io.linfo.listTop.idx;
-    assign raddr = ras_io.request & ras_io.ras_type[0] ? list_p1 : top_p1;
-    assign commit_raddr = ras_io.request && ras_io.ras_type == POP ? inflightTop - 2 : inflightTop - 1;
-    assign commit_waddr = btbEntry.tailSlot.ras_type == POP_PUSH ? commitTop - 1 : commitTop;
+    assign raddr = ras_io.request & lookupType[0] & ~lookupType[1] ? list_p1 : top_p1;
+    assign commit_raddr = ras_io.request & lookupType[0] & ~lookupType[1] ? inflightTop - 2 : inflightTop - 1;
+    assign commit_waddr = btbEntry.tailSlot.br_type == POP_PUSH ? commitTop - 1 : commitTop;
 
     always_ff @(posedge clk)begin
         select_commit <= ~inRange(raddr) | preTopInvalid | 
-                        (ras_io.request & (ras_io.ras_type == POP) & topInvalid[top_p1.idx]);
-        select_bypass <= ras_io.request & ras_io.ras_type[1];
+                        (ras_io.request & (lookupType[0] & ~lookupType[1]) & topInvalid[top_p1.idx]);
+        select_bypass <= ras_io.request & lookupType[1];
         bypassEntry.pc <= ras_io.target;
     end
 
@@ -80,10 +86,8 @@ module LinkRAS(
 `endif
 
     assign updateEntry.pc = ras_io.squash ? squash_target : ras_io.target;
-    assign commit_update = ras_io.update & ras_io.updateInfo.tailTaken & (btbEntry.tailSlot.br_type == CALL);
-    assign commit_we = ras_io.update & ras_io.updateInfo.tailTaken & 
-                        (btbEntry.tailSlot.br_type == CALL) &
-                        btbEntry.tailSlot.ras_type[1];
+    assign commit_update = ras_io.update & ras_io.updateInfo.tailTaken & commitValid;
+    assign commit_we = ras_io.update & ras_io.updateInfo.tailTaken & commitType[1];
 
     assign ras_io.en = 1'b1;
     assign ras_io.rasInfo.rasTop = top;
@@ -170,10 +174,10 @@ module LinkRAS(
                     preTopInvalid <= r.topInvalid;
                 end
 
-                if(squashType == PUSH)begin
+                if(squashType[1] & ~squashType[0])begin
                     inflightTop <= r.inflightTop + 1;
                 end
-                else if(squashType == POP)begin
+                else if(squashType[0] & ~squashType[1])begin
                     inflightTop <= r.inflightTop - 1;
                 end
                 else begin
@@ -181,8 +185,8 @@ module LinkRAS(
                 end
             end
             else if(ras_io.request)begin
-                if(ras_io.ras_type[1])begin
-                    if(ras_io.ras_type[0])begin
+                if(lookupType[1])begin
+                    if(lookupType[0])begin
                         topList[ras_io.linfo.listTop.idx] <= topList[top_p1.idx];
                     end
                     else begin
@@ -193,7 +197,7 @@ module LinkRAS(
                     listTop <= listTop_n1;
                     top <= listTop_n1;
                 end
-                else if(ras_io.ras_type[0]) begin
+                else if(lookupType[0]) begin
                     listTop <= ras_io.linfo.listTop;
                     if(inRange(topList[top_p1.idx]) & ~topInvalid[top_p1.idx] & ~preTopInvalid)begin
                         top <= topList[top_p1.idx];
@@ -208,10 +212,10 @@ module LinkRAS(
                     top <= ras_io.linfo.rasTop;
                 end
                 
-                if(ras_io.ras_type == PUSH)begin
+                if(lookupType[1] & ~lookupType[0])begin
                     inflightTop <= ras_io.linfo.inflightTop + 1;
                 end
-                else if(ras_io.ras_type == POP)begin
+                else if(lookupType[0] & ~lookupType[1])begin
                     inflightTop <= ras_io.linfo.inflightTop - 1;
                 end
                 else begin
@@ -220,10 +224,10 @@ module LinkRAS(
             end
 
             if(commit_update)begin
-                if(btbEntry.tailSlot.ras_type == POP)begin
+                if(commitType[0] & ~commitType[1])begin
                     commitTop <= commitTop - 1;
                 end
-                else if(btbEntry.tailSlot.ras_type == PUSH)begin
+                else if(commitType[1] & ~commitType[0])begin
                     commitTop <= commitTop + 1;
                     listBottom <= listBottom_n1;
                 end

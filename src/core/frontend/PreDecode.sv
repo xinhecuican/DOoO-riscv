@@ -190,7 +190,7 @@ endgenerate
 
     assign jump_error = jump_en & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
                             (stream_next.taken & ((tailIdx != selectIdx) |
-                            (bundles_next[tailIdx].jump & ((stream_next.target != bundles_next[tailIdx].target) | bundles_next[tailIdx].jalrv)))));
+                            (bundles_next[tailIdx].jump & (stream_next.target != bundles_next[tailIdx].target)))));
 
     assign redirect_en = jump_error | nobranch_error;
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
@@ -202,11 +202,10 @@ endgenerate
     assign pd_redirect.fsqIdx_pre = cache_pd_io.fsqIdx.idx;
     assign pd_redirect.stream.taken = ~nobranch_error;
     assign pd_redirect.stream.start_addr = start_addr_n;
-    assign pd_redirect.stream.target = jump_en ? (bundles_next[selectIdx].ras_type[0] ? 
-        ras_addr + {{`XLEN-12{bundles_next[selectIdx].jalr_offset[11]}}, bundles_next[selectIdx].jalr_offset} : 
-                                        bundles_next[selectIdx].target) : next_pc;
-    assign pd_redirect.br_type = jump_en & bundles_next[selectIdx].ras_type != NONE ? CALL : DIRECT;
-    assign pd_redirect.ras_type = jump_en ? bundles_next[selectIdx].ras_type : NONE;
+    assign pd_redirect.stream.target = jump_en ? (
+        bundles_next[selectIdx].br_type == POP || bundles_next[selectIdx].br_type == POP_PUSH ? 
+            ras_addr : bundles_next[selectIdx].target) : next_pc;
+    assign pd_redirect.br_type = bundles_next[selectIdx].br_type;
 `ifdef RVC
     assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : 0;
     assign pd_redirect.last_offset = jump_en ? rvc_offset[selectIdx] + shiftOffset :
@@ -255,12 +254,13 @@ module PreDecoder(
     logic [6: 0] op;
     logic [4: 0] rs, rd;
     logic push, pop;
+    logic push_valid, pop_valid;
     logic `VADDR_BUS offset;
     assign op = inst[6: 0];
     assign rs = inst[19: 15];
     assign rd = inst[11: 7];
     assign push = rd == 1 || rd == 5;
-    assign pop = rs == 1 || rs == 5;
+    assign pop = (rs == 1 || rs == 5) && (rs != rd);
 
     logic jal, jalr, branch;
     assign jal = op[6] & op[5] & ~op[4] & op[3] & op[2] & op[1] & op[0];
@@ -306,24 +306,29 @@ module PreDecoder(
     assign cbnez = sign1 & funct3_7;
     assign cjr = sign2 & funct3_4 & ~cinst[12] & ~full_rd_0 & full_rs2_0;
     assign cjalr = sign2 & funct3_4 & cinst[12] & ~full_rd_0 & full_rs2_0;
-    assign cpop = full_rd == 1 || full_rd == 5;
+    assign cpop = full_rd == 5;
 
     logic `VADDR_BUS offset_o;
     assign offset_o = normal ? offset : cjal_imm;
     assign pdBundle.rvc = ~normal;
     assign pdBundle.branch = jal | jalr | branch | cj | cjal | cjr | cjalr | cbeqz | cbnez;
     assign pdBundle.target = addr + offset_o;
-    assign pdBundle.direct = jal | cj | cjal | jalr & pop | cjr | cjalr;
+    assign pdBundle.direct = jal | cj | cjal | jalr & pop | cjr | cjalr & cpop;
     assign pdBundle.jump = jal | cj | cjal;
-    assign pdBundle.ras_type = {(jal | jalr) & push | cjal | cjalr,
-                                jalr & pop | cjr | cjalr & cpop};
+    assign push_valid = (jal | jalr) & push | cjal | cjalr;
+    assign pop_valid = jalr & pop | cjr | cjalr & cpop;
+    assign pdBundle.br_type = jalr & push & ~pop ? INDIRECT_CALL :
+                              push_valid & pop_valid ? POP_PUSH :
+                              push_valid ? PUSH : pop_valid ? POP : DIRECT;
 `else
     assign pdBundle.branch = jal | jalr | branch;
     assign pdBundle.target = addr + offset;
     assign pdBundle.direct = jal | jalr & pop;
     assign pdBudnle.jump = jal;
-    assign pdBundle.ras_type = {(jal | jalr) & push, jalr & pop};
+    assign push_valid = (jal | jalr) & push;
+    assign pop_valid = jalr & pop;
+    assign pdBundle.br_type = jalr & push & ~pop ? INDIRECT_CALL :
+                              push_valid & pop_valid ? POP_PUSH :
+                              push_valid ? PUSH : pop_valid ? POP : DIRECT;
 `endif
-    assign pdBundle.jalrv = jalr & pop & (|inst[31: 20]);
-    assign pdBundle.jalr_offset = jalr & pop ? inst[31: 20] : 0;
 endmodule

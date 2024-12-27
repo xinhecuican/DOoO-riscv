@@ -27,6 +27,7 @@ module BranchPredictor(
     PredictionResult s3_result_in, s3_result_out;
     logic `VADDR_BUS ras_addr_s3;
     RasRedirectInfo ras_info_s3;
+    logic ras_valid_s2, ras_valid_s3_in, ras_valid_s3_out;
 
     assign squash = bpu_fsq_io.squash;
     assign squashInfo = bpu_fsq_io.squashInfo;
@@ -130,12 +131,17 @@ module BranchPredictor(
     assign bpu_fsq_io.lastStagePred = s3_result_out;
     assign bpu_fsq_io.ras_addr = ras_addr_s3;
 
+    always_comb begin
+        ras_valid_s2 = rasValid(s2_result_out.br_type);
+        ras_valid_s3_in = rasValid(s3_result_in.br_type);
+        ras_valid_s3_out = rasValid(s3_result_out.br_type);
+    end
     assign ras_io.request = s2_result_out.en & s2_result_out.btb_hit & ~redirect.s3_redirect &
-                            s2_result_out.tail_taken & (s2_result_out.br_type == CALL) |
+                            s2_result_out.tail_taken & ras_valid_s2 |
                             s3_result_out.en & s3_result_out.redirect & 
-                            ((s3_result_out.br_type == CALL) != (s3_result_in.br_type == CALL));
-    assign ras_io.ras_type = s3_result_out.en & s3_result_out.redirect ? s3_result_out.ras_type : 
-                            s2_result_out.ras_type;
+                            (ras_valid_s3_in ^ ras_valid_s3_out);
+    assign ras_io.br_type = s3_result_out.en & s3_result_out.redirect ? s3_result_out.br_type : 
+                            s2_result_out.br_type;
     assign ras_io.linfo = s3_result_out.en & s3_result_out.redirect ? ras_info_s3 : ras_io.rasInfo;
 `ifdef RVC
     assign ras_io.target = s3_result_out.en & s3_result_out.redirect ?
@@ -282,7 +288,7 @@ endgenerate
                                                      pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
 generate
     if(RASV)begin
-        assign tail_indirect_target = entry.tailSlot.br_type == CALL && entry.tailSlot.ras_type[0] ?
+        assign tail_indirect_target = entry.tailSlot.br_type == POP || entry.tailSlot.br_type == POP_PUSH ?
                                       ras_addr : {tail_target_high, entry.tailSlot.target, 1'b0};
     end
     else begin
@@ -308,7 +314,6 @@ endgenerate
         result_o.stream.taken = hit & ((|br_takens) | tail_taken);
         result_o.btb_hit = hit;
         result_o.br_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
-        result_o.ras_type = |br_takens ? 0 : entry.tailSlot.ras_type;
         result_o.stream.size = ~hit ? result_i.stream.size : 
                                |br_takens ? br_size : tail_size;
 `ifdef RVC
@@ -336,7 +341,6 @@ endgenerate
         result_o.redirect_info = result_i.redirect_info;
         if(RASV)begin
             result_o.redirect_info.rasInfo = rasInfo;
-            result_o.redirect_info.rasInfo.ras_type = entry.tailSlot.ras_type;
         end
     end
 endmodule
