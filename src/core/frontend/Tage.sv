@@ -198,7 +198,7 @@ generate
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
 		assign u_slot_en[i] = tage_io.update & tage_io.updateInfo.allocSlot[i] & btbEntry.slots[i].en & ~btbEntry.slots[i].carry;
 	end
-	assign u_slot_en[`SLOT_NUM-1] = tage_io.update & btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
+	assign u_slot_en[`SLOT_NUM-1] = tage_io.update & tage_io.updateInfo.allocSlot[`SLOT_NUM-1] & btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
 	for(genvar i=0; i<`TAGE_BANK; i++)begin
 		logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
 		assign bank_u = update_u_origin[i];
@@ -216,7 +216,7 @@ generate
 		for(genvar j=0; j<`TAGE_BANK; j++)begin
 			logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
 			assign bank_u = update_u_origin[j];
-			UpdateCounter #(`TAGE_U_SIZE) updateCounter (bank_u[i], alloc_combine[i], update_u[j][i]);
+			UpdateCounter #(`TAGE_U_SIZE) updateCounter (bank_u[i], ~predError[i], update_u[j][i]);
 			assign update_u_en[j][i] = (~(alloc_combine[i]) & predError[i]) |
 									   (u_provider[i][j] & dec_use[i]);
 		end

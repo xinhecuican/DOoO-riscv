@@ -327,8 +327,11 @@ module SCGIndex #(
     output logic `N(WIDTH) idx
 );
 generate
-    if(HIST_WIDTH < WIDTH)begin
-        assign idx = pc[`INST_OFFSET +: WIDTH] ^ 
+    if(HIST_WIDTH == 0)begin
+        assign idx = pc[`INST_OFFSET +: WIDTH] ^ pc[`INST_OFFSET + WIDTH +: WIDTH];
+    end
+    else if(HIST_WIDTH < WIDTH)begin
+        assign idx = pc[`INST_OFFSET +: WIDTH] ^ pc[`INST_OFFSET + WIDTH +: WIDTH] ^
                      {{WIDTH-HIST_WIDTH{1'b0}}, ghist[HIST_WIDTH-1: 0]} ^
                      {ghist[HIST_WIDTH-1: 0], {WIDTH-HIST_WIDTH{1'b0}}};
     end
@@ -345,6 +348,45 @@ generate
         end
         assign idx = pc[`INST_OFFSET +: WIDTH] ^ pc[`INST_OFFSET + WIDTH +: WIDTH] ^
                      fold_hist;
+    end
+endgenerate
+endmodule
+
+module SCGTag #(
+    parameter WIDTH = 4,
+    parameter HIST_WIDTH = 4,
+    parameter GHIST_WIDTH = 4
+)(
+    input logic `VADDR_BUS pc,
+    input logic `N(GHIST_WIDTH) ghist,
+    output logic `N(WIDTH) tag
+);
+generate
+    if(HIST_WIDTH == 0)begin
+        assign tag = pc[`INST_OFFSET +: WIDTH];
+    end
+    else if(HIST_WIDTH < WIDTH)begin
+        assign tag = pc[`INST_OFFSET +: WIDTH] ^ 
+                    {{WIDTH-HIST_WIDTH{1'b0}}, ghist[HIST_WIDTH-1: 0]} ^
+                    {{WIDTH-HIST_WIDTH-1{1'b0}}, ghist[HIST_WIDTH-2: 0], 1'b0} ^
+                    {1'b0, ghist[HIST_WIDTH-2: 0], {WIDTH-HIST_WIDTH-1{1'b0}}};
+    end
+    else begin
+        localparam REMAIN_WIDTH = HIST_WIDTH % WIDTH;
+        localparam XOR_WIDTH = HIST_WIDTH - REMAIN_WIDTH;
+        logic `N(WIDTH) fold_hist_pre, fold_hist;
+        ParallelXOR #(WIDTH, XOR_WIDTH/WIDTH) xor_hist(ghist[XOR_WIDTH-1: 0], fold_hist_pre);
+        localparam REMAIN_WIDTH1 = HIST_WIDTH % (WIDTH - 1);
+        localparam XOR_WIDTH1 = HIST_WIDTH - REMAIN_WIDTH1;
+        logic `N(WIDTH-1) fold_hist_pre1;
+        ParallelXOR #(WIDTH-1, XOR_WIDTH1/(WIDTH-1)) xor_hist1(ghist[XOR_WIDTH1-1: 0], fold_hist_pre1);
+        if(REMAIN_WIDTH != 0)begin
+            assign fold_hist = fold_hist_pre ^ {{WIDTH-REMAIN_WIDTH{1'b0}}, ghist[HIST_WIDTH-1: HIST_WIDTH-REMAIN_WIDTH]} ^ {fold_hist_pre1, 1'b0};
+        end
+        else begin
+            assign fold_hist = fold_hist_pre ^ {fold_hist_pre1, 1'b0};
+        end
+        assign tag = pc[`INST_OFFSET +: WIDTH] ^ fold_hist;
     end
 endgenerate
 endmodule

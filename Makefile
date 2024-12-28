@@ -7,6 +7,7 @@ WB=0
 WE=0
 T=0
 CYCLES=0
+D=0
 I ?= utils/NEMU/ready-to-run/microbench.bin
 CONFIG ?= ""
 CLK_FREQ_MHZ ?= 100
@@ -48,6 +49,9 @@ ifneq (,$(filter $(EMU_TRACE),1 vcd VCD fst FST))
 endif
 ifneq ($(CYCLES), 0)
 	TRACE_ARGS += -C $(CYCLES)
+endif
+ifneq ($(D), 0)
+	TRACE_ARGS += -D $(D)
 endif
 ifeq ($(ENABLE_FORK), 1)
 	TRACE_ARGS += --enable-fork

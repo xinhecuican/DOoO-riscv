@@ -71,6 +71,29 @@ interface BpuSCIO(
                 output prediction, meta);
 endinterface //BpuSCIO
 
+interface BpuITTAGEIO(
+    input BranchHistory history,
+    input RedirectCtrl redirect,
+    input logic update,
+    input BranchUpdateInfo updateInfo
+);
+    logic `VADDR_BUS pc;
+    ITTageMeta meta; 
+    logic `VADDR_BUS target;
+`ifdef FEAT_ITTAGE_REGION
+    logic last_stage_ind;
+    logic `N(`ITTAGE_REGION_WIDTH) region_idx;
+    logic `N(`ITTAGE_REGION_TAG) update_tag;
+    logic `N(`ITTAGE_REGION_WIDTH) update_region_idx;
+`endif
+
+    modport ittage(input pc, history, redirect, update, updateInfo, output meta, target
+`ifdef FEAT_ITTAGE_REGION
+    , input update_tag, region_idx, last_stage_ind, output update_region_idx
+`endif
+    );
+endinterface //BpuITTAGEIO()
+
 interface BpuRASIO(
     input RedirectCtrl redirect,
     input logic squash,
@@ -116,10 +139,23 @@ interface BpuFsqIO;
     BranchUpdateInfo updateInfo;
     logic `N(`VADDR_SIZE) ras_addr; // last stage
 
-    modport fsq (input en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, lastStagePred, ras_addr, 
-                output stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
-    modport bpu (output en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, lastStagePred, ras_addr, 
-                input stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo);
+`ifdef FEAT_ITTAGE_REGION
+    logic `N(`ITTAGE_REGION_TAG) ittage_tag;
+    logic `N(`ITTAGE_REGION_WIDTH) ittage_idx;
+`endif
+
+    modport fsq (input en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, lastStagePred, ras_addr,
+                output stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo
+`ifdef FEAT_ITTAGE_REGION
+    , input ittage_idx, output ittage_tag
+`endif            
+    );
+    modport bpu (output en, prediction, redirect, lastStage, lastStageIdx, lastStageMeta, lastStagePred, ras_addr,
+                input stall, stream_idx, stream_dir, squash, squashInfo, update, updateInfo
+`ifdef FEAT_ITTAGE_REGION
+    , output ittage_idx, input ittage_tag
+`endif
+                );
 endinterface
 
 interface FsqCacheIO;

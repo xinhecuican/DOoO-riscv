@@ -61,6 +61,13 @@ typedef struct packed {
     logic `N(`TAGE_CTR_SIZE) ctr;
 } TageEntry;
 
+typedef struct packed {
+    logic `N(`ITTAGE_TAG_SIZE) tag;
+    logic `N(`ITTAGE_U_SIZE) u;
+    logic `N(`ITTAGE_CTR_SIZE) ctr;
+    logic `N(`ITTAGE_OFFSET) offset;
+} ITTageEntry;
+
 `LOOP_PTR_DEFINE(RasIdx, `RAS_WIDTH)
 `LOOP_PTR_DEFINE(RasInflightIdx, `RAS_INFLIGHT_WIDTH)
 
@@ -72,6 +79,17 @@ typedef struct packed {
     logic `N(`SLOT_NUM) predTaken;
     logic `N(`SLOT_NUM) altPred;
 } TageMeta;
+
+typedef struct packed {
+    logic `N(`ITTAGE_CTR_SIZE) ctr;
+    logic `ARRAY(`ITTAGE_BANK, `ITTAGE_U_SIZE) u;
+    logic `N(`ITTAGE_BANK) provider;
+`ifdef FEAT_ITTAGE_REGION
+    logic `N(`ITTAGE_REGION) region;
+`endif
+    logic `N(`ITTAGE_OFFSET) offset;
+    logic `N(`ITTAGE_OFFSET) alt_offset;
+} ITTageMeta;
 
 typedef struct packed {
     logic `ARRAY(`SLOT_NUM, 2) ctr;
@@ -88,6 +106,7 @@ typedef struct packed {
     TageMeta tage;
     UBTBMeta ubtb;
     SCMeta sc;
+    ITTageMeta ittage;
 } PredictionMeta;
 
 typedef struct packed {

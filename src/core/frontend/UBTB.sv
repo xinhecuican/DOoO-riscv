@@ -90,6 +90,7 @@ endgenerate
         .entry(lookup_entry_i),
         .prediction(cond_history),
         .ras_addr(),
+        .ind_addr(),
         .rasInfo(),
         .result_i,
         .result_o

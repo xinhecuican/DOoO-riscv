@@ -12,6 +12,7 @@
 
 `define FEAT_LINKRAS
 `define FEAT_SC
+`define FEAT_ITTAGE_REGION
 
 // `define SYNTH_VIVADO
 

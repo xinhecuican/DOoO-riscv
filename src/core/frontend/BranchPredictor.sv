@@ -17,6 +17,7 @@ module BranchPredictor(
     BpuUBtbIO ubtb_io(.*);
     BpuRASIO ras_io(.*);
     BpuSCIO sc_io(.*);
+    BpuITTAGEIO ittage_io(.*);
 
     PredictionResult s1_result;
     PredictionResult s2_result_in, s2_result_out;
@@ -28,6 +29,7 @@ module BranchPredictor(
     logic `VADDR_BUS ras_addr_s3;
     RasRedirectInfo ras_info_s3;
     logic ras_valid_s2, ras_valid_s3_in, ras_valid_s3_out;
+    BTBUpdateInfo entry_s2;
 
     assign squash = bpu_fsq_io.squash;
     assign squashInfo = bpu_fsq_io.squashInfo;
@@ -42,6 +44,17 @@ module BranchPredictor(
     assign sc_io.tage_prediction = tage_io.prediction;
     assign sc_io.tage_ctrs = tage_io.provider_ctr;
     SC sc(.*, .io(sc_io));
+    assign ittage_io.pc = pc;
+`ifdef FEAT_ITTAGE_REGION
+    assign ittage_io.region_idx = entry_s2.tailSlot.target[`ITTAGE_REGION_WIDTH-1: 0];
+    assign ittage_io.update_tag = bpu_fsq_io.ittage_tag;
+    assign bpu_fsq_io.ittage_idx = ittage_io.update_region_idx;
+    assign ittage_io.last_stage_ind = s3_result_out.en & s3_result_out.tail_taken & 
+                                      s3_result_out.btb_hit & s3_result_out.btbEntry.tailSlot.en &
+                                      ((s3_result_out.btbEntry.tailSlot.br_type == INDIRECT) |
+                                    (s3_result_out.btbEntry.tailSlot.br_type == INDIRECT_CALL));
+`endif
+    ITTAGE ittage(.*, .io(ittage_io));
 
     HistoryControl history_control(
         .*,
@@ -163,6 +176,7 @@ module BranchPredictor(
         .ras_addr(ras_io.entry.pc),
         .ras_info(ras_io.rasInfo),
         .result_i(s2_result_in),
+        .entry_s2(entry_s2),
         .result_o(s2_result_out)
     );
     always_comb begin
@@ -172,12 +186,14 @@ module BranchPredictor(
         s2_meta_out.tage = tage_io.meta;
         s3_meta_out = s3_meta_in;
         s3_meta_out.sc = sc_io.meta;
+        s3_meta_out.ittage = ittage_io.meta;
     end
 
     S3Control s3_control(
         .pc(s3_result_in.stream.start_addr),
         .prediction(sc_io.prediction),
         .ras_addr(ras_addr_s3),
+        .ind_addr(ittage_io.target),
         .ras_info(ras_info_s3),
         .result_i(s3_result_in),
         .result_o(s3_result_out)
@@ -197,6 +213,7 @@ module PredictionResultGen #(
     input BTBUpdateInfo entry,
     input logic `N(`SLOT_NUM) prediction,
     input logic `VADDR_BUS ras_addr,
+    input logic `VADDR_BUS ind_addr,
     input RasRedirectInfo rasInfo,
     input PredictionResult result_i,
     output PredictionResult result_o
@@ -286,31 +303,48 @@ endgenerate
     assign tail_target_high = tail_tar_state == TAR_OV ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] + 1 :
                             tail_tar_state == TAR_UN ? pc[`VADDR_SIZE-1: `JALR_OFFSET+1] - 1 :
                                                      pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
+
 generate
-    if(RASV)begin
-        assign tail_indirect_target = entry.tailSlot.br_type == POP || entry.tailSlot.br_type == POP_PUSH ?
-                                      ras_addr : {tail_target_high, entry.tailSlot.target, 1'b0};
+    if(RASV & INDV)begin
+        always_comb begin
+            case(entry.tailSlot.br_type)
+            POP, POP_PUSH: tail_indirect_target = ras_addr;
+            INDIRECT, INDIRECT_CALL: tail_indirect_target = ind_addr;
+            default: tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+            endcase
+        end
+    end
+    else if(RASV)begin
+        always_comb begin
+            case(entry.tailSlot.br_type)
+            POP, POP_PUSH: tail_indirect_target = ras_addr;
+            default: tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+            endcase
+        end
+    end
+    else if(INDV)begin
+        always_comb begin
+            case(entry.tailSlot.br_type)
+            INDIRECT, INDIRECT_CALL: tail_indirect_target = ind_addr;
+            default: tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+            endcase
+        end
     end
     else begin
         assign tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+    end
+    if(REDIRECTV)begin
+        assign result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
+                    tail_taken & (tail_indirect_target != result_i.stream.target));
+    end
+    else begin
+        assign result_o.redirect = 0;
     end
 endgenerate
     assign tail_target = tail_taken ? tail_indirect_target : {fthOffset, {`INST_OFFSET{1'b0}}} + pc;
     assign predict_pc = |br_takens ? br_target : tail_target;
 
     always_comb begin
-        if(REDIRECTV)begin
-            if(INDV)begin
-                result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
-                    tail_taken & (tail_indirect_target != result_i.stream.target));
-            end
-            else begin
-                result_o.redirect = hit & (predTaken != result_i.predTaken);
-            end
-        end
-        else begin
-            result_o.redirect = 0;
-        end
         result_o.stream.taken = hit & ((|br_takens) | tail_taken);
         result_o.btb_hit = hit;
         result_o.br_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
@@ -353,6 +387,7 @@ module S2Control(
     input logic `VADDR_BUS ras_addr,
     input RasRedirectInfo ras_info,
     input PredictionResult result_i,
+    output BTBUpdateInfo entry_s2,
     output PredictionResult result_o
 );
     logic `VADDR_BUS predict_pc;
@@ -383,6 +418,7 @@ module S2Control(
     assign hit = entry.en && (lookup_tag == tag);
     assign btb_hit = hit | result_i.btb_hit;
     assign entry_i = hit ? entry : result_i.btbEntry;
+    assign entry_s2 = entry_i;
     PredictionResultGen #(
         .RASV(1),
         .REDIRECTV(1)
@@ -392,6 +428,7 @@ module S2Control(
         .entry(entry_i),
         .prediction,
         .ras_addr(ras_addr),
+        .ind_addr(),
         .rasInfo(ras_info),
         .result_i,
         .result_o
@@ -403,13 +440,14 @@ module S3Control(
     input logic `VADDR_BUS pc,
     input logic `N(`SLOT_NUM) prediction,
     input logic `VADDR_BUS ras_addr,
+    input logic `VADDR_BUS ind_addr,
     input RasRedirectInfo ras_info,
     input PredictionResult result_i,
     output PredictionResult result_o
 );
     PredictionResultGen #(
         .REDIRECTV(1),
-        .INDV(0),
+        .INDV(1),
         .BTBV(0),
         .RASV(1)
     ) result_gen (
@@ -418,6 +456,7 @@ module S3Control(
         .entry(result_i.btbEntry),
         .prediction,
         .ras_addr,
+        .ind_addr,
         .rasInfo(ras_info),
         .result_i,
         .result_o

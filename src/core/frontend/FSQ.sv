@@ -573,8 +573,9 @@ endgenerate
 
     logic update_taken, update_tail_taken;
     logic `N(`VADDR_SIZE) update_start_addr;
-    logic `N(`VADDR_SIZE) update_target_pc;
-    BTBUpdateInfo update_btb_entry; 
+    logic `N(`VADDR_SIZE) update_target_pc, update_target_pc_pre;
+    BTBUpdateInfo update_btb_entry, update_btb_entry_pre;
+    logic update_indirect;
     logic `N(`SLOT_NUM) update_real_taken;
     logic `N(`SLOT_NUM) update_alloc_slot;
     assign bpu_fsq_io.updateInfo.meta = updateMeta;
@@ -589,16 +590,30 @@ endgenerate
 `ifdef DIFFTEST
     assign bpu_fsq_io.updateInfo.fsqIdx = commit_head;
 `endif
+    assign update_target_pc_pre = pred_error ? commitWBInfo.target : commitStream.target;
+`ifdef FEAT_ITTAGE_REGION
+    assign bpu_fsq_io.ittage_tag = update_target_pc_pre[`ITTAGE_OFFSET + 1 +: `ITTAGE_REGION_TAG];
+`endif
     always_ff @(posedge clk)begin
         bpu_fsq_io.update <= commitValid;
         update_taken <= commitWBInfo.taken;
         update_start_addr <= commitStream.start_addr;
-        update_target_pc <= commitWBInfo.target;
-        update_btb_entry <= pred_error ? commitUpdateEntry : oldEntry;
+        update_target_pc <= update_target_pc_pre;
+        update_btb_entry_pre <= pred_error ? commitUpdateEntry : oldEntry;
         update_real_taken <= realTaken;
         update_alloc_slot <= allocSlot;
         update_tail_taken <= pred_error ? commitWBInfo.br_type != CONDITION :
                             ~(|u_predInfo.condHist) & commitStream.taken;
+        update_indirect <= pred_error ? commitWBInfo.br_type == INDIRECT || commitWBInfo.br_type == INDIRECT_CALL : 
+                            ~(|u_predInfo.condHist) & commitStream.taken & (oldEntry.tailSlot.br_type == INDIRECT) | (oldEntry.tailSlot.br_type == INDIRECT_CALL);
+    end
+    always_comb begin
+        update_btb_entry = update_btb_entry_pre;
+`ifdef FEAT_ITTAGE_REGION
+        if(update_indirect)begin
+            update_btb_entry.tailSlot.target[`ITTAGE_REGION_WIDTH-1: 0] = bpu_fsq_io.ittage_idx; 
+        end
+`endif
     end
 
     logic `N(`FSQ_WIDTH) exception_head, exception_head_n;

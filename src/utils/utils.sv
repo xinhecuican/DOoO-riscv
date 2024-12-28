@@ -70,6 +70,7 @@ generate;
 	16: PEncoder16 pencoder(in, out);
 	17: PEncoder17 pencoder(in, out);
 	32: PEncoder32 pencoder(in, out);
+	64: PEncoder64 pencoder(in, out);
 	default: begin
 		PEncoder2 pencoder(in, out);
 		always_comb begin
@@ -258,8 +259,14 @@ generate
 		assign data_o = data_i;
 	end
 	else if(RADIX == 2)begin
-		assign cmp_o = cmp[1] > cmp[0] ? cmp[1] : cmp[0];
-		assign data_o = cmp[1] > cmp[0] ? data_i[1] : data_i[0];
+		if(WIDTH == 1)begin
+			assign cmp_o = cmp[1] | cmp[0];
+			assign data_o = cmp[1] ? data_i[1] : data_i[0];
+		end
+		else begin
+			assign cmp_o = cmp[1] > cmp[0] ? cmp[1] : cmp[0];
+			assign data_o = cmp[1] > cmp[0] ? data_i[1] : data_i[0];
+		end
 	end
 	else begin
 		logic [DATA_WIDTH-1: 0] data1, data2;
@@ -284,8 +291,14 @@ generate
 			.cmp_o(cmp2),
 			.data_o(data2)
 		);
-		assign cmp_o = cmp2 > cmp1 ? cmp2 : cmp1;
-		assign data_o = cmp2 > cmp1 ? data2 : data1;
+		if(WIDTH == 1)begin
+			assign cmp_o = cmp1 | cmp2;
+			assign data_o = cmp2 ? data2 : data1;
+		end
+		else begin
+			assign cmp_o = cmp2 > cmp1 ? cmp2 : cmp1;
+			assign data_o = cmp2 > cmp1 ? data2 : data1;
+		end
 	end
 endgenerate
 endmodule

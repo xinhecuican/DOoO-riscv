@@ -241,7 +241,6 @@ module PEncoder17(
 	assign out[2: 0] = {3{is_high & ~in[16]}} & out1 | {3{~is_high & ~in[16]}} & out2;
 endmodule
 
-
 module PEncoder32(
 	input logic [31: 0] in,
 	output logic [4: 0] out
@@ -262,6 +261,19 @@ module PEncoder32(
 	assign out[2: 0] = out_high == 2'b11 ? out4 : 
 					   out_high == 2'b10 ? out3 : 
 					   out_high == 2'b01 ? out2 : out1;
+endmodule
+
+module PEncoder64(
+	input logic [63: 0] in,
+	output logic [5: 0] out
+);
+	logic [4: 0] out1, out2;
+	logic is_high;
+	PEncoder32 high(in[63: 32], out1);
+	PEncoder32 low(in[31: 0], out2);
+	assign is_high = |in[63: 32];
+	assign out[5] = is_high;
+	assign out[4: 0] = is_high ? out1 : out2;
 endmodule
 
 module PREncoder2(
