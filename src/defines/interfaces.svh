@@ -5,6 +5,7 @@
 `include "bus/apb.svh"
 `include "bus/ace.svh"
 `include "bus/mem.svh"
+`include "debug.svh"
 
 interface BpuBtbIO#(
     parameter TAG_SIZE=1

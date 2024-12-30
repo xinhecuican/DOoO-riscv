@@ -70,5 +70,5 @@ module L2TLB(
         .data_o({dtlb_io.wpn, dtlb_io.exception, dtlb_io.error, dtlb_io.waddr, dtlb_io.entry, dtlb_io.info_o})
     );
 
-    assign ptw_io.ready = ~tlbCache_io.hit;
+    assign ptw_io.ready = ~(tlbCache_io.hit & ((tlbCache_io.info_o.source == 2'b00) == (ptw_io.info.source == 2'b00)));
 endmodule

@@ -74,8 +74,8 @@ module BranchPredictor(
     UBTB ubtb(.*);
 
 `ifdef T_DEBUG
-    assign ras_io.lastStage = s2_result_out.en  & ~redirect.flush;
-    assign ras_io.lastStageIdx = s2_result_out.stream_idx;
+    assign ras_io.lastStage = s3_result_out.en  & ~redirect.flush;
+    assign ras_io.lastStageIdx = s3_result_out.stream_idx;
 `endif
 `ifdef FEAT_LINKRAS
     LinkRAS ras(.*);

@@ -602,7 +602,7 @@ endgenerate
         update_btb_entry_pre <= pred_error ? commitUpdateEntry : oldEntry;
         update_real_taken <= realTaken;
         update_alloc_slot <= allocSlot;
-        update_tail_taken <= pred_error ? commitWBInfo.br_type != CONDITION :
+        update_tail_taken <= pred_error ? (commitWBInfo.br_type != CONDITION) & ~commitWBInfo.exception :
                             ~(|u_predInfo.condHist) & commitStream.taken;
         update_indirect <= pred_error ? commitWBInfo.br_type == INDIRECT || commitWBInfo.br_type == INDIRECT_CALL : 
                             ~(|u_predInfo.condHist) & commitStream.taken & (oldEntry.tailSlot.br_type == INDIRECT) | (oldEntry.tailSlot.br_type == INDIRECT_CALL);
@@ -617,11 +617,23 @@ endgenerate
     end
 
     logic `N(`FSQ_WIDTH) exception_head, exception_head_n;
+    logic `ARRAY(`COMMIT_WIDTH, `FSQ_WIDTH) commitFsqIdx;
+    logic commit_exc_valid;
+    logic `N(`COMMIT_WIDTH) commit_older;
     logic `N(`PREDICTION_WIDTH) pd_size;
     logic exc_wen;
     logic `N(`FSQ_WIDTH) exc_widx;
     logic `N(`VADDR_SIZE) exc_waddr;
-    assign exception_head_n = exception_head + commitValid;
+
+generate
+    for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
+        assign commit_older[i] = commitBus.en[i] & (commitBus.fsqInfo[i].idx != exception_head);
+        assign commitFsqIdx[i] = commitBus.fsqInfo[i].idx;
+    end
+endgenerate
+    OldestSelect #(1, `COMMIT_WIDTH, `FSQ_WIDTH) select_exception_head (
+        commit_older, commitFsqIdx, commit_exc_valid, exception_head_n
+    );
     always_ff @(posedge clk)begin
         exc_wen <= pd_redirect.exc_en;
         exc_widx <= pd_redirect.fsqIdx.idx;
@@ -633,19 +645,21 @@ endgenerate
             exception_head <= 0;
         end
         else begin
-            exception_head <= exception_head_n;
+            if(commit_exc_valid)begin
+                exception_head <= exception_head_n;
+            end
         end
     end
 
     logic `ARRAY(`COMMIT_WIDTH, `FSQ_WIDTH) exception_idxs;
-    logic `ARRAY(`COMMIT_WIDTH, `VADDR_SIZE) exception_addrs;
+    logic `ARRAY(`COMMIT_WIDTH, `PREDICTION_WIDTH+`VADDR_SIZE) exception_addrs;
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
-        assign exception_idxs[i] = exception_head_n + i;
+        assign exception_idxs[i] = exception_head + i;
     end
 endgenerate
     MPRAM #(
-        .WIDTH(`VADDR_SIZE),
+        .WIDTH(`VADDR_SIZE+`PREDICTION_WIDTH),
         .DEPTH(`FSQ_SIZE),
         .READ_PORT(`COMMIT_WIDTH),
         .WRITE_PORT(1)
@@ -658,13 +672,13 @@ endgenerate
         .rdata(exception_addrs),
         .we(exc_wen),
         .waddr(exc_widx),
-        .wdata(exc_waddr),
+        .wdata({pd_size, exc_waddr}),
         .ready()
     );
     MPRAM #(
         .WIDTH(`PREDICTION_WIDTH),
         .DEPTH(`FSQ_SIZE),
-        .READ_PORT(1),
+        .READ_PORT(`COMMIT_WIDTH),
         .WRITE_PORT(1)
     ) stream_size_ram (
         .clk(clk),
@@ -678,7 +692,9 @@ endgenerate
         .wdata(pd_size),
         .ready()
     );
-    assign fsq_back_io.commitStreamSize = commitSize;
+    logic `N($clog2(`COMMIT_WIDTH)) exc_stream_idx;
+    assign exc_stream_idx = commitBus.fsqInfo[0].idx - exception_head;
+    assign fsq_back_io.commitStreamSize = exception_addrs[exc_stream_idx][`VADDR_SIZE +: `PREDICTION_WIDTH];
 
 `ifdef RVC
     logic `N(`FSQ_SIZE) commit_head_mask, redirect_mask;
@@ -720,8 +736,8 @@ endgenerate
 `endif
 
     logic `N($clog2(`COMMIT_WIDTH)) exc_ridx;
-    assign exc_ridx = fsq_back_io.redirect.fsqInfo.idx - commit_head;
-    assign fsq_back_io.exc_pc = exception_addrs[exc_ridx] + {fsq_back_io.redirect.fsqInfo.offset, {`INST_OFFSET{1'b0}}};
+    assign exc_ridx = fsq_back_io.redirect.fsqInfo.idx - exception_head;
+    assign fsq_back_io.exc_pc = exception_addrs[exc_ridx][`VADDR_SIZE-1: 0] + {fsq_back_io.redirect.fsqInfo.offset, {`INST_OFFSET{1'b0}}};
 
 `ifdef DIFFTEST
     logic `N(`VADDR_SIZE) diff_pcs `N(`FSQ_SIZE);
@@ -759,7 +775,7 @@ endgenerate
     ((commitWBInfo.br_type == INDIRECT) | (commitWBInfo.br_type == INDIRECT_CALL)))
     `PERF(pred_error_call, commitValid & pred_error & ~commitWBInfo.exception & ~commitWBInfo.front & 
     ((commitWBInfo.br_type == POP) | (commitWBInfo.br_type == POP_PUSH) | (commitWBInfo.br_type == PUSH)))
-    `PERF(pred_error, commitValid & pred_error & ~commitWBInfo.exception)
+    `PERF(pred_error, commitValid & pred_error & ~commitWBInfo.exception & ~commitWBInfo.front)
     `PERF(front_redirect_direct, pd_redirect.en & pd_redirect.direct)
     `PERF(front_redirect_nobranch, pd_redirect.en & ~pd_redirect.direct)
 

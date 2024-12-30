@@ -205,7 +205,7 @@ endgenerate
     assign pd_redirect.stream.target = jump_en ? (
         bundles_next[selectIdx].br_type == POP || bundles_next[selectIdx].br_type == POP_PUSH ? 
             ras_addr : bundles_next[selectIdx].target) : next_pc;
-    assign pd_redirect.br_type = bundles_next[selectIdx].br_type;
+    assign pd_redirect.br_type = jump_en ? bundles_next[selectIdx].br_type : DIRECT;
 `ifdef RVC
     assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : 0;
     assign pd_redirect.last_offset = jump_en ? rvc_offset[selectIdx] + shiftOffset :
@@ -275,6 +275,7 @@ module PreDecoder(
     logic `VADDR_BUS cjal_imm;
     logic sign1, sign2;
     logic full_rd_0, full_rs2_0;
+    logic full_rd_1, full_rd_5;
     logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
     logic normal;
 
@@ -294,30 +295,31 @@ module PreDecoder(
     assign funct3_6 = funct3[2] & funct3[1] & ~funct3[0];
     assign funct3_7 = funct3[2] & funct3[1] & funct3[0];
     assign full_rd_0 = ~full_rd[4] & ~full_rd[3] & ~full_rd[2] & ~full_rd[1] & ~full_rd[0];
+    assign full_rd_1 = ~full_rd[4] & ~full_rd[3] & ~full_rd[2] & ~full_rd[1] & full_rd[0];
+    assign full_rd_5 = ~full_rd[4] & ~full_rd[3] & full_rd[2] & ~full_rd[1] & full_rd[0];
     assign full_rs2_0 = ~full_rs2[4] & ~full_rs2[3] & ~full_rs2[2] & ~full_rs2[1] & ~full_rs2[0];
 
     assign cjal_imm = {{`VADDR_SIZE-12{cinst[12]}}, cinst[12], cinst[8], cinst[10: 9], cinst[6], cinst[7], cinst[2], cinst[11], cinst[5: 3], 1'b0};
 
     logic cj, cjal, cjr, cjalr, cbeqz, cbnez;
-    logic cpop;
     assign cjal = sign1 & funct3_1;
     assign cj = sign1 & funct3_5;
     assign cbeqz = sign1 & funct3_6;
     assign cbnez = sign1 & funct3_7;
     assign cjr = sign2 & funct3_4 & ~cinst[12] & ~full_rd_0 & full_rs2_0;
     assign cjalr = sign2 & funct3_4 & cinst[12] & ~full_rd_0 & full_rs2_0;
-    assign cpop = full_rd == 5;
 
     logic `VADDR_BUS offset_o;
     assign offset_o = normal ? offset : cjal_imm;
     assign pdBundle.rvc = ~normal;
     assign pdBundle.branch = jal | jalr | branch | cj | cjal | cjr | cjalr | cbeqz | cbnez;
     assign pdBundle.target = addr + offset_o;
-    assign pdBundle.direct = jal | cj | cjal | jalr & pop | cjr | cjalr & cpop;
+    assign pdBundle.direct = jal | cj | cjal | jalr & pop | 
+                             cjr & (full_rd_1 | full_rd_5) | cjalr & full_rd_5;
     assign pdBundle.jump = jal | cj | cjal;
     assign push_valid = (jal | jalr) & push | cjal | cjalr;
-    assign pop_valid = jalr & pop | cjr | cjalr & cpop;
-    assign pdBundle.br_type = jalr & push & ~pop ? INDIRECT_CALL :
+    assign pop_valid = jalr & pop | cjr & (full_rd_1 | full_rd_5) | cjalr & full_rd_5;
+    assign pdBundle.br_type = jalr & push & ~pop | cjalr & (full_rd == 1) ? INDIRECT_CALL :
                               push_valid & pop_valid ? POP_PUSH :
                               push_valid ? PUSH : pop_valid ? POP : DIRECT;
 `else

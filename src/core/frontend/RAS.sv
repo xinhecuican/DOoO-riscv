@@ -210,6 +210,7 @@ module LinkRAS(
                 else begin
                     listTop <= ras_io.linfo.listTop;
                     top <= ras_io.linfo.rasTop;
+                    preTopInvalid <= ras_io.linfo.topInvalid;
                 end
                 
                 if(lookupType[1] & ~lookupType[0])begin
@@ -234,7 +235,22 @@ module LinkRAS(
             end
         end
     end
-
+`ifdef DIFFTEST
+`ifdef T_DEBUG
+    logic `ARRAY(`FSQ_SIZE, `RAS_WIDTH) lookup_idx;
+    logic `N(`FSQ_WIDTH) fsqIdx;
+    logic `N(`FSQ_WIDTH) inflightTop_n;
+    always_ff @(posedge clk)begin
+        fsqIdx <= ras_io.updateInfo.fsqIdx;
+        inflightTop_n <= inflightTop;
+        if(ras_io.lastStage)begin
+            lookup_idx[ras_io.lastStageIdx] <= inflightTop_n;
+        end
+    end
+    `Log(DLog::Debug, T_DEBUG, ras_io.update && (commitTop != lookup_idx[fsqIdx]),
+    $sformatf("ras commit top mismatch"))
+`endif
+`endif
 endmodule
 `else
 module RAS(
