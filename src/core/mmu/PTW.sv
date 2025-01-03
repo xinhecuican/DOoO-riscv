@@ -349,6 +349,8 @@ module PTW(
             endcase
         end
     end
+
+    `PERF(ptw_miss, axi_io.ar_valid & axi_io.ar_ready)
 endmodule
 
 interface PTBufferIO #(

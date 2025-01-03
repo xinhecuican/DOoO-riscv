@@ -30,6 +30,7 @@ module BranchPredictor(
     RasRedirectInfo ras_info_s3;
     logic ras_valid_s2, ras_valid_s3_in, ras_valid_s3_out;
     BTBUpdateInfo entry_s2;
+    logic `N(`SLOT_NUM) tage_pred_s3;
 
     assign squash = bpu_fsq_io.squash;
     assign squashInfo = bpu_fsq_io.squashInfo;
@@ -40,10 +41,12 @@ module BranchPredictor(
     BTB btb(.*);
     assign tage_io.pc = pc;
     Tage tage(.*);
+`ifdef FEAT_SC
     assign sc_io.pc = pc;
     assign sc_io.tage_prediction = tage_io.prediction;
     assign sc_io.tage_ctrs = tage_io.provider_ctr;
     SC sc(.*, .io(sc_io));
+`endif
     assign ittage_io.pc = pc;
 `ifdef FEAT_ITTAGE_REGION
     assign ittage_io.region_idx = entry_s2.tailSlot.target[`ITTAGE_REGION_WIDTH-1: 0];
@@ -77,11 +80,7 @@ module BranchPredictor(
     assign ras_io.lastStage = s3_result_out.en  & ~redirect.flush;
     assign ras_io.lastStageIdx = s3_result_out.stream_idx;
 `endif
-`ifdef FEAT_LINKRAS
-    LinkRAS ras(.*);
-`else
     RAS ras(.*);
-`endif
     
     assign redirect.s2_redirect = s2_result_out.en && s2_result_out.redirect;
     assign redirect.s3_redirect = s3_result_out.en && s3_result_out.redirect;
@@ -132,6 +131,7 @@ module BranchPredictor(
         end
         ras_addr_s3 <= ras_io.entry.pc;
         ras_info_s3 <= ras_io.rasInfo;
+        tage_pred_s3 <= tage_io.prediction;
     end
 
     assign bpu_fsq_io.en = bpu_fsq_io.prediction.en & ~redirect.flush;
@@ -185,13 +185,19 @@ module BranchPredictor(
         s2_meta_out = s2_meta_in;
         s2_meta_out.tage = tage_io.meta;
         s3_meta_out = s3_meta_in;
+`ifdef FEAT_SC
         s3_meta_out.sc = sc_io.meta;
+`endif
         s3_meta_out.ittage = ittage_io.meta;
     end
 
     S3Control s3_control(
         .pc(s3_result_in.stream.start_addr),
+`ifdef FEAT_SC
         .prediction(sc_io.prediction),
+`else
+        .prediction(tage_pred_s3),
+`endif
         .ras_addr(ras_addr_s3),
         .ind_addr(ittage_io.target),
         .ras_info(ras_info_s3),

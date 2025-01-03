@@ -12,7 +12,9 @@ module HistoryControl(
     logic `N(`GHIST_SIZE) ghist;
     TageFoldHistory tage_history, tage_input_history, tage_update_history;
     logic `N(`SC_GHIST_WIDTH) sc_ghist, sc_ghist_red;
+`ifdef IMLI_VALID
     logic `N(`SC_IMLI_WIDTH) imli, imli_red;
+`endif
     logic `N(`GHIST_WIDTH) pos;
     logic `ARRAY(`SLOT_NUM, `GHIST_WIDTH) we_idx;
     logic `N(`SLOT_NUM) ghist_we;
@@ -36,7 +38,9 @@ module HistoryControl(
     assign we_idx[1] = redirect.flush ? squashInfo.redirectInfo.ghistIdx + 1 : 
                                         result.redirect_info.ghistIdx + 1;
     assign sc_ghist_red = result.en & result.redirect ? result.redirect_info.sc_ghist : sc_ghist;
+`ifdef IMLI_VALID
     assign imli_red = result.en & result.redirect ? result.redirect_info.imli : imli;
+`endif
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
         assign cond_result[i] = (condNum == (i+1)) & taken;
@@ -47,7 +51,9 @@ endgenerate
     assign history.ghistIdx = pos;
     assign history.tage_history = tage_history;
     assign history.sc_ghist = sc_ghist;
+`ifdef IMLI_VALID
     assign history.imli = imli;
+`endif
     localparam [`TAGE_BANK*16-1: 0] tage_hist_length = `TAGE_HIST_LENGTH;
 generate;
     for(genvar i=0; i<`TAGE_BANK; i++)begin
@@ -99,7 +105,9 @@ endgenerate
             pos <= 0;
             tage_history <= 0;
             sc_ghist <= 0;
+`ifdef IMLI_VALID
             imli <= 0;
+`endif
         end
         else begin
             pos <= squash ? squashCondNum + squashInfo.redirectInfo.ghistIdx :
@@ -116,26 +124,40 @@ endgenerate
             if(squash)begin
                 if(squashCondNum == 2)begin
                     sc_ghist <= {squashInfo.redirectInfo.sc_ghist[`SC_GHIST_WIDTH-3: 0], 1'b0, squashInfo.predInfo.taken};
-                    imli <= squashInfo.predInfo.taken;
                 end
                 else if(squashCondNum == 1)begin
                     sc_ghist <= {squashInfo.redirectInfo.sc_ghist[`SC_GHIST_WIDTH-2: 0], squashInfo.predInfo.taken};
-                    imli <= squashInfo.predInfo.taken ? squashInfo.redirectInfo.imli + 1 : 0;
                 end
                 else begin
                     sc_ghist <= squashInfo.redirectInfo.sc_ghist;
+                end
+`ifdef IMLI_VALID
+                if(squashCondNum == 2)begin
+                    imli <= squashInfo.predInfo.taken;
+                end
+                else if(squashCondNum == 1)begin
+                    imli <= squashInfo.predInfo.taken ? squashInfo.redirectInfo.imli + 1 : 0;
+                end
+                else begin
                     imli <= squashInfo.redirectInfo.imli;
                 end
+`endif
             end
             else if(result.en)begin
                 if(result.cond_num == 2)begin
                     sc_ghist <= {sc_ghist_red[`SC_GHIST_WIDTH-3: 0], 1'b0, |result.predTaken};
-                    imli <= |result.predTaken;
                 end
                 else if(result.cond_num == 1)begin
                     sc_ghist <= {sc_ghist_red[`SC_GHIST_WIDTH-2: 0], |result.predTaken};
+                end
+`ifdef IMLI_VALID
+                if(result.cond_Num == 2)begin
+                    imli <= |result.predTaken;
+                end
+                else if(result.cond_num == 1)begin
                     imli <= |result.predTaken ? imli_red + 1 : 0;
                 end
+`endif
             end
         end
     end

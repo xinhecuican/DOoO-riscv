@@ -329,4 +329,6 @@ generate
         end
     end
 endgenerate
+
+    `PERF(redirect_fence, fenceBus.fence_end)
 endmodule
