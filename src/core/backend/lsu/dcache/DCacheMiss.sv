@@ -474,5 +474,6 @@ endgenerate
     assign r_axi_io.r_ready = 1'b1;
 
     `PERF(load_miss, rlast & (|mshr_hit_combine))
+    `PERF(dcache_miss, r_axi_io.ar_valid & r_axi_io.ar_ready)
 
 endmodule

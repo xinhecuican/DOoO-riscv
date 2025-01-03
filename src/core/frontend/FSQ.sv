@@ -605,7 +605,7 @@ endgenerate
         update_tail_taken <= pred_error ? (commitWBInfo.br_type != CONDITION) & ~commitWBInfo.exception :
                             ~(|u_predInfo.condHist) & commitStream.taken;
         update_indirect <= pred_error ? commitWBInfo.br_type == INDIRECT || commitWBInfo.br_type == INDIRECT_CALL : 
-                            ~(|u_predInfo.condHist) & commitStream.taken & (oldEntry.tailSlot.br_type == INDIRECT) | (oldEntry.tailSlot.br_type == INDIRECT_CALL);
+                            ~(|u_predInfo.condHist) & commitStream.taken & ((oldEntry.tailSlot.br_type == INDIRECT) | (oldEntry.tailSlot.br_type == INDIRECT_CALL));
     end
     always_comb begin
         update_btb_entry = update_btb_entry_pre;
@@ -616,7 +616,7 @@ endgenerate
 `endif
     end
 
-    logic `N(`FSQ_WIDTH) exception_head, exception_head_n;
+    logic `N(`FSQ_WIDTH) exception_head, exception_head_n, exception_head_pre;
     logic `ARRAY(`COMMIT_WIDTH, `FSQ_WIDTH) commitFsqIdx;
     logic commit_exc_valid;
     logic `N(`COMMIT_WIDTH) commit_older;
@@ -639,6 +639,7 @@ endgenerate
         exc_widx <= pd_redirect.fsqIdx.idx;
         exc_waddr <= pd_redirect.stream.start_addr;
         pd_size <= pd_redirect.size;
+        exception_head_pre <= exception_head;
     end
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
@@ -693,7 +694,7 @@ endgenerate
         .ready()
     );
     logic `N($clog2(`COMMIT_WIDTH)) exc_stream_idx;
-    assign exc_stream_idx = commitBus.fsqInfo[0].idx - exception_head;
+    assign exc_stream_idx = commitBus.fsqInfo[0].idx - exception_head_pre;
     assign fsq_back_io.commitStreamSize = exception_addrs[exc_stream_idx][`VADDR_SIZE +: `PREDICTION_WIDTH];
 
 `ifdef RVC
@@ -736,7 +737,7 @@ endgenerate
 `endif
 
     logic `N($clog2(`COMMIT_WIDTH)) exc_ridx;
-    assign exc_ridx = fsq_back_io.redirect.fsqInfo.idx - exception_head;
+    assign exc_ridx = fsq_back_io.redirect.fsqInfo.idx - exception_head_pre;
     assign fsq_back_io.exc_pc = exception_addrs[exc_ridx][`VADDR_SIZE-1: 0] + {fsq_back_io.redirect.fsqInfo.offset, {`INST_OFFSET{1'b0}}};
 
 `ifdef DIFFTEST

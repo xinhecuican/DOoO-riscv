@@ -10,7 +10,6 @@
 
 `define EXT_FENCEI
 
-`define FEAT_LINKRAS
 `define FEAT_SC
 `define FEAT_ITTAGE_REGION
 

@@ -74,7 +74,9 @@ endgenerate
         result_i.redirect_info.tage_history = ubtb_io.history.tage_history;
         result_i.redirect_info.rasInfo = 0;
         result_i.redirect_info.sc_ghist = ubtb_io.history.sc_ghist;
+`ifdef IMLI_VALID
         result_i.redirect_info.imli = ubtb_io.history.imli;
+`endif
         result_i.stream.target = ubtb_io.pc + `BLOCK_SIZE;
 `ifdef RVC
         result_i.stream.size = `BLOCK_INST_SIZE - 2;

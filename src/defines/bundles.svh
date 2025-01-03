@@ -105,7 +105,9 @@ typedef struct packed {
 typedef struct packed {
     TageMeta tage;
     UBTBMeta ubtb;
+`ifdef FEAT_SC
     SCMeta sc;
+`endif
     ITTageMeta ittage;
 } PredictionMeta;
 
@@ -130,28 +132,21 @@ typedef struct packed {
     logic `ARRAY(`TAGE_BANK, `TAGE_TAG_COMPRESS2) fold_tag2;
 } TageFoldHistory;
 
-`ifdef FEAT_LINKRAS
 typedef struct packed {
     RasInflightIdx rasTop;
     RasInflightIdx listTop;
     logic `N(`RAS_WIDTH) inflightTop;
     logic topInvalid;
 } RasRedirectInfo;
-`else
-typedef struct packed {
-    logic `N(`RAS_WIDTH) rasTop;
-    logic `N(`RAS_WIDTH) rasBottom;
-    logic ras_tdir;
-    logic ras_bdir;
-} RasRedirectInfo;
-`endif
 
 typedef struct packed {
     logic `N(`GHIST_WIDTH) ghistIdx;
     TageFoldHistory tage_history;
     RasRedirectInfo rasInfo;
     logic `N(`SC_GHIST_WIDTH) sc_ghist;
+`ifdef IMLI_VALID
     logic `N(`SC_IMLI_WIDTH) imli;
+`endif
     // logic `N(`RAS_CTR_SIZE) ras_ctr;
 } RedirectInfo;
 
@@ -160,7 +155,9 @@ typedef struct packed {
     // logic `N(`GHIST_SIZE) ghist;
     // logic `N(`PHIST_SIZE) phist;
     logic `N(`SC_GHIST_WIDTH) sc_ghist;
+`ifdef IMLI_VALID
     logic `N(`SC_IMLI_WIDTH) imli;
+`endif
     TageFoldHistory tage_history;
 } BranchHistory;
 
