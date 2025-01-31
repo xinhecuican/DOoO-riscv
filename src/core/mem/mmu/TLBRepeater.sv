@@ -1,4 +1,4 @@
-`include "../../defines/defines.svh"
+`include "../../../defines/defines.svh"
 
 module TLBRepeater #(
     parameter FRONT=0

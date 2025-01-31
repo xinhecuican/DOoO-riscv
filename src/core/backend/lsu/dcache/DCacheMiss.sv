@@ -9,6 +9,7 @@ interface DCacheMissIO;
     logic `N(`LOAD_PIPELINE) rfull;
 
     logic wen;
+    logic wdata_valid;
     logic `N(`PADDR_SIZE) waddr;
     logic `N(`PADDR_SIZE) waddr_pre;
     logic `N(`STORE_COMMIT_WIDTH) scIdx;
@@ -33,19 +34,19 @@ interface DCacheMissIO;
     logic `N(`PADDR_SIZE) refillAddr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refillData;
     logic `N(`STORE_COMMIT_WIDTH) refill_scIdx;
+    DirectoryState refill_state;
 
     logic `N(`LOAD_REFILL_SIZE) lq_en;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
     modport miss (input ren, raddr, lqIdx, robIdx, req_success, replaceWay, refill_valid,
-                        wen, waddr, scIdx, wdata, wmask, raddr_pre, waddr_pre,
+                        wen, waddr, scIdx, wdata, wmask, raddr_pre, waddr_pre, wdata_valid,
 `ifdef RVA
                   input amo_en, output amo_refill,
 `endif
-                  output rfull, req, req_addr, wfull, 
-                        refill_en, refill_dirty, refillWay, refillAddr, refillData, refill_scIdx,
-                        lq_en, lqData, lqIdx_o);
+                  output rfull, req, req_addr, wfull, lq_en, lqData, lqIdx_o,
+        refill_en, refill_dirty, refillWay, refillAddr, refillData, refill_scIdx, refill_state);
 endinterface
 
 module DCacheMiss(
@@ -88,6 +89,16 @@ module DCacheMiss(
     logic `N(`DCACHE_MISS_SIZE) w_refill_eq, head_decode;
     logic refill_eq;
     logic w_invalid;
+
+    logic req_cache;
+    logic `N(`PADDR_SIZE) cache_addr;
+    logic `N($clog2(`DCACHE_LINE / `DATA_BYTE)) cacheIdx;
+    logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `XLEN) cacheData, req_data;
+    logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `DATA_BYTE) req_mask;
+    logic `N(`XLEN) expandMask;
+    logic `N(`XLEN) combine_cache_data;
+    logic `N(`DCACHE_WAY_WIDTH) req_way;
+    DirectoryState req_state;
 
 //load enqueue
     // 有三种情况
@@ -206,7 +217,7 @@ endgenerate
 
 // refill
     assign io.refill_en = en[head] & dataValid[head];
-    assign io.refill_dirty = |mask[head];
+    assign io.refill_state = req_state;
     assign io.refillWay = way[head];
     assign io.refillAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign io.refillData = data[head];
@@ -336,7 +347,7 @@ endgenerate
             end
             if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
                 scIdxs[widx] <= io.scIdx;
-                data_valid_all[widx] <= &wmask_all;
+                data_valid_all[widx] <= &wmask_all | io.wdata_valid;
                 wvalid[widx] <= 1'b1;
             end
             if(rlast)begin
@@ -363,9 +374,11 @@ endgenerate
 
 `ifdef RVA
     logic `N(`DCACHE_MSHR_SIZE) amo;
+    logic amo_req;
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             amo <= 0;
+            amo_req <= 0;
         end
         else begin
             if(io.amo_en & ~w_invalid & (write_remain_valid | whit_combine))begin
@@ -373,6 +386,9 @@ endgenerate
             end
             if(io.refill_en & io.refill_valid)begin
                 amo[head] <= 1'b0;
+            end
+            if(req_next & io.req_success)begin
+                amo_req <= amo[head];
             end
         end
     end
@@ -384,15 +400,6 @@ endgenerate
 `endif
 
 // req
-    logic req_cache;
-    logic `N(`PADDR_SIZE) cache_addr;
-    logic `N($clog2(`DCACHE_LINE / `DATA_BYTE)) cacheIdx;
-    logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `XLEN) cacheData, req_data;
-    logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `DATA_BYTE) req_mask;
-    logic `N(`XLEN) expandMask;
-    logic `N(`XLEN) combine_cache_data;
-    logic `N(`DCACHE_WAY_WIDTH) req_way;
-
     assign io.req = en[head] & ~req_start;
     assign io.req_addr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign rlast = r_axi_io.r_valid & r_axi_io.r_last;
@@ -418,6 +425,7 @@ endgenerate
             req_way <= 0;
             req_valid_all <= 0;
             req_wvalid <= 0;
+            req_state <= 0;
         end
         else begin
             if(io.req)begin
@@ -458,6 +466,11 @@ endgenerate
         if(rlast)begin
             req_data <= data[head];
             req_mask <= mask[head];
+            req_state <= req_wvalid | req_valid_all 
+`ifdef RVA
+                        | amo_req
+`endif
+            ? 3'b111 : r_axi_io.r_resp[4: 2];
         end
     end
 
@@ -467,8 +480,12 @@ endgenerate
     assign r_axi_io.ar_len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign r_axi_io.ar_size = $clog2(`DATA_BYTE);
     assign r_axi_io.ar_burst = 2'b01;
-    assign r_axi_io.ar_user = req_way;
-    assign r_axi_io.ar_snoop = req_valid_all ? `ACEOP_MAKE_UNIQUE :
+    assign r_axi_io.ar_user = 0;
+    assign r_axi_io.ar_snoop = 
+`ifdef RVA
+                               amo_req ? `ACEOP_READ_UNIQUE :
+`endif
+                               req_valid_all ? `ACEOP_MAKE_UNIQUE :
                                req_wvalid ? `ACEOP_READ_UNIQUE : `ACEOP_READ_SHARED;
 
     assign r_axi_io.r_ready = 1'b1;

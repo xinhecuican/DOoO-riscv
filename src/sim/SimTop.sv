@@ -70,16 +70,16 @@ module SimTop(
     end
 
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+        `PADDR_SIZE, `XLEN, 2, 1
     ) mem_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+        `PADDR_SIZE, `XLEN, 2, 1
     ) core_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+        `PADDR_SIZE, `XLEN, 2, 1
     ) peri_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH+2, 1
+        `PADDR_SIZE, `XLEN, 2, 1
     ) irq_axi();
 
     ClintIO clint_io();
@@ -105,7 +105,7 @@ module SimTop(
         FallThrough: 0,
         LatencyMode: 10'b11111_11111,
         PipelineStages: 1,
-        AxiIdWidthSlvPorts: `CORE_WIDTH+2,
+        AxiIdWidthSlvPorts: 2,
         UniqueIds: 1,
         AxiAddrWidth: `PADDR_SIZE,
         AxiDataWidth: `XLEN,
@@ -114,7 +114,7 @@ module SimTop(
     };
     typedef logic [`PADDR_SIZE-1: 0] addr_t;
     typedef logic user_t;
-    typedef logic [`CORE_WIDTH+2-1: 0] id_t;
+    typedef logic [1: 0] id_t;
     typedef logic [`XLEN-1: 0] data_t;
     typedef logic [`XLEN/8-1: 0] strb_t;
     `AXI_TYPEDEF_AW_CHAN_T(AxiAW, addr_t, id_t, user_t)
@@ -216,7 +216,7 @@ module SimTop(
         .NoRules(2),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(`CORE_WIDTH+2),
+        .AxiIdWidth(2),
         .AxiUserWidth(1),
         .PipelineRequest(1),
         .PipelineResponse(1),
@@ -285,7 +285,7 @@ module SimTop(
         .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(`CORE_WIDTH+2),
+        .AxiIdWidth(2),
         .AxiUserWidth(1),
         .PipelineRequest(1),
         .PipelineResponse(1),

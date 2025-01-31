@@ -1,4 +1,4 @@
-`include "../../defines/defines.svh"
+`include "../../../defines/defines.svh"
 
 interface TLBCacheIO;
     logic req;

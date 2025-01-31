@@ -11,7 +11,7 @@ module Backend(
     CsrTlbIO.csr csr_itlb_io,
     CsrL2IO.csr csr_l2_io,
     TlbL2IO.tlb dtlb_io,
-    NativeSnoopIO.master dcache_snoop_io,
+    SnoopIO.master dcache_snoop_io,
     ClintIO.cpu clint_io,
     FenceBus.backend fenceBus_o
 );

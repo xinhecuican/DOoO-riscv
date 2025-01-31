@@ -50,7 +50,7 @@ interface CacheBus #(
 
     id_t         r_id;
     data_t       r_data;
-    logic  [3:0] r_resp;
+    logic  [4:0] r_resp;
     logic        r_last;
     user_t       r_user;
     logic        r_valid;
@@ -253,5 +253,32 @@ endinterface //CacheBus
     assign rhs.aw_ready = lhs.aw_ready; \
     assign rhs.w_ready = lhs.w_ready; \
     assign rhs.b_valid = lhs.b_valid;
+`define CACHE_ASSIGN_TO_AXI(axi_if, cache_if) \
+    assign axi_if.ar_id     = cache_if.ar_id; \
+    assign axi_if.ar_addr   = cache_if.ar_addr; \
+    assign axi_if.ar_len    = cache_if.ar_len; \
+    assign axi_if.ar_size   = cache_if.ar_size; \
+    assign axi_if.ar_burst  = cache_if.ar_burst; \
+    assign axi_if.ar_user   = cache_if.ar_user; \
+    `__CACHE_TO_R(assign, cache_if.r, _, axi_if.r, _) \
+    assign axi_if.aw_id     = cache_if.aw_id; \
+    assign axi_if.aw_addr   = cache_if.aw_addr; \
+    assign axi_if.aw_len    = cache_if.aw_len; \
+    assign axi_if.aw_size   = cache_if.aw_size; \
+    assign axi_if.aw_burst  = cache_if.aw_burst; \
+    assign axi_if.aw_user   = cache_if.aw_user; \
+    `__CACHE_TO_W(assign, axi_if.w, _, cache_if.w, _) \
+    `__CACHE_TO_B(assign, cache_if.b, _, axi_if.b, _) \
+    assign axi_if.ar_valid = cache_if.ar_valid; \
+    assign cache_if.ar_ready = axi_if.ar_ready; \
+    assign cache_if.r_valid = axi_if.r_valid; \
+    assign axi_if.r_ready = cache_if.r_ready; \
+    assign axi_if.aw_valid = cache_if.aw_valid; \
+    assign axi_if.w_valid = cache_if.w_valid; \
+    assign axi_if.b_ready = cache_if.b_ready; \
+    assign cache_if.aw_ready = axi_if.aw_ready; \
+    assign cache_if.w_ready = axi_if.w_ready; \
+    assign cache_if.b_valid = axi_if.b_valid;
+
 
 `endif
