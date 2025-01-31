@@ -134,11 +134,13 @@ endinterface
 // Snoop bus interafces
 interface SnoopIO #(
   parameter int SNOOP_ADDR_WIDTH = 0,
-  parameter int SNOOP_DATA_WIDTH = 0
+  parameter int SNOOP_DATA_WIDTH = 0,
+  parameter int SNOOP_ID_WIDTH   = 0
 );
 
   typedef logic [SNOOP_ADDR_WIDTH-1:0] addr_t;
   typedef logic [SNOOP_DATA_WIDTH-1:0] data_t;
+  typedef logic [SNOOP_ID_WIDTH-1:0] ack_id_t;
 
   addr_t                ac_addr;
   logic [2: 0]   ac_prot;
@@ -155,16 +157,24 @@ interface SnoopIO #(
   logic                 cd_valid;
   logic                 cd_ready;
 
+  // same as rack in ace
+  // but here add id to support outstanding
+  ack_id_t        ar_snoop_id;
+  ack_id_t        r_snoop_id;
+  logic rack;
+
   modport master (
     input   ac_addr, ac_prot, ac_snoop, ac_valid, output ac_ready,
     input   cr_ready, output cr_valid, cr_resp,
-    input   cd_ready, output cd_data, cd_last, cd_valid
+    input   cd_ready, output cd_data, cd_last, cd_valid,
+    output ar_snoop_id, input r_snoop_id, rack
   );
 
- modport slave (
+  modport slave (
     output   ac_addr, ac_prot, ac_snoop, ac_valid, input ac_ready,
     output   cr_ready, input cr_valid, cr_resp,
-    output   cd_ready, input cd_data, cd_last, cd_valid
+    output   cd_ready, input cd_data, cd_last, cd_valid,
+    input ar_snoop_id, output r_snoop_id, rack
   );
 
 endinterface
@@ -199,61 +209,6 @@ interface NativeSnoopIO #(
     output cd_ready, input cd_data, cd_last, cd_valid, cd_user
   );
 endinterface
-
-  /// Slice on Demux AW channel.
-  localparam logic [9:0] DemuxAw = (1 << 9);
-  /// Slice on Demux W channel.
-  localparam logic [9:0] DemuxW  = (1 << 8);
-  /// Slice on Demux B channel.
-  localparam logic [9:0] DemuxB  = (1 << 7);
-  /// Slice on Demux AR channel.
-  localparam logic [9:0] DemuxAr = (1 << 6);
-  /// Slice on Demux R channel.
-  localparam logic [9:0] DemuxR  = (1 << 5);
-  /// Slice on Mux AW channel.
-  localparam logic [9:0] MuxAw   = (1 << 4);
-  /// Slice on Mux W channel.
-  localparam logic [9:0] MuxW    = (1 << 3);
-  /// Slice on Mux B channel.
-  localparam logic [9:0] MuxB    = (1 << 2);
-  /// Slice on Mux AR channel.
-  localparam logic [9:0] MuxAr   = (1 << 1);
-  /// Slice on Mux R channel.
-  localparam logic [9:0] MuxR    = (1 << 0);
-  /// Latency configuration for `ace_xbar`.
-  typedef enum logic [9:0] {
-    NO_LATENCY    = 10'b000_00_000_00,
-    CUT_SLV_AX    = DemuxAw | DemuxAr,
-    CUT_MST_AX    = MuxAw | MuxAr,
-    CUT_ALL_AX    = DemuxAw | DemuxAr | MuxAw | MuxAr,
-    CUT_SLV_PORTS = DemuxAw | DemuxW | DemuxB | DemuxAr | DemuxR,
-    CUT_MST_PORTS = MuxAw | MuxW | MuxB | MuxAr | MuxR,
-    CUT_ALL_PORTS = 10'b111_11_111_11
-  } ccu_latency_e;
-
-  /// Configuration for `ace_ccu`.
-  typedef struct packed {
-    int  NoSlvPorts;
-    int  MaxMstTrans;
-    int  MaxSlvTrans;
-    bit           FallThrough;
-    ccu_latency_e LatencyMode;
-    int  AxiIdWidthSlvPorts;
-    int  AxiIdUsedSlvPorts;
-    bit           UniqueIds;
-    int  AxiAddrWidth;
-    int  AxiDataWidth;
-    int  AxiUserWidth;
-    int  DcacheLineWidth;
-  } ccu_cfg_t;
-
-  typedef struct packed {
-    logic        wasUnique;
-    logic        isShared;
-    logic        passDirty;
-    logic        error;
-    logic        dataTransfer;
-  } crresp_t;
 
   `define ACEOP_READ_ONCE  4'b0000
   `define ACEOP_READ_SHARED 4'b0001
@@ -356,21 +311,24 @@ endinterface
     logic                 last;                                 \
   } cd_chan_t;
 `define SNOOP_TYPEDEF_CR_CHAN_T(cr_chan_t)                      \
-   typedef crresp_t     cr_chan_t;
-`define SNOOP_TYPEDEF_REQ_T(req_t, ac_chan_t)      \
+   typedef logic [4: 0]     cr_chan_t;
+`define SNOOP_TYPEDEF_REQ_T(req_t, ac_chan_t, ack_id_t)      \
   typedef struct packed {                                       \
     logic     ac_valid;                                         \
     logic     cd_ready;                                         \
     ac_chan_t ac;                                               \
     logic     cr_ready;                                         \
+    ack_id_t ar_snoop_id;                                       \
   } req_t;
-`define SNOOP_TYPEDEF_RESP_T(resp_t, cd_chan_t, cr_chan_t)      \
+`define SNOOP_TYPEDEF_RESP_T(resp_t, cd_chan_t, cr_chan_t, ack_id_t)      \
   typedef struct packed {                                       \
     logic     ac_ready;                                         \
     logic     cd_valid;                                         \
     cd_chan_t cd;                                               \
     logic     cr_valid;                                         \
     cr_chan_t cr_resp;                                          \
+    ack_id_t  r_snoop_id;                                       \
+    logic     rack;                                             \
   } resp_t;
 `define __ACE_TO_AW(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep)   \
   __opt_as __lhs``__lhs_sep``id     = __rhs``__rhs_sep``id;         \

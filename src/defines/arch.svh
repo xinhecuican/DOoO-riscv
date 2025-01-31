@@ -12,6 +12,7 @@
 
 `define FEAT_SC
 `define FEAT_ITTAGE_REGION
+`define FEAT_L2CACHE
 
 // `define SYNTH_VIVADO
 

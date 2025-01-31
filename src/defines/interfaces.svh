@@ -842,6 +842,101 @@ interface RobFCsrIO;
     modport rob(input valid, output we, flag_we, flags);
 endinterface
 
+interface L2MSHRSlaveIO #(
+    parameter SLAVE = 1,
+    parameter LLC = 1,
+    parameter WAY = 4,
+    parameter SET = 64,
+    parameter OFFSET = 32,
+    parameter OFFSET_WIDTH = $clog2(OFFSET),
+    parameter SLAVE_WIDTH = idxWidth(SLAVE),
+    parameter SET_WIDTH = $clog2(SET),
+    parameter WAY_WIDTH = $clog2(WAY),
+    parameter TAG_WIDTH = `PADDR_SIZE - OFFSET_WIDTH - SET_WIDTH,
+    parameter ENTRY_SIZE = TAG_WIDTH + 1 + (LLC ? 0 : 1) + SLAVE + SLAVE_WIDTH
+);
+    logic request;
+    logic `N(`PADDR_SIZE) raddr;
+    logic hit;
+    logic `N(WAY_WIDTH) hit_way;
+    logic share;
+    logic owned;
+    logic `N(SLAVE) slave;
+    logic `N(SLAVE_WIDTH) owner;
+    logic replace_hit;
+    logic `N(WAY_WIDTH) replace_way;
+    logic replace_owned;
+
+    logic we;
+    logic wready;
+    logic `N(`PADDR_SIZE) waddr;
+    logic `N(WAY_WIDTH) wway;
+    logic `N(ENTRY_SIZE) wdata;
+
+    modport mshr (output request, raddr, we, waddr, wway, wdata, input hit, hit_way, share, owned, slave, owner, replace_hit, replace_way, replace_owned, wready);
+    modport slaver (input request, raddr, we, waddr, wway, wdata, output hit, hit_way, share, owned, slave, owner, replace_hit, replace_way, replace_owned, wready);
+endinterface
+
+interface L2MSHRDirIO #(
+    parameter WAY = 4,
+    parameter OFFSET = 32,
+    parameter SET = 64,
+    parameter WAY_WIDTH = $clog2(WAY),
+    parameter OFFSET_WIDTH = $clog2(OFFSET),
+    parameter SET_WIDTH = $clog2(SET),
+    parameter TAG_WIDTH = `PADDR_SIZE - OFFSET_WIDTH - SET_WIDTH
+);
+    logic request;
+    logic `N(`PADDR_SIZE) raddr;
+    logic hit;
+    DirectoryState hit_state;
+    logic `N(WAY_WIDTH) hit_way;
+    logic `N(TAG_WIDTH+1) replace_tagv;
+    logic `N(WAY_WIDTH) replace_way;
+    DirectoryState replace_state;
+
+    logic we;
+    logic wready;
+    logic `N(`PADDR_SIZE) waddr;
+    logic `N(WAY_WIDTH) wway;
+    logic `N(TAG_WIDTH+1+$bits(DirectoryState)) wdata;
+
+    modport mshr (output request, raddr, we, waddr, wway, wdata, input hit, hit_way, hit_state, replace_tagv, replace_way, replace_state, wready);
+    modport dir (input request, raddr, we, waddr, wway, wdata, output hit, hit_way, hit_state, replace_tagv, replace_way, replace_state, wready);
+endinterface
+
+interface L2MSHRDataIO #(
+    parameter MSHR_SIZE = 4,
+    parameter DATA_BANK = 1,
+    parameter SET_SIZE = 64,
+    parameter WAY_NUM = 4,
+    parameter WAY_WIDTH = $clog2(WAY_NUM),
+    parameter MSHR_WIDTH = $clog2(MSHR_SIZE),
+    parameter SET_WIDTH = $clog2(SET_SIZE / DATA_BANK)
+);
+    logic `N(DATA_BANK) req;
+    logic `ARRAY(DATA_BANK, WAY_WIDTH) rway;
+    logic `N(DATA_BANK) ready;
+    logic `ARRAY(DATA_BANK, MSHR_WIDTH) mshr_idx;
+    logic `ARRAY(DATA_BANK, SET_WIDTH) raddr;
+    logic `N(DATA_BANK) rvalid;
+    logic `ARRAY(DATA_BANK, MSHR_WIDTH) mshr_idx_o;
+    logic `TENSOR(DATA_BANK, `DCACHE_BANK, `DCACHE_BITS) rdata;
+
+    logic `N(DATA_BANK) we;
+    logic `ARRAY(DATA_BANK, WAY_WIDTH) wway;
+    logic `ARRAY(DATA_BANK, MSHR_WIDTH) wmshr_idx;
+    logic `ARRAY(DATA_BANK, SET_WIDTH) waddr;
+    logic `N(DATA_BANK) wvalid;
+    logic `ARRAY(DATA_BANK, MSHR_WIDTH) wmshr_idx_o;
+    logic `TENSOR(DATA_BANK, `DCACHE_BANK, `DCACHE_BITS) wdata;
+
+    modport mshr(output req, rway, mshr_idx, raddr, input ready, rvalid, mshr_idx_o, rdata,
+                output we, wway, wmshr_idx, waddr, wdata, input wvalid, wmshr_idx_o);
+    modport data(input req, rway, mshr_idx, raddr, output ready, rvalid, mshr_idx_o, rdata,
+                input we, wway, wmshr_idx, waddr, wdata, output wvalid, wmshr_idx_o);
+endinterface
+
 `ifdef DIFFTEST
 interface DiffRAT;
     logic `ARRAY(32, `PREG_WIDTH) map_reg;

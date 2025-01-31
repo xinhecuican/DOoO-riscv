@@ -12,7 +12,7 @@
 
 
 `define NUM_CORE 1
-`define CORE_WIDTH $clog2(`NUM_CORE + 1)
+`define CORE_WIDTH $clog2(`NUM_CORE)
 
 `define RST 1'b1
 `ifdef RV32I
@@ -148,6 +148,9 @@ typedef enum logic [1:0] {
 
 `define FSQ_SIZE 32
 `define FSQ_WIDTH $clog2(`FSQ_SIZE)
+
+`define CACHELINE_SIZE 64
+`define CACHELINE_WIDTH $clog2(`CACHELINE_SIZE)
 
 // icache
 `define ICACHE_ID 4'b0
@@ -299,7 +302,6 @@ typedef enum logic [1:0] {
 `define DCACHE_REPLACE_WIDTH $clog2(`DCACHE_REPLACE_SIZE)
 `define DCACHE_SNOOP_SIZE 4
 `define DCACHE_SNOOP_WIDTH $clog2(`DCACHE_SNOOP_SIZE)
-`define DCACHE_SNOOP_ID_WIDTH `CORE_WIDTH + 2
 
 // exccode
 `define EXC_WIDTH 5
@@ -378,4 +380,17 @@ typedef enum logic [1:0] {
     SC,
     SD
 } CoherentState;
+
+// l2 cache
+`define L2MSHR_SIZE 4
+`define L2MSHR_WIDTH $clog2(`L2MSHR_SIZE)
+`define L2CACHE_BANK 16
+`define L2DATA_BANK 1
+`define L2WAY_NUM 8
+`define L2SET 64
+`define L2OFFSET `CACHELINE_SIZE
+`define L2SLAVE_SET 64
+`define L2SLAVE_WAY 8
+`define L2PREPEND_PIPE 1
+`define L2APPEND_PIPE 1
 `endif

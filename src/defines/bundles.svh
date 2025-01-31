@@ -633,13 +633,17 @@ typedef struct packed {
     logic `ARRAY(`WALK_WIDTH, `PREG_WIDTH) old_prd;
 } CommitWalk;
 
-`define DIRECTORY_ENTRY_DEF(NUM_ENTRY)  \
-typedef struct packed { \
-    logic en; \
-    CoherentState state; \
-    logic `N($clog2(NUM_ENTRY+1)) owner; \
-    logic `N(NUM_ENTRY) sharers; \
-} DirectoryEntry;
+typedef struct packed {
+    logic owner;
+    logic share;
+    logic dirty;
+} DirectoryState;
 
+typedef struct packed {
+    logic v;
+    logic owned;
+    logic share;
+    logic dirty;
+} DCacheMeta;
 
 `endif

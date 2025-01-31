@@ -34,22 +34,40 @@ module Encoder #(
 	input logic [RADIX-1: 0] in,
 	output logic [WIDTH-1: 0] out
 );
-	generate;
-		case(RADIX)
-		2: Encoder2 encoder(in, out);
-		4: Encoder4 encoder(in, out);
-		8: Encoder8 encoder(in, out);
-		16: Encoder16 encoder(in, out);
-		32: Encoder32 encoder(in, out);
-		64: Encoder64 encoder(in, out);
-		default: begin
-			Encoder2 encoder(in, out);
-			always_comb begin
-				$display("unimpl Encoder");
-			end
+generate
+	for(genvar i=0; i<WIDTH; i++)begin
+		localparam STEP = 2 << i;
+		localparam STEP_NUM = 1 << i;
+		localparam FULL_STEP_NUM = RADIX / STEP;
+		localparam REMAIN = RADIX % STEP;
+		localparam REMAIN_NUM = REMAIN < STEP_NUM ? 0 : STEP_NUM - REMAIN;
+		localparam ALL_NUM = FULL_STEP_NUM * STEP_NUM + REMAIN_NUM;
+		logic [ALL_NUM-1: 0] out_t;
+		for(genvar j=0; j<FULL_STEP_NUM; j++)begin
+			assign out_t[j*STEP_NUM +: STEP_NUM] = in[j*STEP+STEP_NUM +: STEP_NUM];
 		end
-		endcase
-	endgenerate
+		for(genvar j=0; j<REMAIN_NUM; j++)begin
+			assign out_t[ALL_NUM-1-j] = in[RADIX-1-j];
+		end
+		assign out[i] = |out_t;
+	end
+endgenerate
+	// generate;
+	// 	case(RADIX)
+	// 	2: Encoder2 encoder(in, out);
+	// 	4: Encoder4 encoder(in, out);
+	// 	8: Encoder8 encoder(in, out);
+	// 	16: Encoder16 encoder(in, out);
+	// 	32: Encoder32 encoder(in, out);
+	// 	64: Encoder64 encoder(in, out);
+	// 	default: begin
+	// 		Encoder2 encoder(in, out);
+	// 		always_comb begin
+	// 			$display("unimpl Encoder");
+	// 		end
+	// 	end
+	// 	endcase
+	// endgenerate
 endmodule
 
 module PEncoder #(

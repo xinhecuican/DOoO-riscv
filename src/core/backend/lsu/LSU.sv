@@ -49,7 +49,7 @@ module LSU(
     input BackendCtrl backendCtrl,
     CacheBus.master axi_io,
     CacheBus.master ducache_io,
-    NativeSnoopIO.master snoop_io,
+    SnoopIO.master snoop_io,
     BackendRedirectIO.mem redirect_io,
     CsrTlbIO.tlb csr_ltlb_io,
     CsrTlbIO.tlb csr_stlb_io,
@@ -74,12 +74,12 @@ module LSU(
     LoadQueueIO load_queue_io();
 
     CacheBus #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+        `PADDR_SIZE, `XLEN, 1, 1
     ) laxi_io();
     StoreUnitIO store_io();
     StoreQueueIO store_queue_io();
     CacheBus #(
-        `PADDR_SIZE, `XLEN, `CORE_WIDTH, 1
+        `PADDR_SIZE, `XLEN, 1, 1
     ) saxi_io();
     StoreCommitIO store_commit_io();
     ViolationIO violation_io();

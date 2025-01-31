@@ -1,4 +1,4 @@
-`include "../../defines/defines.svh"
+`include "../../../defines/defines.svh"
 
 module PMPCheck (
     input logic `N(`PADDR_SIZE-`TLB_OFFSET) paddr,

@@ -1,4 +1,4 @@
-`include "../../defines/defines.svh"
+`include "../../../defines/defines.svh"
 
 interface PTWL2IO;
     logic valid;
