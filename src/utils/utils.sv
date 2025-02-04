@@ -264,7 +264,8 @@ endmodule
 module OldestSelect #(
 	parameter RADIX = 2,
 	parameter WIDTH = 4,
-	parameter DATA_WIDTH = 4
+	parameter DATA_WIDTH = 4,
+	parameter DIRECTION = 0
 )(
 	input logic [RADIX-1: 0][WIDTH-1: 0] cmp,
 	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
@@ -279,7 +280,12 @@ generate
 	else if(RADIX == 2)begin
 		if(WIDTH == 1)begin
 			assign cmp_o = cmp[1] | cmp[0];
-			assign data_o = cmp[1] ? data_i[1] : data_i[0];
+			if (DIRECTION == 1)begin
+				assign data_o = cmp[0] ? data_i[0] : data_i[1];
+			end
+			else begin
+				assign data_o = cmp[1] ? data_i[1] : data_i[0];
+			end
 		end
 		else begin
 			assign cmp_o = cmp[1] > cmp[0] ? cmp[1] : cmp[0];
@@ -292,7 +298,8 @@ generate
 		OldestSelect #(
 			.RADIX(RADIX/2),
 			.WIDTH(WIDTH),
-			.DATA_WIDTH(DATA_WIDTH)
+			.DATA_WIDTH(DATA_WIDTH),
+			.DIRECTION(DIRECTION)
 		) select1 (
 			.cmp(cmp[RADIX/2-1: 0]),
 			.data_i(data_i[RADIX/2-1: 0]),
@@ -302,7 +309,8 @@ generate
 		OldestSelect #(
 			.RADIX(RADIX-RADIX/2),
 			.WIDTH(WIDTH),
-			.DATA_WIDTH(DATA_WIDTH)
+			.DATA_WIDTH(DATA_WIDTH),
+			.DIRECTION(DIRECTION)
 		) select2 (
 			.cmp(cmp[RADIX-1: RADIX/2]),
 			.data_i(data_i[RADIX-1: RADIX/2]),
@@ -311,7 +319,12 @@ generate
 		);
 		if(WIDTH == 1)begin
 			assign cmp_o = cmp1 | cmp2;
-			assign data_o = cmp2 ? data2 : data1;
+			if(DIRECTION == 1)begin
+				assign data_o = cmp1 ? data1 : data2;
+			end
+			else begin
+				assign data_o = cmp2 ? data2 : data1;
+			end
 		end
 		else begin
 			assign cmp_o = cmp2 > cmp1 ? cmp2 : cmp1;

@@ -167,14 +167,14 @@ interface SnoopIO #(
     input   ac_addr, ac_prot, ac_snoop, ac_valid, output ac_ready,
     input   cr_ready, output cr_valid, cr_resp,
     input   cd_ready, output cd_data, cd_last, cd_valid,
-    output ar_snoop_id, input r_snoop_id, rack
+    input ar_snoop_id, output r_snoop_id, rack
   );
 
   modport slave (
     output   ac_addr, ac_prot, ac_snoop, ac_valid, input ac_ready,
     output   cr_ready, input cr_valid, cr_resp,
     output   cd_ready, input cd_data, cd_last, cd_valid,
-    input ar_snoop_id, output r_snoop_id, rack
+    output ar_snoop_id, input r_snoop_id, rack
   );
 
 endinterface
@@ -470,10 +470,13 @@ endinterface
   `__SNOOP_TO_AC(__opt_as, __lhs.ac, __lhs_sep, __rhs.ac, __rhs_sep)      \
   __opt_as __lhs.ac_valid = __rhs.ac_valid;                               \
   __opt_as __lhs.cd_ready = __rhs.cd_ready;                               \
-  __opt_as __lhs.cr_ready = __rhs.cr_ready;
+  __opt_as __lhs.cr_ready = __rhs.cr_ready;                               \
+  __opt_as __lhs.ar_snoop_id = __rhs.ar_snoop_id;
 `define __SNOOP_TO_RESP(__opt_as, __lhs, __lhs_sep, __rhs, __rhs_sep)     \
   __opt_as __lhs.ac_ready = __rhs.ac_ready;                               \
   __opt_as __lhs.cd_valid = __rhs.cd_valid;                               \
+  __opt_as __lhs.rack = __rhs.rack;                                       \
+  __opt_as __lhs.r_snoop_id  = __rhs.r_snoop_id;                          \
   `__SNOOP_TO_CD(__opt_as, __lhs.cd, __lhs_sep, __rhs.cd, __rhs_sep)      \
   __opt_as __lhs.cr_valid = __rhs.cr_valid;                               \
   __opt_as __lhs.cr_resp = __rhs.cr_resp;

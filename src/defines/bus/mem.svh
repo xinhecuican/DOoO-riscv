@@ -260,7 +260,12 @@ endinterface //CacheBus
     assign axi_if.ar_size   = cache_if.ar_size; \
     assign axi_if.ar_burst  = cache_if.ar_burst; \
     assign axi_if.ar_user   = cache_if.ar_user; \
-    `__CACHE_TO_R(assign, cache_if.r, _, axi_if.r, _) \
+    assign cache_if.r_data = axi_if.r_data; \
+    assign cache_if.r_resp[4: 2] = 3'b001; \
+    assign cache_if.r_resp[1: 0] = axi_if.r_resp[1: 0]; \
+    assign cache_if.r_id = axi_if.r_id; \
+    assign cache_if.r_last = axi_if.r_last; \
+    assign cache_if.r_user = axi_if.r_user; \
     assign axi_if.aw_id     = cache_if.aw_id; \
     assign axi_if.aw_addr   = cache_if.aw_addr; \
     assign axi_if.aw_len    = cache_if.aw_len; \

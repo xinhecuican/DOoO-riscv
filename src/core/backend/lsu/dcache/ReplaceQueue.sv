@@ -4,6 +4,7 @@ interface ReplaceQueueIO;
     logic en;
     logic refill_en;
     DirectoryState refill_state;
+    logic entry_en;
     logic `N(`DCACHE_TAG+`DCACHE_SET_WIDTH) addr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data;
     logic `N(`DCACHE_REPLACE_WIDTH) idx;
@@ -21,7 +22,7 @@ interface ReplaceQueueIO;
     logic `N(`PADDR_SIZE) snoop_addr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) snoop_data;
 
-    modport queue (input en, refill_en, refill_state, addr, data, replace_idx, waddr, snoop_en, snoop_clean, snoop_addr, output idx, whit, full, snoop_data, snoop_hit, snoop_state);
+    modport queue (input en, refill_en, refill_state, entry_en, addr, data, replace_idx, waddr, snoop_en, snoop_clean, snoop_addr, output idx, whit, full, snoop_data, snoop_hit, snoop_state);
     modport miss (input full, idx, output replace_idx);
 endinterface
 
@@ -33,10 +34,11 @@ module ReplaceQueue(
 );
     localparam TRANSFER_BANK = `DCACHE_LINE / `DATA_BYTE;
     typedef struct packed {
+        logic en;
         logic `N(`DCACHE_TAG+`DCACHE_SET_WIDTH) addr;
         logic `ARRAY(TRANSFER_BANK, `XLEN) data;
     } ReplaceEntry;
-    typedef enum { IDLE, ADDRESS, WRITE, WAIT_B, RETIRE } ReplaceState;
+    typedef enum { IDLE, ADDRESS, WRITE, WAIT_B } ReplaceState;
     ReplaceState replace_state;
 
     ReplaceEntry entrys `N(`DCACHE_REPLACE_SIZE);
@@ -47,10 +49,18 @@ module ReplaceQueue(
     logic full;
     logic `N(`DCACHE_REPLACE_SIZE) hit;
     logic `N(`PADDR_SIZE) waddr;
-    logic retire_last;
     ReplaceEntry newEntry;
 
+    logic aw_valid;
+    logic `N($clog2(TRANSFER_BANK)) widx;
+    logic wvalid;
+    logic wlast;
+    logic aw_dirty;
+    logic refill_invalid;
+    ReplaceEntry processEntry;
+
     assign io.full = full;
+    assign newEntry.en = io.entry_en;
     assign newEntry.addr = io.addr;
     assign newEntry.data = io.data;
     PEncoder #(`DCACHE_REPLACE_SIZE) encoder_free_idx (~en, freeIdx);
@@ -84,7 +94,7 @@ module ReplaceQueue(
                 state[io.replace_idx] <= io.refill_state;
             end
 
-            if(retire_last)begin
+            if(w_axi_io.b_valid | refill_invalid)begin
                 en[processIdx] <= 1'b0;
                 dataValid[processIdx] <= 1'b0;
                 prior[processIdx] <= 1'b0;
@@ -96,7 +106,7 @@ module ReplaceQueue(
     assign waddr = io.snoop_en ? io.snoop_addr : io.waddr;
 generate
     for(genvar i=0; i<`DCACHE_REPLACE_SIZE; i++)begin
-        assign hit[i] = dataValid[i] & (waddr`DCACHE_BLOCK_BUS == entrys[i].addr);
+        assign hit[i] = dataValid[i] & entrys[i].en & (waddr`DCACHE_BLOCK_BUS == entrys[i].addr);
     end
     logic `N(`DCACHE_REPLACE_WIDTH) whit_idx;
     Encoder #(`DCACHE_REPLACE_SIZE) encoder_hit (hit, whit_idx);
@@ -107,12 +117,6 @@ generate
 endgenerate
 
 // axi
-    logic aw_valid;
-    logic `N($clog2(TRANSFER_BANK)) widx;
-    logic wvalid;
-    logic wlast;
-    logic aw_dirty;
-    ReplaceEntry processEntry;
 
     assign valid = en & dataValid;
     assign prior_valid = en & dataValid & prior;
@@ -128,15 +132,21 @@ endgenerate
             processEntry <= 0;
             processIdx <= 0;
             replace_state <= IDLE;
-            retire_last <= 1'b0;
+            refill_invalid <= 1'b0;
         end
         else begin
             case(replace_state)
             IDLE: begin
                 if(|valid)begin
-                    aw_valid <= 1'b1;
                     aw_dirty <= state[processIdx_pre].dirty;
-                    replace_state <= ADDRESS;
+                    if (entrys[processIdx_pre].en)begin
+                        replace_state <= ADDRESS;
+                        aw_valid <= 1'b1;
+                    end
+                    else begin
+                        replace_state <= WAIT_B;
+                        refill_invalid <= 1'b1;
+                    end
                     processEntry <= entrys[processIdx_pre];
                     processIdx <= processIdx_pre;
                 end
@@ -144,13 +154,8 @@ endgenerate
             ADDRESS: begin
                 if(w_axi_io.aw_valid & w_axi_io.aw_ready)begin
                     aw_valid <= 1'b0;
-                    if(aw_dirty)begin
-                        replace_state <= WRITE;
-                        wvalid <= 1'b1;
-                    end
-                    else begin
-                        replace_state <= RETIRE;
-                    end
+                    replace_state <= WRITE;
+                    wvalid <= 1'b1;
                 end
             end
             WRITE: begin
@@ -169,17 +174,9 @@ endgenerate
                 end
             end
             WAIT_B: begin
-                if(w_axi_io.b_valid)begin
-                    replace_state <= RETIRE;
-                end
-            end
-            RETIRE: begin
-                if(retire_last)begin
+                if(w_axi_io.b_valid | refill_invalid)begin
                     replace_state <= IDLE;
-                    retire_last <= 1'b0;
-                end
-                else begin
-                    retire_last <= 1'b1;
+                    refill_invalid <= 1'b0;
                 end
             end
             endcase
@@ -231,7 +228,7 @@ endgenerate
 
 `ifdef DIFFTEST
     `LOG_ARRAY(T_DCACHE, dbg_data, newEntry.data, TRANSFER_BANK)
-    `Log(DLog::Debug, T_DCACHE, io.refill_en & io.refill_dirty,
+    `Log(DLog::Debug, T_DCACHE, io.refill_en & io.entry_en,
         $sformatf("dcache replace. [%h] %s", newEntry.addr << `DCACHE_LINE_WIDTH, dbg_data))
 `endif
 endmodule

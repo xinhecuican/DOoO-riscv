@@ -16,6 +16,9 @@ interface DCacheMissIO;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) wdata;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) wmask;
     logic wfull;
+    logic wowned;
+    logic replaceHit;
+    logic `N(`DCACHE_WAY_WIDTH) replaceHitWay;
 
 `ifdef RVA
     logic amo_en;
@@ -26,13 +29,17 @@ interface DCacheMissIO;
     logic `N(`PADDR_SIZE) req_addr;
     logic req_success;
     logic `N(`DCACHE_WAY_WIDTH) replaceWay;
+    logic `N(`L2MSHR_WIDTH) l2_idx;
 
     logic refill_en;
     logic refill_valid;
-    logic refill_dirty;
+    logic refill_write;
+    logic refill_replace_hit;
     logic `N(`DCACHE_WAY_WIDTH) refillWay;
     logic `N(`PADDR_SIZE) refillAddr;
+    logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) refillMask;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refillData;
+    logic `N(`L2MSHR_WIDTH) refill_l2idx;
     logic `N(`STORE_COMMIT_WIDTH) refill_scIdx;
     DirectoryState refill_state;
 
@@ -40,13 +47,13 @@ interface DCacheMissIO;
     logic `ARRAY(`LOAD_REFILL_SIZE, `DCACHE_BITS) lqData;
     logic `ARRAY(`LOAD_REFILL_SIZE, `LOAD_QUEUE_WIDTH) lqIdx_o;
 
-    modport miss (input ren, raddr, lqIdx, robIdx, req_success, replaceWay, refill_valid,
-                        wen, waddr, scIdx, wdata, wmask, raddr_pre, waddr_pre, wdata_valid,
+    modport miss (input ren, raddr, lqIdx, robIdx, req_success, replaceHit, replaceHitWay, replaceWay, refill_valid, l2_idx,
+                wen, waddr, scIdx, wdata, wmask, raddr_pre, waddr_pre, wdata_valid, wowned,
 `ifdef RVA
                   input amo_en, output amo_refill,
 `endif
-                  output rfull, req, req_addr, wfull, lq_en, lqData, lqIdx_o,
-        refill_en, refill_dirty, refillWay, refillAddr, refillData, refill_scIdx, refill_state);
+                  output rfull, req, req_addr, wfull, lq_en, lqData, lqIdx_o, refill_l2idx,
+        refill_en, refill_write, refill_replace_hit, refillWay, refillAddr, refillMask, refillData, refill_scIdx, refill_state);
 endinterface
 
 module DCacheMiss(
@@ -73,6 +80,9 @@ module DCacheMiss(
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`DCACHE_MISS_SIZE);
     logic `N(`DCACHE_MISS_SIZE) data_valid_all, wvalid;
     logic `N(`STORE_COMMIT_WIDTH) scIdxs `N(`DCACHE_MISS_SIZE);
+    logic `ARRAY(`DCACHE_MISS_SIZE, `L2MSHR_WIDTH) l2_idxs;
+    logic `N(`DCACHE_MISS_SIZE) replaceHit, wowned;
+    logic `ARRAY(`DCACHE_MISS_SIZE, `DCACHE_WAY_WIDTH) replaceHitWay;
 
     logic `N(`DCACHE_MISS_WIDTH) mshr_head, head, tail;
     logic `N(`DCACHE_MISS_WIDTH+1) remain_count;
@@ -99,6 +109,7 @@ module DCacheMiss(
     logic `N(`XLEN) combine_cache_data;
     logic `N(`DCACHE_WAY_WIDTH) req_way;
     DirectoryState req_state;
+    logic req_replace_hit, req_owned, req_owned_after;
 
 //load enqueue
     // 有三种情况
@@ -220,8 +231,12 @@ endgenerate
     assign io.refill_state = req_state;
     assign io.refillWay = way[head];
     assign io.refillAddr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
+    assign io.refillMask = req_mask | {`DCACHE_BANK*`DCACHE_BYTE{~req_owned_after}};
     assign io.refillData = data[head];
     assign io.refill_scIdx = scIdxs[head];
+    assign io.refill_l2idx = l2_idxs[head];
+    assign io.refill_write = wvalid[head];
+    assign io.refill_replace_hit = req_replace_hit;
 
     Decoder #(`DCACHE_MISS_SIZE) decoder_head (head, head_decode);
     assign w_refill_eq = {`DCACHE_MISS_SIZE{data_refilled}} & whit & head_decode;
@@ -307,6 +322,9 @@ endgenerate
             data_refilled <= 0;
             data_valid_all <= 0;
             wvalid <= 0;
+            replaceHit <= 0;
+            replaceHitWay <= 0;
+            wowned <= 0;
         end
         else begin
             head <= head + (io.refill_en & io.refill_valid);
@@ -344,6 +362,9 @@ endgenerate
                 en[freeIdx[`LOAD_PIPELINE]] <= 1'b1;
                 addr[freeIdx[`LOAD_PIPELINE]] <= io.waddr`DCACHE_BLOCK_BUS;
                 dataValid[freeIdx[`LOAD_PIPELINE]] <= 1'b0;
+                replaceHit[freeIdx[`LOAD_PIPELINE]] <= io.replaceHit;
+                replaceHitWay[freeIdx[`LOAD_PIPELINE]] <= io.replaceHitWay;
+                wowned[freeIdx[`LOAD_PIPELINE]] <= io.wowned;
             end
             if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
                 scIdxs[widx] <= io.scIdx;
@@ -353,7 +374,7 @@ endgenerate
             if(rlast)begin
                 data_refilled <= 1'b1;
             end
-            if(req_last | r_axi_io.ar_valid & r_axi_io.ar_ready & req_valid_all)begin
+            if(req_last)begin
                 dataValid[head] <= 1'b1;
             end
             if(req_next & io.req_success)begin
@@ -365,6 +386,7 @@ endgenerate
                 data_refilled <= 1'b0;
                 data_valid_all[head] <= 1'b0;
                 wvalid[head] <= 1'b0;
+                replaceHit[head] <= 1'b0;
             end
             if(refilled[mshr_head] & ~(mshr_hit_valid))begin
                 refilled[mshr_head] <= 1'b0;
@@ -387,7 +409,7 @@ endgenerate
             if(io.refill_en & io.refill_valid)begin
                 amo[head] <= 1'b0;
             end
-            if(req_next & io.req_success)begin
+            if(req_next & io.req_success | replaceHit[head] & ~req_start)begin
                 amo_req <= amo[head];
             end
         end
@@ -400,7 +422,7 @@ endgenerate
 `endif
 
 // req
-    assign io.req = en[head] & ~req_start;
+    assign io.req = en[head] & ~replaceHit[head] & ~req_start;
     assign io.req_addr = {addr[head], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
     assign rlast = r_axi_io.r_valid & r_axi_io.r_last;
 
@@ -426,10 +448,16 @@ endgenerate
             req_valid_all <= 0;
             req_wvalid <= 0;
             req_state <= 0;
+            l2_idxs <= 0;
+            req_replace_hit <= 1'b0;
+            req_owned <= 0;
+            req_owned_after <= 0;
         end
         else begin
-            if(io.req)begin
+            if(io.req | replaceHit[head] & ~req_start)begin
                 req_start <= 1'b1;
+                req_replace_hit <= replaceHit[head];
+                req_owned <= wowned[head];
             end
 
             if(req_next & ~io.req_success)begin
@@ -440,29 +468,37 @@ endgenerate
                 req_start <= 1'b0;
             end
 
-            if(req_next & io.req_success)begin
+            if(req_next & io.req_success | replaceHit[head] & ~req_start)begin
                 req_cache <= 1'b1;
                 cache_addr <= io.req_addr;
                 req_way <= io.replaceWay;
                 req_valid_all <= data_valid_all[head];
                 req_wvalid <= wvalid[head];
-            end
-
-            if(req_next & io.req_success)begin
-                way[head] <= io.replaceWay;
+                way[head] <= replaceHit[head] ? replaceHitWay[head] : io.replaceWay;
             end
 
             if(r_axi_io.ar_valid & r_axi_io.ar_ready)begin
                 req_cache <= 1'b0;
             end
 
-            if(r_axi_io.r_valid)begin
+            // MAKE_UNIQUE OR CLEAN_UNIQUE
+            if(r_axi_io.r_valid & ~(r_axi_io.r_last & (cacheIdx == 0)))begin
                 cacheIdx <= cacheIdx + 1;
             end
+            if(r_axi_io.r_valid & (cacheIdx == 0))begin
+                l2_idxs[head] <= io.l2_idx;
+            end
         end
-        if(r_axi_io.r_valid)begin
+        if(r_axi_io.r_valid & ~(r_axi_io.r_last & (cacheIdx == 0)))begin
             cacheData[cacheIdx] <= r_axi_io.r_data;
         end
+        if(r_axi_io.r_valid & r_axi_io.r_last & (cacheIdx == 0) & req_owned & req_replace_hit)begin
+            req_owned_after <= 1'b1;
+        end
+        else if(r_axi_io.r_valid & r_axi_io.r_last)begin
+            req_owned_after <= 1'b0;
+        end
+    
         if(rlast)begin
             req_data <= data[head];
             req_mask <= mask[head];
@@ -470,7 +506,7 @@ endgenerate
 `ifdef RVA
                         | amo_req
 `endif
-            ? 3'b111 : r_axi_io.r_resp[4: 2];
+            ? 3'b101 : r_axi_io.r_resp[4: 2];
         end
     end
 
@@ -486,6 +522,7 @@ endgenerate
                                amo_req ? `ACEOP_READ_UNIQUE :
 `endif
                                req_valid_all ? `ACEOP_MAKE_UNIQUE :
+                               req_wvalid & req_replace_hit & req_owned ? `ACEOP_CLEAN_UNIQUE :
                                req_wvalid ? `ACEOP_READ_UNIQUE : `ACEOP_READ_SHARED;
 
     assign r_axi_io.r_ready = 1'b1;

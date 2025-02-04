@@ -11,12 +11,15 @@ module Soc(
 );
     AxiIO #(
         `PADDR_SIZE, `XLEN, 2, 1
-    ) core_axi();
+    ) core_mem_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2, 1
+        `PADDR_SIZE, `XLEN, 1, 1
+    ) core_peri_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, 1, 1
     ) peri_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2, 1
+        `PADDR_SIZE, `XLEN, 1, 1
     ) irq_axi();
 
     ClintIO clint_io();
@@ -38,9 +41,10 @@ module Soc(
     SyncRst rst_clint (clk, clint_rst_s1, clint_rst);
 
     CPUCore core(
-        .clk(clk),
+        .clk(clock),
         .rst(core_rst),
-        .axi(core_axi.master),
+        .mem_axi(core_mem_axi.master),
+        .peri_axi(core_peri_axi.master),
         .clint_io(clint_io.cpu)
     );
     assign clint_io.meip = meip[0];
@@ -56,7 +60,7 @@ module Soc(
         FallThrough: 0,
         LatencyMode: 10'b11111_11111,
         PipelineStages: 1,
-        AxiIdWidthSlvPorts: 2,
+        AxiIdWidthSlvPorts: 1,
         UniqueIds: 1,
         AxiAddrWidth: `PADDR_SIZE,
         AxiDataWidth: `XLEN,
@@ -65,7 +69,7 @@ module Soc(
     };
     typedef logic [`PADDR_SIZE-1: 0] addr_t;
     typedef logic user_t;
-    typedef logic [1: 0] id_t;
+    typedef logic [0: 0] id_t;
     typedef logic [`XLEN-1: 0] data_t;
     typedef logic [`XLEN/8-1: 0] strb_t;
     `AXI_TYPEDEF_AW_CHAN_T(AxiAW, addr_t, id_t, user_t)
@@ -89,8 +93,8 @@ module Soc(
     AxiResp `N(AXI_SLAVE_NUM) mst_resp_i;
     addr_rule_t `N(AXI_SLAVE_NUM) addr_map;
 
-    `AXI_ASSIGN_TO_REQ(slv_req_i, core_axi)
-    `AXI_ASSIGN_FROM_RESP(core_axi, slv_resp_o)
+    `AXI_ASSIGN_TO_REQ(slv_req_i, core_peri_axi)
+    `AXI_ASSIGN_FROM_RESP(core_peri_axi, slv_resp_o)
     `AXI_ASSIGN_FROM_REQ(peri_axi, mst_req_o[0])
     `AXI_ASSIGN_TO_RESP(mst_resp_i[0], peri_axi)
     `AXI_ASSIGN_FROM_REQ(irq_axi, mst_req_o[1])
@@ -160,7 +164,7 @@ module Soc(
         .NoRules(2),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(2),
+        .AxiIdWidth(1),
         .AxiUserWidth(1),
         .PipelineRequest(1),
         .PipelineResponse(1),
@@ -232,7 +236,7 @@ module Soc(
         .AxiDataWidth(`XLEN),
         .PipelineRequest(1),
         .PipelineResponse(1),
-        .AxiIdWidth(2),
+        .AxiIdWidth(1),
         .AxiUserWidth(1),
         .AxiMaxWriteTxns((`NUM_CORE < 2 ? 2 : `NUM_CORE)),
         .AxiMaxReadTxns((`NUM_CORE < 2 ? 2 : `NUM_CORE)),

@@ -75,7 +75,7 @@ module LocalDirectory #(
 generate
     for(genvar i=0; i<WAY; i++)begin
         logic `N(SET_WIDTH) addr;
-        assign addr = mshr_slave_io.request ? mshr_slave_io.raddr[OFFSET_WIDTH +: SET_WIDTH] : mshr_slave_io.waddr[OFFSET_WIDTH +: SET_WIDTH];
+        assign addr = mshr_slave_io.request ? mshr_slave_io.raddr[OFFSET_WIDTH +: SET_WIDTH] : mshr_slave_io.waddr;
         SPRAM #(
             .WIDTH(ENTRY_SIZE),
             .DEPTH(SET),
@@ -100,7 +100,7 @@ generate
     assign mshr_slave_io.hit = select_hit;
     assign mshr_slave_io.share = select_entry[TAG_WIDTH];
     assign mshr_slave_io.slave = select_entry[TAG_WIDTH + 1 +: SLAVE_NUM];
-    if(LLC)begin
+    if(!LLC)begin
         assign mshr_slave_io.owned = select_entry[ENTRY_SIZE-1];
         assign mshr_slave_io.owner = select_entry[ENTRY_SIZE-2 -: SLAVE_WIDTH];
         assign mshr_slave_io.replace_owned = replace_data[ENTRY_SIZE-1];
@@ -158,7 +158,7 @@ module L2Directory #(
     assign replace_io.hit_en = mshr_dir_io.hit & en_n | mshr_dir_io.we & ~mshr_dir_io.request;
     assign replace_io.hit_way = mshr_dir_io.we & ~mshr_dir_io.request ? 
                     (mshr_dir_io.wdata[0] ? mshr_dir_io.wway : ~mshr_dir_io.wway) : tagv_hits;
-    assign replace_io.hit_index = mshr_dir_io.we & ~mshr_dir_io.request ? mshr_dir_io.waddr[OFFSET_WIDTH +: SET_WIDTH] : lookup_idx;
+    assign replace_io.hit_index = mshr_dir_io.we & ~mshr_dir_io.request ? mshr_dir_io.waddr : lookup_idx;
     always_ff @(posedge clk)begin
         if(mshr_dir_io.request)begin
             cmp_tag <= mshr_dir_io.raddr[`PADDR_SIZE-1 -: TAG_WIDTH];
@@ -169,7 +169,7 @@ module L2Directory #(
 generate
     for(genvar i=0; i<WAY_NUM; i++)begin
         logic `N(SET_WIDTH) addr;
-        assign addr = mshr_dir_io.request ? mshr_dir_io.raddr[OFFSET_WIDTH +: SET_WIDTH] : mshr_dir_io.waddr[OFFSET_WIDTH +: SET_WIDTH];
+        assign addr = mshr_dir_io.request ? mshr_dir_io.raddr[OFFSET_WIDTH +: SET_WIDTH] : mshr_dir_io.waddr;
         SPRAM #(
             .WIDTH(DIRECTORY_SIZE),
             .DEPTH(SET),
@@ -199,6 +199,6 @@ endgenerate
     assign mshr_dir_io.replace_tagv = replace_data[TAG_WIDTH: 0];
     assign mshr_dir_io.replace_state = replace_data[TAG_WIDTH+1 +: $bits(DirectoryState)];
 
-    Decoder #(WAY_NUM) decoder_wway (mshr_slave_io.wway, wway_dec);
+    Decoder #(WAY_NUM) decoder_wway (mshr_dir_io.wway, wway_dec);
     assign mshr_dir_io.wready = ~mshr_dir_io.request;
 endmodule
