@@ -12,7 +12,6 @@ module L2CacheWrapper #(
     CacheBus.slave icache_io,
     CacheBus.slave tlb_io,
     CacheBus.slave dcache_io,
-    CacheBus.slave ducache_io,
     CacheBus.master master_io, // to mem
     output snoop_req_t snoop_req,
     input snoop_resp_t snoop_resp,
@@ -45,9 +44,13 @@ module L2CacheWrapper #(
     `SNOOP_TYPEDEF_AC_CHAN_T(snoop_ac_chan_t, addr_t)
     `SNOOP_TYPEDEF_CD_CHAN_T(snoop_cd_chan_t, data_t)
     `SNOOP_TYPEDEF_CR_CHAN_T(snoop_cr_chan_t)
+    typedef logic [`L2MSHR_WIDTH-1: 0] snoop_id_t;
 
-    AxiReq ireq, dreq, du_req, tlb_req;
-    AxiResp iresp, dresp, du_resp, tlb_resp;
+    snoop_req_t l2_snoop_req;
+    snoop_resp_t l2_snoop_resp;
+
+    AxiReq ireq, dreq, tlb_req;
+    AxiResp iresp, dresp, tlb_resp;
     AxiMReq req_o;
     AxiMResp resp_i;
     CacheBus #(
@@ -81,9 +84,6 @@ module L2CacheWrapper #(
     `CACHE_ASSIGN_TO_REQ(dreq, dcache_io)
     `CACHE_ASSIGN_FROM_RESP(dcache_io, dresp)
 
-    `CACHE_ASSIGN_TO_REQ(du_req, ducache_io)
-    `CACHE_ASSIGN_FROM_RESP(ducache_io, du_resp)
-
     `CACHE_ASSIGN_FROM_REQ(l2_cache_io, req_o)
     `CACHE_ASSIGN_TO_RESP(resp_i, l2_cache_io)
 
@@ -103,15 +103,35 @@ module L2CacheWrapper #(
         .mst_req_t(AxiMReq),
         .mst_resp_t(AxiMResp),
         .MaxWTrans(1),
-        .NoSlvPorts(4)
+        .NoSlvPorts(3),
+        .SpillW(1),
+        .SpillB(1), 
+        .SpillR(1)
     ) axi_mux_inst(
         .clk_i(clk),
         .rst_ni(~rst),
         .test_i(1'b0),
-        .slv_reqs_i({dreq, du_req, tlb_req, ireq}),
-        .slv_resps_o({dresp, du_resp, tlb_resp, iresp}),
+        .slv_reqs_i({dreq, tlb_req, ireq}),
+        .slv_resps_o({dresp, tlb_resp, iresp}),
         .mst_req_o(req_o),
         .mst_resp_i(resp_i)
+    );
+
+    snoop_multicut #(
+        .NoCuts(1),
+        .ac_chan_t(snoop_ac_chan_t),
+        .cr_chan_t(snoop_cr_chan_t),
+        .cd_chan_t(snoop_cd_chan_t),
+        .snoop_id_t(snoop_id_t),
+        .req_t(snoop_req_t),
+        .resp_t(snoop_resp_t)
+    ) snoop_cut (
+        .clk_i(clk),
+        .rst_ni(~rst),
+        .slv_req_i(l2_snoop_req),
+        .slv_resp_o(l2_snoop_resp),
+        .mst_req_o(snoop_req),
+        .mst_resp_i(snoop_resp)
     );
 
     L2Cache #(
@@ -143,8 +163,8 @@ module L2CacheWrapper #(
         .rst,
         .slave_io(l2_cache_io.slave),
         .master_io(master_io),
-        .snoop_req,
-        .snoop_resp,
+        .snoop_req(l2_snoop_req),
+        .snoop_resp(l2_snoop_resp),
         .mst_snoop_req,
         .mst_snoop_resp
     );

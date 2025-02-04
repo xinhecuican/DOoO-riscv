@@ -869,7 +869,7 @@ interface L2MSHRSlaveIO #(
 
     logic we;
     logic wready;
-    logic `N(`PADDR_SIZE) waddr;
+    logic `N(SET_WIDTH) waddr;
     logic `N(WAY_WIDTH) wway;
     logic `N(ENTRY_SIZE) wdata;
 
@@ -897,7 +897,7 @@ interface L2MSHRDirIO #(
 
     logic we;
     logic wready;
-    logic `N(`PADDR_SIZE) waddr;
+    logic `N(SET_WIDTH) waddr;
     logic `N(WAY_WIDTH) wway;
     logic `N(TAG_WIDTH+1+$bits(DirectoryState)) wdata;
 

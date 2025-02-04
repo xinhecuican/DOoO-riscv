@@ -273,7 +273,7 @@ endgenerate
     assign axi_io.ar_burst = 2'b01;
     assign axi_io.ar_valid = main_state == MISS;
     assign axi_io.ar_user = 0;
-    assign axi_io.ar_snoop = `ACEOP_READ_SHARED;
+    assign axi_io.ar_snoop = `ACEOP_READ_ONCE;
     assign axi_io.r_ready = 1'b1;
 
 `define REQ_DEF \

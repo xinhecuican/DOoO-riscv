@@ -74,12 +74,15 @@ module SimTop(
     ) mem_axi();
     AxiIO #(
         `PADDR_SIZE, `XLEN, 2, 1
-    ) core_axi();
+    ) core_mem_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2, 1
+        `PADDR_SIZE, `XLEN, 1, 1
+    ) core_peri_axi();
+    AxiIO #(
+        `PADDR_SIZE, `XLEN, 1, 1
     ) peri_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2, 1
+        `PADDR_SIZE, `XLEN, 1, 1
     ) irq_axi();
 
     ClintIO clint_io();
@@ -89,14 +92,15 @@ module SimTop(
     CPUCore core(
         .clk(clock),
         .rst(core_rst),
-        .axi(core_axi.master),
+        .mem_axi(core_mem_axi.master),
+        .peri_axi(core_peri_axi.master),
         .clint_io(clint_io.cpu)
     );
     assign clint_io.meip = meip[0];
     assign clint_io.seip = seip[0];
 
 
-    localparam [2: 0] AXI_SLAVE_NUM = 3;
+    localparam [2: 0] AXI_SLAVE_NUM = 2;
     localparam xbar_cfg_t crossbar_cfg = '{
         NoSlvPorts: 1,
         NoMstPorts: AXI_SLAVE_NUM,
@@ -105,7 +109,7 @@ module SimTop(
         FallThrough: 0,
         LatencyMode: 10'b11111_11111,
         PipelineStages: 1,
-        AxiIdWidthSlvPorts: 2,
+        AxiIdWidthSlvPorts: 1,
         UniqueIds: 1,
         AxiAddrWidth: `PADDR_SIZE,
         AxiDataWidth: `XLEN,
@@ -114,7 +118,7 @@ module SimTop(
     };
     typedef logic [`PADDR_SIZE-1: 0] addr_t;
     typedef logic user_t;
-    typedef logic [1: 0] id_t;
+    typedef logic [0: 0] id_t;
     typedef logic [`XLEN-1: 0] data_t;
     typedef logic [`XLEN/8-1: 0] strb_t;
     `AXI_TYPEDEF_AW_CHAN_T(AxiAW, addr_t, id_t, user_t)
@@ -138,14 +142,12 @@ module SimTop(
     AxiResp `N(AXI_SLAVE_NUM) mst_resp_i;
     addr_rule_t `N(AXI_SLAVE_NUM) addr_map;
 
-    `AXI_ASSIGN_TO_REQ(slv_req_i, core_axi)
-    `AXI_ASSIGN_FROM_RESP(core_axi, slv_resp_o)
+    `AXI_ASSIGN_TO_REQ(slv_req_i, core_peri_axi)
+    `AXI_ASSIGN_FROM_RESP(core_peri_axi, slv_resp_o)
     `AXI_ASSIGN_FROM_REQ(peri_axi, mst_req_o[0])
     `AXI_ASSIGN_TO_RESP(mst_resp_i[0], peri_axi)
-    `AXI_ASSIGN_FROM_REQ(mem_axi, mst_req_o[1])
-    `AXI_ASSIGN_TO_RESP(mst_resp_i[1], mem_axi)
-    `AXI_ASSIGN_FROM_REQ(irq_axi, mst_req_o[2])
-    `AXI_ASSIGN_TO_RESP(mst_resp_i[2], irq_axi)
+    `AXI_ASSIGN_FROM_REQ(irq_axi, mst_req_o[1])
+    `AXI_ASSIGN_TO_RESP(mst_resp_i[1], irq_axi)
 
     assign addr_map[0] = '{
         idx: 0,
@@ -154,11 +156,6 @@ module SimTop(
     };
     assign addr_map[1] = '{
         idx: 1,
-        start_addr: `MEM_START,
-        end_addr: `MEM_END
-    };
-    assign addr_map[2] = '{
-        idx: 2,
         start_addr: `IRQ_START,
         end_addr: `IRQ_END
     };
@@ -216,7 +213,7 @@ module SimTop(
         .NoRules(2),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(2),
+        .AxiIdWidth(1),
         .AxiUserWidth(1),
         .PipelineRequest(1),
         .PipelineResponse(1),
@@ -285,7 +282,7 @@ module SimTop(
         .NoRules(`PERIPHERAL_SIZE),
         .AxiAddrWidth(`PADDR_SIZE),
         .AxiDataWidth(`XLEN),
-        .AxiIdWidth(2),
+        .AxiIdWidth(1),
         .AxiUserWidth(1),
         .PipelineRequest(1),
         .PipelineResponse(1),
@@ -322,6 +319,39 @@ module SimTop(
         .io_uart_out_ch(io_uart_out_ch),
         .io_uart_in_valid(io_uart_in_valid),
         .io_uart_in_ch(io_uart_in_ch)
+    );
+
+// mem
+    typedef logic [1: 0] mem_id_t;
+    `AXI_TYPEDEF_AW_CHAN_T(AxiMemAW, addr_t, mem_id_t, user_t)
+    `AXI_TYPEDEF_W_CHAN_T(AxiMemW, data_t, strb_t, user_t)
+    `AXI_TYPEDEF_B_CHAN_T(AxiMemB, mem_id_t, user_t)
+    `AXI_TYPEDEF_AR_CHAN_T(AxiMemAR, addr_t, mem_id_t, user_t)
+    `AXI_TYPEDEF_R_CHAN_T(AxiMemR, data_t, mem_id_t, user_t)
+    `AXI_TYPEDEF_REQ_T(AxiMemReq, AxiMemAW, AxiMemW, AxiMemAR)
+    `AXI_TYPEDEF_RESP_T(AxiMemResp, AxiMemB, AxiMemR)
+    AxiMemReq core_mem_req, mem_req;
+    AxiMemResp core_mem_resp, mem_resp;
+    `AXI_ASSIGN_TO_REQ(core_mem_req, core_mem_axi)
+    `AXI_ASSIGN_FROM_RESP(core_mem_axi, core_mem_resp)
+    `AXI_ASSIGN_FROM_REQ(mem_axi, mem_req)
+    `AXI_ASSIGN_TO_RESP(mem_resp, mem_axi)
+    axi_multicut #(
+        .NoCuts(1),
+        .aw_chan_t(AxiMemAW),
+        .w_chan_t(AxiMemW),
+        .b_chan_t(AxiMemB),
+        .ar_chan_t(AxiMemAR),
+        .r_chan_t(AxiMemR),
+        .axi_req_t(AxiMemReq),
+        .axi_resp_t(AxiMemResp)
+    ) mem_cut (
+        .clk_i(clock),
+        .rst_ni(~peri_rst),
+        .slv_req_i(core_mem_req),
+        .slv_resp_o(core_mem_resp),
+        .mst_req_o(mem_req),
+        .mst_resp_i(mem_resp)
     );
 
 `ifdef DRAMSIM3

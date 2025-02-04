@@ -4,7 +4,8 @@
 module CPUCore (
     input logic clk,
     input logic rst,
-    AxiIO.master axi,
+    AxiIO.master  mem_axi,
+    AxiIO.master peri_axi,
     ClintIO.cpu clint_io
 );
 
@@ -42,7 +43,8 @@ module CPUCore (
     mst_snoop_resp_t mst_snoop_resp;
     `SNOOP_ASSIGN_FROM_REQ(dcache_snoop_io, snoop_req)
     `SNOOP_ASSIGN_TO_RESP(snoop_resp, dcache_snoop_io)
-    `CACHE_ASSIGN_TO_AXI(axi, master_io)
+    `CACHE_ASSIGN_TO_AXI(mem_axi, master_io)
+    `CACHE_ASSIGN_TO_AXI(peri_axi, ducache_io)
     assign mst_snoop_req = 0;
 
     IfuBackendIO ifu_backend_io();
