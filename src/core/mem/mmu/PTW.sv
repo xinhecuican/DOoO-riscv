@@ -137,6 +137,7 @@ module PTW(
     assign axi_io.ar_size = $clog2(`DATA_BYTE);
     assign axi_io.ar_burst = 2'b01;
     assign axi_io.ar_user = 0;
+    assign axi_io.ar_snoop = `ACEOP_READ_ONCE;
     assign axi_io.r_ready = 1'b1;
 
     assign pn1_leaf = req_buf.wb_entry.r | req_buf.wb_entry.w | req_buf.wb_entry.x;

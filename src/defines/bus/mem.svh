@@ -130,7 +130,7 @@ endinterface //CacheBus
   typedef struct packed {                                        \
     id_t              id;                                       \
     data_t            data;                                     \
-    logic [3: 0]  resp;                                    \
+    logic [4: 0]  resp;                                    \
     logic             last;                                     \
     user_t            user;                                     \
   } r_chan_t;

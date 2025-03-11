@@ -85,6 +85,7 @@ module L2DataBank #(
     logic `N(SET_WIDTH) idx;
     logic `ARRAY(WAY_NUM, CACHE_BANK * CACHE_BITS) rdata_ram;
     logic `ARRAY(APPEND_PIPE+1, CACHE_BANK * CACHE_BITS) rdata_append/*verilator split_var*/;
+    logic `N(WAY_NUM) way_dec;
 
     assign idx = ridx[PREPEND_PIPE];
     assign mshr_idx_r[0] = we ? {wmshr_idx, 1'b1, 1'b0} : {mshr_idx, 1'b0, req & ready};
@@ -103,6 +104,8 @@ module L2DataBank #(
     assign rdata = rdata_append[APPEND_PIPE];
     assign ridx[0] = we ? waddr : raddr;
     assign ready = ~we;
+
+    Decoder #(WAY_NUM) decoder_way (rway_r[PREPEND_PIPE], way_dec);
 generate
     for(genvar i=0; i<PREPEND_PIPE; i++)begin
         always_ff @(posedge clk)begin
@@ -127,8 +130,8 @@ generate
             .clk,
             .rst,
             .rst_sync(0),
-            .en(mshr_idx_r[PREPEND_PIPE][0]),
-            .we(mshr_idx_r[PREPEND_PIPE][1]),
+            .en(mshr_idx_r[PREPEND_PIPE][0] & way_dec[i]),
+            .we(mshr_idx_r[PREPEND_PIPE][1] & way_dec[i]),
             .addr(idx),
             .rdata(rdata_ram[i]),
             .wdata(wdata_r[PREPEND_PIPE]),

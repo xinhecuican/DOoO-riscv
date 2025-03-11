@@ -866,6 +866,7 @@ interface L2MSHRSlaveIO #(
     logic replace_hit;
     logic `N(WAY_WIDTH) replace_way;
     logic replace_owned;
+    logic `N(TAG_WIDTH) replace_tag;
 
     logic we;
     logic wready;
@@ -873,8 +874,8 @@ interface L2MSHRSlaveIO #(
     logic `N(WAY_WIDTH) wway;
     logic `N(ENTRY_SIZE) wdata;
 
-    modport mshr (output request, raddr, we, waddr, wway, wdata, input hit, hit_way, share, owned, slave, owner, replace_hit, replace_way, replace_owned, wready);
-    modport slaver (input request, raddr, we, waddr, wway, wdata, output hit, hit_way, share, owned, slave, owner, replace_hit, replace_way, replace_owned, wready);
+    modport mshr (output request, raddr, we, waddr, wway, wdata, input hit, hit_way, share, owned, slave, owner, replace_hit, replace_way, replace_owned, replace_tag, wready);
+    modport slaver (input request, raddr, we, waddr, wway, wdata, output hit, hit_way, share, owned, slave, owner, replace_hit, replace_way, replace_owned, replace_tag, wready);
 endinterface
 
 interface L2MSHRDirIO #(
