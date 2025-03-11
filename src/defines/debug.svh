@@ -10,6 +10,7 @@
 // `define T_TAGE
 // `define T_BR_HIST
 `define T_DCACHE
+`define T_L2CACHE
 `define T_SCB
 // `define T_ICACHE
 // `define T_COMMIT

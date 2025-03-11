@@ -35,6 +35,7 @@ interface DCacheMissIO;
     logic refill_valid;
     logic refill_write;
     logic refill_replace_hit;
+    logic refill_nodata;
     logic `N(`DCACHE_WAY_WIDTH) refillWay;
     logic `N(`PADDR_SIZE) refillAddr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) refillMask;
@@ -53,7 +54,7 @@ interface DCacheMissIO;
                   input amo_en, output amo_refill,
 `endif
                   output rfull, req, req_addr, wfull, lq_en, lqData, lqIdx_o, refill_l2idx,
-        refill_en, refill_write, refill_replace_hit, refillWay, refillAddr, refillMask, refillData, refill_scIdx, refill_state);
+        refill_en, refill_write, refill_replace_hit, refillWay, refillAddr, refillMask, refillData, refill_scIdx, refill_state, refill_nodata);
 endinterface
 
 module DCacheMiss(
@@ -110,6 +111,7 @@ module DCacheMiss(
     logic `N(`DCACHE_WAY_WIDTH) req_way;
     DirectoryState req_state;
     logic req_replace_hit, req_owned, req_owned_after;
+    logic req_nodata;
 
 //load enqueue
     // 有三种情况
@@ -237,6 +239,7 @@ endgenerate
     assign io.refill_l2idx = l2_idxs[head];
     assign io.refill_write = wvalid[head];
     assign io.refill_replace_hit = req_replace_hit;
+    assign io.refill_nodata = req_nodata;
 
     Decoder #(`DCACHE_MISS_SIZE) decoder_head (head, head_decode);
     assign w_refill_eq = {`DCACHE_MISS_SIZE{data_refilled}} & whit & head_decode;
@@ -325,6 +328,7 @@ endgenerate
             replaceHit <= 0;
             replaceHitWay <= 0;
             wowned <= 0;
+            replace_idx <= '{default: 0};
         end
         else begin
             head <= head + (io.refill_en & io.refill_valid);
@@ -452,6 +456,7 @@ endgenerate
             req_replace_hit <= 1'b0;
             req_owned <= 0;
             req_owned_after <= 0;
+            req_nodata <= 0;
         end
         else begin
             if(io.req | replaceHit[head] & ~req_start)begin
@@ -475,6 +480,7 @@ endgenerate
                 req_valid_all <= data_valid_all[head];
                 req_wvalid <= wvalid[head];
                 way[head] <= replaceHit[head] ? replaceHitWay[head] : io.replaceWay;
+                req_nodata <= 1'b0;
             end
 
             if(r_axi_io.ar_valid & r_axi_io.ar_ready)begin
@@ -497,6 +503,10 @@ endgenerate
         end
         else if(r_axi_io.r_valid & r_axi_io.r_last)begin
             req_owned_after <= 1'b0;
+        end
+
+        if(r_axi_io.r_valid & r_axi_io.r_last & (cacheIdx == 0))begin
+            req_nodata <= 1'b1;
         end
     
         if(rlast)begin
