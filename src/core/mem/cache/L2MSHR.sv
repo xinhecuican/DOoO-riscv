@@ -745,7 +745,7 @@ endgenerate
                                         {OFFSET_WIDTH{1'b0}}} : snoop_entry.paddr;
                     snoop_buffer.op <= snoop_replace_request[snoop_idx] ? `ACEOP_READ_UNIQUE : 
                                        snoop_op == `ACEOP_MAKE_UNIQUE ? `ACEOP_CLEAN_INVALID : snoop_op;
-                    snoop_buffer.state_change <= snoop_op != `ACEOP_READ_ONCE && snoop_op != `ACEOP_READ_SHARED;
+                    snoop_buffer.state_change <= snoop_replace_request[snoop_idx] || (snoop_op != `ACEOP_READ_ONCE && snoop_op != `ACEOP_READ_SHARED);
                     snoop_buffer.response <= 0;
                     snoop_buffer.require_data <= snoop_op != `ACEOP_CLEAN_INVALID && !(snoop_op == `ACEOP_MAKE_UNIQUE && ~snoop_replace_request[snoop_idx]);
                     snoop_buffer.slave_replace <= snoop_replace_request[snoop_idx];

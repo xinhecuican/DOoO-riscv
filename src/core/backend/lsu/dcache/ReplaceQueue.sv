@@ -97,10 +97,6 @@ module ReplaceQueue(
                 prior[freeIdx] <= 1'b1;
             end
 
-            if(io.snoop_en & io.snoop_clean & (|snoop_hit))begin
-                en[snoop_hit_idx] <= 1'b0;
-            end
-
             if(io.refill_en)begin
                 dataValid[io.replace_idx] <= 1'b1;
                 state[io.replace_idx] <= io.refill_state;
