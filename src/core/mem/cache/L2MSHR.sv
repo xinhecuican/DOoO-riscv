@@ -1293,7 +1293,6 @@ endgenerate
     assign master_io.w_user = 0;
 
     assign master_io.b_ready = 1'b1;
-
 `ifdef DIFFTEST
     logic `ARRAY(MSHR_SIZE, 2) dbg_rsource;
     logic dbg_wend;
