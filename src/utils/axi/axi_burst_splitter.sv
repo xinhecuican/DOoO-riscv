@@ -13,7 +13,7 @@
 // - Wolfgang Roenninger <wroennin@iis.ee.ethz.ch>
 // - Andreas Kurth <akurth@iis.ee.ethz.ch>
 
-`include "../../../defines/defines.svh"
+`include "../../defines/defines.svh"
 
 /// Split AXI4 bursts into single-beat transactions.
 ///

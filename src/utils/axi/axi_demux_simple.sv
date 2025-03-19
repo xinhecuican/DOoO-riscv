@@ -14,7 +14,7 @@
 // - Thomas Benz <tbenz@iis.ee.ethz.ch>
 // - Andreas Kurth <akurth@iis.ee.ethz.ch>
 
-`include "../../../defines/defines.svh"
+`include "../../defines/defines.svh"
 
 `ifdef QUESTA
 // Derive `TARGET_VSIM`, which is used for tool-specific workarounds in this file, from `QUESTA`,

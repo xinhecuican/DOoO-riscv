@@ -13,7 +13,7 @@
 // - Luca Valente <luca.valente@unibo.it>
 // - Andreas Kurth <akurth@iis.ee.ethz.ch>
 
-`include "../../../defines/defines.svh"
+`include "../../defines/defines.svh"
 
 /// Destination-clock-domain half of the AXI CDC crossing.
 ///

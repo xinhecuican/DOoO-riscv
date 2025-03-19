@@ -932,7 +932,7 @@ endgenerate
         end
         else begin
             if(dir_read & (~mshr_dir_io.hit & ~mshr_slave_io.hit & 
-            ~(dir_make_unique_all & LLC)) &  & ~dir_clean_invalid)begin
+            ~(dir_make_unique_all & LLC)) & ~dir_clean_invalid)begin
                 l3_requests[dir_select_idx_n] <= 1'b1;
             end
             case(l3_state)

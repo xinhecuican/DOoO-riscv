@@ -14,7 +14,7 @@
 // - Luca Valente <luca.valente@unibo.it>
 // - Wolfgang Roenninger <wroennin@iis.ee.ethz.ch>
 
-`include "../../../defines/defines.svh"
+`include "../../defines/defines.svh"
 
 /// A clock domain crossing on an AXI interface.
 ///
