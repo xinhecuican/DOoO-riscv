@@ -160,13 +160,13 @@ endgenerate
 
     assign meta = io.updateInfo.meta.sc;
     assign r = io.updateInfo.redirectInfo;
-    assign btbEntry = tage_io.updateInfo.btbEntry;
+    assign btbEntry = io.updateInfo.btbEntry;
 
 generate
 	for(genvar i=0; i<`SLOT_NUM-1; i++)begin
 		assign u_slot_en[i] = io.update & io.updateInfo.allocSlot[i] & btbEntry.slots[i].en & ~btbEntry.slots[i].carry;
 	end
-	assign u_slot_en[`SLOT_NUM-1] = tage_io.update & btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
+	assign u_slot_en[`SLOT_NUM-1] = io.update & btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & ~btbEntry.tailSlot.carry;
     assign pred_error = meta.predTaken ^ io.updateInfo.realTaken;
     assign update_sc = pred_error | meta.thresh_update;
     assign update_en = u_slot_en & update_sc;

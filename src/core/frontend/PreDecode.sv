@@ -128,6 +128,7 @@ endgenerate
             jumpSelectIdx <= 0;
             selectOffset <= 0;
             stream_valid <= 0;
+            rvc_offset <= 0;
         end
         else if(pd_redirect.en || frontendCtrl.redirect)begin
             en_next <= 0;

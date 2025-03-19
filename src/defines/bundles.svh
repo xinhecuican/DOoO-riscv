@@ -640,7 +640,6 @@ typedef struct packed {
 } DirectoryState;
 
 typedef struct packed {
-    logic v;
     logic owned;
     logic share;
     logic dirty;

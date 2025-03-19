@@ -62,7 +62,7 @@ generate
         ) ittage_table (
             .clk,
             .rst,
-            .en(~tage_io.redirect.stall),
+            .en(~io.redirect.stall),
             .lookup_idx(lookup_idx),
             .lookup_tag(lookup_tag),
             .lookup_match(table_hits[i]),

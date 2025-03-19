@@ -185,6 +185,21 @@ module L2MSHR #(
     logic `N(DATA_BANK) lookup_data_req;
     logic `ARRAY(MSHR_SIZE, SET_WIDTH) lookup_addrs, lookup_write_addrs;
 
+    MSHREntry dir_entry, dir_entry_n;
+    logic dir_read_once, dir_read_share, dir_read_unique, dir_make_unique, dir_clean_invalid;
+    logic dir_clean_unique, dir_unique_req, dir_clean_unique_nodata, dir_clean_read;
+    logic dir_clean_req, dir_write_clean;
+    logic dir_make_unique_all, dir_read_unique_all;
+    logic dir_read, dir_write;
+    logic `N(MSHR_SIZE) dir_slave_wreq, dir_slave_we;
+    logic `N(MSHR_SIZE) dir_wreq, dir_we;
+    logic dir_slave_wvalid, dir_wvalid;
+    logic `N(SLAVE) dir_lookup_owner;
+    logic `N(SLAVE) dir_lookup_owner_dec;
+    DirectoryState dir_slave_state, dir_state, dir_wstate;
+    DirWInfo dir_slave_winfo, dir_winfo;
+    logic `N(MSHR_WIDTH) dir_slave_widx, dir_widx;
+
     typedef enum {L3_IDLE, L3_REQUEST} L3State;
     typedef struct packed {
         logic request;
@@ -495,20 +510,6 @@ endgenerate
 
 
 // dir request
-    MSHREntry dir_entry, dir_entry_n;
-    logic dir_read_once, dir_read_share, dir_read_unique, dir_make_unique, dir_clean_invalid;
-    logic dir_clean_unique, dir_unique_req, dir_clean_unique_nodata, dir_clean_read;
-    logic dir_clean_req, dir_write_clean;
-    logic dir_make_unique_all, dir_read_unique_all;
-    logic dir_read, dir_write;
-    logic `N(MSHR_SIZE) dir_slave_wreq, dir_slave_we;
-    logic `N(MSHR_SIZE) dir_wreq, dir_we;
-    logic dir_slave_wvalid, dir_wvalid;
-    logic `N(SLAVE) dir_lookup_owner;
-    logic `N(SLAVE) dir_lookup_owner_dec;
-    DirectoryState dir_slave_state, dir_state, dir_wstate;
-    DirWInfo dir_slave_winfo, dir_winfo;
-    logic `N(MSHR_WIDTH) dir_slave_widx, dir_widx;
 generate
     for(genvar i=0; i<MSHR_SIZE; i++)begin
         assign paddrs[i] = entrys[i].paddr;
@@ -872,7 +873,7 @@ endgenerate
 
 generate
     if(ISL2)begin
-        always_ff @(posedge clk, posedge rst)begin
+        always_ff @(posedge clk)begin
             if(master_io.r_valid & master_io.r_ready)begin
                 l3_data[l3_buffer.data_index] <= master_io.r_data;
             end

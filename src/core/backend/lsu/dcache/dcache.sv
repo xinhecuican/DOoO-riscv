@@ -117,10 +117,12 @@ endgenerate
     ParallelOR #(.WIDTH(`DCACHE_BANK), .DEPTH(`LOAD_PIPELINE)) or_bank(loadBankDecode, loadBank);
 
     logic `N(`LOAD_PIPELINE+1) tagv_en;
-    logic `N(`DCACHE_WAY) tag_we, valid_we, meta_we;
+    logic `N(`DCACHE_WAY) tag_we, meta_we;
     logic `TENSOR(`LOAD_PIPELINE+1, `DCACHE_WAY, `DCACHE_TAG+1) tagv;
+    logic `N(`DCACHE_TAG+1) tagv_wdata;
     DCacheMeta `N(`DCACHE_WAY) meta;
     DCacheMeta wmeta, wmeta_n;
+    logic wvalid_n;
     logic `TENSOR(`DCACHE_BANK, `DCACHE_WAY, `DCACHE_BYTE) data_we;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_SET_WIDTH) data_index;
     logic `N(`DCACHE_SET_WIDTH) refillIdx;
@@ -136,13 +138,12 @@ generate
     assign tagv_en[`LOAD_PIPELINE] = wreq | miss_io.refill_en;
     assign tagvIdx[`LOAD_PIPELINE] = wreq ? widx : miss_io.refillAddr`DCACHE_SET_BUS;
     assign tagvWIdx = snoop_invalid ? widx_n : miss_io.refillAddr`DCACHE_SET_BUS;
-    assign tag_we = {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way;
-    assign valid_we = {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way |
+    assign tag_we = {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way |
                       {`DCACHE_WAY{snoop_invalid}} & w_wayhit;
     assign meta_we = {`DCACHE_WAY{miss_io.refill_valid & miss_io.refill_en}} & refill_way |
-                      {`DCACHE_WAY{snoop_invalid | snoop_share | cache_wreq}} & w_wayhit;
-    assign metaWIdx = snoop_invalid | snoop_share | cache_wreq ? widx_n : miss_io.refillAddr`DCACHE_SET_BUS;
-    assign wmeta.v = miss_io.refill_valid & miss_io.refill_en & ~snoop_invalid | snoop_share & ~snoop_invalid | cache_wreq;
+                      {`DCACHE_WAY{snoop_share | cache_wreq}} & w_wayhit;
+    assign metaWIdx = snoop_share | cache_wreq ? widx_n : miss_io.refillAddr`DCACHE_SET_BUS;
+    assign tagv_wdata = {miss_io.refillAddr`DCACHE_TAG_BUS, miss_io.refill_valid & miss_io.refill_en & ~snoop_invalid | snoop_share & ~snoop_invalid | cache_wreq};
     assign wmeta.share = snoop_share & whit | cache_wreq & select_meta.share | miss_io.refill_state.share;
     assign wmeta.owned = snoop_share & whit  | cache_wreq ? select_meta.owned : miss_io.refill_state.owner;
     assign wmeta.dirty = snoop_share & whit | cache_wreq ? select_meta.dirty | cache_wreq : miss_io.refill_state.dirty;
@@ -171,12 +172,11 @@ endgenerate
         .rst,
         .tagv_en,
         .tag_we,
-        .valid_we,
         .meta_we,
         .tagv_index(tagvIdx),
         .tagv_windex(tagvWIdx),
         .meta_windex(metaWIdx),
-        .tag_wdata(miss_io.refillAddr`DCACHE_TAG_BUS),
+        .tagv_wdata,
         .tagv,
         .meta,
         .wmeta,
@@ -207,7 +207,7 @@ generate
         logic `N(`DCACHE_BYTE) load_wmask;
         assign load_wmask = wmask_n[loadOffset[i]];
         assign write_valid[i] = miss_io.refill_en & ~(cache_wreq & whit) & ~wio.req |
-                                snoop_req_n & whit |
+                                snoop_req_n & whit | snoop_invalid |
                                 cache_wreq & whit & (|load_wmask)
 `ifdef RVA
                                 | amo_en[loadOffset[i]]
@@ -297,7 +297,7 @@ endgenerate
 generate
     for(genvar i=0; i<`DCACHE_WAY; i++)begin
         assign wtagv[i] = tagv[`LOAD_PIPELINE][i];
-        assign w_wayhit[i] = (snoop_write_conflict & w_wayhit_n[i] ? wmeta_n.v : wtagv[i][0]) &
+        assign w_wayhit[i] = (snoop_write_conflict & w_wayhit_n[i] ? wvalid_n : wtagv[i][0]) &
                              (wtagv[i][`DCACHE_TAG: 1] == waddr_n`DCACHE_TAG_BUS);
         assign w_state_errors[i] = snoop_write_conflict & w_wayhit_n[i] ? 
                                 wmeta_n.share | ~wmeta_n.owned : meta[i].share | ~meta[i].owned;
@@ -334,6 +334,7 @@ endgenerate
         w_wayIdx_n <= w_wayIdx;
         snoop_write_conflict <= snoop_req_n & (waddr_n`DCACHE_BLOCK_BUS == waddr`DCACHE_BLOCK_BUS);
         wmeta_n <= wmeta;
+        wvalid_n <= wtagv[0];
         w_wayhit_n <= w_wayhit;
         // write_invalid <= miss_req_n && (waddr_n`DCACHE_BLOCK_BUS == waddr`DCACHE_BLOCK_BUS);
     end
@@ -393,8 +394,8 @@ endgenerate
         refill_addr_n <= miss_io.refillAddr;
     end
     assign replace_queue_io.refill_en = refill_en_n;
-    assign replace_queue_io.entry_en = meta[refill_way_n].v;
-    assign replace_queue_io.refill_state = meta[refill_way_n].v ? meta[refill_way_n][2: 0] : 0;
+    assign replace_queue_io.entry_en = wtagv[refill_way_n][0];
+    assign replace_queue_io.refill_state = wtagv[refill_way_n][0] ? meta[refill_way_n] : 0;
     assign replace_queue_io.addr = replace_addr;
     assign replace_queue_io.data = rdata[refill_way_n];
 
@@ -433,7 +434,7 @@ endgenerate
 
             if(snoop_req_n)begin
                 cr_valid <= 1'b1;
-                cr_state <= |w_wayhit ? select_meta[2: 0] : replace_queue_io.snoop_state;
+                cr_state <= |w_wayhit ? select_meta : replace_queue_io.snoop_state;
                 snoop_invalid_n <= snoop_invalid;
             end
             if(cr_valid & snoop_io.cr_ready)begin

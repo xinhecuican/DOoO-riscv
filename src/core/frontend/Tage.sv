@@ -251,9 +251,9 @@ generate
 		logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) bank_commit_ctr;
 		logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr, update_ctr_provider;
 		logic `N(`SLOT_NUM) bank_alloc;
+		localparam SET_SIZE = tage_set_size[i*16 +: 16];
 		logic `N($clog2(SET_SIZE)) update_idx;
 		logic `N(`TAGE_TAG_SIZE) update_tag;
-		localparam SET_SIZE = tage_set_size[i*16 +: 16];
 		GetIndex #(
 			.COMPRESS_LENGTH(`TAGE_SET_WIDTH),
 			.INDEX_SIZE($clog2(SET_SIZE)),

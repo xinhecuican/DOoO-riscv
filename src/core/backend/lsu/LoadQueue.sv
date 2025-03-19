@@ -44,7 +44,7 @@ module LoadQueue(
     localparam BANK_SIZE = `LOAD_QUEUE_SIZE / `LOAD_PIPELINE;
     logic `N(`LOAD_QUEUE_WIDTH) head, tail, head_n, tail_n, redirect_tail;
     logic hdir, tdir, hdir_n;
-    logic `ARRAY(`LOAD_PIPELINE, BANK_SIZE) eqIdx;
+    logic `ARRAY(`LOAD_PIPELINE, $clog2(BANK_SIZE)) eqIdx;
     logic `ARRAY(`COMMIT_WIDTH, `LOAD_QUEUE_WIDTH) commitIdx;
     logic redirect_next;
     logic `ARRAY(`LOAD_PIPELINE, `ROB_WIDTH) dis_rob_idx;

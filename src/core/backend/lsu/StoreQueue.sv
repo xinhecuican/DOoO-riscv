@@ -395,8 +395,10 @@ generate
         
     end
     
+`ifdef DIFFTEST
     `Log(DLog::Debug, T_DCACHE, saxi_io.w_valid & saxi_io.w_ready, 
         $sformatf("uncache write. [%x %d] %x", uncache_addr, uncache_size, uncache_data))
+`endif
 endgenerate
 endmodule
 

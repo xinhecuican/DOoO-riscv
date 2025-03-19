@@ -631,7 +631,7 @@ generate
         assign commitFsqIdx[i] = commitBus.fsqInfo[i].idx;
     end
 endgenerate
-    OldestSelect #(1, `COMMIT_WIDTH, `FSQ_WIDTH) select_exception_head (
+    OldestSelect #(`COMMIT_WIDTH, 1, `FSQ_WIDTH) select_exception_head (
         commit_older, commitFsqIdx, commit_exc_valid, exception_head_n
     );
     always_ff @(posedge clk)begin
@@ -912,8 +912,8 @@ endgenerate
                       target[`VADDR_SIZE-1: `JAL_OFFSET+1] < pc[`VADDR_SIZE-1: `JAL_OFFSET+1] ? TAR_UN : TAR_NONE;
     assign tailTarState = target[`VADDR_SIZE-1: `JALR_OFFSET+1] > pc[`VADDR_SIZE-1: `JALR_OFFSET+1] ? TAR_OV :
                       target[`VADDR_SIZE-1: `JALR_OFFSET+1] < pc[`VADDR_SIZE-1: `JALR_OFFSET+1] ? TAR_UN : TAR_NONE;
-    assign updateEntry.en = 1'b1;
     always_comb begin
+        updateEntry.en = 1'b1;
         if(br_type != CONDITION)begin
             updateEntry.fthAddr = fsqInfo.offset;
 
