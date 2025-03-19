@@ -46,6 +46,7 @@ module L2MSHR #(
     parameter SLAVE_BITS = (`CACHELINE_SIZE / SLAVE_BANK) * 8,
     parameter CACHE_BITS = (`CACHELINE_SIZE / CACHE_BANK) * 8,
     parameter SLAVE_WIDTH = idxWidth(SLAVE),
+    parameter SLAVE_SET_WIDTH = $clog2(SLAVE_DIR_SET),
     parameter SLAVE_BANK_WIDTH = $clog2(SLAVE_BANK),
     parameter CACHE_BANK_WIDTH = $clog2(CACHE_BANK),
     parameter DATA_BANK_WIDTH = idxWidth(DATA_BANK),
@@ -182,7 +183,7 @@ module L2MSHR #(
     logic `ARRAY(MSHR_SIZE, DATA_BANK) lookup_bank;
     logic `ARRAY(DATA_BANK, MSHR_SIZE) lookup_bank_rev;
     logic `N(DATA_BANK) lookup_data_req;
-    logic `ARRAY(MSHR_SIZE, SET_WIDTH) lookup_addrs;
+    logic `ARRAY(MSHR_SIZE, SET_WIDTH) lookup_addrs, lookup_write_addrs;
 
     typedef enum {L3_IDLE, L3_REQUEST} L3State;
     typedef struct packed {
@@ -247,7 +248,7 @@ module L2MSHR #(
     logic `ARRAY(CACHE_BANK, CACHE_BITS) replace_read_data;
 
 // enqueue
-    logic renq_en, rw_conflict, rsnoop_conflict;
+    logic renq_en, rw_conflict, rsnoop_conflict, wsnoop_conflict;
     logic wenq_en;
     logic snoop_enq_en;
     logic `N(MSHR_SIZE) renq_conflict, wenq_conflict, snoop_enq_conflict;
@@ -263,36 +264,37 @@ module L2MSHR #(
     assign free_conflict = (|(free_en1 & free_en2));
     assign full = &en;
 
-    assign ar_free_conflict = free_conflict;
+    assign ar_free_conflict = (slave_io.aw_valid | mst_snoop_req.ac_valid) & free_conflict;
     assign slave_io.ar_ready = ~full & ~ar_free_conflict;
-    assign slave_io.aw_ready = ~full & ~write_waiting;
+    assign slave_io.aw_ready = ~full & ~write_waiting | wsnoop_conflict;
     assign mst_snoop_resp.ac_ready = ~full & ~(slave_io.aw_valid & ~write_waiting);
 
     // write > snoop > read
-    assign renq_en = ~full & ~free_conflict & slave_io.ar_valid;
-    assign wenq_en = ~full & slave_io.aw_valid & ~write_waiting;
+    assign renq_en = ~full & ~ar_free_conflict & slave_io.ar_valid;
+    assign wenq_en = ~full & slave_io.aw_valid & ~write_waiting & ~wsnoop_conflict;
     assign snoop_enq_en = ~full & mst_snoop_req.ac_valid;
-    assign rw_conflict = slave_io.aw_valid & ~write_waiting & (slave_io.ar_addr[OFFSET_WIDTH +: SET_WIDTH] == slave_io.aw_addr[OFFSET_WIDTH +: SET_WIDTH]);
-    assign rsnoop_conflict = mst_snoop_req.ac_valid & (mst_snoop_req.ac.addr[OFFSET_WIDTH +: SET_WIDTH] == slave_io.ar_addr[OFFSET_WIDTH +: SET_WIDTH]);
+    assign rw_conflict = slave_io.aw_valid & ~write_waiting & (slave_io.ar_addr[OFFSET_WIDTH +: SLAVE_SET_WIDTH] == slave_io.aw_addr[OFFSET_WIDTH +: SLAVE_SET_WIDTH]);
+    assign rsnoop_conflict = mst_snoop_req.ac_valid & (mst_snoop_req.ac.addr[OFFSET_WIDTH +: SLAVE_SET_WIDTH] == slave_io.ar_addr[OFFSET_WIDTH +: SLAVE_SET_WIDTH]);
+    assign wsnoop_conflict = snoop_write_cond & (slave_io.aw_addr == snoop_buffer.snoop_addr);
 generate
     for(genvar i=0; i<MSHR_SIZE; i++)begin
-        assign renq_conflict[i] = en[i] & (slave_io.ar_addr[OFFSET_WIDTH +: SET_WIDTH] == paddrs[i][OFFSET_WIDTH +: SET_WIDTH]);
-        assign wenq_conflict[i] = en[i] & (slave_io.aw_addr[OFFSET_WIDTH +: SET_WIDTH] == paddrs[i][OFFSET_WIDTH +: SET_WIDTH]);
-        assign snoop_enq_conflict[i] = en[i] & (mst_snoop_req.ac.addr[OFFSET_WIDTH +: SET_WIDTH] == paddrs[i][OFFSET_WIDTH +: SET_WIDTH]);
-        assign waiting_conflict[i] = en[i] & entry_waiting[i] & (|mshr_finish_n) & (paddrs[i][OFFSET_WIDTH +: SET_WIDTH] == mshr_wpaddr);
+        assign renq_conflict[i] = en[i] & (slave_io.ar_addr[OFFSET_WIDTH +: SLAVE_SET_WIDTH] == paddrs[i][OFFSET_WIDTH +: SLAVE_SET_WIDTH]);
+        assign wenq_conflict[i] = en[i] & (slave_io.aw_addr[OFFSET_WIDTH +: SLAVE_SET_WIDTH] == paddrs[i][OFFSET_WIDTH +: SLAVE_SET_WIDTH]);
+        assign snoop_enq_conflict[i] = en[i] & (mst_snoop_req.ac.addr[OFFSET_WIDTH +: SLAVE_SET_WIDTH] == paddrs[i][OFFSET_WIDTH +: SLAVE_SET_WIDTH]);
+        assign waiting_conflict[i] = en[i] & entry_waiting[i] & (|mshr_finish_n) & (paddrs[i][OFFSET_WIDTH +: SLAVE_SET_WIDTH] == mshr_wpaddr);
     end
 endgenerate
 
-    assign mshr_finish = en & dir_finish & ~dir_slave_wreq & ~dir_wreq & ~snoop_request &
-        ~l3_requests & (~require_data | refill_finish) & ~replace_reqs & ~lookup_requests &
-        (~entry_write | write_finish);
+    assign mshr_finish = en & dir_finish & ~dir_slave_wreq & ~dir_wreq & ~snoop_request & 
+                        ~snoop_replace_request & ~l3_requests & (~require_data | refill_finish) & 
+                        ~replace_reqs & ~lookup_requests & (~entry_write | write_finish);
     PEncoder #(MSHR_SIZE) encoder_mshr_widx (mshr_finish, mshr_widx);
     PSelector #(MSHR_SIZE) selector_mshr_finish (mshr_finish, mshr_finish_select);
     always_ff @(posedge clk)begin
         mshr_widx_n <= mshr_widx;
         mshr_finish_n <= mshr_finish_select;
         if(mshr_finish)begin
-            mshr_wpaddr <= paddrs[mshr_widx][OFFSET_WIDTH +: SET_WIDTH];
+            mshr_wpaddr <= paddrs[mshr_widx][OFFSET_WIDTH +: SLAVE_SET_WIDTH];
         end
     end
     DirectionSelector #(MSHR_SIZE, 2) selector_mshr_waiting (
@@ -787,7 +789,7 @@ endgenerate
                 end
             end
             SNOOP_REPLACE: begin
-                if(~snoop_replace_request[snoop_buffer.idx] & snoop_buffer.replace_dir)begin
+                if(snoop_buffer.replace_dir)begin
                     snoop_state <= SNOOP_IDLE;
                     snoop_request[snoop_buffer.idx] <= 1'b0;
                 end
@@ -984,7 +986,7 @@ endgenerate
     logic `N(MSHR_SIZE) write_reqs_combine;
     logic write_conflict_wait;
     always_ff @(posedge clk)begin
-        if(slave_io.w_valid & slave_io.w_ready)begin
+        if(slave_io.w_valid & slave_io.w_ready & ~write_conflict_wait)begin
             write_buffer[write_idx][write_data_index] <= slave_io.w_data;
         end
         if(snoop_cd_valid & snoop_buffer.slave_replace)begin
@@ -1011,12 +1013,12 @@ endgenerate
             write_b_ids <= 0;
             entry_write <= 0;
             write_finish <= 0;
-            write_conflict_wait <= 1'b0;
         end
         else begin
             if(slave_io.aw_valid & slave_io.aw_ready)begin
                 write_idx <= free_idx1;
                 write_waiting <= 1'b1;
+                write_conflict_wait <= wsnoop_conflict;
                 write_id <= slave_io.aw_id[ID_OFFSET +: ID_WIDTH];
                 write_data_index <= 0;
                 write_finish[free_idx1] <= 1'b0;
@@ -1073,12 +1075,18 @@ endgenerate
     always_ff @(posedge clk, posedge rst)begin
         if(rst == `RST)begin
             lookup_addrs <= 0;
+            lookup_write_addrs <= 0;
         end
         else begin
-            for(int i=0; i<MSHR_SIZE; i++)begin
-                if(free_en1[i] & slave_io.aw_valid | free_en2[i] & slave_io.ar_valid & ~ar_free_conflict)begin
-                    lookup_addrs[i] <= free_en1[i] & slave_io.aw_valid ? slave_io.aw_addr[OFFSET_WIDTH +: SET_WIDTH] : slave_io.ar_addr[OFFSET_WIDTH +: SET_WIDTH];
-                end
+            if(dir_request_n)begin
+                // dir hit
+                lookup_addrs[dir_select_idx_n] <= dir_entry_n.paddr[OFFSET_WIDTH +: SET_WIDTH];
+                // slave write
+                lookup_write_addrs[dir_select_idx_n] <= dir_entry_n.paddr[OFFSET_WIDTH +: SET_WIDTH];
+            end
+            if(snoop_cd_valid & snoop_cd_data.last & snoop_buffer.slave_replace)begin
+                // snoop replace
+                lookup_write_addrs[snoop_buffer.idx] <= snoop_buffer.snoop_addr[OFFSET_WIDTH +: SET_WIDTH];
             end
         end
     end
@@ -1127,7 +1135,7 @@ generate
         assign write_bank_requests = write_data_valid & (~replace_reqs | replace_data_valids) & dir_finish & lookup_bank_rev[i];
         PEncoder #(MSHR_SIZE) encoder_write_bank_idx (write_bank_requests, write_bank_idx[i]);
         PSelector #(MSHR_SIZE) selector_write_bank_idx (write_bank_requests, write_bank_idx_dec[i]);
-        OldestSelect #(MSHR_SIZE, 1, SET_WIDTH) select_write_addr (write_bank_requests, lookup_addrs, write_bank_req[i], write_addr);
+        OldestSelect #(MSHR_SIZE, 1, SET_WIDTH) select_write_addr (write_bank_requests, lookup_write_addrs, write_bank_req[i], write_addr);
         OldestSelect #(MSHR_SIZE, 1, WAY_WIDTH) select_write_way (write_bank_requests, lookup_data_ways, , write_way);
         assign write_data = write_buffer[write_bank_idx[i]];
 
@@ -1324,5 +1332,8 @@ endgenerate
         $sformatf("l2cache replace. [%h]", replace_buffer.addr));
     `Log(DLog::Debug, T_L2CACHE, dbg_wend,
     $sformatf("l2cache write. [%h] %s", entrys[write_idx].paddr, dbg_wdata_str));
+
+    `PERF(l2_hit, dir_request_n & dir_read & mshr_dir_io.hit)
+    `PERF(l2_snoop_replace, (|snoop_request) & (snoop_state == SNOOP_IDLE) & snoop_replace_request[snoop_idx])
 `endif
 endmodule

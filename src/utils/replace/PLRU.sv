@@ -24,7 +24,7 @@ generate
 
         for(genvar i=0; i<READ_PORT; i++)begin
             assign rdata[i] = plru[replace_io.hit_index[i]];
-            PLRUUpdate #(WAY_NUM) update (rdata[i], replace_io.hit_way[i], updateData[i]);
+            PLRUUpdate #(WAY_NUM) update (replace_io.hit_invalid[i], rdata[i], replace_io.hit_way[i], updateData[i]);
         end
 
 
@@ -56,6 +56,7 @@ module PLRUUpdate #(
     parameter WAY_NUM = 1,
     parameter WAY_WIDTH = idxWidth(WAY_NUM)
 )(
+    input logic invalid,
     input logic `N(WAY_NUM-1) rdata,
     input logic `N(WAY_NUM) hit_way,
     output logic `N(WAY_NUM-1) out
@@ -78,7 +79,7 @@ module PLRUUpdate #(
                     // lvl0 <=> MSB, lvl1 <=> MSB-1, ...
                     shift = WAY_WIDTH - lvl;
                     // to circumvent the 32 bit integer arithmetic assignment
-                    new_index = 1'(~(i >> (shift-1)));
+                    new_index = 1'(~(i >> (shift-1))) ^ invalid;
                     out[idx_base + (i >> shift)] = new_index;
                 end
             end
@@ -116,7 +117,7 @@ module PLRUReplace #(
         // the next entry to replace.
         for (int unsigned i = 0; i < WAY_NUM; i += 1) begin
             for (int unsigned lvl = 0; lvl < WAY_WIDTH; lvl++) begin
-                idx_base = $unsigned((2**lvl)-1);
+                idx_base = $unsigned((2**lvl)-1); // 0 1 3
                 // lvl0 <=> MSB, lvl1 <=> MSB-1, ...
                 shift = WAY_WIDTH - lvl;
                 // plru_o[i] &= plru_tree_q[idx_base + (i>>shift)] == ((i >> (shift-1)) & 1'b1);

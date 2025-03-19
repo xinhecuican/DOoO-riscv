@@ -387,10 +387,10 @@ typedef enum logic [1:0] {
 `define L2CACHE_BANK 16
 `define L2DATA_BANK 1
 `define L2WAY_NUM 8
-`define L2SET 64
+`define L2SET 512
 `define L2OFFSET `CACHELINE_SIZE
-`define L2SLAVE_SET 64
-`define L2SLAVE_WAY 8
+`define L2SLAVE_SET 512 // slave directory set must be same as directory set num
+`define L2SLAVE_WAY 2
 `define L2PREPEND_PIPE 1
 `define L2APPEND_PIPE 1
 `endif

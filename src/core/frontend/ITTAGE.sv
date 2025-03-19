@@ -230,6 +230,7 @@ endgenerate
     `SIG_N(update_tag, update_tag_n)
     assign replace_io.hit_en = en | update;
     assign replace_io.hit_index = 0;
+    assign replace_io.hit_invalid = 0;
     assign replace_io.hit_way = update ? hit_way : lookup_way;
     assign replace_io.miss_index = 0;
 

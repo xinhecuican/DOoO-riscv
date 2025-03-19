@@ -185,6 +185,7 @@ module TLBPage #(
     logic `N(BANK) unaligned;
 
     assign replace_io.hit_en = ptw_page_io.refill_req & ptw_page_io.refill_pn[PN];
+    assign replace_io.hit_invalid = 0;
     assign replace_io.hit_way = replace_io.miss_way;
     assign replace_io.hit_index = ptw_page_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
     assign replace_io.miss_index = ptw_page_io.refill_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);

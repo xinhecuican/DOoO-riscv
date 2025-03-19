@@ -51,7 +51,7 @@ module LocalDirectory #(
     logic `ARRAY(WAY, ENTRY_SIZE) lookup_entry;
     logic `N(ENTRY_SIZE) select_entry, replace_data;
     logic select_hit;
-    logic `N(WAY) tag_hits, wway_dec, wwayn_dec;
+    logic `N(WAY) tag_hits, wway_dec;
     logic en_n;
     logic `N(`PADDR_SIZE) raddr_n;
 
@@ -68,8 +68,8 @@ module LocalDirectory #(
     ) replace (.*);
     assign replace_io.miss_index = mshr_slave_io.raddr[OFFSET_WIDTH +: SET_WIDTH];
     assign replace_io.hit_en = select_hit & en_n | mshr_slave_io.we & ~mshr_slave_io.request;
-    assign replace_io.hit_way = mshr_slave_io.we & ~mshr_slave_io.request ? 
-        (|mshr_slave_io.wdata[TAG_WIDTH+1 +: SLAVE_NUM] ? wway_dec : wwayn_dec) : tag_hits;
+    assign replace_io.hit_invalid = mshr_slave_io.we & ~mshr_slave_io.request & ~(|mshr_slave_io.wdata[TAG_WIDTH+1 +: SLAVE_NUM]);
+    assign replace_io.hit_way = mshr_slave_io.we & ~mshr_slave_io.request ? wway_dec : tag_hits;
     assign replace_io.hit_index = raddr_n[OFFSET_WIDTH +: SET_WIDTH];
 
 generate
@@ -117,7 +117,6 @@ generate
     
 
     Decoder #(WAY) decoder_wway (mshr_slave_io.wway, wway_dec);
-    Decoder #(WAY) decoder_wwayn (~mshr_slave_io.wway, wwayn_dec);
     assign mshr_slave_io.wready = ~mshr_slave_io.request;
 endgenerate
 
@@ -149,7 +148,7 @@ module L2Directory #(
     logic `ARRAY(WAY_NUM, DIRECTORY_SIZE) rdata;
     logic `N(DIRECTORY_SIZE) replace_data;
     logic en_n;
-    logic `N(WAY_NUM) wway_dec, wwayn_dec;
+    logic `N(WAY_NUM) wway_dec;
 
     ReplaceIO #(.DEPTH(SET), .WAY_NUM(WAY_NUM)) replace_io();
     Replace #(
@@ -158,8 +157,8 @@ module L2Directory #(
     ) replace (.*);
     assign replace_io.miss_index = mshr_dir_io.raddr[OFFSET_WIDTH +: SET_WIDTH];
     assign replace_io.hit_en = mshr_dir_io.hit & en_n | mshr_dir_io.we & ~mshr_dir_io.request;
-    assign replace_io.hit_way = mshr_dir_io.we & ~mshr_dir_io.request ? 
-                    (mshr_dir_io.wdata[0] ? wway_dec : wwayn_dec) : tagv_hits;
+    assign replace_io.hit_invalid = mshr_dir_io.we & ~mshr_dir_io.request & ~mshr_dir_io.wdata[0];
+    assign replace_io.hit_way = mshr_dir_io.we & ~mshr_dir_io.request ? wway_dec : tagv_hits;
     assign replace_io.hit_index = mshr_dir_io.we & ~mshr_dir_io.request ? mshr_dir_io.waddr : lookup_idx;
     always_ff @(posedge clk)begin
         if(mshr_dir_io.request)begin
@@ -202,6 +201,5 @@ endgenerate
     assign mshr_dir_io.replace_state = replace_data[TAG_WIDTH+1 +: $bits(DirectoryState)];
 
     Decoder #(WAY_NUM) decoder_wway (mshr_dir_io.wway, wway_dec);
-    Decoder #(WAY_NUM) decoder_wwayn (~mshr_dir_io.wway, wwayn_dec);
     assign mshr_dir_io.wready = ~mshr_dir_io.request;
 endmodule

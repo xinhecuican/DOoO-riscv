@@ -39,6 +39,7 @@ module UBTB(
     )gen_tag(ubtb_io.pc, lookup_tag);
     assign replace_io.hit_en = result_i.en | ubtb_io.update & ubtb_io.updateInfo.btbEntry.en;
     assign replace_io.hit_index = 0;
+    assign replace_io.hit_invalid = 0;
     assign replace_io.hit_way = ubtb_io.update & ubtb_io.updateInfo.btbEntry.en ? update_way : lookup_hits;
     assign replace_io.miss_index = 0;
     assign lookup_hit = |lookup_hits;

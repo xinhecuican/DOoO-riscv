@@ -203,6 +203,7 @@ endgenerate
     ReplaceIO #(.DEPTH(`ICACHE_SET),.WAY_NUM(`ICACHE_WAY)) replace_io();
     assign replace_io.hit_en = main_state == LOOKUP && (!cache_miss[0] && !cache_miss[1]) ||
                                refill_en;
+    assign replace_io.hit_invalid = 0;
     assign replace_io.hit_way = refill_en ? replace_io.miss_way : hit[0];
     assign replace_io.hit_index = refill_en ? miss_buffer.windex : request_buffer.index1;
     assign replace_io.miss_index = miss_buffer.windex;

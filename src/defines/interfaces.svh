@@ -248,12 +248,13 @@ interface ReplaceIO #(
     parameter ADDR_WIDTH = idxWidth(DEPTH)
 );
     logic `N(READ_PORT) hit_en;
+    logic `N(READ_PORT) hit_invalid;
     logic `ARRAY(READ_PORT, WAY_NUM) hit_way;
     logic `N(WAY_NUM) miss_way;
     logic `N(ADDR_WIDTH) miss_index;
     logic `ARRAY(READ_PORT, ADDR_WIDTH) hit_index;
 
-    modport replace(input hit_en, hit_way, hit_index, miss_index, output miss_way);
+    modport replace(input hit_en, hit_invalid, hit_way, hit_index, miss_index, output miss_way);
 endinterface
 
 interface ReplaceD1IO #(
