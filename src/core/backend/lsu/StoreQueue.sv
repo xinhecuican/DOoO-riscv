@@ -108,7 +108,7 @@ endgenerate
     assign tail_n = tail + disNum;
     assign hdir_n = head[`STORE_QUEUE_WIDTH-1] & ~head_n[`STORE_QUEUE_WIDTH-1] ? ~hdir : hdir;
     assign commit_empty = {hdir, head} == {chdir, commitHead};
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -144,7 +144,7 @@ endgenerate
     logic `N(`COMMIT_WIDTH) commitMask;
     MaskGen #(`COMMIT_WIDTH+1) mask_gen_commit (commitBus.storeNum, commitMask);
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             addr_mask <= '{default: 0};
             valid <= 0;
@@ -249,7 +249,7 @@ endgenerate
         commitRobIdx <= commitBus.robIdx;
     end
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             uncacheState <= IDLE;
             uncache_req <= 0;

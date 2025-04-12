@@ -149,7 +149,7 @@ endgenerate
         end \
     end \
     assign io.src[``id``-1] = src[``id``-1][selectIdx]; \
-    always_ff @(posedge clk, posedge rst)begin \
+    always_ff @(posedge clk, negedge rst)begin \
         if(rst == `RST)begin \
             srcv[``id``-1] <= 0; \
         end \
@@ -189,7 +189,7 @@ endgenerate
             rd[freeIdx] <= io.status.rd;
         end
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             en <= 0;
             io.data_o <= 0;

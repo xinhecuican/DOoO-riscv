@@ -96,7 +96,7 @@ module DivUnit(
 
     // div end
     assign q_neg_last = pipe1_pa[2*`XLEN] ? pipe1_q_neg + 1 : pipe1_q_neg;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             ready <= 1'b1;
         end
@@ -239,7 +239,7 @@ module DivPipe #(
     assign clean = backendCtrl.redirect & bigger;
     assign ready = cnt == 0;
     assign cnt_o = cnt;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             cnt <= 0;
             cnt_global <= 0;

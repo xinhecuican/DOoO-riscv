@@ -727,7 +727,7 @@ endgenerate
     LoopCompare #(`ROB_WIDTH) cmp_exc_older (exc_idx, backendCtrl.redirectIdx, exc_redirect_older);
     LoopCompare #(`ROB_WIDTH) cmp_exc_pipe_older (exc_robIdx_o, exc_idx, exc_pipline_older);
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             exc_valid <= 0;
             exc_idx <= 0;

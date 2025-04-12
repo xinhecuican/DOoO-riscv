@@ -81,7 +81,7 @@ module FDivSlice #(
     assign sqrt_start = en & ~div & (~backendCtrl.redirect | input_older);
     div_sqrt_top_mvp div_sqrt (
         .Clk_CI(clk),
-        .Rst_RBI(~rst),
+        .Rst_RBI(rst),
         .Div_start_SI(div_start),
         .Sqrt_start_SI(sqrt_start),
         .Operand_a_DI(rs1_data),
@@ -105,7 +105,7 @@ module FDivSlice #(
             status <= div_fflags;
         end
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             state <= IDLE;
             ex_status <= 0;

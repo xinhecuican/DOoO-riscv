@@ -177,6 +177,7 @@ endgenerate
     logic `N($clog2(`LOAD_PIPELINE)) rwfree_idx;
     logic wen;
     logic `N(`DCACHE_BYTE) wmask_all;
+    logic w_req_conflict;
 
 `ifdef RVA
     assign wen = io.wen | io.amo_en;
@@ -196,12 +197,13 @@ endgenerate
     assign freeIdx[`LOAD_PIPELINE] = tail + write_req_order;
     assign write_remain_valid = remain_count > w_req_order;
     assign whit_combine = |whit | (|rwfree_eq);
-    assign w_invalid = rlast | req_last | refill_eq;
+    assign w_invalid = rlast | req_last | refill_eq | w_req_conflict;
     Encoder #(`DCACHE_MISS_SIZE) encoder_whit(whit, whitIdx);
     PEncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
     ParallelAND #(`DCACHE_BYTE, `DCACHE_BANK) or_wmask (io.wmask, wmask_all);
     assign widx = |whit ? whitIdx : 
                   |rwfree_eq ? freeIdx[rwfree_idx] : freeIdx[`LOAD_PIPELINE];
+    assign w_req_conflict = (req_start | replaceHit[head]) & (|whit) & (whitIdx == head);
     // note: 因为现在CommitBuffer同一时间只允许一个cacheline，所以不存在冲突问题
     // 实际上只需要req_last时禁止写入即可，如果CommitBuffer同一时间有多个同一地址的项
     // 那么req_last, rlast, io.refill_en & io.refill_end都需要考虑冲突问题
@@ -309,7 +311,7 @@ endgenerate
             mask[head] <= 0;
         end
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             en <= 0;
             addr <= '{default: 0};
@@ -401,7 +403,7 @@ endgenerate
 `ifdef RVA
     logic `N(`DCACHE_MSHR_SIZE) amo;
     logic amo_req;
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             amo <= 0;
             amo_req <= 0;

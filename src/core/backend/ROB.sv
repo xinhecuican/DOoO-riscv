@@ -197,7 +197,7 @@ endgenerate
     logic fence, fence_redirect;
     logic fence_end_n;
     `SIG_N(fenceBus.fence_end, fence_end_n)
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             fence <= 0;
             fence_redirect <= 0;
@@ -216,7 +216,7 @@ endgenerate
         end
     end
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             wb_sfence <= 0;
             commitBus.fence_valid <= 0;
@@ -412,7 +412,7 @@ endgenerate
     assign full = remainCount < rob_rename_io.validNum;
     assign rob_rename_io.robIdx.idx = tail;
     assign rob_rename_io.robIdx.dir = tdir;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -495,7 +495,7 @@ endgenerate
     assign commitWalk.walk = walk;
     assign commitWalk.num = commit_walk_num;
     assign commitWalk.walkStart = walk_start;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             walk_state <= 1'b0;
             walkInfo <= '{default: 0};
@@ -679,7 +679,7 @@ endgenerate
     logic `N($clog2(`COMMIT_WIDTH)+1) commitCnt;
     ParallelAdder #(1, `COMMIT_WIDTH) adder_commit (diff_valid, commitCnt);
     assign DLog::cycleCnt = cycleCnt;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             cycleCnt <= 0;
             instrCnt <= 0;

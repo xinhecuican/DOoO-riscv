@@ -151,7 +151,7 @@ endgenerate
         load_redirectIdx_n2 <= load_redirectIdx_n;
         store_redirectIdx_n2 <= store_redirectIdx_n;
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             lq_tail <= 0;
             sq_tail <= 0;

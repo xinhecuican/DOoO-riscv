@@ -59,7 +59,7 @@ endgenerate
     assign fl_io.full = remainCount < fl_io.rdNum;
     assign tail_add_num = backendCtrl.redirect || backendCtrl.rename_full || backendCtrl.dis_full ? 0 : fl_io.rdNum;
     assign tail_n = commitWalk.walk ? tail - walk_we_num : tail + tail_add_num;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<FREELIST_DEPTH; i++)begin
                 freelist[i] <= i + 32;

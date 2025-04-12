@@ -33,7 +33,7 @@ module SimUart(
         rdata <= data[apb.paddr[3: 0]];
     end
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             data <= '{default: 0};
         end

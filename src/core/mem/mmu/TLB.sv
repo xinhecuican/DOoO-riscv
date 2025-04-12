@@ -171,7 +171,7 @@ endgenerate
 
 generate
     if(FENCEV)begin
-        always_ff @(posedge clk, posedge rst)begin
+        always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 en <= 0;
                 entrys <= '{default: 0};
@@ -188,7 +188,7 @@ generate
         end
     end
     else begin
-        always_ff @(posedge clk, posedge rst)begin
+        always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 en <= 0;
                 entrys <= '{default: 0};
@@ -213,7 +213,7 @@ generate
                 fence_asid_all <= fenceBus.mmu_asid_all[SOURCE];
             end
         end
-        always_ff @(posedge clk, posedge rst)begin
+        always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 fenceState <= IDLE;
                 fenceReq <= 0;

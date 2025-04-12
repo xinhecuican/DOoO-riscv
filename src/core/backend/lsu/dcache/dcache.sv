@@ -119,8 +119,9 @@ endgenerate
     logic `N(`LOAD_PIPELINE+1) tagv_en;
     logic `N(`DCACHE_WAY) tag_we, meta_we;
     logic `TENSOR(`LOAD_PIPELINE+1, `DCACHE_WAY, `DCACHE_TAG+1) tagv;
+    logic `ARRAY(`DCACHE_WAY, `DCACHE_TAG+1) rtagv;
     logic `N(`DCACHE_TAG+1) tagv_wdata;
-    DCacheMeta `N(`DCACHE_WAY) meta;
+    DCacheMeta `N(`DCACHE_WAY) meta, rmeta;
     DCacheMeta wmeta, wmeta_n;
     logic wvalid_n;
     logic `TENSOR(`DCACHE_BANK, `DCACHE_WAY, `DCACHE_BYTE) data_we;
@@ -179,6 +180,8 @@ endgenerate
         .tagv_wdata,
         .tagv,
         .meta,
+        .rtagv,
+        .rmeta,
         .wmeta,
 `ifdef RVA
         .en((loadBank | amo_en | {`DCACHE_BANK{miss_io.refill_en | snoop_req_n}})),
@@ -329,8 +332,11 @@ endgenerate
         snoop_invalid <= snoop_io.ac_valid & snoop_io.ac_ready &
                          ((snoop_io.ac_snoop == `ACEOP_READ_UNIQUE) | 
                         (snoop_io.ac_snoop == `ACEOP_CLEAN_INVALID));
-        snoop_share <= snoop_io.ac_valid & snoop_io.ac_ready & ((snoop_io.ac_snoop == `ACEOP_READ_SHARED) | (snoop_io.ac_snoop == `ACEOP_READ_UNIQUE));
-        snoop_once <= snoop_io.ac_valid & snoop_io.ac_ready & (snoop_io.ac_snoop == `ACEOP_READ_ONCE);
+        snoop_share <= snoop_io.ac_valid & snoop_io.ac_ready &
+                        ((snoop_io.ac_snoop == `ACEOP_READ_SHARED) | 
+                        (snoop_io.ac_snoop == `ACEOP_READ_UNIQUE));
+        snoop_once <= snoop_io.ac_valid & snoop_io.ac_ready & 
+                        (snoop_io.ac_snoop == `ACEOP_READ_ONCE);
         w_wayIdx_n <= w_wayIdx;
         snoop_write_conflict <= snoop_req_n & (waddr_n`DCACHE_BLOCK_BUS == waddr`DCACHE_BLOCK_BUS);
         wmeta_n <= wmeta;
@@ -387,15 +393,15 @@ endgenerate
     end
 
     // replace enqueue
-    assign replace_addr = {wtagv[refill_way_n][`DCACHE_TAG: 1], refill_addr_n`DCACHE_SET_BUS};
+    assign replace_addr = {rtagv[refill_way_n][`DCACHE_TAG: 1], refill_addr_n`DCACHE_SET_BUS};
     always_ff @(posedge clk)begin
         refill_en_n <= miss_io.refill_en & miss_io.refill_valid & ~miss_io.refill_replace_hit;
         refill_way_n <= snoop_req ? w_wayIdx : miss_io.refillWay;
         refill_addr_n <= miss_io.refillAddr;
     end
     assign replace_queue_io.refill_en = refill_en_n;
-    assign replace_queue_io.entry_en = wtagv[refill_way_n][0];
-    assign replace_queue_io.refill_state = wtagv[refill_way_n][0] ? meta[refill_way_n] : 0;
+    assign replace_queue_io.entry_en = rtagv[refill_way_n][0];
+    assign replace_queue_io.refill_state = rtagv[refill_way_n][0] ? rmeta[refill_way_n] : 0;
     assign replace_queue_io.addr = replace_addr;
     assign replace_queue_io.data = rdata[refill_way_n];
 
@@ -412,7 +418,7 @@ endgenerate
         snoop_rack <= miss_io.refill_en & miss_io.refill_valid & ~miss_io.refill_nodata;
         snoop_rid <= miss_io.refill_l2idx;
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if (rst == `RST)begin
             ac_ready <= 1'b1;
             cr_valid <= 1'b0;
@@ -503,7 +509,7 @@ endgenerate
     assign miss_io.amo_en = amo_req & ~whit;
     assign amo_io.refill = miss_io.amo_refill;
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             reservation_set <= 0;
             reservation_addr <= 0;
@@ -543,11 +549,11 @@ endgenerate
     `LOG_ARRAY(T_DCACHE, dbg_refillData, miss_io.refillData, `DCACHE_BANK)
     `LOG_ARRAY(T_DCACHE, dbg_wdata, dbg_wdatan, `DCACHE_BANK)
     `Log(DLog::Debug, T_DCACHE, miss_io.refill_en & miss_io.refill_valid,
-        $sformatf("dcache refill. [%8h %d %b] %s", miss_io.refillAddr, miss_io.refillWay, miss_io.refill_write, dbg_refillData))
+        $sformatf("dcache refill. [%8h %d %b] %s", miss_io.refillAddr, miss_io.refillWay, miss_io.refill_write, dbg_refillData), 1'b1, miss_io.refillAddr)
     `Log(DLog::Debug, T_DCACHE, wreq_n & whit,
-        $sformatf("dcache write. [%h %d] %s", waddr_n, w_wayIdx, dbg_wdata))
+        $sformatf("dcache write. [%h %d] %s", waddr_n, w_wayIdx, dbg_wdata), 1'b1, waddr_n)
     `Log(DLog::Debug, T_DCACHE, snoop_req,
-        $sformatf("dcache snoop. [%h %d]", snoop_io.ac_addr, snoop_io.ac_snoop))
+        $sformatf("dcache snoop. [%h %d]", snoop_io.ac_addr, snoop_io.ac_snoop), 1'b1, snoop_io.ac_addr)
     `Log(DLog::Debug, T_DCACHE, |tag_we,
         $sformatf("dcache tag write. [%d %h]", tag_we, tagvWIdx))
 `endif

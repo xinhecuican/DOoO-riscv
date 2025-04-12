@@ -182,7 +182,7 @@ generate;
   endcase
 endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             random <= SEED;
         end

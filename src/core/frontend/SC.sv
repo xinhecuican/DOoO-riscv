@@ -261,7 +261,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<`SLOT_NUM; i++)begin
                 gthresh[i] <= `SC_GTHRESH_INIT;

@@ -3,6 +3,8 @@
 
 `define ENABLE_LOG
 `define T_LOG_ALL
+// `define ENABLE_LOG_ADDR
+`define LOG_ADDR 32'h81871bc0
 // `define T_DEBUG
 // `define T_BTB
 // `define T_FSQ
@@ -22,7 +24,7 @@
 `define PERF(name, cond) \
 `ifdef DIFFTEST \
     logic [31: 0] perf_counter_``name; \
-    always_ff @(posedge clk or posedge rst) begin \
+    always_ff @(posedge clk or negedge rst) begin \
         if(rst == `RST)begin \
             perf_counter_``name <= 0; \
         end \
@@ -44,14 +46,22 @@ endpackage
 
 `endif
 
-`define Log(level, tag=T_LOG_ALL, cond, msg) \
+`define Log(level, tag=T_LOG_ALL, cond, msg, addr_en=1'b0, addr=0) \
 `ifdef ENABLE_LOG \
 `ifdef tag \
+`ifdef ENABLE_LOG_ADDR \
+    always_ff @(posedge clk)begin \
+        if((addr_en && (addr == `LOG_ADDR)) && DLog::logValid && level >= DLog::logLevel && (cond))begin \
+            $display("[%16d] %s", DLog::cycleCnt, msg); \
+        end \
+    end \
+`else \
     always_ff @(posedge clk)begin \
         if(DLog::logValid && level >= DLog::logLevel && (cond))begin \
             $display("[%16d] %s", DLog::cycleCnt, msg); \
         end \
     end \
+`endif \
 `endif \
 `endif \
 

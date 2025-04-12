@@ -73,7 +73,7 @@ endgenerate
     // 如果没有出现跳转，那么无论预测是否为rvi都不会影响
     // 2) BTB匹配正确，不存在half_rvi的情况，因为BTB每个slot中都有rvc位，
     // 如果匹配成功next pc都会加上rvc,也就是说可能一个块有34byte
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             half_rvi <= 0;
         end
@@ -94,7 +94,7 @@ endgenerate
         end
     end
     assign fsqIdx_n = fsqIdx.idx + 1;
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             redirect_half_rvi <= 0;
         end
@@ -110,7 +110,7 @@ endgenerate
 `endif
 
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             bundles_next <= '{default: 0};
             en_next <= 0;

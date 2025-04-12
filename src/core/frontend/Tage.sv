@@ -222,7 +222,7 @@ generate
 		end
 	end
 
-	always_ff @(posedge clk, posedge rst)begin
+	always_ff @(posedge clk, negedge rst)begin
 		if(rst == `RST)begin
 			reset_u <= 0;
 			resetu_ctrs <= 0;

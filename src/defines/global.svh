@@ -14,7 +14,7 @@
 `define NUM_CORE 1
 `define CORE_WIDTH $clog2(`NUM_CORE)
 
-`define RST 1'b1
+`define RST 1'b0
 `ifdef RV32I
 `define XLEN 32
 `define XLEN_32

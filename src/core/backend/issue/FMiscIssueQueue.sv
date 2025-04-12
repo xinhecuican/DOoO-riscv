@@ -194,7 +194,7 @@ endgenerate
             robIdx[freeIdx] <= status.robIdx;
         end
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             en <= 0;
             we <= 0;

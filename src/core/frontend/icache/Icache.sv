@@ -120,7 +120,7 @@ endgenerate
     assign abandon_idle = fsq_cache_io.abandon &&
                           fsq_cache_io.fsqIdx == fsq_cache_io.abandonIdx;
 
-    assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall} & {2{fsq_cache_io.ready}};
+    assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall} & {2{fsq_cache_io.ready & ~abandon_idle}};
     assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
     assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};
@@ -329,7 +329,7 @@ generate
     ParallelAdder #(1, BLOCK_DELTA) adder_miss_bank (miss_bank_valid, miss_bank_valid_num);
 endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             request_buffer <= '{default: 0};
             main_state <= IDLE;
@@ -439,7 +439,7 @@ endgenerate
 `ifdef EXT_FENCEI
     logic `N(`ICACHE_SET_WIDTH) fenceIdx_n;
     assign fenceIdx_n = fenceIdx + 1;
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             fenceValid <= 1'b0;
             fenceIdx <= 0;

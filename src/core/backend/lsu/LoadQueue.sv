@@ -184,7 +184,7 @@ endgenerate
     always_ff @(posedge clk)begin
         redirect_next <= backendCtrl.redirect;
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -352,7 +352,7 @@ module LoadQueueBank #(
     Decoder #(BANK_SIZE) decoder_lq_idx (dis_lq_idx, dis_lq_idx_dec);
     assign dis_lq_valid = {BANK_SIZE{dis_en & ~dis_stall}} & dis_lq_idx_dec;
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             valid <= 0;
             miss <= 0;
@@ -695,7 +695,7 @@ module LoadUncacheBuffer(
     LoopCompare #(`ROB_WIDTH) cmp_uncache_bigger (redirectIdx, uncache_robIdx, uncache_bigger);
     assign redirect_eq = commitIdx == redirectIdx;
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             uncacheState <= IDLE;
             uncache_req <= 0;
@@ -750,7 +750,7 @@ generate
         LoopCompare #(`ROB_WIDTH) cmp_bigger (redirect_robIdxs[i], redirectIdx, bigger[i]);
     end
 endgenerate
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             valid <= 0;
         end

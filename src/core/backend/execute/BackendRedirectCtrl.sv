@@ -21,7 +21,7 @@ module BackendRedirectCtrl (
     always_ff @(posedge clk)begin
         branchValid_n <= branchValid;
     end
-    always_ff @(posedge clk or posedge rst) begin
+    always_ff @(posedge clk or negedge rst) begin
         if (rst == `RST) begin
             preRedirect <= 0;
             preBranch   <= 0;

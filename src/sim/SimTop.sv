@@ -58,8 +58,8 @@ module SimTop(
 );
     logic sync_rst_peri, sync_rst_core, core_rst, peri_rst;
     logic peri_rst_s1, core_rst_s1;
-    SyncRst rst_core (clock, reset, sync_rst_core);
-    SyncRst rst_peri (clock, reset, sync_rst_peri);
+    SyncRst rst_core (clock, ~reset, sync_rst_core);
+    SyncRst rst_peri (clock, ~reset, sync_rst_peri);
     always_ff @(posedge clock)begin
         core_rst_s1 <= sync_rst_core;
         core_rst <= core_rst_s1;
@@ -178,7 +178,7 @@ module SimTop(
         .rule_t(addr_rule_t)
     )crossbar(
         .clk_i(clock),
-        .rst_ni(~core_rst),
+        .rst_ni(core_rst),
         .test_i(1'b0),
         .slv_ports_req_i(slv_req_i),
         .slv_ports_resp_o(slv_resp_o),
@@ -228,7 +228,7 @@ module SimTop(
         .rule_t(addr_rule_t)
     ) irq_axi_to_apb (
         .clk_i(clock),
-        .rst_ni(~peri_rst),
+        .rst_ni(peri_rst),
         .test_i(1'b0),
         .axi_req_i(irq_req),
         .axi_resp_o(irq_resp),
@@ -244,7 +244,7 @@ module SimTop(
     apb4_clint clint(
         .clk(clock),
         .rtc_clk(clock),
-        .rst_n_i(~peri_rst),
+        .rst_n_i(peri_rst),
         .apb4(clint_apb_io.slave),
         .clint(clint_io.clint)
     );
@@ -253,7 +253,7 @@ module SimTop(
     `APB_REQ_ASSIGN(plic_req, plic_apb_io)
     `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
     plic plic_inst (
-        .rstn(~peri_rst),
+        .rstn(peri_rst),
         .clk(clock),
         .apb(plic_apb_io),
         .ints({{32-`IRQ_NUM{1'b0}}, irq_source}),
@@ -297,7 +297,7 @@ module SimTop(
         .rule_t(addr_rule_t)
     ) uart_axi_to_apb (
         .clk_i(clock),
-        .rst_ni(~peri_rst),
+        .rst_ni(peri_rst),
         .test_i(1'b0),
         .axi_req_i(peri_req),
         .axi_resp_o(peri_resp),
@@ -347,7 +347,7 @@ module SimTop(
         .axi_resp_t(AxiMemResp)
     ) mem_cut (
         .clk_i(clock),
-        .rst_ni(~peri_rst),
+        .rst_ni(peri_rst),
         .slv_req_i(core_mem_req),
         .slv_resp_o(core_mem_resp),
         .mst_req_o(mem_req),

@@ -130,7 +130,7 @@ endgenerate
             end
         end
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             rename_dis_io.op <= 0;
             rename_dis_io.int_wen <= 0;

@@ -139,7 +139,7 @@ endgenerate
                 (csrid[11: 0] >= `CSRID_pmpcfg && csrid[11: 0] < 12'h3f0)));
     endfunction
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             state <= IDLE;
             writeRobIdx <= 0;
@@ -177,7 +177,7 @@ endgenerate
         end
     end
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             tail <= 0;
             tdir <= 0;
@@ -241,7 +241,7 @@ endgenerate
 `endif
         end
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             fenceBus.store_flush <= 1'b0;
             fenceBus.inst_flush <= 1'b0;

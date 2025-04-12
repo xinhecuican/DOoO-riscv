@@ -23,7 +23,8 @@ module SPRAM#(
 );
 `ifdef SYNTH_VIVADO
     localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
-    localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
+    localparam REMAIN = (WIDTH/BYTES) % BYTE_WRITE_WIDTH;
+    localparam WIDTH_LOCAL = WIDTH + BYTES * (REMAIN != 0 ? BYTE_WRITE_WIDTH - REMAIN : 0);
     localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
     localparam DELTA = BYTES_LOCAL / BYTES;
     logic [BYTES_LOCAL-1: 0] we_local;
@@ -82,9 +83,9 @@ module SPRAM#(
     if(RESET)begin
         assign resetAddr = resetState ? counter : addr;
         assign resetData = resetState ? RESET_VALUE : wdata;
-        always_ff @(posedge clk or posedge rst)begin
+        always_ff @(posedge clk or negedge rst)begin
             if(rst == `RST ||
-               ENABLE_SYNC_RST && rst_sync)begin
+               ENABLE_SYNC_RST && rst_sync == `RST)begin
                 counter <= 0;
                 resetState <= 1'b1;
                 ready <= 1'b0;
@@ -159,7 +160,8 @@ module SDPRAM#(
 
 `ifdef SYNTH_VIVADO
     localparam BYTE_WRITE_WIDTH = BYTES == 1 ? WIDTH : 8;
-    localparam WIDTH_LOCAL = WIDTH + BYTES * ((WIDTH/BYTES) % BYTE_WRITE_WIDTH);
+    localparam REMAIN = (WIDTH/BYTES) % BYTE_WRITE_WIDTH;
+    localparam WIDTH_LOCAL = WIDTH + BYTES * (REMAIN != 0 ? BYTE_WRITE_WIDTH - REMAIN : 0);
     localparam BYTES_LOCAL = WIDTH_LOCAL / BYTE_WRITE_WIDTH;
     localparam DELTA = BYTES_LOCAL / BYTES;
     logic [BYTES_LOCAL-1: 0] we_local;
@@ -223,9 +225,9 @@ module SDPRAM#(
     if(RESET)begin
         assign resetAddr = resetState ? counter : addr0;
         assign resetData = resetState ? RESET_VALUE : wdata;
-        always_ff @(posedge clk or posedge rst)begin
+        always_ff @(posedge clk or negedge rst)begin
             if(rst == `RST ||
-               ENABLE_SYNC_RST && rst_sync)begin
+               ENABLE_SYNC_RST && rst_sync == `RST)begin
                 counter <= 0;
                 resetState <= 1'b1;
                 ready <= 1'b0;
@@ -306,9 +308,9 @@ generate
     if(RESET)begin
         assign resetAddr = resetState ? counter : waddr[0];
         assign resetData = resetState ? RESET_VALUE : wdata[0];
-        always_ff @(posedge clk or posedge rst)begin
+        always_ff @(posedge clk or negedge rst)begin
             if(rst == `RST ||
-               ENABLE_SYNC_RST && rst_sync)begin
+               ENABLE_SYNC_RST && rst_sync == `RST)begin
                 counter <= 0;
                 resetState <= 1'b1;
                 ready <= 1'b0;
@@ -580,9 +582,9 @@ generate
         logic resetState;
 
         if(RESET)begin
-            always_ff @(posedge clk or posedge rst)begin
+            always_ff @(posedge clk or negedge rst)begin
                 if(rst == `RST ||
-                   ENABLE_SYNC_RST && rst_sync)begin
+                   ENABLE_SYNC_RST && rst_sync == `RST)begin
                     counter <= 0;
                     resetState <= 1'b1;
                     ready <= 1'b0;
@@ -767,7 +769,7 @@ endgenerate
 		rdata
 	);
 
-	always_ff @(posedge clk, posedge rst)begin
+	always_ff @(posedge clk, negedge rst)begin
 		if(rst == `RST)begin
 			tail <= 0;
 			tags <= 0;

@@ -22,7 +22,7 @@ generate;
 endgenerate
 
     // TODO: Fusion Decoder，在rob中添加一个funsion位表示为两条指令
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             dec_rename_io.op <= 0;
         end

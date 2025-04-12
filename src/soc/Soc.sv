@@ -41,7 +41,7 @@ module Soc(
     SyncRst rst_clint (clk, clint_rst_s1, clint_rst);
 
     CPUCore core(
-        .clk(clock),
+        .clk(clk),
         .rst(core_rst),
         .mem_axi(core_mem_axi.master),
         .peri_axi(core_peri_axi.master),
@@ -129,7 +129,7 @@ module Soc(
         .rule_t(addr_rule_t)
     )crossbar(
         .clk_i(clk),
-        .rst_ni(~core_rst),
+        .rst_ni(core_rst),
         .test_i(1'b0),
         .slv_ports_req_i(slv_req_i),
         .slv_ports_resp_o(slv_resp_o),
@@ -179,7 +179,7 @@ module Soc(
         .rule_t(addr_rule_t)
     ) irq_axi_to_apb (
         .clk_i(clk),
-        .rst_ni(~clint_rst),
+        .rst_ni(clint_rst),
         .test_i(1'b0),
         .axi_req_i(irq_req),
         .axi_resp_o(irq_resp),
@@ -195,7 +195,7 @@ module Soc(
     apb4_clint clint(
         .clk(clk),
         .rtc_clk(rtc_clk),
-        .rst_n_i(~clint_rst),
+        .rst_n_i(clint_rst),
         .apb4(clint_apb_io.slave),
         .clint(clint_io.clint)
     );
@@ -205,7 +205,7 @@ module Soc(
     `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
     assign irq_source[0] = uart_irq;
     plic plic_inst (
-        .rstn(~clint_rst),
+        .rstn(clint_rst),
         .clk(clk),
         .apb(plic_apb_io),
         .ints({{32-`IRQ_NUM{1'b0}}, irq_source}),
@@ -249,7 +249,7 @@ module Soc(
         .rule_t(addr_rule_t)
     ) uart_axi_to_apb (
         .clk_i(clk),
-        .rst_ni(~peri_rst),
+        .rst_ni(peri_rst),
         .test_i(1'b0),
         .axi_req_i(peri_req),
         .axi_resp_o(peri_resp),
@@ -264,7 +264,7 @@ module Soc(
     `APB_RESP_ASSIGN(uart_resp, uart_io)
     apb_uart uart_inst(
         .CLK(clk),
-        .RSTN(~peri_rst),
+        .RSTN(peri_rst),
         .apb(uart_io),
         .irq_o(uart_irq),
         .rx_i(rxd),

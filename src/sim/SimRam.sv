@@ -53,7 +53,7 @@ module SimRam(
         3'b111: arsize_n = 128;
         endcase
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             axi.ar_ready <= 1'b1;
             axi.r_valid <= 1'b0;

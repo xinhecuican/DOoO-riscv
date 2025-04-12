@@ -179,7 +179,7 @@ generate
     assign pd_wr_info.offsets[`SLOT_NUM-1] = predEntry.tailSlot.offset;
 endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             predictionInfos <= '{default: 0};
         end
@@ -212,7 +212,7 @@ endgenerate
     assign cache_req_ok = fsq_cache_io.ready;
 
     logic `N(`PREDICTION_WIDTH) shiftOffset, shiftIdx;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             shiftOffset <= 0;
             shiftIdx <= 0;
@@ -347,7 +347,7 @@ endgenerate
     always_ff @(posedge clk)begin
         last_search <= search_head == tail && fsq_cache_io.en;
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             search_head <= 0;
             commit_head <= 0;
@@ -395,7 +395,7 @@ endgenerate
     logic `N(`FSQ_WIDTH) redirect_dir_idx, redirect_dir_idx_n1;
     assign redirect_dir_idx = fsq_back_io.redirect.fsqInfo.idx;
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             tdir <= 0;
             hdir <= 0;
@@ -470,7 +470,7 @@ endgenerate
 
     assign rd_br = fsq_back_io.redirectBr;
     assign rd_csr = fsq_back_io.redirectCsr;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             wbInfos <= '{default: 0};
             pred_error_en <= 0;
@@ -535,7 +535,7 @@ endgenerate
     assign streamCommitSize = pred_error_en[commit_head] ? commitFsqSize : commitSize;
     assign streamCommitNum = streamCommitSize + 1;
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             commitNum <= 0;
         end
@@ -641,7 +641,7 @@ endgenerate
         pd_size <= pd_redirect.size;
         exception_head_pre <= exception_head;
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             exception_head <= 0;
         end
@@ -747,7 +747,7 @@ generate
         assign fsq_back_io.diff_pc[i] = diff_pcs[fsq_back_io.diff_fsqInfo[i].idx] + {fsq_back_io.diff_fsqInfo[i].offset, {`INST_OFFSET{1'b0}}};
     end
 endgenerate
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             diff_pcs <= '{default: 0};
         end
@@ -794,7 +794,7 @@ endgenerate
 //     end
 // endgenerate
 
-//     always_ff @(posedge clk, posedge rst)begin
+//     always_ff @(posedge clk, negedge rst)begin
 //         if(rst == `RST)begin
 //             dbg_commit_idx <= 0;
 //             dbg_fsq_idxs <= 0;
@@ -923,6 +923,7 @@ endgenerate
             updateEntry.tailSlot.br_type = br_type;
 `ifdef RVC
             updateEntry.tailSlot.rvc = rvc;
+            updateEntry.fth_rvc = 0;
 `endif
             updateEntry.tailSlot.offset = fsqInfo.offset;
             updateEntry.tailSlot.target = target[`JALR_OFFSET: 1];

@@ -120,7 +120,7 @@ module PTW(
             rdata[ridx] <= axi_io.r_data;
         end
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             ridx <= 1'b0;
         end
@@ -188,7 +188,7 @@ module PTW(
     end
 
     assign flush_valid = flush | flush_q | fence_flush;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             wb_req <= 0;
             flush_q <= 0;
@@ -231,7 +231,7 @@ module PTW(
         end
     end
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             wb_info <= 0;
         end
@@ -281,7 +281,7 @@ module PTW(
     //      if pn0_buffer is full, then switch state to WALK_PN0
     // WB_PN0: writeback data in req_buf and pn0_buffer
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             state <= IDLE;
             req_buf <= '{default: 0};
@@ -423,7 +423,7 @@ generate
         PSelector #(DEPTH) selector_wb_valid (data_valid, wb_valid);
         Encoder #(DEPTH) encoder_wb_idx (wb_valid, wb_idx);
         assign io.wb_data = {tag[wb_idx], data[wb_idx]};
-        always_ff @(posedge clk, posedge rst)begin
+        always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 data_valid <= 0;
                 en <= 0;
@@ -456,7 +456,7 @@ generate
                 wb_idx <= valid_idx;
             end
         end
-        always_ff @(posedge clk or posedge rst)begin
+        always_ff @(posedge clk or negedge rst)begin
             if(rst == `RST)begin
                 en <= 0;
             end

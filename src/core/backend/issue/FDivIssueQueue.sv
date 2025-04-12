@@ -56,7 +56,7 @@ module FDivIssueQueue (
     assign issue_fdiv_io.rs1_data = fdiv_reg_io.data[0];
     assign issue_fdiv_io.rs2_data = fdiv_reg_io.data[1];
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             ready <= 1'b1;
             issue_robIdx <= 1'b0;

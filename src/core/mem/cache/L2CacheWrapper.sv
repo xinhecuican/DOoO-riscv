@@ -109,7 +109,7 @@ module L2CacheWrapper #(
         .SpillR(1)
     ) axi_mux_inst(
         .clk_i(clk),
-        .rst_ni(~rst),
+        .rst_ni(rst),
         .test_i(1'b0),
         .slv_reqs_i({dreq, tlb_req, ireq}),
         .slv_resps_o({dresp, tlb_resp, iresp}),
@@ -127,7 +127,7 @@ module L2CacheWrapper #(
         .resp_t(snoop_resp_t)
     ) snoop_cut (
         .clk_i(clk),
-        .rst_ni(~rst),
+        .rst_ni(rst),
         .slv_req_i(l2_snoop_req),
         .slv_resp_o(l2_snoop_resp),
         .mst_req_o(snoop_req),

@@ -17,7 +17,7 @@ module ITLB(
         logic `ARRAY(2, `PADDR_SIZE) paddr;
         logic `N(`TLB_IDX_SIZE) idx;
     } RequestBuffer;
-    typedef enum {IDLE, WALK_ADDR0, WALK_ADDR1} State;
+    typedef enum {IDLE, WALK_ADDR0, WALK_ADDR1, WALK_ALL} State;
     State state;
     RequestBuffer req_buf;
     logic flush_n;
@@ -66,7 +66,7 @@ endgenerate
     always_ff @(posedge clk)begin
         flush_n <= itlb_cache_io.flush;
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             state <= IDLE;
             req_buf <= 0;
@@ -85,7 +85,14 @@ endgenerate
                     req_buf.paddr <= {itlb_io[1].paddr, itlb_io[0].paddr};
                     req_buf.exception <= 0;
                 end
-                if(miss[0] & ~(|exception))begin
+                if(miss[0] & miss[1] & ~(|exception) & 
+                    (req_buf.vaddr[0][`VADDR_SIZE-1: `TLB_OFFSET] == req_buf.vaddr[1][`VADDR_SIZE-1: `TLB_OFFSET]))begin
+                    state <= WALK_ALL;
+                    req_buf.req <= 1'b1;
+                    req_buf.req_addr <= req_buf.vaddr[0];
+                    req_buf.idx <= req_buf.idx + 1;
+                end
+                else if(miss[0] & ~(|exception))begin
                     state <= WALK_ADDR0;
                     req_buf.req <= 1'b1;
                     req_buf.req_addr <= req_buf.vaddr[0];
@@ -99,6 +106,25 @@ endgenerate
                 end
                 else begin
                     req_buf.vaddr <= itlb_cache_io.vaddr;
+                end
+            end
+            WALK_ALL:begin
+                if((req_buf.req_s3 & ~tlb_l2_io0.ready) | 
+                   (tlb_valid & tlb_l2_io0.error))begin
+                    req_buf.req <= 1'b1;
+                end
+                if(tlb_valid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
+                    req_buf.exception[0] <= 1'b1;
+                    req_buf.exception[1] <= 1'b1;
+                end
+                if(tlb_valid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
+                    req_buf.paddr[0] <= {wppn, req_buf.vaddr[0][`TLB_OFFSET-1: 0]};
+                    req_buf.paddr[1] <= {wppn, req_buf.vaddr[1][`TLB_OFFSET-1: 0]};
+                end
+
+                if(tlb_valid & ~tlb_l2_io0.error)begin
+                    state <= IDLE;
+                    miss_end <= 1'b1;
                 end
             end
             WALK_ADDR0: begin

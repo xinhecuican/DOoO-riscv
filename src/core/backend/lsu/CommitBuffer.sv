@@ -128,7 +128,7 @@ generate
     ParallelOR #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) or_widx ( widx_valid, widx_valid_combine);
     for(genvar i=0; i<`STORE_COMMIT_SIZE; i++)begin
         assign ready[i] = ((counter[i] == 1) | thresh_write | flush) & addr_en[i] & data_valid[i] & ~writing[i];
-        always_ff @(posedge clk or posedge rst)begin
+        always_ff @(posedge clk or negedge rst)begin
             if(rst == `RST)begin
                 counter[i] <= 1;
             end
@@ -206,7 +206,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             addr_en <= 0;
             writing <= 0;

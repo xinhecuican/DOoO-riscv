@@ -139,7 +139,7 @@ generate
     assign update_carry[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.carry;
     assign update_en[`SLOT_NUM-1] = ubtb_io.updateInfo.btbEntry.tailSlot.en && ubtb_io.updateInfo.btbEntry.tailSlot.br_type == CONDITION & ubtb_io.updateInfo.allocSlot[`SLOT_NUM-1];
 endgenerate
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             entrys <= '{default: 0};
             ctrs <= '{default: 0};

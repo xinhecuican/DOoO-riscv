@@ -131,7 +131,7 @@ module RAS(
         .ready()
     );
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             top <= 0;
             listTop <= 0;

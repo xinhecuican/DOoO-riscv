@@ -80,7 +80,7 @@ module ReplaceQueue(
             entrys[io.replace_idx] <= newEntry;
         end
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             dataValid <= 0;
             prior <= 0;
@@ -133,7 +133,7 @@ endgenerate
     PEncoder #(`DCACHE_REPLACE_SIZE) encoder_valid_idx (valid, validIdx);
     PEncoder #(`DCACHE_REPLACE_SIZE) encoder_prior_idx (prior_valid, priorIdx);
     assign processIdx_pre = |prior_valid ? priorIdx : validIdx;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             aw_valid <= 1'b0;
             widx <= 0;

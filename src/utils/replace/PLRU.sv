@@ -34,7 +34,7 @@ generate
             replace_io.miss_way <= replaceOut;
         end
 
-        always_ff @(posedge clk or posedge rst)begin
+        always_ff @(posedge clk or negedge rst)begin
             if(rst == `RST)begin
                 plru <= '{default: 0};
             end

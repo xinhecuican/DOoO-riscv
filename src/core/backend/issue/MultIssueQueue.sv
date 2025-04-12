@@ -67,7 +67,7 @@ endgenerate
     end
 
     LoopCompare #(`ROB_WIDTH) cmp_div_older(backendCtrl.redirectIdx, div_robIdx, div_older);
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             div_ready <= 1'b1;
             div_robIdx <= 0;

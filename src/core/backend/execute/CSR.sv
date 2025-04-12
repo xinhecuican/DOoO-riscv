@@ -259,7 +259,7 @@ endgenerate                                                   \
 generate                                                                \
     if(WRITE_ENABLE)begin                                               \
         if(MASK_VALID)begin                                             \
-            always_ff @(posedge clk or posedge rst)begin                \
+            always_ff @(posedge clk or negedge rst)begin                \
                 if(rst == `RST)begin                                    \
                     name <= init_value;                                 \
                 end                                                     \
@@ -271,7 +271,7 @@ generate                                                                \
             end                                                         \
         end                                                             \
         else begin                                                      \
-            always_ff @(posedge clk or posedge rst)begin                \
+            always_ff @(posedge clk or negedge rst)begin                \
                 if(rst == `RST)begin                                    \
                     name <= init_value;                                 \
                 end                                                     \
@@ -284,7 +284,7 @@ generate                                                                \
         end                                                             \
     end                                                                 \
     else begin                                                          \
-        always_ff @(posedge clk or posedge rst)begin                    \
+        always_ff @(posedge clk or negedge rst)begin                    \
             if(rst == `RST)begin                                        \
                 name <= init_value;                                     \
             end                                                         \
@@ -352,7 +352,7 @@ endgenerate                                                             \
     logic `N(64) mcycle_n, minstret_n;
     assign mcycle_n = {mpfhcounter[0], mpfcounter[0]} + 1;
     assign minstret_n = {mpfhcounter[2], mpfcounter[2]} + commitBus.num;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
             mepc <= 0;
@@ -535,7 +535,7 @@ endgenerate                                                             \
                                         issue_csr_io.bundle.exc_valid ? issue_csr_io.bundle.exccode : `EXC_NONE;
     assign csr_wb_io.datas[0].irq_enable = 0;
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             mode <= 2'b11;
         end
@@ -599,7 +599,7 @@ endgenerate
         meip <= meip_s1;
         seip_s2 <= seip_s1;
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             msip_s1 <= 0;
             mtip_s1 <= 0;
@@ -632,7 +632,7 @@ endgenerate
         pmpaddr_id_s1 <= pmpaddr_offset;
         pmpaddr_id_s2 <= pmpaddr_id_s1;
     end
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             pmpcfg <= 0;
             pmpaddr <= 0;
@@ -669,7 +669,7 @@ endgenerate
         name.asid <= satp.asid; \
         name.satp_mode <= satp.mode; \
     end \
-    always_ff @(posedge clk, posedge rst)begin \
+    always_ff @(posedge clk, negedge rst)begin \
         if(rst == `RST)begin \
             name.pmpcfg <= 0; \
             name.pmpaddr <= 0; \

@@ -322,7 +322,7 @@ endgenerate
     );
     Encoder #(MSHR_SIZE) encoder_waiting_select (waiting_select, waiting_select_idx);
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             en <= 0;
             dir_requests <= 0;
@@ -405,7 +405,7 @@ generate
         end
         OldestSelect #(MSHR_SIZE, 1, SLAVE_BITS) select_data (data_valid, data, , refill_data[i]);
 
-        always_ff @(posedge clk, posedge rst)begin
+        always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 data <= 0;
                 data_valid <= 0;
@@ -431,7 +431,7 @@ generate
     PEncoder #(MSHR_SIZE) encoder_direct_idx(refill_direct, refill_direct_idx);
     assign refill_idx = |refill_direct ? refill_direct_idx : refill_data_idx;
 endgenerate
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             refill_ids <= 0;
             refill_resps <= 0;
@@ -569,7 +569,7 @@ endgenerate
     assign dir_read_unique_all = dir_read_unique | dir_clean_read;
     assign dir_make_unique_all = dir_make_unique | dir_clean_unique_nodata;
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             require_data <= 0;
             dir_slave_wreq <= 0;
@@ -710,7 +710,7 @@ generate
     end
 endgenerate
     `SIG_N(snoop_write_conflict, snoop_write_conflict_n)
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             snoop_request <= 0;
             snoop_replace_request <= 0;
@@ -812,7 +812,7 @@ endgenerate
     logic `N(CACHE_BANK_WIDTH) mst_snoop_data_idx;
     logic `ARRAY(CACHE_BANK, CACHE_BITS) mst_snoop_data;
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             mst_snoop_op <= 0;
             mst_snoop_idx <= 0;
@@ -878,7 +878,7 @@ generate
                 l3_data[l3_buffer.data_index] <= master_io.r_data;
             end
         end
-        always_ff @(posedge clk, posedge rst)begin
+        always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 l3_req_write <= 0;
                 l3_req_write_end <= 0;
@@ -923,7 +923,7 @@ generate
         end
     end
 endgenerate
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             l3_requests <= 0;
             l3_state <= L3_IDLE;
@@ -1000,7 +1000,7 @@ endgenerate
     OldestSelect #(MSHR_SIZE, 1, ID_WIDTH) select_b_id (write_data_finish, write_b_ids, write_b_req, write_b_id);
     ParallelOR #(MSHR_SIZE, DATA_BANK) or_write_bank (write_bank_idx_dec, write_reqs_combine);
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             write_idx <= 0;
             write_data_index <= 0;
@@ -1073,7 +1073,7 @@ endgenerate
 
 
 // lookup
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             lookup_addrs <= 0;
             lookup_write_addrs <= 0;
@@ -1167,7 +1167,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             lookup_requests <= 0;
         end
@@ -1227,7 +1227,7 @@ endgenerate
     assign replace_read_conflict = |(replace_buffer.data_bank & (lookup_data_req | ~mshr_data_io.ready));
     FairSelect #(DATA_BANK, `DCACHE_BITS * `DCACHE_BANK) select_replace_data (replace_data_hits, mshr_data_io.rdata, replace_data_hit, replace_read_data);
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             replace_reqs <= 0;
             replace_data_valids <= 0;
@@ -1307,7 +1307,7 @@ endgenerate
     logic dbg_wend;
 
     `SIG_N(slave_io.w_valid & slave_io.w_last & ~write_conflict_wait, dbg_wend)
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             dbg_rsource <= 0;
         end
@@ -1328,11 +1328,11 @@ endgenerate
     `LOG_ARRAY(T_L2CACHE, dbg_rdata_str, refill_buffer_data[refill_idx], SLAVE_BANK)
     `LOG_ARRAY(T_L2CACHE, dbg_wdata_str, write_buffer[write_idx], SLAVE_BANK)
     `Log(DLog::Debug, T_L2CACHE, slave_io.r_valid & slave_io.r_last,
-        $sformatf("l2cache refill. [%h %d %d] %s", entrys[refill_idx].paddr, slave_io.r_id, dbg_rsource[refill_idx], dbg_rdata_str));
+        $sformatf("l2cache refill. [%h %d %d] %s", entrys[refill_idx].paddr, slave_io.r_id, dbg_rsource[refill_idx], dbg_rdata_str), 1'b1, entrys[refill_idx].paddr);
     `Log(DLog::Debug, T_L2CACHE, master_io.w_valid & master_io.w_last,
-        $sformatf("l2cache replace. [%h]", replace_buffer.addr));
+        $sformatf("l2cache replace. [%h]", replace_buffer.addr), 1'b1, replace_buffer.addr);
     `Log(DLog::Debug, T_L2CACHE, dbg_wend,
-    $sformatf("l2cache write. [%h] %s", entrys[write_idx].paddr, dbg_wdata_str));
+    $sformatf("l2cache write. [%h] %s", entrys[write_idx].paddr, dbg_wdata_str), 1'b1, entrys[write_idx].paddr);
 
     `PERF(l2_hit, dir_request_n & dir_read & mshr_dir_io.hit)
     `PERF(l2_snoop_replace, (|snoop_request) & (snoop_state == SNOOP_IDLE) & snoop_replace_request[snoop_idx])

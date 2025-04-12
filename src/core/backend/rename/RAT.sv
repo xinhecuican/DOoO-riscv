@@ -33,7 +33,7 @@ generate;
     end
 endgenerate
 
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             for(int i=0; i<32; i++)begin
                 rat[i] <= i;

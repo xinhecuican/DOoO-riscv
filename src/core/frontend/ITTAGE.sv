@@ -163,7 +163,7 @@ generate
     end
 endgenerate
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             reset_u <= 0;
             resetu_ctr <= 0;
@@ -241,7 +241,7 @@ endgenerate
     assign hit_way = tag_hit ? tag_hits_n : replace_io.miss_way;
     assign tag_hit_idx = tag_hit ? tag_hits_encode_n : miss_way_encode;
 
-    always_ff @(posedge clk, posedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             tags <= 0;
         end

@@ -113,7 +113,7 @@ endgenerate
     Encoder #(DEPTH) encoder2 (validEnd, validSelect2);
     ParallelAdder #(.DEPTH(DEPTH)) adder_walk_num (valid, walkNum);
     assign walk_tail = validSelect1 == head ? validSelect2 : validSelect1;
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             head <= 0;
             tail <= 0;
@@ -184,7 +184,7 @@ module MemDispatchQueue #(
         redirect_free <= io.valid_empty;
         redirect_idx <= idxs[io.walk_tail];
     end
-    always_ff @(posedge clk or posedge rst)begin
+    always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             idxs <= '{default: 0};
         end
