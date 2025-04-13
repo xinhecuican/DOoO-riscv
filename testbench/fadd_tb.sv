@@ -1,13 +1,13 @@
-`include "../src/defines/fp_defines.svh"
-`include "../src/defines/defines.svh"
+`include "fp_defines.svh"
+`include "defines.svh"
 
 // sv2v --write=build/fadd_tb.v -I=src/defines -I=build --top=fadd_tb testbench/fadd_tb.sv src/core/backend/execute/FAdd.sv src/core/backend/execute/FMisc.sv src/utils/lzc.sv
 // iverilog -g2012 build/fadd_tb.v -s fadd_tb -o build/sim.out
 // vvp -n build/sim.out
 module fadd_tb();
-    int stimulus_a[1000];
-    int stimulus_b[1000];
-    int corner_values[6];
+    logic [31: 0] stimulus_a[999: 0];
+    logic [31: 0] stimulus_b[999: 0];
+    int corner_values[7];
     int perm_idx;
     int count = 0;
     logic clk, rst;
@@ -20,15 +20,15 @@ module fadd_tb();
     always #5 clk = ~clk;
     localparam int unsigned FP32_EXP_BITS = exp_bits(FP32);
     localparam int unsigned FP32_MAN_BITS = man_bits(FP32);
-    FAdd #(FP32_EXP_BITS, FP32_MAN_BITS*2, FP32_MAN_BITS) fadd_dut (
+    FAdd #(FP32_EXP_BITS, FP32_MAN_BITS, FP32_MAN_BITS) fadd_dut (
         .clk,
         .rst,
         .round_mode,
         .sub(sub),
         .fma(1'b0),
         .info_fma(info),
-        .rs1_data({rs1_data, {FP32_MAN_BITS{1'b0}}}),
-        .rs2_data({rs2_data, {FP32_MAN_BITS{1'b0}}}),
+        .rs1_data(rs1_data),
+        .rs2_data(rs2_data),
         .res(res_dut),
         .status(flag_dut)
     );
@@ -37,23 +37,30 @@ module fadd_tb();
         .clock(clk),
         .reset(rst),
         .io_a(rs1_data),
-        .io_b(rs2_data),
+        .io_b(sub ? rs2_data ^ 32'h80000000 : rs2_data),
         .io_rm(round_mode),
         .io_result(res_ref),
         .io_fflags(flag_ref)
     );
 
     initial begin
-        $dumpfile("build/wave.vcd");
-        $dumpvars(0, fadd_tb);
+`ifdef DUMP_VPD
+        $vcdpluson();
+`endif
     end
 
     // task to run the test and print the count
-    task run_test(input int a[1000], input int b[1000], input int size);
+    task run_test(input logic [31: 0] a[999: 0], input logic [31: 0] b[999: 0], input int size, input bit random_round=0, input bit random_sub=0);
         int count = 0;
         for (int i = 0; i < size; i++) begin
             rs1_data = a[i];
             rs2_data = b[i];
+            if(random_round)begin
+                round_mode = roundmode_e'($random % 8);
+            end
+            if(random_sub)begin
+                sub = $random % 2;
+            end
             #20;
             if(res_dut != res_ref || flag_dut != flag_ref)begin
                 $display("Test with A: %h, B: %h error.\nDut: %h %h\nRef: %h %h", a[i], b[i], res_dut, flag_dut, res_ref, flag_ref);
@@ -65,19 +72,26 @@ module fadd_tb();
     initial begin
         clk = 1;
         rst = 1;
-        round_mode = 0;
+        round_mode = RNE;
         sub = 0;
         info = 0;
         #10;
         // Regression Tests
-        stimulus_a[7: 0] = '{32'h22cb525a, 32'h40000000, 32'h83e73d5c, 32'hbf9b1e94, 32'h34082401, 32'h05e8ef81, 32'h5c75da81, 32'h002b017};
-        stimulus_b[7: 0] = '{32'hadd79efa, 32'hc0000000, 32'h1c800000, 32'hc038ed3a, 32'hb328cd45, 32'h0114f3db, 32'h2f642a39, 32'hff3807ab};
+        stimulus_a[9: 0] = '{32'h22cb525a, 32'h40000000, 32'h83e73d5c, 32'hbf9b1e94, 32'h34082401, 32'h05e8ef81, 32'h5c75da81, 32'h002b017, 32'h33e7bcd5, 32'h00800000};
+        stimulus_b[9: 0] = '{32'hadd79efa, 32'hc0000000, 32'h1c800000, 32'hc038ed3a, 32'hb328cd45, 32'h0114f3db, 32'h2f642a39, 32'hff3807ab, 32'h37e7bcd5, 32'h00043fd1};
+        #10;
         $display("Regression Tests");
-        run_test(stimulus_a, stimulus_b, 8);
-        
+        run_test(stimulus_a, stimulus_b, 10);
+
+        stimulus_a[3: 0] = '{32'h7f7fffff, 32'h7f000000, 32'h7f7fffff, 32'h7fffffff};
+        stimulus_b[3: 0] = '{32'h7f7fffff, 32'h7f000000, 32'h00800000, 32'h7f010000};
+        #10;
+        $display("overflow");
+        run_test(stimulus_a, stimulus_b, 4);
 
         // Corner Cases
-        corner_values = '{32'h80000000, 32'h00000000, 32'h7f800000, 32'hff800000, 32'h7fc00000, 32'hffc00000};
+        corner_values = '{32'h80000000, 32'h00000000, 32'h7f800000, 32'hff800000, 32'h7fc00000, 32'hffc00000, 32'ha2cb525a};
+        #10;
         perm_idx = 0;
         foreach (corner_values[i]) begin
             foreach (corner_values[j]) begin
@@ -143,20 +157,6 @@ module fadd_tb();
         run_test(stimulus_a, stimulus_b, 1000);
 
         for (int i = 0; i < 1000; i++) begin
-            stimulus_a[i] = $random;
-            stimulus_b[i] = 32'h7f800000;
-        end
-        $display("any + Inf");
-        run_test(stimulus_a, stimulus_b, 1000);
-
-        for (int i = 0; i < 1000; i++) begin
-            stimulus_a[i] = $random;
-            stimulus_b[i] = 32'hff800000;
-        end
-        $display("any - Inf");
-        run_test(stimulus_a, stimulus_b, 1000);
-
-        for (int i = 0; i < 1000; i++) begin
             stimulus_a[i] = 32'h7fc00000; // NaN
             stimulus_b[i] = $random;
         end
@@ -172,26 +172,29 @@ module fadd_tb();
 
         for (int i = 0; i < 1000; i++) begin
             stimulus_a[i] = $random;
-            stimulus_b[i] = 32'h7fc00000;
-        end
-        $display("any + Nan");
-        run_test(stimulus_a, stimulus_b, 1000);
-
-        for (int i = 0; i < 1000; i++) begin
-            stimulus_a[i] = $random;
-            stimulus_b[i] = 32'hffc00000;
-        end
-        $display("any - NaN");
-        run_test(stimulus_a, stimulus_b, 1000);
-
-        for (int i = 0; i < 1000; i++) begin
-            stimulus_a[i] = $random;
             stimulus_b[i] = $random;
         end
         $display("any + any");
         run_test(stimulus_a, stimulus_b, 1000);
 
+        for (int i = 0; i < 1000; i++)begin
+            stimulus_a[i] = $random;
+            stimulus_b[i] = $random;
+        end
+        $display("round mode");
+        run_test(stimulus_a, stimulus_b, 1000, 1);
+
+        for (int i = 0; i < 1000; i++)begin
+            stimulus_a[i] = $random;
+            stimulus_b[i] = $random;
+        end
+        $display("sub");
+        run_test(stimulus_a, stimulus_b, 1000, 0, 1);
+
+
         $display("All tests passed.");
+
+        $get_coverage();
         $finish;
     end
 endmodule

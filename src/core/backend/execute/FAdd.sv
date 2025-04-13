@@ -37,7 +37,7 @@ module FAdd #(
     assign fp_b.sign = fp_b_pre.sign ^ sub;
     assign fp_b.exp = fp_b_pre.exp;
     assign fp_b.mant = fp_b_pre.mant;
-    assign exp_mant_equal = fp_a.exp == fp_b.exp && fp_a.mant == fp_b.mant;
+    assign exp_mant_equal = (fp_a.exp == fp_b.exp) && (fp_a.mant == fp_b.mant);
     fp_classifier #(EXP_BITS, MAN_BITS, 2) classifier (
         .operands_i ({rs2_data, rs1_data}),
         .is_boxed_i (2'b11),
@@ -59,7 +59,7 @@ module FAdd #(
     assign raw_mant_b = {exp_nz_b, fp_b.mant, 3'b0};
 
 // align
-    logic `N(EXP_BITS) shift_cnt, sub_ab, sub_ba, exp_diff;
+    logic `N(EXP_BITS) sub_ab, sub_ba, exp_diff;
     logic `N(MAN_BITS+4) shift_mant_a, shift_mant_b, sticky_mask;
     logic sticky_pre, exp_gt;
     assign sub_ab = nor_exp_a - nor_exp_b;
@@ -113,8 +113,17 @@ module FAdd #(
     lzc #(OUT_MAN_BITS+1, 1) lzc_inst (mant_sum_c[OUT_MAN_BITS+3: 3], lpath_shamt_pre, lzc_empty);
     assign lpath_shamt = shift_exp < lpath_shamt_pre ? shift_exp : lpath_shamt_pre;
     assign shift_mant = mant_sum << lpath_shamt;
-    assign sticky_bit = mant_sum_c[0] | (mant_sum_c[OUT_MAN_BITS+4] & mant_sum_c[2]) | 
-                        ((lzc_empty | mant_sum_c[OUT_MAN_BITS+3] | mant_sum_c[OUT_MAN_BITS+4]) & mant_sum_c[1]) | (|mant_sum[MAN_BITS-OUT_MAN_BITS-1: 0]);
+generate
+    if(MAN_BITS == OUT_MAN_BITS)begin
+        assign sticky_bit = mant_sum_c[0] | (mant_sum_c[OUT_MAN_BITS+4] & mant_sum_c[2]) | 
+                            ((lzc_empty | mant_sum_c[OUT_MAN_BITS+3] | mant_sum_c[OUT_MAN_BITS+4]) & mant_sum_c[1]);
+    end
+    else begin
+        assign sticky_bit = mant_sum_c[0] | (mant_sum_c[OUT_MAN_BITS+4] & mant_sum_c[2]) | 
+                            ((lzc_empty | mant_sum_c[OUT_MAN_BITS+3] | mant_sum_c[OUT_MAN_BITS+4]) & mant_sum_c[1]) | (|mant_sum[MAN_BITS-OUT_MAN_BITS-1: 0]);
+    end
+endgenerate
+
     always_comb begin 
         if(mant_sum_c[OUT_MAN_BITS+4])begin
             align_exp = shift_exp + 1;
@@ -125,7 +134,7 @@ module FAdd #(
             align_mant = mant_sum_c[OUT_MAN_BITS+3: 2];
         end
         else if(!lzc_empty) begin
-            align_exp = shift_exp < lpath_shamt ? 0 : shift_exp - lpath_shamt;
+            align_exp = shift_exp - lpath_shamt;
             align_mant = shift_mant[MAN_BITS+3: MAN_BITS-OUT_MAN_BITS+2];
         end
         else begin
@@ -158,7 +167,7 @@ module FAdd #(
         normal_status = 0;
         normal_status.OF = ov;
         normal_status.UF = round_ix && (shift_exp_z & ((mant_sum_c[OUT_MAN_BITS+4: OUT_MAN_BITS+3] == 2'b00) & ~(mant_sum_c[OUT_MAN_BITS+2] & round_cout)));
-        normal_status.NX = round_ix;
+        normal_status.NX = round_ix | ov;
     end
 
 
@@ -220,5 +229,29 @@ module FAdd #(
                  ov ? {sign, ov_exp, ov_mant} :
                  {sign, round_exp[EXP_BITS-1: 0], round_mant};
     assign status = result_special_n ? special_status_n : normal_status;
+
+`ifdef COVERAGE
+    covergroup cg;
+        status: coverpoint status {
+            bins NV = {5'b10000};
+            bins UF = {5'b00010};
+            bins NX = {5'b00001};
+            bins NX_OF = {5'b00101};
+            bins NX_UF = {5'b00011};
+        }
+    endgroup
+    cg cg_inst = new();
+
+    logic `N(FP_BITS) rs1_data_n, rs2_data_n;
+    logic data_valid;
+    always_ff @(posedge clk)begin
+        rs1_data_n <= rs1_data;
+        rs2_data_n <= rs2_data;
+        data_valid <= (rs1_data != rs1_data_n) || (rs2_data != rs2_data_n);
+        if(data_valid)begin
+            cg_inst.sample();
+        end
+    end
+`endif
 
 endmodule

@@ -20,6 +20,7 @@ TIMING_RPT ?= build/${TOP}.rpt
 SYNTH_LOG = ${LOG_PATH}synth
 FOUNDRY ?= sky130
 DESIGN_CONFIG = ../../config/config.mk
+TESTBENCH = fadd_tb
 
 export CLK_FREQ_MHZ
 export SDC_FILE
@@ -83,6 +84,15 @@ build/${TOP}/${TOP}.v: ${SRC}
 	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
 	mkdir -p build/${TOP}
 	sv2v -v --write=build/${TOP} -I=src/defines -I=build --top=Soc ${SRC}
+
+vcs:
+	vcs -sverilog +v2k -Mupdate -Mdir=build/ -timescale=1ns/1ns -debug_access+all +warn=noUII-L -cm line+cond+fsm+branch+tgl -cm_name ${TESTBENCH} -cm_dir build/${TESTBENCH}.vdb +define+DUMP_VPD +define+COVERAGE +vpdfile+build/${TESTBENCH}.vpd -cpp g++-4.8 -cc gcc-4.8 -LDFLAGS -Wl,-no-as-needed -f testbench/${TESTBENCH}.f -top ${TESTBENCH} -o build/${TESTBENCH}
+
+vcs_sim:
+	build/${TESTBENCH} +vpdfile+build/${TESTBENCH}.vpd -cm line+cond+fsm+branch+tgl -cm_name ${TESTBENCH} -cm_dir build/${TESTBENCH}.vdb -l build/${TESTBENCH}.log
+
+vcs_report:
+	urg -dir build/${TESTBENCH}.vdb -report build/${TESTBENCH}_report
 
 # VSRC := $(shell test -d build/v && find build/v -name "*.v" -or -name "*.sv" -or -name "*.svh")
 # VSRC_PREFIX = $(patsubst %,../../%,$(VSRC))
