@@ -43,15 +43,15 @@ module RAS(
         return ~bottom & top;
     endfunction
 
-    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_top_n1 (1, top, top_n1);
-    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_top_p1 (1, ras_io.linfo.rasTop, top_p1);
-    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listtop_n1 (1, ras_io.linfo.listTop, listTop_n1);
-    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_rtop_p1 (1, r.rasTop, rtop_p1);
-    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rlisttop_n1 (1, r.listTop, rlistTop_n1);
-    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rtop_n1 (1, r.rasTop, rtop_n1);
-    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listbottom_n1 (1, listBottom, listBottom_n1);
-    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_bottom_p1 (1, listBottom, listBottom_p1);
-    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_p1 (1, topList[top_p1.idx], list_p1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_top_n1 (1'b1, top, top_n1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_top_p1 (1'b1, ras_io.linfo.rasTop, top_p1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listtop_n1 (1'b1, ras_io.linfo.listTop, listTop_n1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_rtop_p1 (1'b1, r.rasTop, rtop_p1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rlisttop_n1 (1'b1, r.listTop, rlistTop_n1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_rtop_n1 (1'b1, r.rasTop, rtop_n1);
+    LoopAdder #(`RAS_INFLIGHT_WIDTH, 1) add_listbottom_n1 (1'b1, listBottom, listBottom_n1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_bottom_p1 (1'b1, listBottom, listBottom_p1);
+    LoopSub #(`RAS_INFLIGHT_WIDTH, 1) sub_list_p1 (1'b1, topList[top_p1.idx], list_p1);
 
     always_comb begin
         squashType = getRasType(ras_io.squashInfo.br_type);
@@ -104,7 +104,7 @@ module RAS(
     ) inflight_ras (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .we(we),
         .waddr(waddr),
@@ -121,7 +121,7 @@ module RAS(
     ) commit_ras (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .we(commit_we),
         .waddr(commit_waddr),

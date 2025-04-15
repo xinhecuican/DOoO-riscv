@@ -165,7 +165,8 @@ endgenerate
         end
     end
 
+`ifdef DIFFTEST
     `Log(DLog::Debug, T_BTB, ubtb_io.update & ubtb_io.updateInfo.btbEntry.en,
     $sformatf("update ubtb. %h->%h[%h]", ubtb_io.updateInfo.start_addr, updateSelectIdx, update_tag))
-
+`endif
 endmodule

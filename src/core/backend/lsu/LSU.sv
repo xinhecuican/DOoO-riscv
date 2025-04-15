@@ -60,7 +60,10 @@ module LSU(
     output StoreIdx sqIdx,
     output logic `N(`VADDR_SIZE) exc_vaddr
 );
-    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr, storeVAddr;
+    logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr;
+    logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) storeVAddr;
+    logic `ARRAY(`LOAD_PIPELINE, 2) lcarry;
+    logic `ARRAY(`STORE_PIPELINE, 2) scarry;
     LoadIssueData `N(`LOAD_PIPELINE) load_issue_data;
     logic `N(`LOAD_PIPELINE) load_en, fwd_data_invalid; // fwd_data_invalid from StoreQueue
     logic sc_buffer_empty;
@@ -168,7 +171,8 @@ generate
         AGU agu(
             .imm(load_io.loadIssueData[i].imm),
             .data(load_reg_io.data[i]),
-            .addr(loadVAddr[i])
+            .addr(loadVAddr[i]),
+            .carry(lcarry[i])
         );
         getMask get_mask(loadVAddr[i][1: 0], load_io.loadIssueData[i].size, lmask_pre[i]);
         MisalignDetect misalign_detect (load_io.loadIssueData[i].size, loadVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], lmisalign[i]);
@@ -223,12 +227,14 @@ endgenerate
     ;
     assign tlb_lsu_io.lidx = load_io.issue_idx;
     assign tlb_lsu_io.laddr = loadVAddr;
+    assign tlb_lsu_io.lsel = lcarry;
     assign tlb_lsu_io.flush = backendCtrl.redirect;
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
         LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_io.loadIssueData[i].robIdx, older);
+        assign tlb_lsu_io.lsel_tag[i] = load_reg_io.data[i][`VADDR_SIZE-1: `TLB_OFFSET];
         assign redirect_clear_req[i] = backendCtrl.redirect & older;
         assign lptag[i] = tlb_lsu_io.lpaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];
     end
@@ -498,7 +504,8 @@ generate
         AGU agu(
             .imm(store_io.storeIssueData[i].imm),
             .data(store_reg_io.data[i]),
-            .addr(storeVAddr[i])
+            .addr(storeVAddr[i]),
+            .carry(scarry[i])
         );
         assign sptag[i] = tlb_lsu_io.spaddr[i][`PADDR_SIZE-1: `TLB_OFFSET];
         always_ff @(posedge clk)begin
@@ -521,6 +528,7 @@ generate
         logic older;
         LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, store_issue_data[i].robIdx, older);
         assign store_redirect_s2[i] = backendCtrl.redirect & older;
+        assign tlb_lsu_io.ssel_tag[i] = store_reg_io.data[i][`VADDR_SIZE-1: `TLB_OFFSET];
     end
 endgenerate
 
@@ -529,6 +537,7 @@ endgenerate
     assign tlb_lsu_io.sreq_s2 = store_en & ~smisalign_s2 & ~store_redirect_s2;
     assign tlb_lsu_io.sidx = sissue_idx;
     assign tlb_lsu_io.saddr = storeVAddr;
+    assign tlb_lsu_io.ssel = scarry;
 
     //store enqueue
     assign stlb_miss = tlb_lsu_io.smiss;

@@ -40,11 +40,11 @@ endgenerate
 
 `ifdef RVC
     logic `N(`BLOCK_INST_SIZE) rvc_mask /*verilator split_var*/;
-    logic `N(`BLOCK_INST_SIZE) rvc_en, rvc_en_compress;
+    logic `N(`BLOCK_INST_SIZE) rvc_en;
+    logic `N(`BLOCK_INST_SIZE+1) rvc_en_compress;
     logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx, rvc_offset;
     logic `N(`BLOCK_INST_WIDTH+1) rvc_num;
     logic `N(`PREDICTION_WIDTH) tailIdx_pre, tail_rvi_idx;
-    logic `N(`PREDICTION_WIDTH+1) stream_tail_idx;
     logic `ARRAY(`BLOCK_INST_SIZE, `VADDR_SIZE) addrs;
     logic half_rvi;
     logic `N(`FSQ_SIZE) redirect_half_rvi;
@@ -61,7 +61,6 @@ endgenerate
     CalValidNum #(`BLOCK_INST_SIZE) cal_rvc_idx(rvc_en, rvc_idx);
     MaskGen #(`BLOCK_INST_SIZE+1) mask_rvc_en(rvc_num, rvc_en_compress);
     PEncoder #(`BLOCK_INST_SIZE) encoder_tail_idx(rvc_en, tailIdx_pre);
-    PEncoder #(`BLOCK_INST_SIZE+1) encoder_stream_idx(cache_pd_io.en, stream_tail_idx);
     // pipeline cal tail_rvi_idx if needed
     assign tail_rvi_idx = cache_pd_io.stream.size + {~cache_pd_io.stream.rvc, cache_pd_io.stream.rvc} - 1;
     assign redirect_fsqIdx_n = frontendCtrl.redirectInfo.idx + 1;
@@ -140,7 +139,7 @@ endgenerate
             for(int i=0; i<`BLOCK_INST_SIZE; i++)begin
                 if(rvc_en[i])begin
                     bundles_next[rvc_idx[i]] <= bundles[i];
-                    data_next[rvc_idx[i]] <= cache_pd_io.data[i +: 2];
+                    data_next[rvc_idx[i]] <= {cache_pd_io.data[i+1], cache_pd_io.data[i]};
                     rvc_offset[rvc_idx[i]] <= i;
                 end
             end

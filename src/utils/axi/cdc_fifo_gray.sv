@@ -95,7 +95,7 @@
 ///     -through [get_pins -hierarchical -filter async]
 /// ```
 
-`include "../../../defines/defines.svh"
+`include "../../defines/defines.svh"
 
 (* no_ungroup *)
 (* no_boundary_optimization *)

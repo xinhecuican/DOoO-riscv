@@ -391,6 +391,22 @@ module MaskGen4(
 	end
 endmodule
 
+module MaskGen5(
+	input logic [2: 0] in,
+	output logic [4: 0] out
+);
+	always_comb begin
+		case(in)
+		3'b000: out = 5'b00000;
+		3'b001: out = 5'b00001;
+		3'b010: out = 5'b00011;
+		3'b011: out = 5'b00111;
+		3'b100: out = 5'b01111;
+		default: out = 5'b00000;
+		endcase
+	end
+endmodule
+
 module MaskGen8(
 	input logic [2: 0] in,
 	output logic [7: 0] out

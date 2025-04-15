@@ -50,7 +50,7 @@ module DTLB(
 
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        TLB #(`DTLB_SIZE, 2'b01, 2'b01) ltlb(
+        TLB #(`DTLB_SIZE, 2'b01, 2'b01, 1'b1) ltlb(
             .*,
             .io(ltlb_io[i]),
             .csr_tlb_io(csr_ltlb_io)
@@ -59,12 +59,16 @@ generate
         if(i == 0)begin
             assign ltlb_io[i].req = tlb_lsu_io.lreq[i] | tlb_lsu_io.amo_req;
             assign ltlb_io[i].vaddr = tlb_lsu_io.amo_req ? tlb_lsu_io.amo_addr : tlb_lsu_io.laddr[i];
+            assign ltlb_io[i].sel_tag = tlb_lsu_io.amo_req ? tlb_lsu_io.amo_addr[`VADDR_SIZE-1: `TLB_OFFSET] : tlb_lsu_io.lsel_tag[i];
+            assign ltlb_io[i].sel = tlb_lsu_io.lsel[i] & ~tlb_lsu_io.amo_req;
         end
         else begin
 `endif
         assign ltlb_io[i].req = tlb_lsu_io.lreq[i];
         assign ltlb_io[i].vaddr = tlb_lsu_io.laddr[i];
         assign ltlb_io[i].flush = tlb_lsu_io.flush;
+        assign ltlb_io[i].sel = tlb_lsu_io.lsel[i];
+        assign ltlb_io[i].sel_tag = tlb_lsu_io.lsel_tag[i];
 `ifdef RVA
         end
 `endif
@@ -83,7 +87,7 @@ generate
         assign tlb_lsu_io.lpaddr[i] = ltlb_io[i].paddr;
     end
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
-        TLB #(`DTLB_SIZE, 2'b01, 2'b10) stlb(
+        TLB #(`DTLB_SIZE, 2'b01, 2'b10, 1'b1) stlb(
             .*,
             .io(stlb_io[i]),
             .csr_tlb_io(csr_stlb_io)
@@ -91,6 +95,8 @@ generate
         assign stlb_io[i].req = tlb_lsu_io.sreq[i];
         assign stlb_io[i].vaddr = tlb_lsu_io.saddr[i];
         assign stlb_io[i].flush = tlb_lsu_io.flush;
+        assign stlb_io[i].sel = tlb_lsu_io.ssel[i];
+        assign stlb_io[i].sel_tag = tlb_lsu_io.ssel_tag[i];
 
         assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception | fenceWe;
         assign stlb_io[i].wen = ~fenceWe;

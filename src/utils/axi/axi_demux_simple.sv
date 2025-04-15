@@ -64,7 +64,7 @@ module axi_demux_simple #(
   input  axi_resp_t   [NoMstPorts-1:0]  mst_resps_i
 );
 
-  localparam int unsigned IdCounterWidth = idx_width(MaxTrans);
+  localparam int unsigned IdCounterWidth = MaxTrans > 1 ? $clog2(MaxTrans) : 1;
   typedef logic [IdCounterWidth-1:0] id_cnt_t;
 
   // pass through if only one master port
@@ -258,7 +258,8 @@ module axi_demux_simple #(
     //--------------------------------------
     //  B Channel
     //--------------------------------------
-    logic [idx_width(NoMstPorts)-1:0] b_idx;
+    localparam NoMstPortsWidth = NoMstPorts > 1 ? $clog2(NoMstPorts) : 1;
+    logic [NoMstPortsWidth-1:0] b_idx;
 
     // Arbitration of the different B responses
     rr_arb_tree #(
@@ -371,7 +372,7 @@ module axi_demux_simple #(
     //  R Channel
     //--------------------------------------
 
-    logic [idx_width(NoMstPorts)-1:0] r_idx;
+    logic [NoMstPortsWidth-1:0] r_idx;
 
     // Arbitration of the different r responses
     rr_arb_tree #(

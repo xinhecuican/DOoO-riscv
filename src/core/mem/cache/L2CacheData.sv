@@ -129,7 +129,7 @@ generate
         ) ram (
             .clk,
             .rst,
-            .rst_sync(0),
+            .rst_sync(1'b0),
             .en(mshr_idx_r[PREPEND_PIPE][0] & way_dec[i]),
             .we(mshr_idx_r[PREPEND_PIPE][1] & way_dec[i]),
             .addr(idx),

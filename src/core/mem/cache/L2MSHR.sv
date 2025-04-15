@@ -45,11 +45,11 @@ module L2MSHR #(
     parameter MSHR_WIDTH = $clog2(MSHR_SIZE),
     parameter SLAVE_BITS = (`CACHELINE_SIZE / SLAVE_BANK) * 8,
     parameter CACHE_BITS = (`CACHELINE_SIZE / CACHE_BANK) * 8,
-    parameter SLAVE_WIDTH = idxWidth(SLAVE),
+    parameter SLAVE_WIDTH = SLAVE > 1 ? $clog2(SLAVE) : 1,
     parameter SLAVE_SET_WIDTH = $clog2(SLAVE_DIR_SET),
     parameter SLAVE_BANK_WIDTH = $clog2(SLAVE_BANK),
     parameter CACHE_BANK_WIDTH = $clog2(CACHE_BANK),
-    parameter DATA_BANK_WIDTH = idxWidth(DATA_BANK),
+    parameter DATA_BANK_WIDTH = DATA_BANK > 1 ? $clog2(DATA_BANK) : 1,
     parameter WAY_WIDTH = $clog2(WAY_NUM),
     parameter SET_WIDTH = $clog2(SET),
     parameter OFFSET_WIDTH = $clog2(OFFSET),
@@ -114,7 +114,7 @@ module L2MSHR #(
     logic `N(MSHR_SIZE) snoop_request, snoop_replace_request;
 
     logic `N(MSHR_SIZE) free_en1, free_en2;
-    logic `N(MSHR_SIZE) free_idx1, free_idx2;
+    logic `N(MSHR_WIDTH) free_idx1, free_idx2;
     logic free_conflict, full, ar_free_conflict;
     logic `N(MSHR_SIZE) dir_requests, dir_request_select;
     logic `N(MSHR_SIZE) dir_resp_reqs; // need response state to fill directory
@@ -316,7 +316,7 @@ endgenerate
         .clk,
         .rst,
         .en({renq_en, wenq_en | snoop_enq_en}),
-        .idx({free_idx2, free_idx1}),
+        .idx({free_en2, free_en1}),
         .ready(waiting_conflict),
         .select(waiting_select)
     );

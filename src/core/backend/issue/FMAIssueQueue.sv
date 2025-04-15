@@ -16,7 +16,7 @@ module FMAIssueQueue (
     logic `N(BANK_NUM) bigger;
     IssueBankIO #($bits(FMAIssueBundle), 3, BANK_SIZE, 3) bank_io[BANK_NUM-1: 0]();
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) order;
-    logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
+    logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)+1) bankNum;
     logic `N(BANK_NUM) bank_en_s4, madd_s3, madd_s4;
 generate
     for(genvar i=0; i<BANK_NUM; i++)begin

@@ -16,7 +16,7 @@ module IntIssueQueue(
     localparam BANK_NUM = `ALU_SIZE;
     IssueBankIO #($bits(IntIssueBundle), 2, BANK_SIZE) bank_io [BANK_NUM-1: 0]();
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) order;
-    logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
+    logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)+1) bankNum;
     logic `N(BANK_NUM) full;
     logic `N(BANK_NUM) enNext, bigger;
 generate

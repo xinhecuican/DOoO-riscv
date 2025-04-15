@@ -28,7 +28,7 @@ module Regfile #(
     ) ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(en),
         .raddr(raddr),
         .rdata(rdata),

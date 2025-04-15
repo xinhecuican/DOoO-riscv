@@ -10,7 +10,7 @@ module CsrIssueQueue(
     CommitBus.csr commitBus,
     input BackendCtrl backendCtrl,
     FenceBus.csr fenceBus,
-    input logic `N(`PREDICTION_WIDTH) commitStreamSize,
+    input logic `N(`PREDICTION_WIDTH+1) commitStreamSize,
     output logic `N(32) trapInst,
     output FenceReq fence_req
 );
@@ -83,7 +83,7 @@ module CsrIssueQueue(
     ) data_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(head),
         .rdata(rdata),

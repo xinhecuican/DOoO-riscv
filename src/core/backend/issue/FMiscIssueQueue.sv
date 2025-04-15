@@ -14,7 +14,7 @@ module FMiscIssueQueue (
     localparam BANK_NUM = `FMISC_SIZE;
     logic `N(BANK_NUM) full, fsel, fsel_n, fsel_n2;
     logic `ARRAY(BANK_NUM, $clog2(BANK_NUM)) order;
-    logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)) bankNum;
+    logic `ARRAY(BANK_NUM, $clog2(BANK_SIZE)+1) bankNum;
     logic `N(BANK_NUM) enNext, bigger, reg_en, en_o, bigger_s2, reg_ready;
     ExStatusBundle `N(BANK_NUM) bank_status, status_o;
     FMiscIssueBundle `N(BANK_NUM) bank_bundle, bundle_o;
@@ -96,7 +96,7 @@ module FMiscIssueBank #(
 
     output logic reg_en,
     output logic fsel,
-    output logic `N($clog2(DEPTH)) bankNum,
+    output logic `N($clog2(DEPTH)+1) bankNum,
     output logic `N(`PREG_WIDTH) rs1_o,
     output logic `N(`PREG_WIDTH) rs2_o,
     output logic `N(`PREG_WIDTH) rd_o,
@@ -126,7 +126,7 @@ module FMiscIssueBank #(
     ) data_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .addr0(freeIdx),
         .addr1(selectIdx),

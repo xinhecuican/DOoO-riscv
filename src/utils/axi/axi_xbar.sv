@@ -15,6 +15,8 @@
 
 /// axi_xbar: Fully-connected AXI4+ATOP crossbar with an arbitrary number of slave and master ports.
 /// See `doc/axi_xbar.md` for the documentation, including the definition of parameters and ports.
+`include "../../defines/bus/axi.svh"
+
 module axi_xbar
 #(
   /// Configuration struct for the crossbar see `axi_pkg` for fields and definitions.
@@ -59,11 +61,9 @@ module axi_xbar
   ///   axi_addr_t   end_addr;
   /// } rule_t;
   /// ```
-  parameter type rule_t                                               = logic
-`ifdef VCS
-  , localparam int unsigned MstPortsIdxWidth =
-      (Cfg.NoMstPorts == 32'd1) ? 32'd1 : unsigned'($clog2(Cfg.NoMstPorts))
-`endif
+  parameter type rule_t                                               = logic,
+  parameter NoMstPorts                                                = 2,
+  parameter int unsigned MstPortsIdxWidth = NoMstPorts > 1 ? $clog2(NoMstPorts) : 1
 ) (
   /// Clock, positive edge triggered.
   input  logic                                                          clk_i,
@@ -94,7 +94,7 @@ module axi_xbar
   /// Enables a default master port for each slave port. When this is enabled unmapped
   /// transactions get issued at the master port given by `default_mst_port_i`.
   /// When not used, tie to `'0`.  
-  input  logic      [Cfg.NoSlvPorts-1:0][idx_width(Cfg.NoMstPorts)-1:0] default_mst_port_i
+  input  logic      [Cfg.NoSlvPorts-1:0][MstPortsIdxWidth-1:0] default_mst_port_i
 `endif
 );
 
@@ -161,17 +161,4 @@ module axi_xbar
       .mst_resp_i  ( mst_ports_resp_i[i] )
     );
   end
-
-  // pragma translate_off
-  `ifndef VERILATOR
-  `ifndef XSIM
-  initial begin : check_params
-    id_slv_req_ports: assert ($bits(slv_ports_req_i[0].aw.id ) == Cfg.AxiIdWidthSlvPorts) else
-      $fatal(1, $sformatf("Slv_req and aw_chan id width not equal."));
-    id_slv_resp_ports: assert ($bits(slv_ports_resp_o[0].r.id) == Cfg.AxiIdWidthSlvPorts) else
-      $fatal(1, $sformatf("Slv_req and aw_chan id width not equal."));
-  end
-  `endif
-  `endif
-  // pragma translate_on
 endmodule

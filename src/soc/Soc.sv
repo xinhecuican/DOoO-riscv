@@ -126,7 +126,8 @@ module Soc(
         .slv_resp_t(AxiResp),
         .mst_req_t(AxiReq),
         .mst_resp_t(AxiResp),
-        .rule_t(addr_rule_t)
+        .rule_t(addr_rule_t),
+        .NoMstPorts(AXI_SLAVE_NUM)
     )crossbar(
         .clk_i(clk),
         .rst_ni(core_rst),
@@ -136,8 +137,8 @@ module Soc(
         .mst_ports_req_o(mst_req_o),
         .mst_ports_resp_i(mst_resp_i),
         .addr_map_i(addr_map),
-        .en_default_mst_port_i(0),
-        .default_mst_port_i(0)
+        .en_default_mst_port_i(1'b0),
+        .default_mst_port_i()
     );
 
 // interrupt

@@ -30,7 +30,7 @@ module ICacheData(
     ) tagv_ram0 (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(tagv_en),
         .rdata(tagv0),
         .we(tagv_we),
@@ -49,7 +49,7 @@ module ICacheData(
     ) tagv_ram1 (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(tagv_en),
         .rdata(tagv1),
         .we(tagv_we),
@@ -69,7 +69,7 @@ module ICacheData(
             ) bank (
                 .clk(clk),
                 .rst(rst),
-                .rst_sync(0),
+                .rst_sync(1'b0),
                 .en(en[i]),
                 .addr(index[i]),
                 .we(we[i]),

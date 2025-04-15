@@ -211,15 +211,14 @@ always_comb begin: comb_apb_wr
 end
 
 always_ff @(posedge clk or negedge rstn) begin: reg_int_prior
-    integer i;
     if (~rstn) begin
-        for (i = 0; i < INT_NUM; i = i + 1) begin
+        for (int i = 0; i < INT_NUM; i = i + 1) begin
             int_prior[i] <= 32'b0;
         end
     end
     else if (apb_wr) begin
-        for (i = 1; i < INT_NUM; i = i + 1) begin
-            if (apb.paddr[25:0] == `PLIC_INT_PRIOR + 26'h4 * i[25:0]) begin
+        for (int i = 1; i < INT_NUM; i = i + 1) begin
+            if (apb.paddr[25:0] == `PLIC_INT_PRIOR + 26'h4 * i) begin
                 int_prior[i] <= apb.pwdata;
             end
         end

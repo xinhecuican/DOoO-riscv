@@ -5,8 +5,8 @@ module PLRU#(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
     parameter READ_PORT = 1,
-    parameter WAY_WIDTH = idxWidth(WAY_NUM),
-    parameter ADDR_WIDTH = idxWidth(DEPTH)
+    parameter WAY_WIDTH = WAY_NUM > 1 ? $clog2(WAY_NUM) : 1,
+    parameter ADDR_WIDTH = DEPTH > 1 ? $clog2(DEPTH) : 1
 )(
     input logic clk,
     input logic rst,
@@ -54,7 +54,7 @@ endmodule
 
 module PLRUUpdate #(
     parameter WAY_NUM = 1,
-    parameter WAY_WIDTH = idxWidth(WAY_NUM)
+    parameter WAY_WIDTH = WAY_NUM > 1 ? $clog2(WAY_NUM) : 1
 )(
     input logic invalid,
     input logic `N(WAY_NUM-1) rdata,
@@ -89,7 +89,7 @@ endmodule
 
 module PLRUReplace #(
     parameter WAY_NUM = 1,
-    parameter WAY_WIDTH = idxWidth(WAY_NUM)
+    parameter WAY_WIDTH = WAY_NUM > 1 ? $clog2(WAY_NUM) : 1
 )(
     input logic `N(WAY_NUM-1) rdata,
     output logic `N(WAY_NUM) out

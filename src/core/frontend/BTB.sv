@@ -60,7 +60,7 @@ module BTB (
             ) btb_bank(
                 .clk(clk),
                 .rst(rst),
-                .rst_sync(0),
+                .rst_sync(1'b0),
                 .en(bank_en[i] & ~btb_io.redirect.stall),
                 .we(bank_ctrl[i].we),
                 .waddr(bank_ctrl[i].waddr),

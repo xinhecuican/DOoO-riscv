@@ -477,7 +477,7 @@ generate
 	case(RADIX)
 	2: MaskGen2 mask_gen(in, out);
 	4: MaskGen4 mask_gen(in, out);
-	5: MaskGen8 mask_gen(in, out);
+	5: MaskGen5 mask_gen(in, out);
 	8: MaskGen8 mask_gen(in, out);
 	16: MaskGen16 mask_gen(in, out);
 	17: MaskGen17 mask_gen(in, out);

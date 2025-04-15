@@ -22,7 +22,6 @@ module FSQ (
     logic full;
     logic queue_we;
     logic last_stage_we;
-    logic last_search;
     logic cache_req;
     logic cache_req_ok;
     BTBUpdateInfo oldEntry;
@@ -61,7 +60,7 @@ module FSQ (
     ) fs_queue(
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en({cache_req_ok | fsq_back_io.redirect.en, {(`ALU_SIZE+1){1'b1}}}),
         .we((queue_we | pd_redirect.en | rd_br_en)),
         .waddr(write_index),
@@ -83,7 +82,7 @@ module FSQ (
     ) redirect_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(2'b11),
         .we(bpu_fsq_io.lastStage),
         .waddr(bpu_fsq_io.lastStageIdx),
@@ -102,7 +101,7 @@ module FSQ (
     ) btb_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(n_commit_head),
         .rdata(oldEntry),
@@ -122,7 +121,7 @@ module FSQ (
     ) meta_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(commit_head),
         .rdata(updateMeta),
@@ -141,7 +140,7 @@ module FSQ (
     ) ras_addr_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(pd_redirect.fsqIdx_pre),
         .rdata(pd_redirect.ras_addr),
@@ -344,9 +343,6 @@ endgenerate
     LoopCompare #(`FSQ_WIDTH) cmp_redirect_search({bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir}, {search_head, shdir}, search_bigger);
     assign search_eq = {bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir} == {search_head, shdir};
     assign search_abandon = search_bigger | search_eq;
-    always_ff @(posedge clk)begin
-        last_search <= search_head == tail && fsq_cache_io.en;
-    end
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             search_head <= 0;
@@ -667,7 +663,7 @@ endgenerate
     ) exception_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en({`COMMIT_WIDTH{1'b1}}),
         .raddr(exception_idxs),
         .rdata(exception_addrs),
@@ -679,12 +675,12 @@ endgenerate
     MPRAM #(
         .WIDTH(`PREDICTION_WIDTH),
         .DEPTH(`FSQ_SIZE),
-        .READ_PORT(`COMMIT_WIDTH),
+        .READ_PORT(1),
         .WRITE_PORT(1)
     ) stream_size_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(n_commit_head),
         .rdata(commitSize),
@@ -715,7 +711,7 @@ endgenerate
     ) stream_last_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en({`ALU_SIZE{1'b1}}),
         .raddr(fsq_back_io.fsqIdx),
         .rdata(stream_lasts),

@@ -7,6 +7,8 @@ interface TLBIO #(
     logic req;
     logic `VADDR_BUS vaddr;
     logic flush;
+    logic [1: 0] sel;
+    VPNAddr sel_tag;
 
     logic miss;
     logic uncache;
@@ -21,7 +23,7 @@ interface TLBIO #(
     logic `N(2) wpn;
     logic `N(`VADDR_SIZE) waddr;
 
-    modport tlb(input req, flush, vaddr, we, wen, wbInfo, wentry, wpn, widx, waddr, output miss, uncache, exception, paddr);
+    modport tlb(input req, flush, vaddr, sel, sel_tag, we, wen, wbInfo, wentry, wpn, widx, waddr, output miss, uncache, exception, paddr);
 endinterface
 
 module TLB #(
@@ -29,6 +31,7 @@ module TLB #(
     parameter SOURCE=0,
     parameter [1: 0] MODE=2'b00, //2'b00: x, 2'b01: r, 2'b10: w
     parameter FENCEV = MODE == 2'b00,
+    parameter SELV = 0,
     parameter ADDR_WIDTH=$clog2(DEPTH)
 )(
     input logic clk,
@@ -56,9 +59,10 @@ module TLB #(
     logic `N(DEPTH) asid_hit;
     logic `N(ADDR_WIDTH) hit_idx;
     logic mode_exc;
-    logic `ARRAY(DEPTH, `TLB_PN) pn_hits;
+    logic `ARRAY(DEPTH, `TLB_PN) pn_hits, sel_pn_hits_n, sel_pn_hits_p;
     logic `N(`TLB_PN) hit_mask;
     logic `ARRAY(DEPTH, $bits(L1TLBEntry)+`TLB_PN) mask_entry;
+    logic `ARRAY(DEPTH, $bits(VPNAddr)) sel_vaddrs_n, sel_vaddrs_p;
     logic `N(DEPTH) pn_hit;
     VPNAddr lookup_addr;
     PPNAddr lookup_paddr;
@@ -86,9 +90,22 @@ generate
         end
         // assign asid_hit[i] = en[i];
         for(genvar j=0; j<`TLB_PN; j++)begin
-            assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == lookup_addr.vpn[j];
+            if(SELV)begin
+                assign sel_pn_hits_p[i][j] = sel_vaddrs_p[i].vpn[j] == io.sel_tag.vpn[j];
+                assign sel_pn_hits_n[i][j] = sel_vaddrs_n[i].vpn[j] == io.sel_tag.vpn[j];
+                assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == io.sel_tag.vpn[j];
+            end
+            else begin
+                assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == lookup_addr.vpn[j];
+            end
         end
-        assign pn_hit[i] = &(pn_hits[i] | entrys[i].size);
+        if(SELV)begin
+            assign pn_hit[i] = &((io.sel[1] ? sel_pn_hits_p[i] :
+                                  io.sel[0] ? sel_pn_hits_n[i] : pn_hits[i]) | entrys[i].size);
+        end
+        else begin
+            assign pn_hit[i] = &(pn_hits[i] | entrys[i].size);
+        end
         assign mask_entry[i] = {entrys[i], entrys[i].size};
     end
 endgenerate
@@ -197,6 +214,21 @@ generate
                 if(io.we)begin
                     entrys[io.widx] <= wentry;
                     en[io.widx] <= io.wen;
+                end
+            end
+        end
+    end
+
+    if(SELV)begin
+        always_ff @(posedge clk, negedge rst)begin
+            if(rst == `RST)begin
+                sel_vaddrs_p <= 0;
+                sel_vaddrs_n <= 0;
+            end
+            else begin
+                if(io.we)begin
+                    sel_vaddrs_p[io.widx] <= wentry.vpn - 1;
+                    sel_vaddrs_n[io.widx] <= wentry.vpn + 1;
                 end
             end
         end

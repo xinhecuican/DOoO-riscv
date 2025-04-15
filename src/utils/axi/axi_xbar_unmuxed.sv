@@ -15,6 +15,9 @@
 
 /// axi_xbar: Fully-connected AXI4+ATOP crossbar with an arbitrary number of slave and master ports.
 /// See `doc/axi_xbar.md` for the documentation, including the definition of parameters and ports.
+`include "../../defines/bus/axi.svh"
+
+
 module axi_xbar_unmuxed
 #(
   /// Configuration struct for the crossbar see `axi_pkg` for fields and definitions.
@@ -47,11 +50,9 @@ module axi_xbar_unmuxed
   ///   axi_addr_t   end_addr;
   /// } rule_t;
   /// ```
-  parameter type rule_t                                               = logic
-`ifdef VCS
-  , localparam int unsigned MstPortsIdxWidth =
-      (Cfg.NoMstPorts == 32'd1) ? 32'd1 : unsigned'($clog2(Cfg.NoMstPorts))
-`endif
+  parameter type rule_t                                               = logic,
+  parameter NoMstPorts                                                = 2,
+  parameter int unsigned MstPortsIdxWidth = NoMstPorts > 1 ? $clog2(NoMstPorts) : 1
 ) (
   /// Clock, positive edge triggered.
   input  logic                                                          clk_i,
@@ -82,19 +83,18 @@ module axi_xbar_unmuxed
   /// Enables a default master port for each slave port. When this is enabled unmapped
   /// transactions get issued at the master port given by `default_mst_port_i`.
   /// When not used, tie to `'0`.
-  input  logic      [Cfg.NoSlvPorts-1:0][idx_width(Cfg.NoMstPorts)-1:0] default_mst_port_i
+  input  logic      [Cfg.NoSlvPorts-1:0][MstPortsIdxWidth-1:0] default_mst_port_i
 `endif
 );
 
   // Address tpye for inidvidual address signals
   typedef logic [Cfg.AxiAddrWidth-1:0] addr_t;
   // to account for the decoding error slave
+  localparam MstPortsIdxWidthOne = $clog2(NoMstPorts+1);
 `ifdef VCS
-  localparam int unsigned MstPortsIdxWidthOne =
-      (Cfg.NoMstPorts == 32'd1) ? 32'd1 : unsigned'($clog2(Cfg.NoMstPorts + 1));
   typedef logic [MstPortsIdxWidthOne-1:0]           mst_port_idx_t;
 `else
-  typedef logic [idx_width(Cfg.NoMstPorts + 1)-1:0] mst_port_idx_t;
+  typedef logic [MstPortsIdxWidthOne-1:0] mst_port_idx_t;
 `endif
 
   // signals from the axi_demuxes, one index more for decode error
@@ -108,7 +108,7 @@ module axi_xbar_unmuxed
 `ifdef VCS
     logic [MstPortsIdxWidth-1:0]          dec_aw,        dec_ar;
 `else
-    logic [idx_width(Cfg.NoMstPorts)-1:0] dec_aw,        dec_ar;
+    logic [MstPortsIdxWidth-1:0] dec_aw,        dec_ar;
 `endif
     mst_port_idx_t                        slv_aw_select, slv_ar_select;
     logic                                 dec_aw_valid,  dec_aw_error;
@@ -240,17 +240,4 @@ module axi_xbar_unmuxed
       end
     end
   end
-
-  // pragma translate_off
-  `ifndef VERILATOR
-  `ifndef XSIM
-  initial begin : check_params
-    id_slv_req_ports: assert ($bits(slv_ports_req_i[0].aw.id ) == Cfg.AxiIdWidthSlvPorts) else
-      $fatal(1, $sformatf("Slv_req and aw_chan id width not equal."));
-    id_slv_resp_ports: assert ($bits(slv_ports_resp_o[0].r.id) == Cfg.AxiIdWidthSlvPorts) else
-      $fatal(1, $sformatf("Slv_req and aw_chan id width not equal."));
-  end
-  `endif
-  `endif
-  // pragma translate_on
 endmodule

@@ -83,7 +83,7 @@ module SPRAM#(
     if(RESET)begin
         assign resetAddr = resetState ? counter : addr;
         assign resetData = resetState ? RESET_VALUE : wdata;
-        always_ff @(posedge clk or negedge rst)begin
+        always_ff @(posedge clk)begin
             if(rst == `RST ||
                ENABLE_SYNC_RST && rst_sync == `RST)begin
                 counter <= 0;
@@ -225,7 +225,7 @@ module SDPRAM#(
     if(RESET)begin
         assign resetAddr = resetState ? counter : addr0;
         assign resetData = resetState ? RESET_VALUE : wdata;
-        always_ff @(posedge clk or negedge rst)begin
+        always_ff @(posedge clk)begin
             if(rst == `RST ||
                ENABLE_SYNC_RST && rst_sync == `RST)begin
                 counter <= 0;
@@ -308,7 +308,7 @@ generate
     if(RESET)begin
         assign resetAddr = resetState ? counter : waddr[0];
         assign resetData = resetState ? RESET_VALUE : wdata[0];
-        always_ff @(posedge clk or negedge rst)begin
+        always_ff @(posedge clk)begin
             if(rst == `RST ||
                ENABLE_SYNC_RST && rst_sync == `RST)begin
                 counter <= 0;
@@ -572,7 +572,7 @@ generate
         logic `ARRAY(BANK_ALL, WRITE_PORT+RW_PORT) bank_we;
         logic `ARRAY(READ_PORT, ADDR_WIDTH-$clog2(BANK_ALL)) raddr_bank;
         logic `ARRAY(WRITE_PORT+RW_PORT, ADDR_WIDTH-$clog2(BANK_ALL)) waddr_bank;
-        logic `TENSOR(BANK_ALL, READ_PORT+RW_PORT, BYTES) we_bank;
+        logic `TENSOR(BANK_ALL, WRITE_PORT+RW_PORT, BYTES) we_bank;
         logic `TENSOR(BANK_ALL, READ_PORT+RW_PORT, WIDTH) rdata_bank;
         logic `N(BANK) ready_bank;
         logic `ARRAY(READ_PORT+RW_PORT, $clog2(BANK_ALL)) bank_idx, ridx;
@@ -582,9 +582,9 @@ generate
         logic resetState;
 
         if(RESET)begin
-            always_ff @(posedge clk or negedge rst)begin
-                if(rst == `RST ||
-                   ENABLE_SYNC_RST && rst_sync == `RST)begin
+            always_ff @(posedge clk)begin
+                if((rst == `RST) ||
+                   (ENABLE_SYNC_RST && rst_sync == `RST))begin
                     counter <= 0;
                     resetState <= 1'b1;
                     ready <= 1'b0;

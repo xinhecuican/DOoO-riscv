@@ -52,7 +52,7 @@ module div_sqrt_mvp_wrapper #(
     input logic [`C_OP_FP64-1:0] Operand_b_DI,
 
     // Input Control
-    input logic [``C_RM-1:0] RM_SI,             //Rounding Mode
+    input logic [`C_RM-1:0] RM_SI,             //Rounding Mode
     input logic [`C_PC-1:0] Precision_ctl_SI,  // Precision Control
     input logic [`C_FS-1:0] Format_sel_SI,     // Format Selection,
     input logic             Kill_SI,
@@ -72,7 +72,7 @@ module div_sqrt_mvp_wrapper #(
     logic [ `C_OP_FP64-1:0] Operand_b_S_D;
 
     // Input Control
-    logic [      ``C_RM-1:0] RM_S_S;  //Rounding Mode
+    logic [      `C_RM-1:0] RM_S_S;  //Rounding Mode
     logic [      `C_PC-1:0] Precision_ctl_S_S;  // Precision Control
     logic [      `C_FS-1:0] Format_sel_S_S;  // Format Selection,
     logic                   Kill_S_S;

@@ -28,7 +28,7 @@ module ITTAGE(
     logic reset_u;
     logic `N(`ITTAGE_RESETU_CTR) resetu_ctr;
     logic pred_error, alt_pred_error;
-    logic `N($clog2(`ITTAGE_BANK)) update_u_cnt;
+    logic `N($clog2(`ITTAGE_BANK)+1) update_u_cnt;
 
 
 	parameter [`ITTAGE_BANK*16-1: 0] ittage_set_size  = `ITTAGE_SET_SIZE;
@@ -82,7 +82,7 @@ generate
         );
         CAMQueue #(
             `ITTAGE_COMMIT_SIZE,
-            `ITTAGE_SET_WIDTH,
+            $clog2(ittage_set_size[i*16 +: 16]),
             `ITTAGE_CTR_SIZE
         ) bank_cam (
             .clk,
@@ -261,7 +261,7 @@ endgenerate
     ) region_ram (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(lookup_idx),
         .rdata(lookup_region),
@@ -320,7 +320,7 @@ module ITTAGETable #(
     )ctr_bank(
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(en),
         .we(update_en & (provider | alloc)),
         .waddr(update_idx),
@@ -340,7 +340,7 @@ module ITTAGETable #(
     ) offset_bank (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(en),
         .we(update_en & (provider & (update_ctr == 0) | alloc)),
         .waddr(update_idx),

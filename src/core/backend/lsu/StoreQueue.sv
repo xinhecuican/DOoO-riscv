@@ -61,7 +61,7 @@ module StoreQueue(
     typedef enum { IDLE, LOOKUP, WRITEBACK, RETIRE } UncacheState;
     UncacheState uncacheState;
     logic `N(`PADDR_SIZE) uncache_addr;
-    logic `N(`DCACHE_BYTE_WIDTH) uncache_size, uncache_size_pre;
+    logic `N(`DCACHE_BYTE_WIDTH+1) uncache_size, uncache_size_pre;
     logic `N(`DCACHE_BYTE_WIDTH) uncache_offset;
     logic `N(`DCACHE_BITS) uncache_data, uncache_wb_data;
     logic `N(`STORE_QUEUE_WIDTH) uncache_head;
@@ -141,7 +141,7 @@ endgenerate
     logic `N(`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH) addr_mask `N(`STORE_QUEUE_SIZE);
     logic `N(`STORE_QUEUE_SIZE) data_dir;
     logic `ARRAY(`STORE_QUEUE_SIZE, `DCACHE_BITS) data;
-    logic `N(`COMMIT_WIDTH) commitMask;
+    logic `N(`COMMIT_WIDTH+1) commitMask;
     MaskGen #(`COMMIT_WIDTH+1) mask_gen_commit (commitBus.storeNum, commitMask);
 
     always_ff @(posedge clk or negedge rst)begin

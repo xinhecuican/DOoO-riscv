@@ -80,8 +80,8 @@ module id_queue #(
     // indices.
     localparam int NIds = 2**ID_WIDTH;
     localparam int HtCapacity = (NIds <= CAPACITY) ? NIds : CAPACITY;
-    localparam int unsigned HtIdxWidth = idx_width(HtCapacity);
-    localparam int unsigned LdIdxWidth = idx_width(CAPACITY);
+    localparam int unsigned HtIdxWidth = HtCapacity > 1 ? $clog2(HtCapacity) : 1;
+    localparam int unsigned LdIdxWidth = CAPACITY > 1 ? $clog2(CAPACITY) : 1;
 
     // Type for indexing the head-tail table.
     typedef logic [HtIdxWidth-1:0] ht_idx_t;

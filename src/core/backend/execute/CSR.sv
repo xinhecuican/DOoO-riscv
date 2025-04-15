@@ -655,38 +655,125 @@ endgenerate
     assign ``name``_we_o = ``name``_we & (~backendCtrl.redirect | redirect_s2_older); \
     always_ff @(posedge clk)begin \
         if(~IFETCH & mstatus.mprv)begin \
-            name.mode <= mstatus.mpp; \
+            ``name``.mode <= mstatus.mpp; \
         end \
         else begin \
-            name.mode <= mode; \
+            ``name``.mode <= mode; \
         end \
         ``name``_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older); \
         ``name``_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg]; \
         ``name``_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr]; \
         ``name``_wdata <= wdata_s1; \
-        name.sum <= mstatus.sum; \
-        name.mxr <= mstatus.mxr; \
-        name.asid <= satp.asid; \
-        name.satp_mode <= satp.mode; \
+        ``name``.sum <= mstatus.sum; \
+        ``name``.mxr <= mstatus.mxr; \
+        ``name``.asid <= satp.asid; \
+        ``name``.satp_mode <= satp.mode; \
     end \
     always_ff @(posedge clk, negedge rst)begin \
         if(rst == `RST)begin \
-            name.pmpcfg <= 0; \
-            name.pmpaddr <= 0; \
+            ``name``.pmpcfg <= 0; \
+            ``name``.pmpaddr <= 0; \
         end \
         else begin \
             if(``name``_we_o & ``name``_pmpcfg_en)begin \
-                name.pmpcfg[pmp_id_s2] <= ``name``_wdata; \
+                ``name``.pmpcfg[pmp_id_s2] <= ``name``_wdata; \
             end \
             if(``name``_we_o & ``name``_pmpaddr_en)begin \
-                name.pmpaddr[pmpaddr_id_s2] <= ``name``_wdata; \
+                ``name``.pmpaddr[pmpaddr_id_s2] <= ``name``_wdata; \
             end \
         end \
-    end \
+    end
 
-    `TLB_ASSIGN(csr_itlb_io, 1)
-    `TLB_ASSIGN(csr_ltlb_io, 0)
-    `TLB_ASSIGN(csr_stlb_io, 0)
+    logic csr_itlb_io_we, csr_itlb_io_pmpcfg_en, csr_itlb_io_pmpaddr_en, csr_itlb_io_we_o;
+    logic `N(`XLEN) csr_itlb_io_wdata;
+    assign csr_itlb_io_we_o = csr_itlb_io_we & (~backendCtrl.redirect | redirect_s2_older);
+    always_ff @(posedge clk)begin
+        csr_itlb_io.mode <= mode;
+        csr_itlb_io_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older);
+        csr_itlb_io_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg];
+        csr_itlb_io_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr];
+        csr_itlb_io_wdata <= wdata_s1;
+        csr_itlb_io.sum <= mstatus.sum;
+        csr_itlb_io.mxr <= mstatus.mxr;
+        csr_itlb_io.asid <= satp.asid;
+        csr_itlb_io.satp_mode <= satp.mode;
+    end
+    always_ff @(posedge clk, negedge rst)begin
+        if(rst == `RST)begin
+            csr_itlb_io.pmpcfg <= 0;
+            csr_itlb_io.pmpaddr <= 0;
+        end
+        else begin
+            if(csr_itlb_io_we_o & csr_itlb_io_pmpcfg_en)begin
+                csr_itlb_io.pmpcfg[pmp_id_s2] <= csr_itlb_io_wdata;
+            end
+            if(csr_itlb_io_we_o & csr_itlb_io_pmpaddr_en)begin
+                csr_itlb_io.pmpaddr[pmpaddr_id_s2] <= csr_itlb_io_wdata;
+            end
+        end
+    end
+
+    logic csr_ltlb_io_we, csr_ltlb_io_pmpcfg_en, csr_ltlb_io_pmpaddr_en, csr_ltlb_io_we_o;
+    logic `N(`XLEN) csr_ltlb_io_wdata;
+    assign csr_ltlb_io_we_o = csr_ltlb_io_we & (~backendCtrl.redirect | redirect_s2_older);
+    always_ff @(posedge clk)begin
+        csr_ltlb_io.mode <= mode;
+        csr_ltlb_io_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older);
+        csr_ltlb_io_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg];
+        csr_ltlb_io_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr];
+        csr_ltlb_io_wdata <= wdata_s1;
+        csr_ltlb_io.sum <= mstatus.sum;
+        csr_ltlb_io.mxr <= mstatus.mxr;
+        csr_ltlb_io.asid <= satp.asid;
+        csr_ltlb_io.satp_mode <= satp.mode;
+    end
+    always_ff @(posedge clk, negedge rst)begin
+        if(rst == `RST)begin
+            csr_ltlb_io.pmpcfg <= 0;
+            csr_ltlb_io.pmpaddr <= 0;
+        end
+        else begin
+            if(csr_ltlb_io_we_o & csr_ltlb_io_pmpcfg_en)begin
+                csr_ltlb_io.pmpcfg[pmp_id_s2] <= csr_ltlb_io_wdata;
+            end
+            if(csr_ltlb_io_we_o & csr_ltlb_io_pmpaddr_en)begin
+                csr_ltlb_io.pmpaddr[pmpaddr_id_s2] <= csr_ltlb_io_wdata;
+            end
+        end
+    end
+
+    logic csr_stlb_io_we, csr_stlb_io_pmpcfg_en, csr_stlb_io_pmpaddr_en, csr_stlb_io_we_o;
+    logic `N(`XLEN) csr_stlb_io_wdata;
+    assign csr_stlb_io_we_o = csr_stlb_io_we & (~backendCtrl.redirect | redirect_s2_older);
+    always_ff @(posedge clk)begin
+        csr_stlb_io.mode <= mode;
+        csr_stlb_io_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older);
+        csr_stlb_io_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg];
+        csr_stlb_io_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr];
+        csr_stlb_io_wdata <= wdata_s1;
+        csr_stlb_io.sum <= mstatus.sum;
+        csr_stlb_io.mxr <= mstatus.mxr;
+        csr_stlb_io.asid <= satp.asid;
+        csr_stlb_io.satp_mode <= satp.mode;
+    end
+    always_ff @(posedge clk, negedge rst)begin
+        if(rst == `RST)begin
+            csr_stlb_io.pmpcfg <= 0;
+            csr_stlb_io.pmpaddr <= 0;
+        end
+        else begin
+            if(csr_stlb_io_we_o & csr_stlb_io_pmpcfg_en)begin
+                csr_stlb_io.pmpcfg[pmp_id_s2] <= csr_stlb_io_wdata;
+            end
+            if(csr_stlb_io_we_o & csr_stlb_io_pmpaddr_en)begin
+                csr_stlb_io.pmpaddr[pmpaddr_id_s2] <= csr_stlb_io_wdata;
+            end
+        end
+    end
+    // `TLB_ASSIGN(csr_itlb_io, 1)
+    // `TLB_ASSIGN(csr_ltlb_io, 1'b0)
+    // `TLB_ASSIGN(csr_stlb_io, 1'b0)
+`undef TLB_ASSIGN
     always_ff @(posedge clk)begin
         csr_l2_io.sum <= mstatus.sum;
         csr_l2_io.mxr <= mstatus.mxr;

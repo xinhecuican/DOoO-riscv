@@ -25,6 +25,8 @@ module ITLB(
     logic miss_end;
     logic `N(2) exception, miss;
     logic `N(`PADDR_SIZE) wpaddr;
+    VPNAddr vpn;
+    PPNAddr wppn;
 
     TlbL2IO tlb_l2_io0();
     logic tlb_valid;
@@ -179,8 +181,7 @@ endgenerate
         end
     end
 
-    VPNAddr vpn;
-    PPNAddr wppn;
+
     assign vpn = tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign wppn.ppn1 = tlb_l2_io0.wpn[1] ? vpn.vpn[1] : tlb_l2_io0.entry.ppn.ppn1;
     assign wppn.ppn0 = tlb_l2_io0.wpn[0] ? vpn.vpn[0] : tlb_l2_io0.entry.ppn.ppn0;

@@ -244,8 +244,8 @@ interface ReplaceIO #(
     parameter DEPTH = 256,
     parameter WAY_NUM = 4,
     parameter READ_PORT = 1,
-    parameter WAY_WIDTH = idxWidth(WAY_NUM),
-    parameter ADDR_WIDTH = idxWidth(DEPTH)
+    parameter WAY_WIDTH = WAY_NUM > 1 ? $clog2(WAY_NUM) : 1,
+    parameter ADDR_WIDTH = DEPTH > 1 ? $clog2(DEPTH) : 1
 );
     logic `N(READ_PORT) hit_en;
     logic `N(READ_PORT) hit_invalid;
@@ -680,6 +680,8 @@ interface DTLBLsuIO;
     logic `N(`LOAD_PIPELINE) lreq_s2;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lidx;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) laddr;
+    logic `ARRAY(`LOAD_PIPELINE, $bits(VPNAddr)) lsel_tag;
+    logic `ARRAY(`LOAD_PIPELINE, 2) lsel;
     
     logic `N(`LOAD_PIPELINE) lmiss;
     logic `N(`LOAD_PIPELINE) lexception;
@@ -696,6 +698,8 @@ interface DTLBLsuIO;
     logic `N(`STORE_PIPELINE) sreq_s2;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sidx;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) saddr;
+    logic `ARRAY(`STORE_PIPELINE, $bits(VPNAddr)) ssel_tag;
+    logic `ARRAY(`STORE_PIPELINE, 2) ssel;
 
     logic `N(`STORE_PIPELINE) smiss;
     logic `N(`STORE_PIPELINE) sexception;
@@ -716,8 +720,8 @@ interface DTLBLsuIO;
     logic amo_error;
     logic `N(`PADDR_SIZE) amo_paddr;
 `endif
-    modport tlb(input flush, lreq, lreq_s2, lidx, laddr, 
-                sreq, sreq_s2, sidx, saddr,
+    modport tlb(input flush, lreq, lreq_s2, lidx, laddr, lsel, lsel_tag,
+                sreq, sreq_s2, sidx, saddr, ssel, ssel_tag,
 `ifdef RVA
                 input amo_req, amo_addr,
                 output amo_valid, amo_exception, amo_error, amo_paddr,
@@ -850,7 +854,7 @@ interface L2MSHRSlaveIO #(
     parameter SET = 64,
     parameter OFFSET = 32,
     parameter OFFSET_WIDTH = $clog2(OFFSET),
-    parameter SLAVE_WIDTH = idxWidth(SLAVE),
+    parameter SLAVE_WIDTH = SLAVE > 1 ? $clog2(SLAVE) : 1,
     parameter SET_WIDTH = $clog2(SET),
     parameter WAY_WIDTH = $clog2(WAY),
     parameter TAG_WIDTH = `PADDR_SIZE - OFFSET_WIDTH - SET_WIDTH,

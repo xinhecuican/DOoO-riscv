@@ -15,6 +15,8 @@
 
 // AXI Error Slave: This module always responds with an AXI error for transactions that are sent to
 // it.  This module optionally supports ATOPs if the `ATOPs` parameter is set.
+`include "../../defines/bus/axi.svh"
+
 
 module axi_err_slv #(
   parameter int unsigned          AxiIdWidth  = 0,                    // AXI ID Width

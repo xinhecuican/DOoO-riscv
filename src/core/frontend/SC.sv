@@ -103,7 +103,7 @@ endgenerate
     ) thresh_ram (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(~io.redirect.stall),
         .raddr(thresh_idx),
         .rdata(thresh_data),
@@ -306,7 +306,7 @@ module SCTable #(
     ) data (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(en),
         .raddr(lookup_idx),
         .rdata(lookup_ctr),

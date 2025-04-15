@@ -118,7 +118,7 @@ module OrderSelector #(
 )(
   input logic clk,
   input logic rst,
-  input logic [BANK_SIZE-1: 0][ADDR_WIDTH-1: 0] bankNum,
+  input logic [BANK_SIZE-1: 0][ADDR_WIDTH: 0] bankNum,
   output logic [BANK_SIZE-1: 0][$clog2(BANK_SIZE)-1: 0] order
 );
   logic [BANK_SIZE-1: 0][$clog2(BANK_SIZE)-1: 0] originOrder, sortOrder;
@@ -127,7 +127,7 @@ generate
     assign originOrder[i] = i;
   end
 endgenerate
-  Sort #(BANK_SIZE, ADDR_WIDTH, $clog2(BANK_SIZE)) sort_order (bankNum, originOrder, sortOrder);
+  Sort #(BANK_SIZE, ADDR_WIDTH+1, $clog2(BANK_SIZE)) sort_order (bankNum, originOrder, sortOrder);
   always_ff @(posedge clk)begin
     order <= sortOrder;
   end

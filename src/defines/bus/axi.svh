@@ -581,16 +581,4 @@ typedef struct packed {
 `define AXI_LITE_ASSIGN_R_STRUCT(lhs, rhs) `__AXI_LITE_TO_R(assign, lhs, ., rhs, .)
 `define AXI_LITE_ASSIGN_REQ_STRUCT(lhs, rhs) `__AXI_LITE_TO_REQ(assign, lhs, ., rhs, .)
 `define AXI_LITE_ASSIGN_RESP_STRUCT(lhs, rhs) `__AXI_LITE_TO_RESP(assign, lhs, ., rhs, .)
-/// Index width required to be able to represent up to `num_idx` indices as a binary
-/// encoded signal.
-/// Ensures that the minimum width if an index signal is `1`, regardless of parametrization.
-///
-/// Sample usage in type definition:
-/// As parameter:
-///   `parameter type idx_t = logic[cf_math_pkg::idx_width(NumIdx)-1:0]`
-/// As typedef:
-///   `typedef logic [cf_math_pkg::idx_width(NumIdx)-1:0] idx_t`
-function automatic integer idx_width(input integer num_idx);
-    return (num_idx > 32'd1) ?$clog2(num_idx) : 32'd1;
-endfunction
 `endif

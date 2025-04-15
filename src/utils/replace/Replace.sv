@@ -5,8 +5,8 @@ module Replace #(
     parameter WAY_NUM = 4,
     parameter READ_PORT = 1,
     parameter REPLACE_METHOD = "plru",
-    parameter WAY_WIDTH = idxWidth(WAY_NUM),
-    parameter ADDR_WIDTH = idxWidth(DEPTH)
+    parameter WAY_WIDTH = WAY_NUM > 1 ? $clog2(WAY_NUM) : 1,
+    parameter ADDR_WIDTH = WAY_NUM > 1 ? $clog2(WAY_NUM) : 1
 )(
     input logic clk,
     input logic rst,

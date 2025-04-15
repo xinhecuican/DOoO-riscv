@@ -113,7 +113,7 @@ module Tage(
 	) base_table (
 		.clk(clk),
 		.rst(rst),
-		.rst_sync(0),
+		.rst_sync(1'b0),
 		.en(!tage_io.redirect.stall),
 		.we(base_we),
 		.waddr(base_update_idx),
@@ -315,8 +315,10 @@ generate
 	end
 endgenerate
 
+`ifdef DIFFTEST
 	`Log(DLog::Debug, T_TAGE, ~tage_io.redirect.stall, $sformatf("tage lookup. %2b %8h %h %h", tage_prediction, tage_io.pc, bank_ctrl[0].lookup_idx, bank_ctrl[0].lookup_tag))
 	`Log(DLog::Debug, T_TAGE, tage_io.update, $sformatf("tage update. %2b %8h %h %h", update_en, tage_io.updateInfo.start_addr, bank_ctrl[0].update_idx, bank_ctrl[0].update_tag))
+`endif
 endmodule
 
 module TageTable #(
@@ -372,7 +374,7 @@ module TageTable #(
 		)tage_bank(
 			.clk(clk),
 			.rst(rst),
-			.rst_sync(0),
+			.rst_sync(1'b0),
 			.en(en),
 			.we(update_en[i] & (provider[i] | alloc[i])),
 			.waddr(update_idx),

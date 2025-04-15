@@ -70,7 +70,7 @@ module FDivSlice #(
     ExStatusBundle ex_status;
     logic input_older, output_older;
     logic div_start, sqrt_start;
-    logic `N(FP_WIDTH) div_res;
+    logic `N(64) div_res;
     FFlags div_fflags, fflags;
     logic div_ready, div_done;
     logic wakeup_valid, wb_valid;
@@ -84,11 +84,11 @@ module FDivSlice #(
         .Rst_RBI(rst),
         .Div_start_SI(div_start),
         .Sqrt_start_SI(sqrt_start),
-        .Operand_a_DI(rs1_data),
-        .Operand_b_DI(rs2_data),
-        .RM_SI(round_mode[1: 0]),
-        .Precision_ctl_SI(0),
-        .Format_sel_SI(fp_fmt == FP32 ? 0 : 1),
+        .Operand_a_DI({32'b0, rs1_data}),
+        .Operand_b_DI({32'b0, rs2_data}),
+        .RM_SI({1'b0, round_mode[1: 0]}),
+        .Precision_ctl_SI(6'b0),
+        .Format_sel_SI(fp_fmt == FP32 ? 2'b00 : 2'b01),
         .Kill_SI(state == WAIT && (backendCtrl.redirect & ~output_older)),
         .Result_DO(div_res),
         .Fflags_SO(div_fflags),
@@ -101,7 +101,7 @@ module FDivSlice #(
     assign wakeup_rd = ex_status.rd;
     always_ff @(posedge clk)begin
         if(div_done)begin
-            res <= div_res;
+            res <= div_res[FP_WIDTH-1: 0];
             status <= div_fflags;
         end
     end

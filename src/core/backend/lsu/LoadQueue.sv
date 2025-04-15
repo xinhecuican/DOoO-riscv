@@ -340,7 +340,7 @@ module LoadQueueBank #(
     logic `N(BANK_WIDTH) wbIdx_pre, wbIdx;
     logic `ARRAY(`COMMIT_WIDTH, BANK_SIZE) commit_invalid;
     logic `N(BANK_SIZE) commit_invalid_combine;
-    logic `N($clog2(`COMMIT_WIDTH)) commitNum;
+    logic `N($clog2(`COMMIT_WIDTH)+1) commitNum;
     logic `N(`LOAD_UNCACHE_WIDTH) uncache_idx_o;
     logic `N(`XLEN) uncache_wb_data;
     logic uncache_wb_valid, uncache_wb_valid_n;
@@ -411,7 +411,7 @@ module LoadQueueBank #(
     ) load_queue_data (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(wbIdx),
         .rdata(wb_queue_data),
@@ -435,7 +435,7 @@ module LoadQueueBank #(
     ) load_data_mask_ram (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(cache_en),
         .raddr(cache_lqIdx),
         .rdata({mask_data, refillData}),
@@ -452,7 +452,7 @@ module LoadQueueBank #(
     ) load_wb_data (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(wbIdx),
         .rdata(wb_data),
@@ -670,7 +670,7 @@ module LoadUncacheBuffer(
     ) data_ram (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(1'b1),
         .raddr(uncache_idx_i),
         .rdata(data_o),
@@ -679,7 +679,7 @@ module LoadUncacheBuffer(
         .wdata(data_i),
         .ready()
     );
-    RDataGen uncache_data_gen (uncache_uext, uncache_arsize, 0, uncache_rdata, uncache_data);
+    RDataGen uncache_data_gen (uncache_uext, uncache_arsize, {`DCACHE_BYTE_WIDTH{1'b0}}, uncache_rdata, uncache_data);
     assign uncache_arvalid = uncache_req;
     assign input_eq = data.robIdx == commitIdx;
     assign input_en = input_eq & en;

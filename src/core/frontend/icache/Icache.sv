@@ -70,7 +70,7 @@ module ICache(
     logic `N(`ICACHE_BANK * 2) expand_en;
     logic `N(LINE_INST_NUM * 2) expand_exception;
     logic `N(LINE_INST_NUM * 2) expand_en_block, start_addr_mask, end_addr_mask;
-    logic `N(`BLOCK_INST_SIZE) expand_en_shift;
+    logic `N(`BLOCK_INST_SIZE+1) expand_en_shift;
 
     logic `N(PARTIAL_ADDR_WIDTH) end_addr, start_addr;
     logic `N(`PREDICTION_WIDTH+1) stream_size, block_stream_size;
@@ -460,6 +460,8 @@ endgenerate
     end
 `endif
 
+`ifdef DIFFTEST
     `Log(DLog::Debug, T_ICACHE, axi_io.ar_valid & axi_io.ar_ready, $sformatf("icache req. %h %d", axi_io.ar_addr, axi_io.ar_len))
     `Log(DLog::Debug, T_ICACHE, refill_en, $sformatf("icache refill. %h %d %d", {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}}, replace_io.miss_way, miss_buffer.windex))
+`endif
 endmodule

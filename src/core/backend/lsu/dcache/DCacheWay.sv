@@ -33,7 +33,7 @@ generate
         ) tag_ram (
             .clk(clk),
             .rst(rst),
-            .rst_sync(0),
+            .rst_sync(1'b0),
             .en(tagv_en[i]),
             .addr(|tag_we ? tagv_windex : tagv_index[i]),
             .rdata(tagv[i]),
@@ -59,7 +59,7 @@ generate
     ) wtag_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(tagv_en[`LOAD_PIPELINE]),
         .raddr(tagv_index[`LOAD_PIPELINE]),
         .waddr(tagv_windex),
@@ -80,7 +80,7 @@ generate
     ) meta_ram (
         .clk,
         .rst,
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(tagv_en[`LOAD_PIPELINE]),
         .raddr(tagv_index[`LOAD_PIPELINE]),
         .rdata(rmeta),
@@ -116,7 +116,7 @@ generate
         ) bank (
             .clk(clk),
             .rst(rst),
-            .rst_sync(0),
+            .rst_sync(1'b0),
             .en(en[i]),
             .addr(index[i]),
             .we(we[i]),

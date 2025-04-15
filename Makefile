@@ -15,6 +15,7 @@ CLK_PERIOD = $(shell expr 1000 / ${CLK_FREQ_MHZ})
 TOP ?= Soc
 SYNTH_V ?= build/${TOP}.synth.v
 SYNTH_FIX_V ?= build/${TOP}.synth.fix.v
+SYNTH_DC_V ?= build/${TOP}.synth.dc.v
 SDC_FILE ?= config/sdc/Soc.sdc
 TIMING_RPT ?= build/${TOP}.rpt
 SYNTH_LOG = ${LOG_PATH}synth
@@ -100,6 +101,12 @@ yosys: ${SYNTH_V}
 ${SYNTH_V}: scripts/gen_netlist.tcl build/${TOP}/${TOP}.v
 	mkdir -p ${SYNTH_LOG}
 	env CLK_FREQ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} LOG_DIR=${SYNTH_LOG} SYNTH=${SYNTH_V} TOP=${TOP} yosys -c scripts/gen_netlist.tcl > ${SYNTH_LOG}/yosys_build.log
+
+syn: ${SYNTH_DC_V}
+${SYNTH_DC_V}: scripts/syn_dc.tcl ${SRC}
+	mkdir -p ${SYNTH_LOG}
+	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
+	env CLK_FREQ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} LOG_DIR=${SYNTH_LOG} SYNTH=${SYNTH_DC_V} TOP=Soc FILES="${SRC}" dc_shell -64bit -f scripts/syn_dc.tcl > ${SYNTH_LOG}/synth.log
 
 # fix-fanout: ${SYNTH_FIX_V}
 # ${SYNTH_FIX_V}: scripts/fix-fanout.tcl ${SDC_FILE} ${SYNTH_V}

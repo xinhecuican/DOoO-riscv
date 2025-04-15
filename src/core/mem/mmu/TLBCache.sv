@@ -361,7 +361,7 @@ module TLBWay #(
     ) tag_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(io.tag_en),
         .we(io.tag_we),
         .addr(io.idx),
@@ -377,7 +377,7 @@ module TLBWay #(
     ) data_ram (
         .clk(clk),
         .rst(rst),
-        .rst_sync(0),
+        .rst_sync(1'b0),
         .en(io.en),
         .we(io.we),
         .addr(io.idx),

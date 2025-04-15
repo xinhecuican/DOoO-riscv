@@ -65,7 +65,7 @@ module addr_decode_dync #(
   /// Dependent parameter, do **not** overwite!
   ///
   /// Width of the `idx_o` output port.
-  parameter int unsigned IdxWidth  = idx_width(NoIndices),
+  parameter int unsigned IdxWidth  = NoIndices > 1 ? $clog2(NoIndices) : 1,
   /// Dependent parameter, do **not** overwite!
   ///
   /// Type of the `idx_o` output port.

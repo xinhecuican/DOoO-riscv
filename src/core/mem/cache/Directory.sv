@@ -32,7 +32,7 @@ module LocalDirectory #(
     parameter OFFSET_WIDTH = $clog2(OFFSET),
     parameter SET_WIDTH = $clog2(SET),
     parameter TAG_WIDTH = `PADDR_SIZE - OFFSET_WIDTH - SET_WIDTH,
-    parameter SLAVE_WIDTH = idxWidth(SLAVE_NUM)
+    parameter SLAVE_WIDTH = SLAVE_NUM > 1 ? $clog2(SLAVE_NUM) : 1
 )(
     input logic clk,
     input logic rst,
@@ -84,7 +84,7 @@ generate
         ) ram (
             .clk,
             .rst,
-            .rst_sync(0),
+            .rst_sync(1'b0),
             .en(mshr_slave_io.request),
             .addr(addr),
             .rdata(lookup_entry[i]),
@@ -179,7 +179,7 @@ generate
         ) directory (
             .clk,
             .rst,
-            .rst_sync(0),
+            .rst_sync(1'b0),
             .en(mshr_dir_io.request),
             .addr(addr),
             .rdata(rdata[i]),
