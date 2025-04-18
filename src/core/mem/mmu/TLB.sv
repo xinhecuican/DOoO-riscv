@@ -30,8 +30,8 @@ module TLB #(
     parameter DEPTH=16,
     parameter SOURCE=0,
     parameter [1: 0] MODE=2'b00, //2'b00: x, 2'b01: r, 2'b10: w
-    parameter FENCEV = MODE == 2'b00,
     parameter SELV = 0,
+    parameter FENCEV = MODE == 2'b00,
     parameter ADDR_WIDTH=$clog2(DEPTH)
 )(
     input logic clk,
@@ -62,7 +62,7 @@ module TLB #(
     logic `ARRAY(DEPTH, `TLB_PN) pn_hits, sel_pn_hits_n, sel_pn_hits_p;
     logic `N(`TLB_PN) hit_mask;
     logic `ARRAY(DEPTH, $bits(L1TLBEntry)+`TLB_PN) mask_entry;
-    logic `ARRAY(DEPTH, $bits(VPNAddr)) sel_vaddrs_n, sel_vaddrs_p;
+    VPNAddr `N(DEPTH) sel_vaddrs_n, sel_vaddrs_p;
     logic `N(DEPTH) pn_hit;
     VPNAddr lookup_addr;
     PPNAddr lookup_paddr;

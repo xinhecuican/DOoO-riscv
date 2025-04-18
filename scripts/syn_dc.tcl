@@ -1,9 +1,4 @@
-set search_path [list config/sky130/lib ./ src/defines build/ src/defines/bus]
-set target_library [list sky130_fd_sc_hd__tt_025C_1v80.db]
-set link_library [list {*} sky130_fd_sc_hd__tt_025C_1v80.db]
-set work_path build/work
-define_design_lib work -path $work_path
-set verilogout_no_tri true
+source scripts/dc_setup.tcl
 
 set foundry $::env(FOUNDRY)
 set CLK_FREQ $::env(CLK_FREQ)
@@ -34,7 +29,7 @@ set_fix_multiple_port_nets -all -buffer_constants [get_designs *]
 
 set_structure -timing true
 
-compile
+compile -ungroup_all
 compile -map_effort high -inc
 
 # Output
@@ -51,7 +46,7 @@ define_name_rules name_rule -map {{"\\*cell\\*" "cell"}}
 define_name_rules name_rule -case_insensitive
 change_names -hierarchy -rules name_rule
 
-write -format ddc -hierarchy -output build/%{TOP}.ddc
+write -format ddc -hierarchy -output build/${TOP}.ddc
 write_file -format verilog -hierarchy    -output         ${SYNTH_V}
 write_sdf -version 2.0 -context verilog  -load_delay net build/${TOP}.sdf
 write_sdc -version 2.0 build/${TOP}.sdc

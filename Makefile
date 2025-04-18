@@ -70,7 +70,7 @@ endif
 DEFINES += CLK_FREQ=${CLK_FREQ_MHZ};CLK_PERIOD=${CLK_PERIOD};
 
 emu:
-	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "${DEFINES}"
+	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=ON;${DEFINES}"
 	make -C utils/difftest emu -j `nproc` $(EMU_ARGS)
 
 emu-run: emu

@@ -107,7 +107,7 @@ module Backend(
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
     logic rename_full, rob_full;
     /* verilator lint_off UNOPTFLAT */
-    logic `N(`VADDR_SIZE) exc_pc;
+    logic `N(`VADDR_SIZE) csr_exc_pc;
     LoadIdx lqIdx;
     StoreIdx sqIdx;
     CSRIrqInfo irqInfo;
@@ -153,7 +153,8 @@ module Backend(
     ROB rob(.*,
             .dis_io(rename_dis_io),
             .full(rob_full),
-            .backendRedirect(backendRedirect.out));
+            .backendRedirect(backendRedirect.out),
+            .exc_pc(csr_exc_pc));
     Dispatch dispatch(.*,
                       .full(backendCtrl.dis_full));
     IntIssueQueue int_issue_queue(
@@ -188,6 +189,6 @@ module Backend(
     CSR csr(.*,
             .exc_pc(fsq_back_io.exc_pc),
             .redirect(backendRedirect.csrOut),
-            .target_pc(exc_pc));
+            .target_pc(csr_exc_pc));
     WriteBack write_back(.*);
 endmodule
