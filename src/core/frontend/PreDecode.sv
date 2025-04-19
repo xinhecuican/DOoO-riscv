@@ -40,9 +40,9 @@ endgenerate
 
 `ifdef RVC
     logic `N(`BLOCK_INST_SIZE) rvc_mask /*verilator split_var*/;
-    logic `N(`BLOCK_INST_SIZE) rvc_en;
+    logic `N(`BLOCK_INST_SIZE) rvc_en, rvc_en_n;
     logic `N(`BLOCK_INST_SIZE+1) rvc_en_compress;
-    logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx, rvc_offset;
+    logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx, rvc_idx_n, rvc_offset, rvc_offset_n;
     logic `N(`BLOCK_INST_WIDTH+1) rvc_num;
     logic `N(`PREDICTION_WIDTH) tailIdx_pre, tail_rvi_idx;
     logic `ARRAY(`BLOCK_INST_SIZE, `VADDR_SIZE) addrs;
@@ -54,6 +54,20 @@ generate
     for(genvar i=1; i<`BLOCK_INST_SIZE; i++)begin
         assign rvc_mask[i] = ~rvc_mask[i-1] & ~bundles[i-1].rvc;
         assign addrs[i] = cache_pd_io.stream.start_addr + (i<<`INST_OFFSET) + {~bundles[i].rvc, bundles[i].rvc, 1'b0};
+    end
+    for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
+        localparam MAX = 2 * (i + 1) < `BLOCK_INST_SIZE ? 2 * (i + 1) : `BLOCK_INST_SIZE;
+        localparam NUM = MAX - i;
+        logic `N(NUM) equal;
+        logic `ARRAY(NUM, `BLOCK_INST_WIDTH) offset;
+        logic valid;
+        for(genvar j=i; j<MAX; j++)begin
+            assign equal[j-i] = rvc_idx[j] == i;
+            assign offset[j-i] = j;
+        end
+        OldestSelect #(NUM, 1, `BLOCK_INST_WIDTH) select_offset (
+            equal, offset, valid, rvc_offset[i]
+        );
     end
 endgenerate
     assign rvc_en = ~rvc_mask & cache_pd_io.en;
@@ -127,7 +141,11 @@ endgenerate
             jumpSelectIdx <= 0;
             selectOffset <= 0;
             stream_valid <= 0;
-            rvc_offset <= 0;
+`ifdef RVC
+            rvc_idx_n <= 0;
+            rvc_en_n <= 0;
+            rvc_offset_n <= 0;
+`endif
         end
         else if(pd_redirect.en || frontendCtrl.redirect)begin
             en_next <= 0;
@@ -137,19 +155,21 @@ endgenerate
         else if(!frontendCtrl.ibuf_full) begin
 `ifdef RVC
             for(int i=0; i<`BLOCK_INST_SIZE; i++)begin
-                if(rvc_en[i])begin
-                    bundles_next[rvc_idx[i]] <= bundles[i];
-                    data_next[rvc_idx[i]] <= {cache_pd_io.data[i+1], cache_pd_io.data[i]};
-                    rvc_offset[rvc_idx[i]] <= i;
+                if(cache_pd_io.en[0])begin
+                    bundles_next[i] <= bundles[i];
+                    data_next[i] <= {cache_pd_io.data[i+1], cache_pd_io.data[i]};
+                    rvc_idx_n[i] <= rvc_idx[i];
                 end
             end
             en_next <= rvc_en_compress;
             instNumNext <= rvc_num;
-            tailIdx <= rvc_num == 0 ? 0 : rvc_num-1;
+            tailIdx <= tailIdx_pre;
             jump_en <= |jump_en_pre;
-            jumpSelectIdx <= rvc_idx[jumpSelectIdx_pre];
+            jumpSelectIdx <= jumpSelectIdx_pre;
             selectOffset <= jumpSelectIdx_pre;
             shiftIdx <= cache_pd_io.shiftIdx;
+            rvc_en_n <= rvc_en;
+            rvc_offset_n <= rvc_offset;
 `else
             bundles_next <= bundles;
             en_next <= cache_pd_io.en;
@@ -195,8 +215,7 @@ endgenerate
     assign redirect_en = jump_error | nobranch_error;
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
     assign pd_redirect.exc_en = stream_valid;
-    assign pd_redirect.size = jump_en ? selectIdx + shiftIdx :
-                              nobranch_error ? tailIdx : tailIdx + shiftIdx;
+    assign pd_redirect.size = jump_en ? rvc_idx_n[selectIdx] + shiftIdx : rvc_idx_n[tailIdx] + shiftIdx;
     assign pd_redirect.direct = jump_en;
     assign pd_redirect.fsqIdx = fsqIdx;
     assign pd_redirect.fsqIdx_pre = cache_pd_io.fsqIdx.idx;
@@ -208,26 +227,30 @@ endgenerate
     assign pd_redirect.br_type = jump_en ? bundles_next[selectIdx].br_type : DIRECT;
 `ifdef RVC
     assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : 0;
-    assign pd_redirect.last_offset = jump_en ? rvc_offset[selectIdx] + shiftOffset :
-                                                rvc_offset[tailIdx] + shiftOffset;
+    assign pd_redirect.last_offset = jump_en ? selectIdx + shiftOffset :
+                                                tailIdx + shiftOffset;
     assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : `BLOCK_INST_SIZE - 2;
 `else
     assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : `BLOCK_INST_SIZE - 1;
 
 `endif
 
-    MaskGen #(`BLOCK_INST_SIZE) mask_gen_redirect (selectIdx, redirect_mask_pre);
+    MaskGen #(`BLOCK_INST_SIZE) mask_gen_redirect (rvc_idx_n[selectIdx], redirect_mask_pre);
     assign redirect_mask = jump_en ? {redirect_mask_pre[`BLOCK_INST_SIZE-2: 0], 1'b1} : 0;
     assign pd_ibuffer_io.en = ({`BLOCK_INST_SIZE{~pd_redirect.en}} | redirect_mask) & en_next;
-    assign pd_ibuffer_io.num = redirect_en & jump_en ? selectIdx + 1 : 
-                               redirect_en ? tailIdx + 1 : instNumNext;
-    assign pd_ibuffer_io.inst = data_next;
+    assign pd_ibuffer_io.num = redirect_en & jump_en ? rvc_idx_n[jumpSelectIdx] + 1 : instNumNext;
     assign pd_ibuffer_io.fsqIdx = fsqIdx.idx;
 `ifdef RVC
     // rvc will never raise iam
     assign pd_ibuffer_io.iam = 0;
+generate
+    for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
+        assign pd_ibuffer_io.inst[i] = data_next[rvc_offset_n[i]];
+    end
+endgenerate
 `else
     assign pd_ibuffer_io.iam = stream_next.start_addr[`INST_OFFSET-1: 0] != 0;
+    assign pd_ibuffer_io.inst = data_next;
 `endif
     assign pd_ibuffer_io.ipf = ipf;
     assign pd_ibuffer_io.shiftIdx = shiftIdx;
@@ -235,7 +258,7 @@ endgenerate
 generate
     for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
 `ifdef RVC
-        assign pd_ibuffer_io.offset[i] = rvc_offset[i] + shiftOffset;
+        assign pd_ibuffer_io.offset[i] = rvc_offset_n[i] + shiftOffset;
         assign jump_en_pre[i] = rvc_en[i] & bundles[i].direct;
 `else
         assign pd_ibuffer_io.offset[i] = i + shiftOffset;

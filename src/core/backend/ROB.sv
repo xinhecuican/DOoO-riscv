@@ -97,8 +97,9 @@ module ROB(
 
     logic `N(`FETCH_WIDTH) dis_en;
     logic `N(`FETCH_WIDTH * 2) dis_en_shift;
-    localparam ROB_ADD_WIDTH = $clog2(`WALK_WIDTH); 
-    logic `N(ROB_ADD_WIDTH) dis_validNum, addNum, subNum;
+    localparam ROB_ADD_WIDTH = $clog2(`WALK_WIDTH)+1; 
+    logic `N($clog2(`FETCH_WIDTH)+1) dis_validNum;
+    logic `N(ROB_ADD_WIDTH) addNum, subNum;
     logic `N(`FETCH_WIDTH) initReady;
     logic `N(`COMMIT_WIDTH) commit_store, commit_mem;
 

@@ -488,7 +488,7 @@ module CalValidNum2(
 	input logic [1: 0] en,
 	output logic [1: 0] out
 );
-	assign out[0] = 0;
+	assign out[0] = 1'b0;
 	assign out[1] = en[0];
 endmodule
 
@@ -496,10 +496,9 @@ module CalValidNum3(
 	input logic [2: 0] en,
 	output logic [2: 0][1: 0] out
 );
-	assign out[0] = 0;
-	assign out[1] = en[0];
-	assign out[2] = en[0] & en[1] ? 2 :
-					en[0] | en[1] ? 1 : 0;
+	assign out[0] = 2'b0;
+	assign out[1] = {1'b0, en[0]};
+	assign out[2] = {en[0] & en[1], en[0] ^ en[1]};
 endmodule
 
 module CalValidNum4(
@@ -507,9 +506,7 @@ module CalValidNum4(
 	output logic [3: 0][1: 0] out
 );
 	CalValidNum3 calValidNum(en[2: 0], out[2: 0]);
-	assign out[3] = en[0] & en[1] & en[2] ? 3 :
-					en[0] & en[1] | en[0] & en[2] | en[1] & en[2] ? 2 :
-					en[0] | en[1] | en[2] ? 1 : 0;
+	assign out[3] = {en[0] & en[1] | en[0] & en[2] | en[1] & en[2], en[0] ^ en[1] ^ en[2]};
 endmodule
 
 `define CAL_VALID_NUM_TEMPLATE(num, half, num_log, half_log) \

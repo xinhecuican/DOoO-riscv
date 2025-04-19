@@ -145,7 +145,7 @@ generate
                       {`DCACHE_WAY{snoop_share | cache_wreq}} & w_wayhit;
     assign metaWIdx = snoop_share | cache_wreq ? widx_n : miss_io.refillAddr`DCACHE_SET_BUS;
     assign tagv_wdata = {miss_io.refillAddr`DCACHE_TAG_BUS, miss_io.refill_valid & miss_io.refill_en & ~snoop_invalid | snoop_share & ~snoop_invalid | cache_wreq};
-    assign wmeta.share = snoop_share & whit | cache_wreq & select_meta.share | miss_io.refill_state.share;
+    assign wmeta.share = snoop_share & whit | cache_wreq & select_meta.share | ~cache_wreq & miss_io.refill_state.share;
     assign wmeta.owned = snoop_share & whit  | cache_wreq ? select_meta.owned : miss_io.refill_state.owner;
     assign wmeta.dirty = snoop_share & whit | cache_wreq ? select_meta.dirty | cache_wreq : miss_io.refill_state.dirty;
     for(genvar i=0; i<`DCACHE_BANK; i++)begin
