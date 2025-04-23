@@ -4,7 +4,7 @@
 `define ENABLE_LOG
 `define T_LOG_ALL
 // `define ENABLE_LOG_ADDR
-`define LOG_ADDR 32'h81808b40
+`define LOG_ADDR 32'h810889c0
 // `define T_DEBUG
 // `define T_BTB
 // `define T_FSQ

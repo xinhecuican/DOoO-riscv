@@ -34,7 +34,6 @@ interface DCacheMissIO;
     logic refill_en;
     logic refill_valid;
     logic refill_write;
-    logic refill_replace_hit;
     logic refill_nodata;
     logic `N(`DCACHE_WAY_WIDTH) refillWay;
     logic `N(`PADDR_SIZE) refillAddr;
@@ -54,7 +53,7 @@ interface DCacheMissIO;
                   input amo_en, output amo_refill,
 `endif
                   output rfull, req, req_addr, wfull, lq_en, lqData, lqIdx_o, refill_l2idx,
-        refill_en, refill_write, refill_replace_hit, refillWay, refillAddr, refillMask, refillData, refill_scIdx, refill_state, refill_nodata);
+        refill_en, refill_write, refillWay, refillAddr, refillMask, refillData, refill_scIdx, refill_state, refill_nodata);
 endinterface
 
 module DCacheMiss(
@@ -109,7 +108,6 @@ module DCacheMiss(
     logic `ARRAY(`DCACHE_LINE / `DATA_BYTE, `DATA_BYTE) req_mask;
     logic `N(`XLEN) expandMask;
     logic `N(`XLEN) combine_cache_data;
-    logic `N(`DCACHE_WAY_WIDTH) req_way;
     DirectoryState req_state;
     logic req_replace_hit, req_owned, req_owned_after;
     logic req_nodata;
@@ -241,7 +239,6 @@ endgenerate
     assign io.refill_scIdx = scIdxs[head];
     assign io.refill_l2idx = l2_idxs[head];
     assign io.refill_write = wvalid[head];
-    assign io.refill_replace_hit = req_replace_hit;
     assign io.refill_nodata = req_nodata;
 
     Decoder #(`DCACHE_MISS_SIZE) decoder_head (head, head_decode);
@@ -454,7 +451,6 @@ endgenerate
             req_cache <= 1'b0;
             cacheIdx <= 0;
             way <= '{default: 0};
-            req_way <= 0;
             req_valid_all <= 0;
             req_wvalid <= 0;
             req_state <= 0;
@@ -482,7 +478,6 @@ endgenerate
             if(req_next & io.req_success | replaceHit[head] & ~req_start)begin
                 req_cache <= 1'b1;
                 cache_addr <= io.req_addr;
-                req_way <= io.replaceWay;
                 req_valid_all <= data_valid_all[head];
                 req_wvalid <= wvalid[head];
                 way[head] <= replaceHit[head] ? replaceHitWay[head] : io.replaceWay;
