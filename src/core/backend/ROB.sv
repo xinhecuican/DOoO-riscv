@@ -6,11 +6,11 @@ module ROB(
     input FenceReq fence_req,
     input BackendRedirectInfo backendRedirect,
     input CSRIrqInfo irqInfo,
-    input logic `N(`VADDR_SIZE) exc_pc,
     input StoreWBData `N(`STORE_PIPELINE) storeWBData,
     RenameDisIO.rob dis_io,
     ROBRenameIO.rob rob_rename_io,
     RobRedirectIO.rob rob_redirect_io,
+    output RobRedirectInfo rob_redirect_info,
     WriteBackBus.in int_wbBus,
 `ifdef RVF
     WriteBackBus.in fp_wbBus,
@@ -384,11 +384,10 @@ endgenerate
     assign rob_redirect_io.csrRedirect.fsqInfo = robData[excIdx_n].fsqInfo;
     assign rob_redirect_io.csrRedirect.robIdx.idx = exc_robIdx;
     assign rob_redirect_io.csrRedirect.robIdx.dir = exc_dir;
-    assign rob_redirect_io.csrInfo.en = exc_exist_n;
-    assign rob_redirect_io.csrInfo.irq = irq_n;
-    assign rob_redirect_io.csrInfo.irq_deleg = irq_deleg_n;
-    assign rob_redirect_io.csrInfo.exccode = redirect_exccode;
-    assign rob_redirect_io.csrInfo.exc_pc = exc_pc;
+    assign rob_redirect_info.en = exc_exist_n;
+    assign rob_redirect_info.irq = irq_n;
+    assign rob_redirect_info.irq_deleg = irq_deleg_n;
+    assign rob_redirect_info.exccode = redirect_exccode;
 
 // idx maintain
     always_comb begin
@@ -692,6 +691,6 @@ endgenerate
     end
 
     `Log(DLog::Debug, T_COMMIT, exc_exist_n,
-        $sformatf("exception[%d %x] pc: %x", irq_n, redirect_exccode, exc_pc))
+        $sformatf("exception[%d %x]", irq_n, redirect_exccode))
 `endif
 endmodule

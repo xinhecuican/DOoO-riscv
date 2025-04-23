@@ -7,7 +7,7 @@ module CSR(
     input logic `N(`VADDR_SIZE) exc_pc,
     input logic `N(32) trapInst,
     input logic `N(`VADDR_SIZE) exc_vaddr,
-    input CSRRedirectInfo redirect,
+    input RobRedirectInfo redirect,
     IssueCSRIO.csr issue_csr_io,
     WriteBackIO.fu csr_wb_io,
     CommitBus.in commitBus,
@@ -322,8 +322,8 @@ endgenerate                                                             \
     logic `N(`MXL) edelege;
     logic edelege_valid;
     logic ret, ret_priv_error, ret_valid;
-    assign mvec_pc = mtvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
-    assign svec_pc = stvec[`MXL-1: 2] + mcause[`EXC_WIDTH-1: 0];
+    assign mvec_pc = mtvec[`MXL-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
+    assign svec_pc = stvec[`MXL-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
     assign mtarget_pc = redirect.irq & (mtvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
                         {{`VADDR_SIZE-`MXL{1'b0}}, mtvec[`MXL-1: 2], 2'b00};
     assign starget_pc = redirect.irq & (stvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
@@ -561,13 +561,13 @@ endgenerate                                                             \
 
 // interrupt
     logic msip, ssip, mtip, stip, meip, seip;
-    logic msip_s1, mtip_s1, meip_s1, seip_s1, seip_s2;
+    logic msip_s1, mtip_s1, meip_s1;
     logic `N(7) deleg_s, irq_enable, irq_valid;
     logic `N(3) irqIdx;
 
     assign mip = '{
         meip: meip,
-        seip: seip | seip_s2,
+        seip: seip,
         msip: msip,
         ssip: ssip,
         mtip: mtip,
@@ -597,14 +597,12 @@ endgenerate
         msip <= msip_s1;
         mtip <= mtip_s1;
         meip <= meip_s1;
-        seip_s2 <= seip_s1;
     end
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             msip_s1 <= 0;
             mtip_s1 <= 0;
             meip_s1 <= 0;
-            seip_s1 <= 0;
             seip <= 0;
             ssip <= 0;
             stip <= 0;
@@ -612,8 +610,7 @@ endgenerate
         else begin
             msip_s1 <= clint_io.soft_irq;
             mtip_s1 <= clint_io.timer_irq;
-            meip_s1 <= clint_io.meip;
-            seip_s1 <= clint_io.seip;
+            meip_s1 <= clint_io.irq;
             if(wen_o[mip_id] | wen_o[sip_id])begin
                 ssip <= wdata_s2[1];
                 stip <= wdata_s2[5];

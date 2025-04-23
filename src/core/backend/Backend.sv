@@ -89,6 +89,7 @@ module Backend(
     CommitWalk commitWalk;
     BackendRedirectIO backendRedirect();
     RobRedirectIO rob_redirect_io();
+    RobRedirectInfo rob_redirect_info;
     WriteBackIO #(`ALU_SIZE) alu_wb_io();
     WriteBackIO #(
 `ifdef RVF
@@ -153,8 +154,7 @@ module Backend(
     ROB rob(.*,
             .dis_io(rename_dis_io),
             .full(rob_full),
-            .backendRedirect(backendRedirect.out),
-            .exc_pc(csr_exc_pc));
+            .backendRedirect(backendRedirect.out));
     Dispatch dispatch(.*,
                       .full(backendCtrl.dis_full));
     IntIssueQueue int_issue_queue(
@@ -185,10 +185,11 @@ module Backend(
                     .branchRedirectInfo(backendRedirect.branchInfo));
     BackendRedirectCtrl backend_redirect_ctrl(.*,
                                               .io(backendRedirect),
+                                              .exc_pc(csr_exc_pc),
                                               .redirectIdx(backendCtrl.redirectIdx));
     CSR csr(.*,
             .exc_pc(fsq_back_io.exc_pc),
-            .redirect(backendRedirect.csrOut),
+            .redirect(rob_redirect_info),
             .target_pc(csr_exc_pc));
     WriteBack write_back(.*);
 endmodule

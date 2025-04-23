@@ -62,10 +62,9 @@ interface ClintIO;
     logic timer_irq;
     logic soft_irq;
     logic [63: 0] mtime;
-    logic meip;
-    logic seip;
+    logic irq;
 
     modport clint(output timer_irq, soft_irq, mtime);
-    modport cpu(input timer_irq, soft_irq, mtime, meip, seip);
+    modport cpu(input timer_irq, soft_irq, mtime, irq);
 endinterface //ClintIO
 `endif

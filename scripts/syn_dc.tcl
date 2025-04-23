@@ -1,4 +1,7 @@
 source scripts/dc_setup.tcl
+set work_path build/work
+define_design_lib work -path $work_path
+set verilogout_no_tri true
 
 set foundry $::env(FOUNDRY)
 set CLK_FREQ $::env(CLK_FREQ)
@@ -20,16 +23,15 @@ elaborate $TOP
 link
 
 source -echo -verbose config/sdc/Soc.sdc
-
+set_ideal_network           $clk_port
 #compile
 set high_fanout_net_threshold 0
 
 uniquify
-set_fix_multiple_port_nets -all -buffer_constants [get_designs *]
-
+set_fix_multiple_port_nets -all -buffer_constants
 set_structure -timing true
 
-compile -ungroup_all
+compile -boundary_optimization -auto_ungroup area
 compile -map_effort high -inc
 
 # Output
@@ -50,8 +52,6 @@ write -format ddc -hierarchy -output build/${TOP}.ddc
 write_file -format verilog -hierarchy    -output         ${SYNTH_V}
 write_sdf -version 2.0 -context verilog  -load_delay net build/${TOP}.sdf
 write_sdc -version 2.0 build/${TOP}.sdc
-report_area   > $LOG_DIR/area.log
 report_timing > $LOG_DIR/timing.log
-report_power  > $LOG_DIR/power.log
 report_qor    > $LOG_DIR/top.qor
 exit

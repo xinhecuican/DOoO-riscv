@@ -5,6 +5,8 @@ module BackendRedirectCtrl (
     input logic rst,
     BackendRedirectIO.redirect io,
     RobRedirectIO.redirect rob_redirect_io,
+    input RobRedirectInfo rob_redirect_info,
+    input logic `N(`VADDR_SIZE) exc_pc,
     output RobIdx redirectIdx
 );
     logic branchOlder;
@@ -39,7 +41,11 @@ module BackendRedirectCtrl (
     assign io.branchOut.taken = preBranch.taken;
     assign io.branchOut.target = preBranch.target;
     assign io.branchOut.br_type = preBranch.br_type;
-    assign io.csrOut = rob_redirect_io.csrInfo;
+    assign io.csrOut.en = rob_redirect_info.en;
+    assign io.csrOut.irq = rob_redirect_info.irq;
+    assign io.csrOut.irq_deleg = rob_redirect_info.irq_deleg;
+    assign io.csrOut.exccode = rob_redirect_info.exccode;
+    assign io.csrOut.exc_pc = exc_pc;
     assign redirectIdx = rob_redirect_io.csrRedirect.en ? rob_redirect_io.csrRedirect.robIdx : preRedirectIdx;
 
     `PERF(redirect_mem, io.out.en & ~rob_redirect_io.csrRedirect.en & ~branchValid_n)

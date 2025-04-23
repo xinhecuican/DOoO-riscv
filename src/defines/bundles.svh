@@ -428,6 +428,13 @@ typedef struct packed {
     logic irq;
     logic irq_deleg;
     logic `N(`EXC_WIDTH) exccode;
+} RobRedirectInfo;
+
+typedef struct packed {
+    logic en;
+    logic irq;
+    logic irq_deleg;
+    logic `N(`EXC_WIDTH) exccode;
     logic `N(`VADDR_SIZE) exc_pc;
 } CSRRedirectInfo;
 

@@ -42,7 +42,7 @@ endgenerate
     logic `N(`BLOCK_INST_SIZE) rvc_mask /*verilator split_var*/;
     logic `N(`BLOCK_INST_SIZE) rvc_en, rvc_en_n;
     logic `N(`BLOCK_INST_SIZE+1) rvc_en_compress;
-    logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx, rvc_idx_n, rvc_offset, rvc_offset_n;
+    logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx, rvc_idx_n, rvc_offset;
     logic `N(`BLOCK_INST_WIDTH+1) rvc_num;
     logic `N(`PREDICTION_WIDTH) tailIdx_pre, tail_rvi_idx;
     logic `ARRAY(`BLOCK_INST_SIZE, `VADDR_SIZE) addrs;
@@ -62,7 +62,7 @@ generate
         logic `ARRAY(NUM, `BLOCK_INST_WIDTH) offset;
         logic valid;
         for(genvar j=i; j<MAX; j++)begin
-            assign equal[j-i] = rvc_idx[j] == i;
+            assign equal[j-i] = rvc_idx_n[j] == i;
             assign offset[j-i] = j;
         end
         OldestSelect #(NUM, 1, `BLOCK_INST_WIDTH) select_offset (
@@ -144,7 +144,6 @@ endgenerate
 `ifdef RVC
             rvc_idx_n <= 0;
             rvc_en_n <= 0;
-            rvc_offset_n <= 0;
 `endif
         end
         else if(pd_redirect.en || frontendCtrl.redirect)begin
@@ -169,7 +168,6 @@ endgenerate
             selectOffset <= jumpSelectIdx_pre;
             shiftIdx <= cache_pd_io.shiftIdx;
             rvc_en_n <= rvc_en;
-            rvc_offset_n <= rvc_offset;
 `else
             bundles_next <= bundles;
             en_next <= cache_pd_io.en;
@@ -245,7 +243,7 @@ endgenerate
     assign pd_ibuffer_io.iam = 0;
 generate
     for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
-        assign pd_ibuffer_io.inst[i] = data_next[rvc_offset_n[i]];
+        assign pd_ibuffer_io.inst[i] = data_next[rvc_offset[i]];
     end
 endgenerate
 `else
@@ -258,7 +256,7 @@ endgenerate
 generate
     for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
 `ifdef RVC
-        assign pd_ibuffer_io.offset[i] = rvc_offset_n[i] + shiftOffset;
+        assign pd_ibuffer_io.offset[i] = rvc_offset[i] + shiftOffset;
         assign jump_en_pre[i] = rvc_en[i] & bundles[i].direct;
 `else
         assign pd_ibuffer_io.offset[i] = i + shiftOffset;

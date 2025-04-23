@@ -79,6 +79,7 @@ module DCacheMiss(
     logic `N(`DCACHE_REPLACE_WIDTH) replace_idx `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) data `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) mask `N(`DCACHE_MISS_SIZE);
+    logic `N(`DCACHE_MISS_WIDTH) data_idx;
     logic `N(`DCACHE_MISS_SIZE) data_valid_all, wvalid;
     logic `N(`STORE_COMMIT_WIDTH) scIdxs `N(`DCACHE_MISS_SIZE);
     logic `ARRAY(`DCACHE_MISS_SIZE, `L2MSHR_WIDTH) l2_idxs;
@@ -213,8 +214,8 @@ endgenerate
 
     assign free_en[`LOAD_PIPELINE] = wen & ~w_invalid & (write_remain_valid & ~whit_combine);
 
-    assign read_data = data[widx];
-    assign read_mask = mask[widx];
+    assign read_data = data[data_idx];
+    assign read_mask = mask[data_idx];
 generate
     for(genvar i=0; i<`DCACHE_BANK; i++)begin
         logic `N(`DCACHE_BITS) expand_mask;
@@ -299,16 +300,19 @@ endgenerate
     end
 
     ParallelAdder #(1, `LOAD_PIPELINE+1) adder_free (free_en, free_num);
+    assign data_idx = req_last | rlast ? head : widx;
     always_ff @(posedge clk)begin
-        if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
-            data[widx] <= combine_data;
-            mask[widx] <= combine_mask;
+        if(req_last)begin
+            data[data_idx] <= cache_eq_data;
+        end
+        else if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
+            data[data_idx] <= combine_data;
         end
         if(req_last)begin
-            data[head] <= cache_eq_data;
+            mask[data_idx] <= 0;
         end
-        if(io.refill_en & io.refill_valid)begin
-            mask[head] <= 0;
+        else if(io.wen & ~w_invalid & (write_remain_valid | whit_combine))begin
+            mask[data_idx] <= combine_mask;
         end
     end
     always_ff @(posedge clk or negedge rst)begin
@@ -512,8 +516,8 @@ endgenerate
         end
     
         if(rlast)begin
-            req_data <= data[head];
-            req_mask <= mask[head];
+            req_data <= data[data_idx];
+            req_mask <= mask[data_idx];
             req_state <= req_wvalid | req_valid_all 
 `ifdef RVA
                         | amo_req
