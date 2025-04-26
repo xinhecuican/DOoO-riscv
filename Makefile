@@ -33,6 +33,7 @@ SRC += $(shell find src/soc -name "*.v" -or -name "*.sv" -or -name "*.svh")
 WITH_DRAMSIM3 := 1
 EMU_TRACE := fst
 EMU_THREADS := 4
+EMU_COVERAGE := 0
 TRACK_INST := 0
 TRACE_ARGS := -T ${TRACK_INST}
 ENABLE_FORK := 0
@@ -63,6 +64,9 @@ ifeq ($(ENABLE_DIFF), 1)
 else
 	TRACE_ARGS += --no-diff
 endif
+ifeq ($(EMU_COVERAGE),1)
+	EMU_ARGS += EMU_COVERAGE=${EMU_COVERAGE}
+endif
 ifeq ($(LLVM),1)
 	EMU_ARGS += PGO_WORKLOAD=`realpath config/bench/coremark.riscv.bin` LLVM_PROFDATA=llvm-profdata
 endif
@@ -76,6 +80,9 @@ emu:
 emu-run: emu
 	mkdir -p $(LOG_PATH)
 	build/emu -i "${I}" -s 1168 -b ${S} -e ${E} -B $(WB) -E $(WE) ${TRACE_ARGS} --log-path=${LOG_PATH}
+
+coverage:
+	make -C utils/difftest coverage
 
 sbi:
 	make -C utils/opensbi ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- PLATFORM_RISCV_XLEN=32 PLATFORM=generic FW_PAYLOAD_PATH=${CURDIR}/utils/rv-linux/arch/riscv/boot/Image FW_FDT_PATH=${CURDIR}/utils/opensbi/dts/custom.dtb FW_PAYLOAD_OFFSET=0x400000
@@ -132,6 +139,7 @@ clean_emu:
 	rm -rf build/emu-compile
 	rm -f build/emu
 	rm -f build/time.log
+	rm -rf build/annotated
 
 clean:
 	make -C utils/difftest clean

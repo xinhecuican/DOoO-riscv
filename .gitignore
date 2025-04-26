@@ -2,6 +2,7 @@ nscscc-group/
 build/
 log/
 slpp_all/
+payloads/
 tags
 dramsim3.json
 dramsim3.txt

@@ -159,6 +159,7 @@ module SimTop(
         end_addr: `IRQ_END
     };
 
+    /*verilator coverage_off*/
     axi_xbar #(
         .Cfg(crossbar_cfg),
         .slv_aw_chan_t(AxiAW),
@@ -236,7 +237,7 @@ module SimTop(
         .apb_resp_i({plic_resp, clint_resp}),
         .addr_map_i(irq_map_rules)
     );
-
+    /*verilator coverage_on*/
     ApbIO clint_apb_io();
     `APB_REQ_ASSIGN(clint_req, clint_apb_io)
     `APB_RESP_ASSIGN(clint_resp, clint_apb_io)
@@ -258,8 +259,8 @@ module SimTop(
         .SOURCES(`IRQ_NUM),
         .TARGETS(`NUM_CORE)
     ) plic_inst (
-        .PRESETn(clint_rst),
-        .PCLK(clk),
+        .PRESETn(peri_rst),
+        .PCLK(clock),
         .apb4(plic_apb_io),
         .src(irq_source),
         .irq(irq)
@@ -280,7 +281,7 @@ module SimTop(
 
     `AXI_ASSIGN_TO_REQ(peri_req, peri_axi)
     `AXI_ASSIGN_FROM_RESP(peri_axi, peri_resp)
-
+/*verilator coverage_off*/
     axi_to_apb #(
         .NoApbSlaves(`PERIPHERAL_SIZE),
         .NoRules(`PERIPHERAL_SIZE),
@@ -309,7 +310,7 @@ module SimTop(
         .apb_resp_i(uart_resp),
         .addr_map_i(map_rules)
     );
-
+/*verilator coverage_on*/
 // uart
 
     ApbIO uart_io();
@@ -340,6 +341,7 @@ module SimTop(
     `AXI_ASSIGN_FROM_RESP(core_mem_axi, core_mem_resp)
     `AXI_ASSIGN_FROM_REQ(mem_axi, mem_req)
     `AXI_ASSIGN_TO_RESP(mem_resp, mem_axi)
+/*verilator coverage_off*/
     axi_multicut #(
         .NoCuts(1),
         .aw_chan_t(AxiMemAW),
@@ -357,7 +359,7 @@ module SimTop(
         .mst_req_o(mem_req),
         .mst_resp_i(mem_resp)
     );
-
+/*verilator coverage_on*/
 `ifdef DRAMSIM3
     assign mem_axi.aw_ready = io_memAXI_0_aw_ready;
     assign io_memAXI_0_aw_valid = mem_axi.aw_valid;

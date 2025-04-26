@@ -231,8 +231,8 @@ module FMantMul #(
     logic `N(NUM/2) c0;
     assign c0 = n;
     `CSA_DEF(0, 1)
-    `CSA_DEF(1, 2)
-    `CSAN_DEF(2, 3)
+    `CSAN_DEF(1, 2)
+    `CSA_DEF(2, 3)
     `CSA_DEF(3, 4)
     `CSA_DEF(4, 5)
 

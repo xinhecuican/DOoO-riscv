@@ -26,7 +26,8 @@ module Dispatch(
     CommitBus.in commitBus,
     FenceBus.dis fenceBus,
     input CommitWalk commitWalk,
-    input BackendCtrl backendCtrl,
+    input BackendCtrl backendCtrl/*verilator split_var*/,
+    input logic redirect,
     output logic full
 );
     BusyTableIO #(`INT_BUSY_PORT) int_busy_io();
@@ -106,7 +107,7 @@ generate
                         };
         assign int_io.en[i] = rename_dis_io.op[i].en & 
                               (di.intv | di.branchv) &
-                              (~(backendCtrl.redirect));
+                              (~(redirect));
         assign int_io.data[i] = bundle;
     end
 endgenerate
@@ -142,7 +143,7 @@ endgenerate
     LoopAdder #(`LOAD_QUEUE_WIDTH, 1) adder_lq_redirect (1'b1, load_redirect_idx, load_redirectIdx_n);
     LoopAdder #(`STORE_QUEUE_WIDTH, 1) adder_sq_redirect (1'b1, store_redirect_idx, store_redirectIdx_n);
     always_ff @(posedge clk)begin
-        redirect_n1 <= backendCtrl.redirect;
+        redirect_n1 <= redirect;
         redirect_n2 <= redirect_n1;
         load_redirect_n <= load_redirect;
         store_redirect_n <= store_redirect;
@@ -189,10 +190,10 @@ generate
                         lqIdx: lq_eq_tail[i], sqIdx: sq_eq_tail[i]};
         assign di = rename_dis_io.op[i].di;
         assign load_io.en[i] = rename_dis_io.op[i].en & (di.memv) & ~di.memop[`MEMOP_WIDTH-1] &
-                               (~(backendCtrl.redirect));
+                               (~(redirect));
         assign load_io.data[i] = data;
         assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
-                                (~(backendCtrl.redirect));
+                                (~(redirect));
         assign store_io.data[i] = data;
     end
 endgenerate
@@ -244,7 +245,7 @@ generate
         assign data.exccode = di.exccode;
         assign data.inst = rename_dis_io.op[i].inst;
         assign di = rename_dis_io.op[i].di;
-        assign csr_io.en[i] = rename_dis_io.op[i].en & di.csrv & (~(backendCtrl.redirect));
+        assign csr_io.en[i] = rename_dis_io.op[i].en & di.csrv & (~(redirect));
         assign csr_io.data[i] = data;
     end
 endgenerate
@@ -265,7 +266,7 @@ generate
         MultIssueBundle data;
         assign di = rename_dis_io.op[i].di;
         assign data.multop = di.multop;
-        assign mult_io.en[i] = rename_dis_io.op[i].en & di.multv & ~backendCtrl.redirect;
+        assign mult_io.en[i] = rename_dis_io.op[i].en & di.multv & ~redirect;
         assign mult_io.data[i] = data;
     end
 endgenerate
@@ -287,7 +288,7 @@ generate
         AmoIssueBundle data;
         assign di = rename_dis_io.op[i].di;
         assign data.amoop = di.amoop;
-        assign amo_io.en[i] = rename_dis_io.op[i].en & di.amov & ~backendCtrl.redirect;
+        assign amo_io.en[i] = rename_dis_io.op[i].en & di.amov & ~redirect;
         assign amo_io.data[i] = data;
     end
 endgenerate
@@ -340,9 +341,9 @@ generate
         assign fma_bundle.rm = di.rm;
         assign fdiv_bundle.div = di.fltop == `FLT_DIV;
         assign fdiv_bundle.rm = di.rm;
-        assign fmisc_io.en[i] = rename_dis_io.op[i].en & di.fmiscv & ~backendCtrl.redirect;
-        assign fma_io.en[i] = rename_dis_io.op[i].en & di.fcalv & ~div & ~backendCtrl.redirect;
-        assign fdiv_io.en[i] = rename_dis_io.op[i].en & di.fcalv & div & ~backendCtrl.redirect;
+        assign fmisc_io.en[i] = rename_dis_io.op[i].en & di.fmiscv & ~redirect;
+        assign fma_io.en[i] = rename_dis_io.op[i].en & di.fcalv & ~div & ~redirect;
+        assign fdiv_io.en[i] = rename_dis_io.op[i].en & di.fcalv & div & ~redirect;
         assign fmisc_io.data[i] = misc_bundle;
         assign fma_io.data[i] = fma_bundle;
         assign fdiv_io.data[i] = fdiv_bundle;

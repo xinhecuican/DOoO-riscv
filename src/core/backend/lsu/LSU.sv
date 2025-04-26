@@ -181,8 +181,7 @@ endgenerate
     // load request
     assign rio.req = load_io.en;
     assign rio.vaddr = loadVAddr;
-    /* verilator lint_off UNOPTFLAT */
-    logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) oldest_cmp;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) oldest_cmp/*verilator split_var*/;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin

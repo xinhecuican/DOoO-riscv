@@ -574,10 +574,9 @@ endinterface
 interface RobRedirectIO;
     logic fence;
     BackendRedirectInfo csrRedirect;
-    CSRRedirectInfo csrInfo;
 
-    modport rob (output csrRedirect, csrInfo, fence);
-    modport redirect (input csrRedirect, csrInfo, fence);
+    modport rob (output csrRedirect, fence);
+    modport redirect (input csrRedirect, fence);
 endinterface
 
 interface DCacheLoadIO;

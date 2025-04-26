@@ -84,7 +84,7 @@ module Backend(
 `endif
     WriteBackIO #(1) csr_wb_io();
     IntIssueExuIO int_exu_io();
-    BackendCtrl backendCtrl;
+    BackendCtrl backendCtrl/*verilator split_var*/;
     CommitBus commitBus();
     CommitWalk commitWalk;
     BackendRedirectIO backendRedirect();
@@ -107,7 +107,6 @@ module Backend(
     FenceBus fenceBus();
     StoreWBData `N(`STORE_PIPELINE) storeWBData;
     logic rename_full, rob_full;
-    /* verilator lint_off UNOPTFLAT */
     logic `N(`VADDR_SIZE) csr_exc_pc;
     LoadIdx lqIdx;
     StoreIdx sqIdx;
@@ -156,7 +155,8 @@ module Backend(
             .full(rob_full),
             .backendRedirect(backendRedirect.out));
     Dispatch dispatch(.*,
-                      .full(backendCtrl.dis_full));
+                      .full(backendCtrl.dis_full),
+                      .redirect(fsq_back_io.redirect.en));
     IntIssueQueue int_issue_queue(
         .*,
         .dis_issue_io(dis_int_io),
