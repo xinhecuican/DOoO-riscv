@@ -70,10 +70,10 @@ module SimTop(
     end
 
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2, 1
+        `PADDR_SIZE, `XLEN, 2+`DCACHE_ID_WIDTH, 1
     ) mem_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2, 1
+        `PADDR_SIZE, `XLEN, 2+`DCACHE_ID_WIDTH, 1
     ) core_mem_axi();
     AxiIO #(
         `PADDR_SIZE, `XLEN, 1, 1
@@ -87,7 +87,7 @@ module SimTop(
 
     ClintIO clint_io();
     logic `N(`IRQ_NUM) irq_source;
-    logic `N(`NUM_CORE) irq;
+    logic `N(`NUM_CORE) meip, seip;
 
     CPUCore core(
         .clk(clock),
@@ -96,8 +96,8 @@ module SimTop(
         .peri_axi(core_peri_axi.master),
         .clint_io(clint_io.cpu)
     );
-    assign clint_io.irq = irq[0];
-
+    assign clint_io.meip = meip[0];
+    assign clint_io.seip = seip[0];
 
     localparam [2: 0] AXI_SLAVE_NUM = 2;
     localparam xbar_cfg_t crossbar_cfg = '{
@@ -193,8 +193,8 @@ module SimTop(
 // interrupt
     AxiReq irq_req;
     AxiResp irq_resp;
-    ApbReq clint_req, plic_req;
-    ApbResp clint_resp, plic_resp;
+    ApbReq clint_req, plic_req/*verilator split_var*/;
+    ApbResp clint_resp, plic_resp/*verilator split_var*/;
     addr_rule_t `N(2) irq_map_rules;
     assign irq_map_rules[0] = '{
         idx: 0,
@@ -253,17 +253,13 @@ module SimTop(
     ApbIO plic_apb_io();
     `APB_REQ_ASSIGN(plic_req, plic_apb_io)
     `APB_RESP_ASSIGN(plic_resp, plic_apb_io)
-    apb4_plic_top #(
-        .PADDR_SIZE(`PADDR_SIZE),
-        .PDATA_SIZE(`XLEN),
-        .SOURCES(`IRQ_NUM),
-        .TARGETS(`NUM_CORE)
-    ) plic_inst (
-        .PRESETn(peri_rst),
-        .PCLK(clock),
-        .apb4(plic_apb_io),
-        .src(irq_source),
-        .irq(irq)
+    plic plic_inst (
+        .rstn(peri_rst),
+        .clk(clock),
+        .apb(plic_apb_io),
+        .ints({{32-`IRQ_NUM{1'b0}}, irq_source}),
+        .meip(meip),
+        .seip(seip)
     );
 
 // peri
@@ -327,7 +323,7 @@ module SimTop(
     );
 
 // mem
-    typedef logic [1: 0] mem_id_t;
+    typedef logic [1+`DCACHE_ID_WIDTH: 0] mem_id_t;
     `AXI_TYPEDEF_AW_CHAN_T(AxiMemAW, addr_t, mem_id_t, user_t)
     `AXI_TYPEDEF_W_CHAN_T(AxiMemW, data_t, strb_t, user_t)
     `AXI_TYPEDEF_B_CHAN_T(AxiMemB, mem_id_t, user_t)
@@ -411,11 +407,8 @@ module SimTop(
     );
 `endif
 
-import DLog::*;
-    initial begin
-        logLevel = io_logCtrl_log_level;
-    end
     always_ff @(posedge clock)begin
-        logValid <= cycleCnt > io_logCtrl_log_begin && cycleCnt < io_logCtrl_log_end;
+        DLog::logLevel <= io_logCtrl_log_level;
+        DLog::logValid <= DLog::cycleCnt > io_logCtrl_log_begin && DLog::cycleCnt < io_logCtrl_log_end;
     end
 endmodule

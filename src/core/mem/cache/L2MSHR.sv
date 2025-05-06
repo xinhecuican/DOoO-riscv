@@ -497,7 +497,7 @@ endgenerate
     end
     OldestSelect #(SLAVE_BANK, 1, SLAVE_BITS, 1) select_refill_data (refill_valids_bank, refill_data, refill_r_valid, refill_r_data);
     assign slave_io.r_valid = (|refill_direct) | (|refill_valids_bank);
-    assign slave_io.r_id = {refill_ids[refill_idx], 1'b0};
+    assign slave_io.r_id = refill_ids[refill_idx];
     assign slave_io.r_data = refill_r_data;
     assign slave_io.r_resp = {refill_resps[refill_idx], 2'b00};
     assign slave_io.r_last = (|refill_direct) | refill_bank_select[SLAVE_BANK-1];
@@ -1067,7 +1067,7 @@ endgenerate
     end
     assign slave_io.w_ready = write_waiting;
     assign slave_io.b_valid = slave_b_valid;
-    assign slave_io.b_id = {slave_b_id, 1'b0};
+    assign slave_io.b_id = slave_b_id;
     assign slave_io.b_resp = 0;
     assign slave_io.b_user = 0;
 

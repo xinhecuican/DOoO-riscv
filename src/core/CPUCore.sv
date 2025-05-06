@@ -10,19 +10,19 @@ module CPUCore (
 );
 
     CacheBus #(
-        `PADDR_SIZE, `XLEN, 1, 1
+        `PADDR_SIZE, `XLEN, `DCACHE_ID_WIDTH, 1
     ) icache_io();
     CacheBus #(
-        `PADDR_SIZE, `XLEN, 1, `DCACHE_WAY_WIDTH
+        `PADDR_SIZE, `XLEN, `DCACHE_ID_WIDTH, `DCACHE_WAY_WIDTH
     ) dcache_io();
     CacheBus #(
         `PADDR_SIZE, `XLEN, 1, 1
     ) ducache_io();
     CacheBus #(
-        `PADDR_SIZE, `XLEN, 1, 1
+        `PADDR_SIZE, `XLEN, `DCACHE_ID_WIDTH, 1
     ) tlb_io();
     CacheBus #(
-        `PADDR_SIZE, `XLEN, 2, 1
+        `PADDR_SIZE, `XLEN, 2+`DCACHE_ID_WIDTH, 1
     ) master_io();
     SnoopIO #(
         `PADDR_SIZE, `XLEN, `L2MSHR_WIDTH

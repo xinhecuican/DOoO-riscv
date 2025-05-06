@@ -30,6 +30,7 @@ interface ApbIO #(
     logic `N(DATA_WIDTH/8) pstrb;   // write strb, comes from W channel
 
     logic  pready;   // slave signals that it is ready
+    /*verilator lint_off UNOPTFLAT*/
     logic `N(DATA_WIDTH) prdata;   // read data, connects to R channel
     logic  pslverr; 
 

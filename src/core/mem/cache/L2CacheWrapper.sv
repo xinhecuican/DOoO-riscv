@@ -19,9 +19,9 @@ module L2CacheWrapper #(
     output mst_snoop_resp_t mst_snoop_resp
 );
     typedef logic [`PADDR_SIZE-1: 0] addr_t;
-    typedef logic [0: 0] id_t;
+    typedef logic [`DCACHE_ID_WIDTH-1: 0] id_t;
     typedef logic user_t;
-    typedef logic [2: 0] mst_id_t;
+    typedef logic [1+`DCACHE_ID_WIDTH: 0] mst_id_t;
     typedef logic [`XLEN-1: 0] data_t;
     typedef logic [`XLEN/8-1: 0] strb_t;
     typedef logic [$clog2(`L2MSHR_SIZE)-1: 0] snoop_ack_id_t;
@@ -54,7 +54,7 @@ module L2CacheWrapper #(
     AxiMReq req_o;
     AxiMResp resp_i;
     CacheBus #(
-        `PADDR_SIZE, `XLEN, 3, 1
+        `PADDR_SIZE, `XLEN, 2+`DCACHE_ID_WIDTH, 1
     ) l2_cache_io();
 
     `CACHE_ASSIGN_TO_AR(ireq.ar, icache_io)
@@ -88,7 +88,7 @@ module L2CacheWrapper #(
     `CACHE_ASSIGN_TO_RESP(resp_i, l2_cache_io)
 
     axi_mux #(
-        .SlvAxiIDWidth(1),
+        .SlvAxiIDWidth(`DCACHE_ID_WIDTH),
         .slv_aw_chan_t(AxiAW),
         .mst_aw_chan_t(AxiMAW),
         .w_chan_t(AxiW),
@@ -139,8 +139,8 @@ module L2CacheWrapper #(
         .SLAVE_BANK(`DCACHE_BANK),
         .CACHE_BANK(`L2CACHE_BANK),
         .DATA_BANK(`L2DATA_BANK),
-        .ID_WIDTH(2),
-        .ID_OFFSET(1),
+        .ID_WIDTH(2+`DCACHE_ID_WIDTH),
+        .ID_OFFSET(0),
         .SLAVE(1),
         .WAY_NUM(`L2WAY_NUM),
         .SET(`L2SET),

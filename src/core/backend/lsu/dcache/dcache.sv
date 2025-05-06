@@ -84,7 +84,7 @@ module DCache(
     DCacheMissIO miss_io();
     ReplaceQueueIO replace_queue_io();
     CacheBus #(
-        `PADDR_SIZE, `XLEN, 1, 1
+        `PADDR_SIZE, `XLEN, `DCACHE_ID_WIDTH, 1
     ) dcache_axi_io();
     ReplaceIO #(
         .DEPTH(`DCACHE_SET),
@@ -215,7 +215,7 @@ generate
         logic `N(`DCACHE_BYTE) load_wmask;
         assign load_wmask = wmask_n[loadOffset[i]];
         assign write_valid[i] = miss_io.refill_en & ~(cache_wreq & whit) & ~wio.req |
-                                snoop_req_n & whit | snoop_invalid |
+                                snoop_req_n |
                                 cache_wreq & whit & (|load_wmask)
 `ifdef RVA
                                 | amo_en[loadOffset[i]]
@@ -389,7 +389,7 @@ endgenerate
     // refill
     assign miss_io.refill_valid = ~(cache_wreq & whit) & ~wio.req & ~snoop_req & ~snoop_req_n
 `ifdef RVA
-    & ~amo_io.req
+    & ~amo_io.req & ~amo_req_n
 `endif
     ;
     always_ff @(posedge clk)begin

@@ -561,7 +561,7 @@ endgenerate                                                             \
 
 // interrupt
     logic msip, ssip, mtip, stip, meip, seip;
-    logic msip_s1, mtip_s1, meip_s1;
+    logic msip_s1, mtip_s1, meip_s1, seip_s1, seip_s2;
     logic `N(7) deleg_s, irq_enable, irq_valid;
     logic `N(3) irqIdx;
 
@@ -597,12 +597,14 @@ endgenerate
         msip <= msip_s1;
         mtip <= mtip_s1;
         meip <= meip_s1;
+        seip_s2 <= seip_s1;
     end
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             msip_s1 <= 0;
             mtip_s1 <= 0;
             meip_s1 <= 0;
+            seip_s1 <= 0;
             seip <= 0;
             ssip <= 0;
             stip <= 0;
@@ -610,7 +612,8 @@ endgenerate
         else begin
             msip_s1 <= clint_io.soft_irq;
             mtip_s1 <= clint_io.timer_irq;
-            meip_s1 <= clint_io.irq;
+            meip_s1 <= clint_io.meip;
+            seip_s1 <= clint_io.seip;
             if(wen_o[mip_id] | wen_o[sip_id])begin
                 ssip <= wdata_s2[1];
                 stip <= wdata_s2[5];

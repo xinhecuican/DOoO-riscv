@@ -30,6 +30,7 @@ module apb4_clint (
 
   assign s_apb4_addr     = apb4.paddr[15: 0];
   assign s_apb4_wr_hdshk = (apb4.psel && apb4.penable) && apb4.pwrite;
+  /*verilator lint_off UNOPTFLAT*/
   assign s_apb4_rd_hdshk = (apb4.psel && apb4.penable) && (~apb4.pwrite);
   assign apb4.pready     = 1'b1;
   assign apb4.pslverr    = 1'b0;

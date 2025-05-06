@@ -377,6 +377,15 @@ module MaskGen2(
 	assign out[1] = 1'b0;
 endmodule
 
+module MaskGen3(
+	input logic [1: 0] in,
+	output logic [2: 0] out
+);
+	assign out[0] = in[0] | in[1];
+	assign out[1] = in[1];
+	assign out[2] = 1'b0;
+endmodule
+
 module MaskGen4(
 	input logic [1: 0] in,
 	output logic [3: 0] out
