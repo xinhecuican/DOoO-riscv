@@ -269,6 +269,7 @@ generate
         MultIssueBundle data;
         assign di = rename_dis_io.op[i].di;
         assign data.multop = di.multop;
+        assign data.word = di.word;
         assign mult_io.en[i] = rename_dis_io.op[i].en & di.multv & ~redirect;
         assign mult_io.data[i] = data;
     end

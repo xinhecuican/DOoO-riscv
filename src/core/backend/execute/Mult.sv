@@ -5,6 +5,9 @@ module MultUnit(
     input logic clk,
     input logic rst,
     input logic en,
+`ifdef RV64I
+    input logic word,
+`endif
     input logic `N(`MULTOP_WIDTH) multop,
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
@@ -55,7 +58,6 @@ module MultUnit(
     `STA_NUM_DEF(3, 4)
     `STA_NUM_DEF(4, 5)
     `STA_NUM_DEF(5, 6)
-    `STA_NUM_DEF(6, 7)
     // localparam S2 = S1_ALL / 3; // 4 7
     // localparam S2_REM = (S1_ALL % 3); // 0 1
     // localparam S2_ALL = (S2 * 2 + S1_ALL % 3); // 8 15
@@ -66,9 +68,9 @@ module MultUnit(
     // localparam S5 = S4_ALL / 3; // 1 2
     // localparam S5_ALL = (S5 * 2 + S4_ALL % 3); // 3 5
     // localparam S6 = S5_ALL / 3; // 1 1
-    // localparam S6_ALL = (S6 * 2 + S5_ALL % 3); // 2 3
+    // localparam S6_ALL = (S6 * 2 + S5_ALL % 3); // 2 4
     // localparam S7 = S6_ALL / 3; // 0 1
-    // localparam S7_ALL = (S7 * 2 + S6_ALL % 3); // 2 2
+    // localparam S7_ALL = (S7 * 2 + S6_ALL % 3); // 2 3
 
 generate
 // stage1
@@ -83,7 +85,16 @@ generate
     `ST_REG(5, 1, 2)
     `CSAN_DEF(5, 6)
 `ifdef RV64I
+
+    `STA_NUM_DEF(6, 7)
+    `STA_NUM_DEF(7, 8)
     `CSA_DEF(6, 7)
+    `CSA_DEF(7, 8)
+    logic word_s1, word_s2;
+    always_ff @(posedge clk)begin
+        word_s1 <= word;
+        word_s2 <= word_s1;
+    end
 `endif
 endgenerate
     logic bigger;
@@ -103,7 +114,7 @@ generate
 `ifdef RV32I
             assign transpose[i][j] = st6[j][i];
 `elsif RV64I
-            assign transpose[i][j] = st7[j][i];
+            assign transpose[i][j] = st8[j][i];
 `endif
         end
     end
@@ -111,10 +122,12 @@ endgenerate
     
 `ifdef RV32I
     assign result = transpose[0] + transpose[1] + c6[HNUM-2];
-`elsif RV64I
-    assign result = transpose[0] + transpose[1] + c7[HNUM-2];
-`endif
     assign wbData.res = selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];
+`elsif RV64I
+    assign result = transpose[0] + transpose[1] + c8[HNUM-2];
+    assign wbData.res = word_s2 ? {{32{result[31]}}, result[31: 0]} :
+                        selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];
+`endif
 
 endmodule
 

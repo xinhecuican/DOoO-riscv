@@ -75,6 +75,9 @@ generate
         MultUnit mult(
             .*,
             .en(mult_exu_io.en[i]),
+`ifdef RV64I
+            .word(mult_exu_io.bundle[i].word),
+`endif
             .rs1_data(mult_exu_io.rs1_data[i]),
             .rs2_data(mult_exu_io.rs2_data[i]),
             .status_i(mult_exu_io.status[i]),
@@ -87,6 +90,9 @@ generate
         DivUnit div(
             .*,
             .en(mult_exu_io.en[i]),
+`ifdef RV64I
+            .word(mult_exu_io.bundle[i].word),
+`endif
             .rs1_data(mult_exu_io.rs1_data[i]),
             .rs2_data(mult_exu_io.rs2_data[i]),
             .status_i(mult_exu_io.status[i]),

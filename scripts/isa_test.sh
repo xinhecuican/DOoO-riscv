@@ -18,6 +18,10 @@ rv32m=(
     "div" "divu" "mul" "mulh" "mulhsu" "mulhu" "rem" "remu"
 )
 rv32m_prefix="utils/riscv-tests/isa/rv32um-p-"
+rv64m=(
+    ${rv32m[@]} "mulw" "divw" "divuw" "remw" "remuw"
+)
+rv64m_prefix="utils/riscv-tests/isa/rv64um-p-"
 
 rv32s=(
     "csr" "sbreak" "scall" "ill_csr" "dirty" "lam" "wfi"
@@ -55,7 +59,7 @@ if [[ " ${args[@]} " =~ " all " ]]; then
     if [[ " ${args[@]}" =~ " rv32 " ]]; then
         args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
     else
-        args=("rv64i" "benchmarks")
+        args=("rv64i" "rv64m" "benchmarks")
     fi
 fi
 
@@ -89,6 +93,11 @@ for arg in "${args[@]}"; do
         rv64i)
             for test in "${rv64i[@]}"; do
                 selected_tests+=("${test}:${rv64i_prefix}${test}.bin")
+            done
+            ;;
+        rv64m)
+            for test in "${rv64m[@]}"; do
+                selected_tests+=("${test}:${rv64m_prefix}${test}.bin")
             done
             ;;
         benchmarks)

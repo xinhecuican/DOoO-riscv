@@ -343,6 +343,15 @@ module DecodeUnit(
     assign rem = mult & funct3_6;
     assign remu = mult & funct3_7;
     assign info.multop = funct3;
+`ifdef RV64I
+    logic multw, mulw, divw, divuw, remw, remuw;
+    assign multw = ~op[4] & op[3] & op[2] & op[1] & ~op[0] & inst[1] & inst[0] & funct7_1;
+    assign mulw = multw & funct3_0;
+    assign divw = multw & funct3_4;
+    assign divuw = multw & funct3_5;
+    assign remw = multw & funct3_6;
+    assign remuw = multw & funct3_7;
+`endif
 `endif
 
 `ifdef RVA
@@ -447,6 +456,9 @@ module DecodeUnit(
 `endif
 `ifdef RVM
                      & ~mult
+`ifdef RV64I
+                     & ~mulw & ~divw & ~divuw & ~remw & ~remuw
+`endif
 `endif
 `ifdef RVA
                      & ~lr & ~sc & ~amoswap & ~amoadd & ~amoxor & ~amoand & ~amoor & ~amomin
@@ -574,7 +586,7 @@ module DecodeUnit(
     | cslli | cadd | cmv | caddisp | caddi4spn
 `endif
 `ifdef RV64I
-    | opimm32 | opreg32
+    | opimm32 | addw | subw | sllw | srlw | sraw
 `endif
     ) & ~ipf & ~iam;
     assign info.branchv = (branch | jal | jalr
@@ -605,7 +617,11 @@ module DecodeUnit(
 
 
 `ifdef RVM
-    assign info.multv = mult & ~ipf & ~iam;
+    assign info.multv = (mult
+`ifdef RV64I
+        | multw
+`endif
+    ) & ~ipf & ~iam;
 `endif
 `ifdef RVA
     assign info.amov = amo & ~ipf & ~iam;
@@ -617,7 +633,11 @@ module DecodeUnit(
                          fsqrt) & ~ipf & ~iam;
 `endif
 `ifdef RV64I
-    assign info.word = addiw | slliw | srliw | sraiw | addw | subw | sllw | srlw | sraw;
+    assign info.word = addiw | slliw | srliw | sraiw | addw | subw | sllw | srlw | sraw
+`ifdef RVM
+    | mulw | divw | divuw | remw | remuw
+`endif
+    ;
 `endif
 
 

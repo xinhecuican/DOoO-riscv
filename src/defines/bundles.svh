@@ -384,6 +384,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic `N(`MULTOP_WIDTH) multop;
+    logic word;
 } MultIssueBundle;
 
 typedef struct packed {

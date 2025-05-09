@@ -9,12 +9,27 @@ typedef struct packed {
     logic `N(`XLEN) src1;
     logic ha, hb; // sign bit of divisor and dividend
     ExStatusBundle status;
+`ifdef RV64I
+    logic word;
+`endif
 } DivPipeInfo;
+
+typedef struct packed {
+    DivPipeInfo info;
+    logic en;
+    logic `N(`XLEN*2+1) pa;
+    logic `N(`XLEN) b;
+    logic `N(`XLEN) q_pos;
+    logic `N(`XLEN) q_neg;
+} DivPipeBundle;
 
 module DivUnit(
     input logic clk,
     input logic rst,
     input logic en,
+`ifdef RV64I
+    input logic word,
+`endif
     input logic `N(`MULTOP_WIDTH) multop,
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
@@ -32,7 +47,8 @@ module DivUnit(
     logic zero;
     assign zero = rs2_data == 0;
 
-    DivPipeInfo pipe0_i, pipe1_i;
+    DivPipeInfo pipe0_i;
+    DivPipeBundle pipe0_info, pipe1_info;
     logic `N($clog2(`XLEN/2)+1) pipe0_cnt;
     logic pipe0_ready;
     logic `N($clog2(`XLEN)) lzc_rs2;
@@ -41,13 +57,16 @@ module DivUnit(
     logic clean;
     logic sext;
 
-    logic `N(2*`XLEN+1) pipe1_pa, pa_o;
-    logic `N(`XLEN) q_pos, q_neg, q_neg_last, pipe1_q_pos, pipe1_q_neg;
-    logic en_o, we_o, pipe1_en;
+    logic `N(2*`XLEN+1) pa_o;
+    logic `N(`XLEN) q_pos, q_neg, q_neg_last;
+    logic en_o, we_o;
     logic rem_o;
     logic zero_o, ov_o;
-    logic `N(`XLEN) src1_o, pipe1_b;
+    logic `N(`XLEN) src1_o;
     logic sext_o, ha_o;
+`ifdef RV64I
+    logic word_o;
+`endif
     ExStatusBundle status_o;
     logic `N(`XLEN) r, q;
 
@@ -55,33 +74,67 @@ module DivUnit(
     assign en_i = en & multop[2] & (~backendCtrl.redirect | bigger_i);
     assign sext = multop == `MULT_DIV || multop == `MULT_REM;
     assign pipe0_i.sext = sext;
+`ifdef RV64I
+    assign pipe0_i.zero = word ? (rs2_data[31: 0] == 0) : rs2_data == 0;
+    assign pipe0_i.ov = (((rs1_data[31: 0] == 32'h80000000) & (rs2_data[31: 0] == 32'hffffffff) & word) |
+        ((rs1_data == 64'h80000000_00000000) & (rs2_data == 64'hffffffff_ffffffff) & ~word)) & sext;
+    logic `N(32) abs_a_w, abs_b_w;
+    assign abs_a_w = word & sext & rs1_data[31] ? ~rs1_data[31: 0] + 32'h1 : rs1_data[31: 0];
+    assign abs_b_w = word & sext & rs2_data[31] ? ~rs2_data[31: 0] + 32'h1 : rs2_data[31: 0];
+    always_comb begin
+        if(word)begin
+            abs_a = abs_a_w;
+            abs_b = abs_b_w;
+        end
+        else begin
+            if(sext & rs1_data[`XLEN-1])begin
+                abs_a = ~rs1_data + 1;
+            end
+            else begin
+                abs_a = rs1_data;
+            end
+            if(sext & rs2_data[`XLEN-1])begin
+                abs_b = ~rs2_data + 1;
+            end
+            else begin
+                abs_b = rs2_data;
+            end
+        end
+    end
+    logic `N(5) lzc_rs2_w;
+    logic `N($clog2(`XLEN)) lzc_rs2_pre;
+    lzc #(32, 1) lzc_gen_w (abs_b[31: 0], lzc_rs2_w,);
+    lzc #(`XLEN, 1) lzc_gen (abs_b, lzc_rs2_pre,);
+    assign lzc_rs2 = word ? lzc_rs2_w : lzc_rs2_pre;
+`else
     assign pipe0_i.zero = rs2_data == 0;
-    assign pipe0_i.ov = (rs1_data == 32'h80000000) && (rs2_data == 32'hffffffff) && sext;
-    assign pipe0_i.rem = multop == `MULT_REM || multop == `MULT_REMU;
-    assign pipe0_i.lzc = lzc_rs2;
+    assign pipe0_i.ov = (rs1_data == 32'h80000000) & (rs2_data == 32'hffffffff) & sext;
     lzc #(`XLEN, 1) lzc_gen (abs_b, lzc_rs2,);
     assign abs_a = (sext & rs1_data[`XLEN-1]) ? ~rs1_data + 1 : rs1_data;
     assign abs_b = (sext & rs2_data[`XLEN-1]) ? ~rs2_data + 1 : rs2_data;
+`endif
+    assign pipe0_i.rem = multop == `MULT_REM || multop == `MULT_REMU;
+    assign pipe0_i.lzc = lzc_rs2;
     assign pipe0_i.ha = rs1_data[`XLEN-1];
     assign pipe0_i.hb = rs2_data[`XLEN-1];
     assign pipe0_i.status = status_i;
     assign pipe0_i.src1 = rs1_data;
+`ifdef RV64I
+    assign pipe0_i.word = word;
+`endif
 
-    DivPipe #(`XLEN/2, `XLEN, $bits(DivPipeInfo)) pipe0(
+    assign pipe0_info.info = pipe0_i;
+    assign pipe0_info.en = en_i;
+    assign pipe0_info.pa = {{`XLEN+1{1'b0}}, abs_a} << lzc_rs2;
+    assign pipe0_info.b = abs_b << lzc_rs2;
+    assign pipe0_info.q_pos = 0;
+    assign pipe0_info.q_neg = 0;
+
+    DivPipe #(`XLEN/2, `XLEN) pipe0(
         .clk(clk),
         .rst(rst),
-        .info_i(pipe0_i),
-        .info_o(pipe1_i),
-        .en_i(en_i),
-        .pa_i({{`XLEN+1{1'b0}}, abs_a} << lzc_rs2),
-        .b_i(abs_b << lzc_rs2),
-        .q_pos_i(0),
-        .q_neg_i(0),
-        .en_o(pipe1_en),
-        .pa_o(pipe1_pa),
-        .b_o(pipe1_b),
-        .q_pos_o(pipe1_q_pos),
-        .q_neg_o(pipe1_q_neg),
+        .info_i(pipe0_info),
+        .info_o(pipe1_info),
         .cnt_o(pipe0_cnt),
         .ready(pipe0_ready),
         .clean(clean),
@@ -90,12 +143,12 @@ module DivUnit(
 
     always_ff @(posedge clk)begin
         wakeup_en <= pipe0_cnt == 2;
-        wakeup_we <= pipe1_i.status.we;
-        wakeup_rd <= pipe1_i.status.rd;
+        wakeup_we <= pipe1_info.info.status.we;
+        wakeup_rd <= pipe1_info.info.status.rd;
     end
 
     // div end
-    assign q_neg_last = pipe1_pa[2*`XLEN] ? pipe1_q_neg + 1 : pipe1_q_neg;
+    assign q_neg_last = pipe1_info.pa[2*`XLEN] ? pipe1_info.q_neg + 1 : pipe1_info.q_neg;
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             ready <= 1'b1;
@@ -115,36 +168,61 @@ module DivUnit(
 
     always_ff @(posedge clk)begin
         div_end <= pipe0_cnt == 2;
-        if(pipe1_pa[2*`XLEN])begin
-            pa_o <= ((pipe1_pa + {pipe1_b, `XLEN'b0}) >> pipe1_i.lzc) & {2*`XLEN+1{~pipe1_i.ov}};
+`ifdef RV64I
+        if(pipe1_info.pa[2*`XLEN] & ~pipe1_info.info.word | pipe1_info.pa[`XLEN] & pipe1_info.info.word)begin
+`else
+        if(pipe1_info.pa[2*`XLEN])begin
+`endif
+            pa_o <= ((pipe1_info.pa + (pipe1_info.info.word ? {pipe1_info.b, 32'b0} : {pipe1_info.b, `XLEN'b0})) >> pipe1_info.info.lzc) & {2*`XLEN+1{~pipe1_info.info.ov}};
         end
         else begin
-            pa_o <= (pipe1_pa >> pipe1_i.lzc) & {2*`XLEN+1{~pipe1_i.ov}};
+            pa_o <= (pipe1_info.pa >> pipe1_info.info.lzc) & {2*`XLEN+1{~pipe1_info.info.ov}};
         end
-        en_o <= pipe1_en & ~clean;
-        status_o <= pipe1_i.status;
-        rem_o <= pipe1_i.rem;
-        zero_o <= pipe1_i.zero;
-        ov_o <= pipe1_i.ov;
-        src1_o <= pipe1_i.src1;
-        sext_o <= pipe1_i.sext;
-        ha_o <= pipe1_i.ha;
-        if((pipe1_i.ha ^ pipe1_i.hb) & pipe1_i.sext)begin
+        en_o <= pipe1_info.en & ~clean;
+        status_o <= pipe1_info.info.status;
+        rem_o <= pipe1_info.info.rem;
+        zero_o <= pipe1_info.info.zero;
+        ov_o <= pipe1_info.info.ov;
+        src1_o <= pipe1_info.info.src1;
+        sext_o <= pipe1_info.info.sext;
+        ha_o <= pipe1_info.info.ha;
+`ifdef RV64I
+        word_o <= pipe1_info.info.word;
+`endif
+        if((pipe1_info.info.ha ^ pipe1_info.info.hb) & pipe1_info.info.sext)begin
             q_pos <= q_neg_last;
-            q_neg <= pipe1_q_pos;
+            q_neg <= pipe1_info.q_pos;
         end
         else begin
-            q_pos <= pipe1_q_pos;
+            q_pos <= pipe1_info.q_pos;
             q_neg <= q_neg_last;
         end
     end
     logic bigger_o;
     LoopCompare #(`ROB_WIDTH) cmp_out (status_o.robIdx, backendCtrl.redirectIdx, bigger_o);
+`ifdef RV64I
+    logic `N(`XLEN) q_w, r_w;
+    logic `N(32) q_delta, pa_neg;
+    assign q_delta = q_pos - q_neg;
+    assign pa_neg = ~pa_o[63: 32] + 1;
+    assign q_w = ov_o ? {{32{src1_o[31]}}, src1_o[31: 0]} :
+                {{32{q_delta[31] | zero_o}}, q_delta[31: 0] | {32{zero_o}}};
+    assign r_w = zero_o ? {{32{src1_o[31]}}, src1_o[31: 0]} :
+                sext_o & ha_o ? {{32{pa_neg[31]}}, pa_neg[31: 0]} :
+                                {{32{pa_o[63]}}, pa_o[63: 32]};
+    assign q = word_o ? q_w :
+                ov_o ? src1_o : (q_pos - q_neg) | {`XLEN{zero_o}};
+    assign r = word_o ? r_w :
+               zero_o           ? src1_o : 
+               sext_o & ha_o    ? ~pa_o[`XLEN*2-1: `XLEN] + 1 : 
+                                   pa_o[`XLEN*2-1: `XLEN];
+`else
     assign q = ov_o ? src1_o :
                (q_pos - q_neg) | {`XLEN{zero_o}};
     assign r = zero_o           ? src1_o : 
                sext_o & ha_o    ? ~pa_o[`XLEN*2-1: `XLEN] + 1 : 
                                    pa_o[`XLEN*2-1: `XLEN];
+`endif
     assign wbData.en = en_o & (~backendCtrl.redirect | bigger_o);
     assign wbData.we = status_o.we;
     assign wbData.rd = status_o.rd;
@@ -157,25 +235,15 @@ endmodule
 module DivPipe #(
     parameter PIPE_NUM=4,
     parameter WIDTH=32,
-    parameter DATA_WIDTH=1,
+    parameter PIPE_ALL = WIDTH / 2,
     parameter PIPE_START=0,
     parameter PIPE_ALL_WIDTH=$clog2(WIDTH),
     parameter PIPE_WIDTH=$clog2(PIPE_NUM)
 )(
     input logic clk,
     input logic rst,
-    input logic `N(DATA_WIDTH) info_i,
-    output logic `N(DATA_WIDTH) info_o,
-    input logic en_i,
-    input logic `N(WIDTH*2+1) pa_i,
-    input logic `N(WIDTH) b_i,
-    input logic `N(WIDTH) q_pos_i,
-    input logic `N(WIDTH) q_neg_i,
-    output logic en_o,
-    output logic `N(WIDTH*2+1) pa_o,
-    output logic `N(WIDTH) b_o,
-    output logic `N(WIDTH) q_pos_o,
-    output logic `N(WIDTH) q_neg_o,
+    input DivPipeBundle info_i,
+    output DivPipeBundle info_o,
     output logic `N(PIPE_WIDTH+1) cnt_o,
     output logic ready,
     output logic clean,
@@ -189,21 +257,31 @@ module DivPipe #(
     logic `N(WIDTH*2+1) b_n1, b_n2, b_p1, b_p2;
     logic `N(WIDTH) q_pos, q_neg, q_pos_n, q_neg_n;
     logic `N(WIDTH) src1;
-    logic `N(DATA_WIDTH) data;
+    DivPipeInfo data;
     logic ha, hb, zero, ov;
     RobIdx robIdx;
     logic `N(3) q;
 
     qselect q_select(
+`ifdef RV64I
+        .b(data.word ? b[31: 28] : b[WIDTH-1: WIDTH-4]),
+        .p(data.word ? pa[64: 59] : pa[WIDTH*2: WIDTH*2-5]),
+`else
         .b(b[WIDTH-1: WIDTH-4]),
         .p(pa[WIDTH*2: WIDTH*2-5]),
+`endif
         .q(q)
     );
 
     always_comb begin
         pa_shift = pa << 2;
+`ifdef RV64I
+        b_n1 = data.word ? {b, 32'b0} : {1'b0, b, {WIDTH{1'b0}}};
+        b_n2 = data.word ? {b, 33'b0} : {b, {WIDTH+1{1'b0}}};
+`else
         b_n1 = {1'b0, b, {WIDTH{1'b0}}};
         b_n2 = {b, {WIDTH+1{1'b0}}};
+`endif
         b_p1 = ~b_n1 + 1;
         b_p2 = b_p1 << 1;
         case(q)
@@ -255,15 +333,20 @@ module DivPipe #(
             if(clean & cnt != 0)begin
                 cnt <= 0;
             end
-            else if(en_i & ready)begin
-                cnt <= PIPE_NUM ;
-                cnt_global <= PIPE_NUM + PIPE_START - 1;
-                data <= info_i;
-                pa <= pa_i;
-                b <= b_i;
-                q_pos <= q_pos_i;
-                q_neg <= q_neg_i;
-                robIdx <= info_i[$bits(RobIdx)-1: 0];
+            else if(info_i.en & ready)begin
+`ifdef RV64I
+                cnt <= info_i.info.word ? PIPE_NUM / 2 : PIPE_NUM;
+                cnt_global <= info_i.info.word ? (PIPE_ALL - PIPE_START) / 2 - 1 : PIPE_ALL - PIPE_START - 1;
+`else
+                cnt <= PIPE_NUM;
+                cnt_global <= PIPE_ALL - PIPE_START - 1;
+`endif
+                data <= info_i.info;
+                pa <= info_i.pa;
+                b <= info_i.b;
+                q_pos <= info_i.q_pos;
+                q_neg <= info_i.q_neg;
+                robIdx <= info_i.info.status.robIdx;
             end
             else if(cnt != 0)begin
                 cnt <= cnt - 1;
@@ -275,14 +358,16 @@ module DivPipe #(
         end
     end
 
+    logic en_o;
     always_ff @(posedge clk)begin
         en_o <= cnt == 1 & ~clean;
     end
-    assign info_o = data;
-    assign pa_o = pa;
-    assign b_o = b;
-    assign q_pos_o = q_pos;
-    assign q_neg_o = q_neg;
+    assign info_o.info = data;
+    assign info_o.en = en_o;
+    assign info_o.pa = pa;
+    assign info_o.b = b;
+    assign info_o.q_pos = q_pos;
+    assign info_o.q_neg = q_neg;
 endmodule
 
 module qselect (
