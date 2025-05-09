@@ -60,6 +60,11 @@ module DecodeUnit(
     assign opimm = ~op[4] & ~op[3] & op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
     assign opreg = ~op[4] & op[3] & op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
     assign opsystem = op[4] & op[3] & op[2] & ~op[0] & ~op[0] & inst[1] & inst[0];
+`ifdef RV64I
+    logic opimm32, opreg32;
+    assign opimm32 = ~op[4] & ~op[3] & op[2] & op[1] & ~op[0] & inst[1] & inst[0];
+    assign opreg32 = ~op[4] & op[3] & op[2] & op[1] & ~op[0] & inst[1] & inst[0];
+`endif
 
 `ifdef RVC
     logic `N(16) cinst;
@@ -243,6 +248,12 @@ module DecodeUnit(
     assign sb = store & funct3_0;
     assign sh = store & funct3_1;
     assign sw = store & funct3_2;
+`ifdef RV64I
+    logic lwu, ld, sd;
+    assign lwu = load & funct3_6;
+    assign ld = load & funct3_3;
+    assign sd = store & funct3_3;
+`endif
 
 
 
@@ -253,9 +264,9 @@ module DecodeUnit(
     assign xori = opimm & funct3_4;
     assign ori = opimm & funct3_6;
     assign andi = opimm & funct3_7;
-    assign slli = opimm & funct3_1 & funct7_0;
-    assign srli = opimm & funct3_5 & funct7_0;
-    assign srai = opimm & funct3_5 & funct7_32;
+    assign slli = opimm & funct3_1 & ~inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & ~inst[27] & ~inst[26];
+    assign srli = opimm & funct3_5 & ~inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & ~inst[27] & ~inst[26];
+    assign srai = opimm & funct3_5 & ~inst[31] & inst[30] & ~inst[29] & ~inst[28] & ~inst[27] & ~inst[26];
 
     logic add, sub, sll, slt, sltu, _xor, srl, sra, _or, _and;
     assign add = opreg & funct3_0 & funct7_0;
@@ -268,6 +279,18 @@ module DecodeUnit(
     assign sra = opreg & funct3_5 & funct7_32;
     assign _or = opreg & funct3_6 & funct7_0;
     assign _and = opreg & funct3_7 & funct7_0;
+`ifdef RV64I
+    logic addiw, slliw, srliw, sraiw, addw, subw, sllw, srlw, sraw;
+    assign addiw = opimm32 & funct3_0;
+    assign slliw = opimm32 & funct3_1 & funct7_0;
+    assign srliw = opimm32 & funct3_5 & funct7_0;
+    assign sraiw = opimm32 & funct3_5 & funct7_32;
+    assign addw = opreg32 & funct3_0 & funct7_0;
+    assign subw = opreg32 & funct3_0 & funct7_32;
+    assign sllw = opreg32 & funct3_1 & funct7_0;
+    assign srlw = opreg32 & funct3_5 & funct7_0;
+    assign sraw = opreg32 & funct3_5 & funct7_32;
+`endif
 
 `ifdef DIFFTEST
     logic custom0;
@@ -441,47 +464,50 @@ module DecodeUnit(
 `ifdef EXT_FENCEI
                      & ~fencei
 `endif
+`ifdef RV64I
+                     & ~addiw & ~slliw & ~srliw & ~sraiw & ~addw & ~subw & ~sllw & ~srlw & ~sraw
+                     & ~lwu & ~ld & ~sd
+`endif
                      ;
 
+    always_comb begin
+        info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
+        info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc;
+        info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sub;
+        info.intop[0] = lui | andi | _and | srl | srli | sra | srai;
 `ifdef RVC
-    assign info.intop[4] = 1'b0;
-    assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub | csub | cslli | csrli | csrai;
-    assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc | sub | csub | cand | cor | candi | cxor;
-    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | cor | sub | csub;
-    assign info.intop[0] = lui | andi | _and | srl | srli | sra | srai | cand | clui | csrli | csrai | candi;
-`else
-    assign info.intop[4] = 1'b0;
-    assign info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
-    assign info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc | sub;
-    assign info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sub;
-    assign info.intop[0] = lui | andi | _and | srl | srli | sra | srai;
+        info.intop[3] = info.intop[3] | csub | cslli | csrli | csrai;
+        info.intop[2] = info.intop[2] | cand | cor | candi | cxor;
+        info.intop[1] = info.intop[1] | csub;
+        info.intop[0] = info.intop[0] | cand | clui | csrli | csrai | candi;
+`endif
+`ifdef RV64I
+        info.intop[3] = info.intop[3] | slliw | srliw | sraiw | sllw | srlw | sraw | subw;
+        info.intop[2] = info.intop[2];
+        info.intop[1] = info.intop[1] | subw;
+        info.intop[0] = info.intop[0] | srliw | srlw | sraiw | sraw;
+`endif
+    end
+
+    always_comb begin
+        info.memop[2] = store;
+        info.memop[1] = sw | lw;
+        info.memop[0] = lh | lhu | sh;
+
+`ifdef RV64I
+        info.memop[1] = info.memop[1] | lwu | ld | sd;
+        info.memop[0] = info.memop[0] | ld | sd;
 `endif
 
 `ifdef RVC
+        info.memop[1] = info.memop[1] | clw | clwsp | csw | cswsp;
 `ifdef RVF
-    assign info.memop[3] = store | fsw | csw | cfsw | cswsp | cfswsp;
-    assign info.memop[2] = sw | fsw | csw | cfsw | cswsp | cfswsp;
-    assign info.memop[1] = lw | flw | clw | clwsp | cflw | cflwsp;
-    assign info.memop[0] = lh | lhu | sh;
-`else
-    assign info.memop[3] = store | csw | cswsp;
-    assign info.memop[2] = sw | csw | cswsp;
-    assign info.memop[1] = lw | clw | clwsp;
-    assign info.memop[0] = lh | lhu | sh;
+        info.memop[1] = info.memop[1] | flw | cflw | cflwsp | fsw | cfsw | cfswsp;
 `endif
-`else
-`ifdef RVF
-    assign info.memop[3] = store | fsw;
-    assign info.memop[2] = sw | fsw;
-    assign info.memop[1] = lw | flw;
-    assign info.memop[0] = lh | lhu | sh;
-`else
-    assign info.memop[3] = store;
-    assign info.memop[2] = sw;
-    assign info.memop[1] = lw;
-    assign info.memop[0] = lh | lhu | sh;
+`elsif RVF
+        info.memop[1] = info.memop[1] | flw | fsw;
 `endif
-`endif
+    end
 
 
     assign info.csrop[3] = sfence_vma | fence
@@ -504,6 +530,9 @@ module DecodeUnit(
 `ifdef RVC
                     | csrli
 `endif
+`ifdef RV64I
+                    | srliw | srlw | lwu
+`endif
     ;
     logic [`DEC_IMM_WIDTH-1: 0] store_imm;
     logic [`DEC_IMM_WIDTH-1: 0] lui_imm;
@@ -516,7 +545,12 @@ module DecodeUnit(
 `ifdef RVC
     | cslli | csrai | csrli | caddi | caddi4spn | candi | caddisp | cli
 `endif
+`ifdef RV64I
+    | addiw | slliw | srliw | sraiw
+`endif
     ;
+
+
     assign info.imm = beq | bne | blt | bge | bgeu | bltu ? branch_imm :
                       store
 `ifdef RVF
@@ -528,6 +562,7 @@ module DecodeUnit(
 `endif
                                 lui_imm;
 
+
     assign info.intv = (lui | opimm |
                        add | sub | sll | slt | sltu | _xor | srl | sra | _or | _and |
                        auipc
@@ -538,12 +573,17 @@ module DecodeUnit(
     | caddi | cli | clui | csrli | csrai | candi | csub | cxor | cor | cand 
     | cslli | cadd | cmv | caddisp | caddi4spn
 `endif
+`ifdef RV64I
+    | opimm32 | opreg32
+`endif
     ) & ~ipf & ~iam;
     assign info.branchv = (branch | jal | jalr
 `ifdef RVC
     | cj | cjal | cbeqz | cbnez | cjr | cjalr
 `endif
     ) & ~ipf & ~iam;
+
+
     assign info.memv = (load | store
 `ifdef RVF
                         | loadfp | storefp
@@ -555,11 +595,15 @@ module DecodeUnit(
 `endif
 `endif
     ) & ~ipf & ~iam;
+
+
     assign info.csrv = csr | ecall | ebreak_all | mret | sret | unknown | iam | sfence_vma | ipf | fence | wfi
 `ifdef EXT_FENCEI
     | fencei
 `endif
     ;
+
+
 `ifdef RVM
     assign info.multv = mult & ~ipf & ~iam;
 `endif
@@ -572,6 +616,9 @@ module DecodeUnit(
     assign info.fcalv = (fmadd | fnmadd | fmsub | fnmsub | fadd | fsub | fmul | fdiv |
                          fsqrt) & ~ipf & ~iam;
 `endif
+`ifdef RV64I
+    assign info.word = addiw | slliw | srliw | sraiw | addw | subw | sllw | srlw | sraw;
+`endif
 
 
     assign info.rs1 = {5{jalr | branch | load | store | opimm | opreg | csrrs | csrrc | csrrw | sfence_vma
@@ -580,6 +627,9 @@ module DecodeUnit(
 `endif
 `ifdef RVF
     | fp | madd | msub | nmsub | nmadd | flw | fsw
+`endif
+`ifdef RV64I
+    | opimm32 | opreg32
 `endif
     }} & inst[19: 15]
 `ifdef RVC
@@ -594,6 +644,9 @@ module DecodeUnit(
 `endif
 `ifdef RVF
     |((fp | madd | msub | nmsub | nmadd | fsw) & ~fcvtsu & ~fcvtu)
+`endif
+`ifdef RV64I
+    | opreg32
 `endif
     }} & inst[24: 20]
 `ifdef RVC
@@ -612,6 +665,9 @@ module DecodeUnit(
 `endif
 `ifdef RVF
     | fp | madd | msub | nmsub | nmadd | flw
+`endif
+`ifdef RV64I
+    | opreg32 | opimm32
 `endif
     }} & inst[11: 7]
 `ifdef RVC

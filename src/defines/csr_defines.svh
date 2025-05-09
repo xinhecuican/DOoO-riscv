@@ -117,7 +117,7 @@ typedef struct packed {
     mxl: 2'b1,  \
 `endif \
 `ifdef RV64I \
-    mxl: 2'b2, \
+    mxl: 2'b10, \
 `endif \
     ext: '{ \
 `ifdef RVM \
@@ -146,8 +146,24 @@ typedef struct packed {
 } VENDORID;
 
 typedef struct packed {
+`ifdef RV64I
     logic sd;
-    logic `N(6) unuse;
+    logic `N(20) unuse;
+    logic mdt;
+    logic mpelp;
+    logic unuse1;
+    logic mpv;
+    logic gva;
+    logic mbe;
+    logic sbe;
+    logic [1: 0] sxl;
+    logic [1: 0] uxl;
+    logic `N(8) unuse1_2;
+`endif
+`ifdef RV32I
+    logic sd;
+    logic `N(7) unuse;
+`endif
     logic sdt;
     logic spelp;
     logic tsr;

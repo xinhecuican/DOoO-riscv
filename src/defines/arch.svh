@@ -1,7 +1,8 @@
 `ifndef ARCH_H
 `define ARCH_H
 
-`define RV32I
+// `define RV32I
+`define RV64I
 `define RVM
 `define RVA
 `define RVF

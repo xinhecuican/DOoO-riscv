@@ -82,7 +82,7 @@ generate
     `CSA_DEF(4, 5)
     `ST_REG(5, 1, 2)
     `CSAN_DEF(5, 6)
-`ifdef RV64
+`ifdef RV64I
     `CSA_DEF(6, 7)
 `endif
 endgenerate
@@ -100,18 +100,18 @@ endgenerate
 generate
     for(genvar i=0; i<2; i++)begin
         for(genvar j=0; j<NUM*2; j++)begin
-`ifdef SV32
+`ifdef RV32I
             assign transpose[i][j] = st6[j][i];
-`elsif SV64
+`elsif RV64I
             assign transpose[i][j] = st7[j][i];
 `endif
         end
     end
 endgenerate
     
-`ifdef SV32
+`ifdef RV32I
     assign result = transpose[0] + transpose[1] + c6[HNUM-2];
-`elsif SV64
+`elsif RV64I
     assign result = transpose[0] + transpose[1] + c7[HNUM-2];
 `endif
     assign wbData.res = selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];

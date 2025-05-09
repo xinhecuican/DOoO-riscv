@@ -253,8 +253,12 @@ generate
         logic `N(8) difftestMask;
         logic `N(64) difftestData, expandMask;
         MaskExpand #(8) mask_expand(difftestMask, expandMask);
+`ifdef RV32I
         assign difftestMask = {wmask[i] & {`DCACHE_BYTE{waddr[i][0]}},
                                wmask[i] & {`DCACHE_BYTE{~waddr[i][0]}}};
+`else
+        assign difftestMask = wmask[i];
+`endif
         assign difftestData = {wdata[i] & {`DCACHE_BITS{waddr[i][0]}},
                                wdata[i] & {`DCACHE_BITS{~waddr[i][0]}}} & expandMask;
         DifftestStoreEvent difftest_store_event(
@@ -262,9 +266,15 @@ generate
             .coreid(0),
             .index(i),
             .valid(data_we_combine[i]),
+`ifdef RV32I
             .storeAddr((waddr[i] << `DCACHE_BYTE_WIDTH) & 32'hfffffffb),
             .storeData(difftestData),
             .storeMask(difftestMask)
+`else
+            .storeAddr(waddr[i] << `DCACHE_BYTE_WIDTH),
+            .storeData(wdata[i] & expandMask),
+            .storeMask(wmask[i])
+`endif
         );
     end
 endgenerate

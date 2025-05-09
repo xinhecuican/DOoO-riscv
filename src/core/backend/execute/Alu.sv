@@ -13,6 +13,9 @@ module ALU(
     ALUModel model(
         .immv(io.bundle.immv),
         .uext(io.bundle.uext),
+`ifdef RV64I
+        .word(io.bundle.word),
+`endif
         .imm(io.bundle.imm),
         .rs1_data(io.rs1_data),
         .rs2_data(io.rs2_data),
@@ -132,6 +135,9 @@ endmodule
 module ALUModel(
     input logic immv,
     input logic uext,
+`ifdef RV64I
+    input logic word,
+`endif
     input logic `N(`DEC_IMM_WIDTH) imm,
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
@@ -145,7 +151,7 @@ module ALUModel(
     assign s_imm = {{`XLEN-12{imm[19]}}, imm[19: 8]};
 
     logic `N(`XLEN) data1, data2, cmp_data;
-    logic `N(`XLEN) add_result;
+    logic `N(`XLEN) add_result, sub_result;
     logic cmp, scmp, equal;
 
     assign data1 = rs1_data;
@@ -153,6 +159,16 @@ module ALUModel(
 
     assign cmp_data = immv ? s_imm : rs2_data;
     assign add_result = data1 + data2;
+    assign sub_result = data1 - rs2_data;
+`ifdef RV64I
+    // assign add_result = (data1 | {{32{data1[31] & word}}, 32'b0}) +
+    //                     (data2 | {{32{data2[31] & word}}, 32'b0});
+    // assign sub_result = (data1 | {{32{data1[31] & word}}, 32'b0}) -
+    //                     (rs2_data | {{32{rs2_data[31] & word}}, 32'b0});
+`else
+    // assign add_result = data1 + data2;
+    // assign sub_result = data1 - rs2_data;
+`endif
     assign cmp = data1 < cmp_data;
     assign equal = data1 == cmp_data;
     always_comb begin
@@ -166,17 +182,35 @@ module ALUModel(
 
 
     logic padding;
-    logic `N(`XLEN) sr_data;
+    logic `N($clog2(`XLEN)) shift;
+    logic `N(`XLEN) sr_data, shift_data, sl_data;
+`ifdef RV64I
+    assign padding = (word ? rs1_data[31] : rs1_data[`XLEN-1]) & ~uext;
+    assign shift = {data2[$clog2(`XLEN)-1] & ~word, data2[$clog2(`XLEN)-2: 0]};
+    assign shift_data = word ? {{32{data1[31] & ~uext}}, data1[31: 0]} : data1;
+`else
     assign padding = rs1_data[`XLEN-1] & ~uext;
-    ShiftModel shift_model (padding, data1, data2[$clog2(`XLEN)-1: 0], sr_data);
+    assign shift = data2[$clog2(`XLEN)-1: 0];
+    assign shift_data = data1;
+`endif
+    assign sl_data = data1 << shift;
+    ShiftModel shift_model (padding, shift_data, shift, sr_data);
 
     always_comb begin
         case(op)
         `INT_ADD: begin
+`ifdef RV64I
+            result = word ? {{32{add_result[31]}}, add_result[31: 0]} : add_result;
+`else
             result = add_result;
+`endif
         end
         `INT_SUB: begin
-            result = data1 - rs2_data;
+`ifdef RV64I
+            result = word ? {{32{sub_result[31]}}, sub_result[31: 0]} : sub_result;
+`else
+            result = sub_result;
+`endif
         end
         `INT_LUI: begin
             result = lui_imm;
@@ -205,10 +239,18 @@ module ALUModel(
             result = data1 & data2;
         end
         `INT_SL: begin
-            result = data1 << data2[$clog2(`XLEN)-1: 0];
+`ifdef RV64I
+            result = word ? {{32{sl_data[31]}}, sl_data[31: 0]} : sl_data;
+`else
+            result = sl_data;
+`endif
         end
         `INT_SR: begin
+`ifdef RV64I
+            result = word ? {{32{sr_data[31]}}, sr_data[31: 0]} : sr_data;
+`else
             result = sr_data;
+`endif
         end
         `INT_AUIPC: begin
             result = vaddr + lui_imm;
@@ -261,7 +303,7 @@ module ShiftModel(
         `SHIFT_DEFINE(29)
         `SHIFT_DEFINE(30)
         `SHIFT_DEFINE(31)
-`ifdef XLEN_64
+`ifdef RV64I
         `SHIFT_DEFINE(32)
         `SHIFT_DEFINE(33)
         `SHIFT_DEFINE(34)

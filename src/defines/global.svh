@@ -20,11 +20,18 @@
 `define XLEN_32
 `define MXL 32
 `define SV32
+`define VADDR_SIZE 32
 `define PADDR_SIZE 34
+`else
+`define XLEN 64
+`define XLEN_64
+`define MXL 64
+`define SV39
+`define VADDR_SIZE 39
+`define PADDR_SIZE 56
 `endif
 `define DATA_BYTE (`XLEN / 8)
 `define DATA_BUS `N(`XLEN)
-`define VADDR_SIZE `XLEN
 `define VADDR_BUS [(`VADDR_SIZE)-1: 0]
 `define PADDR_BUS [(`PADDR_SIZE)-1: 0]
 `define IALIGN 32
@@ -157,7 +164,7 @@ typedef enum logic [1:0] {
 `define ICACHE_SET 64
 `define ICACHE_WAY 8
 `define ICACHE_LINE 64
-`define ICACHE_BYTE 4 // bank byte
+`define ICACHE_BYTE 8 // bank byte
 `define ICACHE_BITS (`DCACHE_BYTE * 8)
 `define ICACHE_BANK (`ICACHE_LINE / `ICACHE_BYTE)
 `define ICACHE_BANK_WIDTH $clog2(`ICACHE_BANK)
@@ -277,7 +284,7 @@ typedef enum logic [1:0] {
 `define DCACHE_SET 64
 `define DCACHE_WAY 8
 `define DCACHE_LINE 64
-`define DCACHE_BYTE 4 // bank byte
+`define DCACHE_BYTE 8 // bank byte
 `define DCACHE_BITS (`DCACHE_BYTE * 8)
 `define DCACHE_BANK (`DCACHE_LINE / `DCACHE_BYTE)
 `define DCACHE_BANK_WIDTH $clog2(`DCACHE_BANK)
@@ -342,17 +349,27 @@ typedef enum logic [1:0] {
 `define TLB_TAG_BUS [`PADDR_SIZE-1: `TLB_OFFSET]
 `define TLB_IDX_SIZE $clog2(`LOAD_ISSUE_BANK_SIZE) + $clog2(`LOAD_PIPELINE)
 `ifdef SV32
-`define TLB_MODE 1
-`define TLB_ASID 9
-`define TLB_PPN 22
-`define TLB_VPN 10
-`define TLB_PPN1 12
-`define TLB_PPN0 10
-`define TLB_PN 2
-`define PTE_SIZE 4
+    `define TLB_MODE 1
+    `define TLB_ASID 9
+    `define TLB_PPN 22
+    `define TLB_VPN 10
+    `define TLB_PPN1 12
+    `define TLB_PPN0 10
+    `define TLB_PN 2
+    `define PTE_SIZE 4
+`elsif SV39
+    `define TLB_MODE 2
+    `define TLB_ASID 14
+    `define TLB_PPN 44
+    `define TLB_VPN 9
+    `define TLB_PPN2 26
+    `define TLB_PPN1 9
+    `define TLB_PPN0 9
+    `define TLB_PN 3 
+    `define PTE_SIZE 8
+`endif
 `define PTE_BITS (`PTE_SIZE * 8)
 `define PTE_WIDTH $clog2(`PTE_SIZE)
-`endif
 `define TLB_VPN_BASE(i) (`TLB_VPN * i + `TLB_OFFSET)
 `define TLB_VPN_BUS(i) [`TLB_VPN * (i+1) + `TLB_OFFSET - 1 : `TLB_VPN * i + `TLB_OFFSET]
 
@@ -386,7 +403,7 @@ typedef enum logic [1:0] {
 // l2 cache
 `define L2MSHR_SIZE 4
 `define L2MSHR_WIDTH $clog2(`L2MSHR_SIZE)
-`define L2CACHE_BANK 16
+`define L2CACHE_BANK 8
 `define L2DATA_BANK 1
 `define L2WAY_NUM 8
 `define L2SET 512

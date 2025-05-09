@@ -147,8 +147,7 @@ module LoadIssueBank(
     RobIdx select_robIdx;
     logic `N(`LOAD_ISSUE_BANK_SIZE) selectIdx_decode, replyfast_decode, replyslow_decode, tlbbank_decode;
 
-    assign size = io.data.memop == `MEM_LW ? 2'b10 :
-                  io.data.memop == `MEM_LH ? 2'b01 : 2'b00;
+    assign size = io.data.memop[1: 0];
     SDPRAM #(
         .WIDTH($bits(LoadIssueData)),
         .DEPTH(`LOAD_ISSUE_BANK_SIZE)

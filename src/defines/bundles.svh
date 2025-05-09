@@ -290,6 +290,9 @@ typedef struct packed {
 `ifdef RVC
     logic rvc;
 `endif
+`ifdef RV64I
+    logic word;
+`endif
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
     logic `N(`EXC_WIDTH) exccode;
@@ -337,6 +340,9 @@ typedef struct packed {
     logic immv;
 `ifdef RVC
     logic rvc;
+`endif
+`ifdef RV64I
+    logic word;
 `endif
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;
@@ -508,7 +514,7 @@ typedef struct packed {
 typedef struct packed {
     logic en;
     logic `N(`PADDR_SIZE) addr;
-    logic `N(4) mask;
+    logic `N(`DCACHE_BYTE) mask;
     LoadIdx lqIdx;
     RobIdx robIdx;
     FsqIdxInfo fsqInfo;

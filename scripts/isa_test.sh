@@ -1,13 +1,18 @@
 #!/bin/bash
 set -e
 rv32i=(
-    "add" "addi" "and" "andi" "auipc" "beq" "bge" "bge"
+    "add" "addi" "and" "andi" "auipc" "beq" "bge"
     "bgeu" "blt" "bltu" "bne" "jal" "jalr" "lb" "lbu"
     "lh" "lhu" "lui" "lw" "or" "ori" "sb" "sh" "sll"
     "slli" "slt" "slti" "sltiu" "sltu" "sra" "srai"
     "srl" "srli" "sub" "sw" "xor" "xori" "fence_i"
 )
+rv64i=(
+    ${rv32i[@]} "addiw" "slliw" "srliw" "sraiw" "addw"
+    "subw" "sllw" "srlw" "sraw" "lwu" "ld" "sd"
+)
 rv32i_prefix="utils/riscv-tests/isa/rv32ui-p-"
+rv64i_prefix="utils/riscv-tests/isa/rv64ui-p-"
 
 rv32m=(
     "div" "divu" "mul" "mulh" "mulhsu" "mulhu" "rem" "remu"
@@ -47,7 +52,11 @@ fi
 args=("$@")
 
 if [[ " ${args[@]} " =~ " all " ]]; then
-    args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
+    if [[ " ${args[@]}" =~ " rv32 " ]]; then
+        args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
+    else
+        args=("rv64i" "benchmarks")
+    fi
 fi
 
 for arg in "${args[@]}"; do
@@ -75,6 +84,11 @@ for arg in "${args[@]}"; do
         rv32f)
             for test in "${rv32f[@]}"; do
                 selected_tests+=("${test}:${rv32f_prefix}${test}.bin")
+            done
+            ;;
+        rv64i)
+            for test in "${rv64i[@]}"; do
+                selected_tests+=("${test}:${rv64i_prefix}${test}.bin")
             done
             ;;
         benchmarks)

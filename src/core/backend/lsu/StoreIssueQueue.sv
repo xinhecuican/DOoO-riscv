@@ -180,8 +180,7 @@ module StoreAddrBank(
     RobIdx select_robIdx;
     logic `N(`STORE_ISSUE_BANK_SIZE) selectIdx_decode, reply_decode, replyslow_decode, tlbbank_decode;
 
-    assign size = io.data.memop == `MEM_SW ? 2'b10 :
-                  io.data.memop == `MEM_SH ? 2'b01 : 2'b00;
+    assign size = io.data.memop[1: 0];
     SDPRAM #(
         .WIDTH($bits(StoreIssueData)),
         .DEPTH(`STORE_ISSUE_BANK_SIZE)
@@ -363,8 +362,7 @@ module StoreDataBank(
     logic [1: 0] size;
     RobIdx select_robIdx;
 
-    assign size = io.data.memop == `MEM_SW ? 2'b10 :
-                  io.data.memop == `MEM_SH ? 2'b01 : 2'b00;
+    assign size = io.data.memop[1: 0];
 generate
     for(genvar i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
         assign ready[i] = en[i] & status_ram[i].rs2v;

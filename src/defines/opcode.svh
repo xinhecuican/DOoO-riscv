@@ -1,8 +1,8 @@
 `ifndef OPCODE_SVH
 `define OPCODE_SVH
 
-`define INTOP_WIDTH 5
-`define MEMOP_WIDTH 4
+`define INTOP_WIDTH 4
+`define MEMOP_WIDTH 3
 `define BRANCHOP_WIDTH 3
 `define CSROP_WIDTH 4
 `define MULTOP_WIDTH 4
@@ -10,26 +10,28 @@
 `define FLTOP_WIDTH 5
 
 // intop
-`define INT_ADD     `INTOP_WIDTH'b00000
-`define INT_SUB     `INTOP_WIDTH'b01110
-`define INT_LUI     `INTOP_WIDTH'b00001
-`define INT_SLT     `INTOP_WIDTH'b00010
-`define INT_XOR     `INTOP_WIDTH'b00100
-`define INT_OR      `INTOP_WIDTH'b00110
-`define INT_AND     `INTOP_WIDTH'b00101
-`define INT_SL      `INTOP_WIDTH'b01000
-`define INT_SR      `INTOP_WIDTH'b01001
-`define INT_AUIPC   `INTOP_WIDTH'b01100
-`define INT_FENCE   `INTOP_WIDTH'b00011
+`define INT_ADD     `INTOP_WIDTH'b0000
+`define INT_SUB     `INTOP_WIDTH'b1010
+`define INT_LUI     `INTOP_WIDTH'b0001
+`define INT_SLT     `INTOP_WIDTH'b0010
+`define INT_XOR     `INTOP_WIDTH'b0100
+`define INT_OR      `INTOP_WIDTH'b0110
+`define INT_AND     `INTOP_WIDTH'b0101
+`define INT_SL      `INTOP_WIDTH'b1000
+`define INT_SR      `INTOP_WIDTH'b1001
+`define INT_AUIPC   `INTOP_WIDTH'b1100
+`define INT_FENCE   `INTOP_WIDTH'b0011
 
 // memop
 
-`define MEM_LB      `MEMOP_WIDTH'b0000
-`define MEM_LH      `MEMOP_WIDTH'b0001
-`define MEM_LW      `MEMOP_WIDTH'b0010
-`define MEM_SB      `MEMOP_WIDTH'b1000
-`define MEM_SH      `MEMOP_WIDTH'b1001
-`define MEM_SW      `MEMOP_WIDTH'b1100
+`define MEM_LB      `MEMOP_WIDTH'b000
+`define MEM_LH      `MEMOP_WIDTH'b001
+`define MEM_LW      `MEMOP_WIDTH'b010
+`define MEM_LD      `MEMOP_WIDTH'b011
+`define MEM_SB      `MEMOP_WIDTH'b100
+`define MEM_SH      `MEMOP_WIDTH'b101
+`define MEM_SW      `MEMOP_WIDTH'b110
+`define MEM_SD      `MEMOP_WIDTH'b111
 
 // branchop
 

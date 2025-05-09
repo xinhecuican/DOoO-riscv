@@ -104,6 +104,9 @@ generate
 `ifdef RVC
                         , rvc: di.rvc
 `endif
+`ifdef RV64I
+                        , word: di.word
+`endif
                         };
         assign int_io.en[i] = rename_dis_io.op[i].en & 
                               (di.intv | di.branchv) &

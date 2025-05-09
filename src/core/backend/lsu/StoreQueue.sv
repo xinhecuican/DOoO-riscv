@@ -5,7 +5,7 @@ interface StoreQueueIO;
     logic `N(`STORE_PIPELINE) uncache;
     StoreIssueData `N(`STORE_PIPELINE) data;
     logic `ARRAY(`STORE_PIPELINE, `PADDR_SIZE) paddr;
-    logic `ARRAY(`STORE_PIPELINE, 4) mask;
+    logic `ARRAY(`STORE_PIPELINE, `DCACHE_BYTE) mask;
     StoreIdx sqIdx;
     RobIdx wb_robIdx;
     logic wb_req;
@@ -486,7 +486,7 @@ module StoreDataGen(
         2'b00: data_o = {`DCACHE_BYTE{shift_data[0]}};
         2'b01: data_o = {`DCACHE_BYTE/2{shift_data[1: 0]}};
         2'b10: data_o = {`DCACHE_BYTE/4{shift_data[3: 0]}};
-`ifdef XLEN_64
+`ifdef RV64I
         2'b11: data_o = {`DCACHE_BYTE/8{shift_data[7: 0]}};
 `else
         2'b11: data_o = 0;

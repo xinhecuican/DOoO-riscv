@@ -284,7 +284,7 @@ endgenerate
                 mshr[i][mshrFreeIdx[i]].robIdx <= io.robIdx[i];
                 mshr[i][mshrFreeIdx[i]].missIdx <= ridx[i];
                 mshr[i][mshrFreeIdx[i]].lqIdx <= io.lqIdx[i];
-                mshr[i][mshrFreeIdx[i]].offset <= io.raddr[i][`DCACHE_BANK_WIDTH+1: 2];
+                mshr[i][mshrFreeIdx[i]].offset <= io.raddr[i][`DCACHE_BANK_WIDTH+1: `DCACHE_BYTE_WIDTH];
             end
         end
         if(wen & ~w_invalid & (write_remain_valid & ~whit_combine))begin
@@ -380,7 +380,7 @@ endgenerate
     PEncoder #(`DCACHE_MISS_SIZE) encoder_axi_req(axi_req_valid, axi_req_idx);
     PEncoder #(`DCACHE_ID_SIZE) encoder_free_id(~id_valids, free_id);
     assign io.req = |cache_req_valid;
-    assign io.req_addr = {addr[cache_req_idx], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
+    assign io.req_addr = {addr[cache_req_idx], {`DCACHE_LINE_WIDTH{1'b0}}};
     assign req_idx = req_next & io.req_success ? cache_req_idx_n : replace_hit_idx;
     assign rlast = r_axi_io.r_valid & r_axi_io.r_last;
     assign map_idx = id_map[r_axi_io.r_id];
@@ -461,7 +461,7 @@ endgenerate
             IDLE:begin
                 if((|axi_req_valid) & (|(~id_valids)))begin
                     ar_valid <= 1'b1;
-                    ar_addr <= {addr[axi_req_idx], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
+                    ar_addr <= {addr[axi_req_idx], {`DCACHE_LINE_WIDTH{1'b0}}};
                     ar_id <= free_id;
                     id_valids[free_id] <= 1'b1;
                     ar_snoop <= 
@@ -546,7 +546,7 @@ endgenerate
     assign io.refill_en = |refill_valid;
     assign io.refill_state = refill_state[refill_idx];
     assign io.refillWay = way[refill_idx];
-    assign io.refillAddr = {addr[refill_idx], {`DCACHE_BANK_WIDTH{1'b0}}, 2'b0};
+    assign io.refillAddr = {addr[refill_idx], {`DCACHE_LINE_WIDTH{1'b0}}};
     assign io.refillMask = {`DCACHE_BANK*`DCACHE_BYTE{~req_owned_after[refill_idx]}};
     assign io.refillData = data[refill_idx];
     assign io.refill_scIdx = scIdxs[refill_idx];

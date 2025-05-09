@@ -485,6 +485,7 @@ generate
 	20: MaskGen20 mask_gen(in, out);
 	22: MaskGen22 mask_gen(in, out);
 	32: MaskGen32 mask_gen(in, out);
+	44: MaskGen44 mask_gen(in, out);
 	64: MaskGen64 mask_gen(in, out);
 	default: begin
 		MaskGen2 mask_gen(in, out);

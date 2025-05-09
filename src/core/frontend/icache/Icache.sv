@@ -17,6 +17,7 @@ module ICache(
 
     localparam PARTIAL_ADDR_WIDTH = `ICACHE_LINE_WIDTH-`INST_OFFSET+1;
     localparam BLOCK_DELTA = `ICACHE_BYTE / `INST_BYTE;
+    localparam BLOCK_DELTA_WIDTH = BLOCK_DELTA > 1 ? $clog2(BLOCK_DELTA) : 1;
     localparam LINE_INST_NUM = `ICACHE_LINE / `INST_BYTE;
     typedef struct packed {
         logic `N(`ICACHE_SET_WIDTH) index1, index2;
@@ -46,7 +47,7 @@ module ICache(
         logic flush;
         logic `N(`BLOCK_INST_WIDTH+1) current_index;
         logic `ARRAY(`BLOCK_INST_SIZE+BLOCK_DELTA, `INST_BITS) data;
-        logic `ARRAY(`ICACHE_BANK, 32) replace_data;
+        logic `ARRAY(`ICACHE_BANK, `ICACHE_BITS) replace_data;
         logic `N(`ICACHE_SET_WIDTH) windex;
         logic `N(`ICACHE_BANK_WIDTH) stream_index;
         logic line;
@@ -74,7 +75,7 @@ module ICache(
 
     logic `N(PARTIAL_ADDR_WIDTH) end_addr, start_addr;
     logic `N(`PREDICTION_WIDTH+1) stream_size, block_stream_size;
-    logic `ARRAY(`ICACHE_BANK, 32) rdata `N(`ICACHE_WAY);
+    logic `ARRAY(`ICACHE_BANK, `ICACHE_BITS) rdata `N(`ICACHE_WAY);
     logic `N(`ICACHE_SET_WIDTH) index;
     logic `N(`ICACHE_SET_WIDTH+1) indexp1;
     logic `N(`VADDR_SIZE-`TLB_OFFSET) vtag1, vtag2;
@@ -266,7 +267,7 @@ endgenerate
         end
     endgenerate
     assign axi_io.ar_id = 0;
-    assign axi_io.ar_addr = {miss_buffer.paddr, {`ICACHE_BANK_WIDTH+2{1'b0}}};
+    assign axi_io.ar_addr = {miss_buffer.paddr, {$clog2(`ICACHE_LINE){1'b0}}};
     logic `N(5) len;
     assign len = `ICACHE_LINE / `ICACHE_BYTE - 1;
     assign axi_io.ar_len = {3'b0, len};
@@ -302,7 +303,7 @@ endgenerate
     logic `ARRAY(BLOCK_DELTA, `INST_BITS) r_data_inst;
     logic `N(BLOCK_DELTA) miss_bank_valid;
     logic `N($clog2(BLOCK_DELTA)+1) miss_bank_valid_num;
-    logic `ARRAY(BLOCK_DELTA, $clog2(BLOCK_DELTA+1)) miss_bank_idx;
+    logic `ARRAY(BLOCK_DELTA, BLOCK_DELTA_WIDTH) miss_bank_idx;
 
     assign r_data_inst = axi_io.r_data;
 generate
@@ -320,12 +321,7 @@ generate
         end
         assign miss_bank_valid[i] = miss_bank_en[i][miss_buffer.stream_index];
     end
-`ifdef RVC
-    assign miss_bank_idx[0] = 0;
-    assign miss_bank_idx[1] = miss_bank_valid[0];
-`else
-    assign miss_bank_idx = 0;
-`endif
+    CalValidNum #(BLOCK_DELTA) cal_miss_bank_idx (miss_bank_valid, miss_bank_idx);
     ParallelAdder #(1, BLOCK_DELTA) adder_miss_bank (miss_bank_valid, miss_bank_valid_num);
 endgenerate
 

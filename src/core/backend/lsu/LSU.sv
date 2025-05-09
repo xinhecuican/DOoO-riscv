@@ -1,31 +1,60 @@
 `include "../../../defines/defines.svh"
 
 module getMask(
-    input logic [1: 0] offset,
+    input logic [`DCACHE_BYTE_WIDTH-1: 0] offset,
     input logic [1: 0] size,
-    output logic [3: 0] mask
+    output logic [`DCACHE_BYTE-1: 0] mask
 );
-    always_comb begin
-        if(size == 2'b10)begin
-            mask = 4'b1111;
-        end
-        else if(size == 2'b01)begin
+    logic [`DCACHE_BYTE-1: 0] mask_byte, mask_half, mask_word, mask_dword;
+    Decoder #(`DCACHE_BYTE) decoder_offset (offset, mask_byte);
+    always_comb begin 
+        case(size)
+        2'b00: mask = mask_byte;
+        2'b01: mask = mask_half;
+        2'b10: mask = mask_word;
+        2'b11: mask = mask_dword;
+        endcase
+    end
+generate
+    if(`DCACHE_BYTE_WIDTH == 2)begin
+        always_comb begin
+            mask_word = 4'b1111;
+            mask_dword = 0;
             case (offset)
-            2'b00: mask = 4'b0011;
-            2'b01: mask = 4'b0110;
-            2'b10: mask = 4'b1100;
-            2'b11: mask = 4'b1000;
+            2'b00: mask_half = 4'b0011;
+            2'b01: mask_half = 4'b0110;
+            2'b10: mask_half = 4'b1100;
+            2'b11: mask_half = 4'b1000;
             endcase
-        end
-        else begin
-            case (offset)
-            2'b00: mask = 4'b0001;
-            2'b01: mask = 4'b0010;
-            2'b10: mask = 4'b0100;
-            2'b11: mask = 4'b1000;
-            endcase
+
         end
     end
+    else begin
+        always_comb begin
+            case(offset)
+            3'b000: mask_word = 8'h0f;
+            3'b001: mask_word = 8'h1e;
+            3'b010: mask_word = 8'h3c;
+            3'b011: mask_word = 8'h78;
+            3'b100: mask_word = 8'hf0;
+            3'b101: mask_word = 8'he0;
+            3'b110: mask_word = 8'hc0;
+            3'b111: mask_word = 8'h80;
+            endcase
+            case(offset)
+            3'b000: mask_half = 8'h03;
+            3'b001: mask_half = 8'h06;
+            3'b010: mask_half = 8'h0c;
+            3'b011: mask_half = 8'h18;
+            3'b100: mask_half = 8'h30;
+            3'b101: mask_half = 8'h60;
+            3'b110: mask_half = 8'hc0;
+            3'b111: mask_half = 8'h80;
+            endcase
+            mask_dword = 8'hff;
+        end
+    end
+endgenerate
 endmodule
 
 module LSU(
@@ -174,7 +203,7 @@ generate
             .addr(loadVAddr[i]),
             .carry(lcarry[i])
         );
-        getMask get_mask(loadVAddr[i][1: 0], load_io.loadIssueData[i].size, lmask_pre[i]);
+        getMask get_mask(loadVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], load_io.loadIssueData[i].size, lmask_pre[i]);
         MisalignDetect misalign_detect (load_io.loadIssueData[i].size, loadVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], lmisalign[i]);
     end
 endgenerate
@@ -203,7 +232,7 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `TLB_TAG) lptag;
     logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) lpaddr;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadAddrNext;
-    logic `ARRAY(`LOAD_PIPELINE, 4) lmask, lmaskNext;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) lmask, lmaskNext;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) load_issue_idx;
     logic `N(`LOAD_PIPELINE) redirect_clear_req;
     logic `N(`LOAD_PIPELINE) lmisalign_s2;
@@ -289,7 +318,7 @@ generate
 endgenerate
 
     // load data
-    logic `ARRAY(`LOAD_PIPELINE, 32) rdata;
+    logic `ARRAY(`LOAD_PIPELINE, `XLEN) rdata;
     logic `N(`LOAD_PIPELINE) rdata_valid;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : data_gen
@@ -515,9 +544,9 @@ generate
             stlb_exception[i] <= store_io.exception[i];
             sissue_idx_s2[i] <= sissue_idx[i];
         end
-        getMask get_mask(storeAddrNext[i][1: 0], store_issue_data[i].size, smask[i]);
+        getMask get_mask(storeAddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], store_issue_data[i].size, smask[i]);
         MisalignDetect misalign_detect (store_io.storeIssueData[i].size, storeVAddr[i][`DCACHE_BYTE_WIDTH-1: 0], smisalign[i]);
-        assign spaddr[i] = {sptag[i], storeAddrNext[i][11: 0]};
+        assign spaddr[i] = {sptag[i], storeAddrNext[i][`TLB_OFFSET-1: 0]};
     end
 
     assign stlb_exception_s2 = stlb_exception | tlb_lsu_io.sexception;
@@ -876,6 +905,9 @@ module RDataGen(
     logic [7: 0] byte_data;
     logic [15: 0] half;
     logic [31: 0] word;
+`ifdef RV64I
+    logic [63: 0] dword;
+`endif
     logic `ARRAY(`DCACHE_BYTE, 8) db;
     logic `ARRAY(`DCACHE_BYTE, `DCACHE_BYTE_WIDTH) idx;
 generate
@@ -887,11 +919,17 @@ endgenerate
     assign byte_data = db[idx[0]];
     assign half = {db[idx[1]], byte_data};
     assign word = {db[idx[3]], db[idx[2]], half};
+`ifdef RV64I
+    assign dword = db;
+`endif
     always_comb begin
         case(size)
         2'b00: data_o = {{`XLEN-8{~uext & byte_data[7]}}, byte_data};
         2'b01: data_o = {{`XLEN-16{~uext & half[15]}}, half};
         2'b10: data_o = {{`XLEN-32{~uext & word[31]}}, word};
+`ifdef RV64I
+        2'b11: data_o = dword;
+`endif
         default: data_o = 0;
         endcase
     end

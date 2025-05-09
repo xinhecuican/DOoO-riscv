@@ -16,11 +16,11 @@ module DCache(
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_SET_WIDTH) loadIdx;
     logic `ARRAY(`LOAD_PIPELINE+1, `DCACHE_SET_WIDTH) tagvIdx;
     logic `N(`DCACHE_SET_WIDTH) tagvWIdx, metaWIdx;
-    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_LINE_WIDTH-2) loadOffset;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BANK_WIDTH) loadOffset;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BANK) loadBankDecode;
     logic `N(`DCACHE_BANK) loadBank;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_WAY) wayHit;
-    logic `TENSOR(`DCACHE_WAY, `DCACHE_BANK, 32) rdata;
+    logic `TENSOR(`DCACHE_WAY, `DCACHE_BANK, `DCACHE_BITS) rdata;
 
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BANK_WIDTH)  s2_loadBank;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_WAY_WIDTH) hitWay_encode;

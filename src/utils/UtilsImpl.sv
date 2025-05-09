@@ -476,6 +476,16 @@ module MaskGen32(
 	assign out[15: 0] = low | {16{in[4]}};
 endmodule
 
+module MaskGen44(
+	input logic [5: 0] in,
+	output logic [43: 0] out
+);
+	logic [31: 0] low;
+	MaskGen32 gen_low (in[4: 0], low);
+	assign out[43: 32] = low[11: 0] & {12{in[5]}};
+	assign out[31: 0] = low | {32{in[5]}};
+endmodule
+
 module MaskGen64(
 	input logic [5: 0] in,
 	output logic [63: 0] out

@@ -52,9 +52,16 @@ generate
     for(genvar i=0; i<READ_PORT; i++)begin
         localparam SLICE_DEPTH = SLICE_BASE_NUM + (i < SLICE_REMAIN_NUM);
         logic [$clog2(READ_PORT)-1: 0] roffset, roffset_en, woffset;
-        assign roffset_en = i < slice_head ? i - OFFSET - slice_head : i - slice_head;
-        assign roffset = slice_head >= READ_PORT - i ? slice_head + i - READ_PORT : slice_head + i;
-        assign woffset = i < slice_tail ? i - OFFSET - slice_tail : i - slice_tail;
+        if((SLICE_BASE_NUM & (SLICE_BASE_NUM -1)) == 0)begin
+            assign roffset_en = i - slice_head;
+            assign roffset = slice_head + i;
+            assign woffset = i - slice_tail;
+        end
+        else begin
+            assign roffset_en = i < slice_head ? i - OFFSET - slice_head : i - slice_head;
+            assign roffset = slice_head >= READ_PORT - i ? slice_head + i - READ_PORT : slice_head + i;
+            assign woffset = i < slice_tail ? i - OFFSET - slice_tail : i - slice_tail;
+        end
         FreelistSlice #(
             .DEPTH(SLICE_DEPTH),
             .DATA_WIDTH(DATA_WIDTH),
@@ -70,6 +77,38 @@ generate
         );
         assign io.r_idxs[i] = r_idxs[roffset];
     end
+    if((SLICE_BASE_NUM & (SLICE_BASE_NUM -1)) == 0)begin
+        always_ff @(posedge clk, negedge rst)begin
+            if(~rst)begin
+                slice_head <= 0;
+                slice_tail <= 0;
+            end
+            else begin
+                if(io.en)begin
+                    slice_head <= slice_head_n;
+                end
+                if(io.we)begin
+                    slice_tail <= slice_tail_n;
+                end
+            end
+        end
+    end
+    else begin
+        always_ff @(posedge clk, negedge rst)begin
+            if(~rst)begin
+                slice_head <= 0;
+                slice_tail <= 0;
+            end
+            else begin
+                if(io.en)begin
+                    slice_head <= slice_head_n < READ_PORT ? slice_head_n : slice_head_n - READ_PORT;
+                end
+                if(io.we)begin
+                    slice_tail <= slice_tail_n < READ_PORT ? slice_tail_n : slice_tail_n - READ_PORT;
+                end
+            end
+        end
+    end
 endgenerate
 
     assign slice_head_n = slice_head + io.rdNum;
@@ -77,19 +116,11 @@ endgenerate
 
     always_ff @(posedge clk, negedge rst)begin
         if(~rst)begin
-            slice_head <= 0;
-            slice_tail <= 0;
             io.remain_count <= DEPTH;
         end
         else begin
             io.remain_count <= io.remain_count - ({$clog2(READ_PORT)+1{io.en}} & io.rdNum) 
                                         + ({$clog2(WRITE_PORT)+1{io.we}} & io.wrNum);
-            if(io.en)begin
-                slice_head <= slice_head_n < READ_PORT ? slice_head_n : slice_head_n - READ_PORT;
-            end
-            if(io.we)begin
-                slice_tail <= slice_tail_n < READ_PORT ? slice_tail_n : slice_tail_n - READ_PORT;
-            end
         end
     end
 

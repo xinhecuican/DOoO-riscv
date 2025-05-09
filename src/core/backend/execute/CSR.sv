@@ -325,9 +325,9 @@ endgenerate                                                             \
     assign mvec_pc = mtvec[`MXL-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
     assign svec_pc = stvec[`MXL-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
     assign mtarget_pc = redirect.irq & (mtvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
-                        {{`VADDR_SIZE-`MXL{1'b0}}, mtvec[`MXL-1: 2], 2'b00};
+                        { mtvec[`VADDR_SIZE-1: 2], 2'b00};
     assign starget_pc = redirect.irq & (stvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
-                        {{`VADDR_SIZE-`MXL{1'b0}}, stvec[`MXL-1: 2], 2'b00};
+                        {stvec[`MXL-1: 2], 2'b00};
     assign target_pc = (redirect.exccode == `EXC_MRET) & ~ret_priv_error ? mepc :
                        (redirect.exccode == `EXC_SRET) & ~ret_priv_error ? sepc :
                        edelege_valid ? starget_pc : mtarget_pc;
@@ -350,8 +350,13 @@ endgenerate                                                             \
     ) & (~mcounteren & mpf_offset_decode & ~mode_m) & (~scounteren & mpf_offset_decode & mode_u);
 
     logic `N(64) mcycle_n, minstret_n;
+`ifdef RV32I
     assign mcycle_n = {mpfhcounter[0], mpfcounter[0]} + 1;
     assign minstret_n = {mpfhcounter[2], mpfcounter[2]} + commitBus.num;
+`else
+    assign mcycle_n = mpfcounter[0] + 1;
+    assign minstret_n = mpfcounter[2] + commitBus.num;
+`endif
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             mstatus <= 0;
@@ -368,6 +373,7 @@ endgenerate                                                             \
 `endif
         end
         else begin
+`ifdef RV32I
             if(!mcounterinhibit[0])begin
                 {mpfhcounter[0], mpfcounter[0]} <= mcycle_n;
             end
@@ -377,6 +383,17 @@ endgenerate                                                             \
             if(!mcounterinhibit[2])begin
                 {mpfhcounter[2], mpfcounter[2]} <= minstret_n;
             end
+`else
+            if(!mcounterinhibit[0])begin
+                mpfcounter[0] <= mcycle_n;
+            end
+            if(!mcounterinhibit[1])begin
+                mpfcounter[1] <= clint_io.mtime;
+            end
+            if(!mcounterinhibit[2])begin
+                mpfcounter[2] <= minstret_n;
+            end
+`endif
             if(wen_o[mstatus_id])begin
                 mstatus.sie <= wdata_s2[1];
                 mstatus.mie <= wdata_s2[3];
@@ -807,11 +824,21 @@ endgenerate
         .sscratch(sscratch),
         .mideleg(mideleg & `MEDELEG_MASK),
         .medeleg(medeleg & `MEDELEG_MASK),
+`ifdef RV32I
         .mcycle({mpfhcounter[0], mpfcounter[0]}),
         .minstret({mpfhcounter[2], mpfcounter[2]})
+`else
+        .mcycle(mpfcounter[0]),
+        .minstret(mpfcounter[2])
+`endif
     );
+`ifdef RV32I
     DifftestLogEvent #("cycle") log_event_cycle (clk, 0, {mpfhcounter[0], mpfcounter[0]});
     DifftestLogEvent #("instret") log_event_instret (clk, 0, {mpfhcounter[2], mpfcounter[2]});
+`else
+    DifftestLogEvent #("cycle") log_event_cycle (clk, 0, mpfcounter[0]);
+    DifftestLogEvent #("instret") log_event_instret (clk, 0, mpfcounter[2]);
+`endif
 `endif
 endmodule
 

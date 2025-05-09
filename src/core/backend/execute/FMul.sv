@@ -240,7 +240,7 @@ module FMantMul #(
 generate
     for(genvar i=0; i<2; i++)begin
         for(genvar j=0; j<NUM*2; j++)begin
-`ifdef SV32
+`ifdef RV32I
             assign transpose[i][j] = st5[j][i];
 `endif
         end

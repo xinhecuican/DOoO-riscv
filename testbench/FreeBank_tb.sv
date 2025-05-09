@@ -19,12 +19,12 @@
         int insert_loc;
 
         constraint rd_range {
-            rdNum <= vif_ref.remain_count;
+            rdNum <= vif_dut.remain_count;
             rdNum <= READ_PORT;
         }
 
         constraint wr_range {
-            wrNum <= DEPTH - vif_ref.remain_count;
+            wrNum <= DEPTH - vif_dut.remain_count;
             wrNum <= WRITE_PORT;
         }
 
@@ -110,6 +110,32 @@ module FreeBank_tb();
         .WRITE_PORT(WRITE_PORT)
     ) test_inst(.*);
 
+    logic `N(DEPTH) free_valid;
+
+    always_ff @(posedge clk, negedge rst)begin
+        if(~rst)begin
+            free_valid <= 0;
+        end
+        else begin
+            for(int i=0; i<READ_PORT; i++)begin
+                if(dut_io.en & (i < dut_io.rdNum))begin
+                    if(free_valid[dut_io.r_idxs[i]])begin
+                        $display("[ERROR] index conflict");
+                        $finish;
+                    end
+                    else begin
+                        free_valid[dut_io.r_idxs[i]] <= 1'b1;
+                    end
+                end
+            end
+            for(int i=0; i<WRITE_PORT; i++)begin
+                if(dut_io.we & (i < dut_io.wrNum))begin
+                    free_valid[dut_io.w_idxs[i]] <= 1'b0;
+                end
+            end
+        end
+    end
+
 endmodule
 
 program automatic test #(
@@ -137,8 +163,8 @@ program automatic test #(
         rst = 1;
         #15;
         repeat(100)begin
-            s.randomize();
             #1;
+            s.randomize();
             s.sample();
             #9;
         end
