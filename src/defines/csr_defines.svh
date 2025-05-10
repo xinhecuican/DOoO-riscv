@@ -158,11 +158,11 @@ typedef struct packed {
     logic sbe;
     logic [1: 0] sxl;
     logic [1: 0] uxl;
-    logic `N(8) unuse1_2;
+    logic `N(7) unuse1_2;
 `endif
 `ifdef RV32I
     logic sd;
-    logic `N(7) unuse;
+    logic `N(6) unuse;
 `endif
     logic sdt;
     logic spelp;
@@ -187,8 +187,13 @@ typedef struct packed {
     logic unuse4;
 } STATUS;
 
+`ifdef RV64I
+`define STATUS_MASK {1'b1, 39'h0, 19'h7fff, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
+`define SSTATUS_MASK {1'b1, 38'h0, 2'h3, 3'h0, 2'h3, 1'b0, 4'hf, 2'h0, 3'h7, 1'b0, 2'h3, 3'h0, 1'b1, 1'b0}
+`else
 `define STATUS_MASK {1'b1, 7'h0, 19'h7fff, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
 `define SSTATUS_MASK {1'b1, 6'h0, 2'h3, 3'h0, 2'h3, 1'b0, 4'hf, 2'h0, 3'h7, 1'b0, 2'h3, 3'h0, 1'b1, 1'b0}
+`endif
 
 typedef struct packed {
     logic `N(21) unuse;

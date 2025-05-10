@@ -384,11 +384,16 @@ typedef struct packed {
 
 typedef struct packed {
     logic `N(`MULTOP_WIDTH) multop;
+`ifdef RV64I
     logic word;
+`endif
 } MultIssueBundle;
 
 typedef struct packed {
     logic `N(`AMOOP_WIDTH) amoop;
+`ifdef RV64I
+    logic word;
+`endif
 } AmoIssueBundle;
 
 typedef struct packed {

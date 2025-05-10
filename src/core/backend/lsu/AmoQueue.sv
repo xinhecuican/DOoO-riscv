@@ -43,6 +43,9 @@ module AmoQueue(
     logic `N(`XLEN) rdata;
     logic flush_ready, tlb_ready;
     logic amo_older;
+`ifdef RV64I
+    logic word;
+`endif
 
     assign dis_amo_io.full = state != IDLE && !(state == WB && wb_ready);
     assign bundle = dis_amo_io.data[0];
@@ -56,23 +59,37 @@ module AmoQueue(
         waiting_data <= amo_reg_io.en[0];
         if(datav && state == LOOKUP)begin
             rs1_data <= amo_reg_io.data[0];
+`ifdef RV64I
+            rs2_data <= word ? amo_reg_io.data[1][31: 0] : amo_reg_io.data[1];
+`else
             rs2_data <= amo_reg_io.data[1];
+`endif
         end
         if(tlb_valid)begin
             paddr <= amo_paddr;
         end
         if(amo_io.success)begin
+`ifdef RV64I
+            rdata <= word ? {{32{amo_io.rdata[31]}}, amo_io.rdata[31: 0]} : amo_io.rdata;
+`else
             rdata <= amo_io.rdata;
+`endif
         end
     end
     assign amo_vaddr = rs1_data;
-    MisalignDetect misalign_detect (2'b10, rs1_data[1: 0], misalign_pre);
     LoopCompare #(`ROB_WIDTH) cmp_bigger (robIdx, backendCtrl.redirectIdx, amo_older);
 
     assign amo_io.paddr = paddr;
     assign amo_io.data = rs2_data;
     assign amo_io.op = amoop;
+`ifdef RV64I
+    assign amo_io.word = word;
+    assign amo_io.mask = {{4{~word | word & paddr[2]}}, {4{~word | word & ~paddr[2]}}};
+    MisalignDetect misalign_detect ({1'b1, ~word}, rs1_data[`DCACHE_BYTE_WIDTH-1: 0], misalign_pre);
+`else
     assign amo_io.mask = {`DCACHE_BYTE{1'b1}};
+    MisalignDetect misalign_detect (2'b10, rs1_data[`DCACHE_BYTE_WIDTH-1: 0], misalign_pre);
+`endif
 
     assign wbData.en = state == WB;
     assign wbData.we = we;
@@ -97,6 +114,9 @@ module AmoQueue(
             store_flush <= 1'b0;
             flush_ready <= 1'b0;
             tlb_ready <= 1'b0;
+`ifdef RV64I
+            word <= 0;
+`endif
         end
         else begin
             if(dis_amo_io.en & ~dis_amo_io.full)begin
@@ -106,6 +126,9 @@ module AmoQueue(
                 robIdx <= dis_amo_io.status[0].robIdx;
                 we <= dis_amo_io.status[0].we;
                 amoop <= bundle.amoop;
+`ifdef RV64I
+                word <= bundle.word;
+`endif
                 datav <= 1'b0;
                 misalign <= 1'b0;
                 tlb_exc <= 1'b0;

@@ -269,7 +269,9 @@ generate
         MultIssueBundle data;
         assign di = rename_dis_io.op[i].di;
         assign data.multop = di.multop;
+`ifdef RV64I
         assign data.word = di.word;
+`endif
         assign mult_io.en[i] = rename_dis_io.op[i].en & di.multv & ~redirect;
         assign mult_io.data[i] = data;
     end
@@ -292,6 +294,9 @@ generate
         AmoIssueBundle data;
         assign di = rename_dis_io.op[i].di;
         assign data.amoop = di.amoop;
+`ifdef RV64I
+        assign data.word = di.word;
+`endif
         assign amo_io.en[i] = rename_dis_io.op[i].en & di.amov & ~redirect;
         assign amo_io.data[i] = data;
     end

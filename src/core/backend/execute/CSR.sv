@@ -815,8 +815,13 @@ endgenerate
         .stval(stval),
         .mtvec(mtvec),
         .stvec(stvec),
+`ifdef RV32I
         .mcause({mcause[31], 32'h0, mcause[30: 0]}),
         .scause({scause[31], 32'h0, scause[30: 0]}),
+`else
+        .mcause(mcause),
+        .scause(scause),
+`endif
         .satp(satp),
         .mip(mip),
         .mie(mie),

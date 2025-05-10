@@ -627,14 +627,25 @@ interface DCacheAmoIO;
     logic `N(`DCACHE_BYTE) mask;
     logic `N(`XLEN) data;
     logic `N(`AMOOP_WIDTH) op;
+`ifdef RV64I
+    logic word;
+`endif
 
     logic ready;
     logic success;
     logic `N(`DCACHE_BITS) rdata;
     logic refill;
 
-    modport dcache (input req, paddr, data, op, mask, output ready, success, rdata, refill);
-    modport buffer (output req, paddr, data, op, mask, input ready, success, rdata, refill);
+    modport dcache (input req, paddr, data, op, mask, output ready, success, rdata, refill
+`ifdef RV64I
+                    ,input word
+`endif
+    );
+    modport buffer (output req, paddr, data, op, mask, input ready, success, rdata, refill
+`ifdef RV64I
+                    ,output word
+`endif
+    );
 endinterface
 
 interface LoadForwardIO;

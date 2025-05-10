@@ -33,6 +33,11 @@ rv32a=(
     "amominu_w" "amoor_w" "amoswap_w" "amoxor_w" "lrsc"
 )
 rv32a_prefix="utils/riscv-tests/isa/rv32ua-p-"
+rv64a=(
+    ${rv64a[@]} "amoadd_d" "amoand_d" "amomax_d" "amomaxu_d"
+    "amomin_d" "amominu_d" "amoor_d" "amoswap_d" "amoxor_d"
+)
+rv64a_prefix="utils/riscv-tests/isa/rv64ua-p-"
 
 rv32f=(
     "fclass" "fcmp" "fcvt" "fcvt_w" "fmin" "fadd" "fmadd" 
@@ -59,7 +64,7 @@ if [[ " ${args[@]} " =~ " all " ]]; then
     if [[ " ${args[@]}" =~ " rv32 " ]]; then
         args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
     else
-        args=("rv64i" "rv64m" "benchmarks")
+        args=("rv64i" "rv64m" "rv64a" "benchmarks")
     fi
 fi
 
@@ -98,6 +103,11 @@ for arg in "${args[@]}"; do
         rv64m)
             for test in "${rv64m[@]}"; do
                 selected_tests+=("${test}:${rv64m_prefix}${test}.bin")
+            done
+            ;;
+        rv64a)
+            for test in "${rv64a[@]}"; do
+                selected_tests+=("${test}:${rv64a_prefix}${test}.bin")
             done
             ;;
         benchmarks)

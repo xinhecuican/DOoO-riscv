@@ -369,10 +369,34 @@ module DecodeUnit(
     assign amominu = amo & funct3_2 & inst[31] & inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
     assign amomaxu = amo & funct3_2 & inst[31] & inst[30] & inst[29] & ~inst[28] & ~inst[27];
 
-    assign info.amoop[3] = amomin | amomax | amominu | amomaxu;
-    assign info.amoop[2] = amoadd | amoxor | amoand | amomaxu;
-    assign info.amoop[1] = amoswap | amoxor | amoor | amominu;
-    assign info.amoop[0] = sc | amoand | amoor | amomax;
+`ifdef RV64I
+    logic lrd, scd, amoswapd, amoaddd, amoxord, amoandd, amoord, amomind, amomaxd, amominud, amomaxud;
+    assign lrd = amo & funct3_3 & ~inst[31] & ~inst[30] & ~inst[29] & inst[28] & ~inst[27];
+    assign scd = amo & funct3_3 & ~inst[31] & ~inst[30] & ~inst[29] & inst[28] & inst[27];
+    assign amoswapd = amo & funct3_3 & ~inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & inst[27];
+    assign amoaddd = amo & funct3_3 & ~inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amoxord = amo & funct3_3 & ~inst[31] & ~inst[30] & inst[29] & ~inst[28] & ~inst[27];
+    assign amoandd = amo & funct3_3 & ~inst[31] & inst[30] & inst[29] & ~inst[28] & ~inst[27];
+    assign amoord = amo & funct3_3 & ~inst[31] & inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amomind = amo & funct3_3 & inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amomaxd = amo & funct3_3 & inst[31] & ~inst[30] & inst[29] & ~inst[28] & ~inst[27];
+    assign amominud = amo & funct3_3 & inst[31] & inst[30] & ~inst[29] & ~inst[28] & ~inst[27];
+    assign amomaxud = amo & funct3_3 & inst[31] & inst[30] & inst[29] & ~inst[28] & ~inst[27];
+`endif
+
+    always_comb begin
+        info.amoop[3] = amomin | amomax | amominu | amomaxu;
+        info.amoop[2] = amoadd | amoxor | amoand | amomaxu;
+        info.amoop[1] = amoswap | amoxor | amoor | amominu;
+        info.amoop[0] = sc | amoand | amoor | amomax;
+`ifdef RV64I
+        info.amoop[3] = info.amoop[3] | amomind | amomaxd | amominud | amomaxud;
+        info.amoop[2] = info.amoop[2] | amoaddd | amoxord | amoandd | amomaxud;
+        info.amoop[1] = info.amoop[1] | amoswapd | amoxord | amoord | amominud;
+        info.amoop[0] = info.amoop[0] | scd | amoandd | amoord | amomaxd;
+`endif
+    end
+
 `endif
 
 `ifdef RVF
@@ -463,6 +487,10 @@ module DecodeUnit(
 `ifdef RVA
                      & ~lr & ~sc & ~amoswap & ~amoadd & ~amoxor & ~amoand & ~amoor & ~amomin
                      & ~amomax & ~amominu & ~amomaxu
+`ifdef RV64I
+                     & ~lrd & ~scd & ~amoswapd & ~amoaddd & ~amoxord & ~amoandd & ~amoord & ~amomind
+                     & ~amomaxd & ~amominud & ~amomaxud
+`endif
 `endif
 `ifdef RVF
                      & ~flw & ~fsw & ~fmadd & ~fmsub & ~fnmsub & ~fnmadd & ~fadd & ~fsub
@@ -636,6 +664,10 @@ module DecodeUnit(
     assign info.word = addiw | slliw | srliw | sraiw | addw | subw | sllw | srlw | sraw
 `ifdef RVM
     | mulw | divw | divuw | remw | remuw
+`endif
+`ifdef RVA
+    | lr | sc | amoadd | amoswap | amoxor | amoand
+    | amoor | amomin | amomax | amominu | amomaxu
 `endif
     ;
 `endif

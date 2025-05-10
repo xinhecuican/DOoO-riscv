@@ -73,6 +73,9 @@ module DCache(
     logic `N(`DCACHE_BITS) amo_rdata, amo_res, amo_wdata;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BYTE) amo_wmask;
     logic `N(`DCACHE_WAY) amo_wway;
+`ifdef RV64I
+    logic amo_word;
+`endif
 
     logic reservation_set;
     logic `N(`PADDR_SIZE-`DCACHE_BYTE) reservation_addr;
@@ -505,8 +508,18 @@ endgenerate
         islr <= amo_io.op == `AMO_LR;
         issc <= amo_io.op == `AMO_SC;
         sc_match <= reservation_set & (reservation_addr == amo_io.paddr[`PADDR_SIZE-1: `DCACHE_BYTE]) & (reservation_mask == amo_io.mask);
+`ifdef RV64I
+        amo_word <= amo_io.word;
+`endif
     end
+`ifdef RV64I
+    logic `N(`DCACHE_BITS) amo_rdata_pre;
+    assign amo_rdata_pre = rdata[w_wayIdx][amo_addr`DCACHE_BANK_BUS];
+    assign amo_rdata = {amo_word ? 32'h0 : amo_rdata_pre[63: 32], 
+                        amo_word & amo_addr[2] ? amo_rdata_pre[63: 32] : amo_rdata_pre[31: 0]};
+`else
     assign amo_rdata = rdata[w_wayIdx][amo_addr`DCACHE_BANK_BUS];
+`endif
 
     assign amo_io.ready = ~wio.req & ~snoop_req & ~(snoop_share | snoop_once);
     assign amo_io.success = amo_req & whit;
@@ -533,8 +546,18 @@ endgenerate
         end
     end
 
-    AmoALU amo_alu (amo_rdata, amo_data, amoop, amo_res);
+    AmoALU amo_alu (
+`ifdef RV64I
+        amo_word,
+`endif
+        amo_rdata, amo_data, amoop, amo_res);
+`ifdef RV64I
+    logic `N(`DCACHE_BITS) amo_wdata_pre;
+    assign amo_wdata_pre = issc & sc_match ? amo_data : amo_res;
+    assign amo_wdata = amo_word & amo_addr[2] ? {amo_wdata_pre[31: 0], 32'h0} : amo_wdata_pre;
+`else
     assign amo_wdata = issc & sc_match ? amo_data : amo_res;
+`endif
 generate
     for(genvar i=0; i<`DCACHE_BANK; i++)begin
         assign amo_wmask[i] = {`DCACHE_BYTE{~islr & (~issc | sc_match) & amo_bank_n[i]}} & amo_mask;
