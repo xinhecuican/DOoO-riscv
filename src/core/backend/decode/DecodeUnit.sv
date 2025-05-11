@@ -17,7 +17,7 @@ module DecodeUnit(
 
     logic funct7_0, funct7_32, funct7_4, funct7_2, funct7_1, funct7_8, funct7_12, funct7_44,
     funct7_16, funct7_20, funct7_80, funct7_96, funct7_104, funct7_112, funct7_120;
-    logic rs2_0, rs2_1, rs2_2, rs2_5;
+    logic rs2_0, rs2_1, rs2_2, rs2_3, rs2_5;
     logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
     logic ebreak_all;
     assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
@@ -46,6 +46,7 @@ module DecodeUnit(
     assign rs2_0 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & ~inst[20];
     assign rs2_1 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & inst[20];
     assign rs2_2 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & ~inst[20];
+    assign rs2_3 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & inst[20];
     assign rs2_5 = ~inst[24] & ~inst[23] & inst[22] & ~inst[21] & inst[20];
 
     logic lui, auipc, jal, jalr, branch, load, store, miscmem, opimm, opreg, opsystem, unknown;
@@ -439,6 +440,14 @@ module DecodeUnit(
     assign fcvtsu = fp & funct7_104 & rs2_1;
     assign fmv = fp & funct7_120 & funct3_0;
 
+`ifdef RV64I
+    logic fcvtl, fcvtlu, fcvtsl, fcvtslu;
+    assign fcvtl = fp & funct7_96 & rs2_2;
+    assign fcvtlu = fp & funct7_96 & rs2_3;
+    assign fcvtsl = fp & funct7_104 & rs2_2;
+    assign fcvtslu = fp & funct7_104 & rs2_3;
+`endif
+
     assign info.rm = funct3;
     assign info.flt_mem = loadfp | storefp
 `ifdef RVC
@@ -450,10 +459,17 @@ module DecodeUnit(
 `ifdef RVC
     | cflw | cflwsp
 `endif
+`ifdef RV64I
+    | fcvtsl | fcvtslu
+`endif
                         ;
     assign info.frs1_sel = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
                             fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu |
-                            fmvx | feq | flt | fle | fclass;
+                            fmvx | feq | flt | fle | fclass
+`ifdef RV64I
+                            | fcvtl | fcvtlu
+`endif
+                            ;
     assign info.frs2_sel = storefp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
                            fsgnj | fsgnjn | fsgnjx | fmin | fmax | feq | flt | fle
 `ifdef RVC
@@ -461,12 +477,24 @@ module DecodeUnit(
 `endif
                            ;
     assign info.fflag_we = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
-                           fsqrt | fmin | fmax | fcvt | fcvtu | feq | flt | fle | fcvts | fcvtsu;
-    assign info.fltop[4] = fmvx | feq | flt | fle | fclass | fcvts | fcvtsu | fmv;
-    assign info.fltop[3] = fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu | fclass | fcvts | fcvtsu;
-    assign info.fltop[2] = fmadd | fmsub | fnmsub | fnmadd | fmin | fmax | fcvt | fcvtu | fle | fcvts | fcvtsu;
-    assign info.fltop[1] = fmul | fdiv | fnmsub | fnmadd | fsgnjn | fsgnjx | fcvt | fcvtu | flt;
-    assign info.fltop[0] = fsub | fdiv | fmsub | fnmadd | fsgnj | fsgnjx | fmax | feq ;
+                           fsqrt | fmin | fmax | fcvt | fcvtu | feq | flt | fle | fcvts | fcvtsu
+`ifdef RV64I
+                           | fcvtl | fcvtlu | fcvtsl | fcvtslu
+`endif
+;
+    always_comb begin
+    info.fltop[4] = feq | flt | fle | fclass | fsub | fcvt | fcvtu;
+    info.fltop[3] = fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fmv | fmvx | fclass | fsub;
+    info.fltop[2] = fmadd | fmsub | fnmsub | fnmadd | fmin | fmax | fmv | fmvx | fle | fsub;
+    info.fltop[1] = fmul | fdiv | fnmsub | fnmadd | fsgnjn | fsgnjx | fmv | fmvx | flt;
+    info.fltop[0] = fdiv | fmsub | fnmadd | fsgnj | fsgnjx | fmax | feq  | fcvts | fcvtsu;
+
+`ifdef RV64I
+    info.fltop[4] = info.fltop[4] | fcvtl | fcvtlu;
+    info.fltop[0] = info.fltop[0] | fcvtsl | fcvtslu;
+`endif
+    end
+
 `endif
 
     assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & ~jal & ~jalr &
@@ -497,6 +525,9 @@ module DecodeUnit(
                      & ~fmul & ~fdiv & ~fsqrt & ~fsgnj & ~fsgnjn & ~fsgnjx & ~fmin & ~fmax
                      & ~fcvt & ~fcvtu & ~fmvx & ~feq & ~flt & ~fle & ~fclass & ~fcvts
                      & ~fcvtsu & ~fmv
+`ifdef RV64I
+                     & ~fcvtl & ~fcvtlu & ~fcvtsl & ~fcvtslu
+`endif
 `endif
 `ifdef RVC
                      & ~cvalid
@@ -540,11 +571,14 @@ module DecodeUnit(
 `endif
 
 `ifdef RVC
+        info.memop[2] = info.memop[2] | csw | cswsp;
         info.memop[1] = info.memop[1] | clw | clwsp | csw | cswsp;
 `ifdef RVF
-        info.memop[1] = info.memop[1] | flw | cflw | cflwsp | fsw | cfsw | cfswsp;
+        info.memop[2] = info.memop[2] | fsw;
+        info.memop[1] = info.memop[1] | flw | fsw;
 `endif
 `elsif RVF
+        info.memop[2] = info.memop[2] | fsw;
         info.memop[1] = info.memop[1] | flw | fsw;
 `endif
     end
@@ -566,6 +600,9 @@ module DecodeUnit(
     assign info.uext = sltu | sltiu | lbu | lhu | bltu | bgeu | srl | srli
 `ifdef RVF
                     | fcvtu | fcvtsu
+`ifdef RV64I
+                    | fcvtlu | fcvtslu
+`endif
 `endif
 `ifdef RVC
                     | csrli
@@ -656,7 +693,11 @@ module DecodeUnit(
 `endif
 `ifdef RVF
     assign info.fmiscv = (fsgnj | fsgnjn | fsgnjx | fmvx | feq | flt | fle | fclass |
-                           fcvt | fcvtu | fcvts | fcvtsu | fmv | fmin | fmax) & ~ipf & ~iam;
+                           fcvt | fcvtu | fcvts | fcvtsu | fmv | fmin | fmax
+`ifdef RV64I
+                            | fcvtl | fcvtlu | fcvtsl | fcvtslu
+`endif
+                           ) & ~ipf & ~iam;
     assign info.fcalv = (fmadd | fnmadd | fmsub | fnmsub | fadd | fsub | fmul | fdiv |
                          fsqrt) & ~ipf & ~iam;
 `endif
@@ -668,6 +709,9 @@ module DecodeUnit(
 `ifdef RVA
     | lr | sc | amoadd | amoswap | amoxor | amoand
     | amoor | amomin | amomax | amominu | amomaxu
+`endif
+`ifdef RVF
+    | fcvt | fcvtu | fcvts | fcvtsu
 `endif
     ;
 `endif
@@ -695,7 +739,11 @@ module DecodeUnit(
     | amo
 `endif
 `ifdef RVF
-    |((fp | madd | msub | nmsub | nmadd | fsw) & ~fcvtsu & ~fcvtu)
+    |((fp | madd | msub | nmsub | nmadd | fsw) & ~fcvtsu & ~fcvtu
+`ifdef RV64I
+    & ~fcvtlu & ~fcvtslu
+`endif
+    )
 `endif
 `ifdef RV64I
     | opreg32

@@ -346,6 +346,9 @@ generate
         assign misc_bundle.flt_we = di.flt_we;
         assign misc_bundle.uext = di.uext;
         assign misc_bundle.rm = di.rm;
+`ifdef RV64I
+        assign misc_bundle.word = di.word;
+`endif
         assign fma_bundle.fltop = di.fltop;
         assign fma_bundle.rm = di.rm;
         assign fdiv_bundle.div = di.fltop == `FLT_DIV;

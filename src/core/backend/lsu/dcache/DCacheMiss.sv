@@ -284,7 +284,7 @@ endgenerate
                 mshr[i][mshrFreeIdx[i]].robIdx <= io.robIdx[i];
                 mshr[i][mshrFreeIdx[i]].missIdx <= ridx[i];
                 mshr[i][mshrFreeIdx[i]].lqIdx <= io.lqIdx[i];
-                mshr[i][mshrFreeIdx[i]].offset <= io.raddr[i][`DCACHE_BANK_WIDTH+1: `DCACHE_BYTE_WIDTH];
+                mshr[i][mshrFreeIdx[i]].offset <= io.raddr[i][`DCACHE_BYTE_WIDTH +: `DCACHE_BANK_WIDTH];
             end
         end
         if(wen & ~w_invalid & (write_remain_valid & ~whit_combine))begin

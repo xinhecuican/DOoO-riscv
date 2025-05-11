@@ -400,6 +400,9 @@ module LoadQueueBank #(
     assign writeData.we = data.we;
 `ifdef RVF
     assign writeData.frd_en = data.frd_en;
+`ifdef RV64I
+    assign writeData.word = data.size == 2'b10;
+`endif
 `endif
     assign writeData.rd = data.rd;
     assign writeData.robIdx = data.robIdx;
@@ -472,7 +475,11 @@ module LoadQueueBank #(
     assign fp_wbData.we = 1'b1;
     assign fp_wbData.robIdx = wb_queue_data.robIdx;
     assign fp_wbData.rd = wb_queue_data.rd;
-    assign fp_wbData.res = uncache_wb_valid_n ? uncache_wb_data : wb_data;
+    assign fp_wbData.res = (uncache_wb_valid_n ? uncache_wb_data : wb_data) 
+`ifdef RV64I
+                        | {{32{wb_queue_data.word}}, 32'b0}
+`endif
+    ;
     assign fp_wbData.exccode = `EXC_NONE;
     assign fp_wbData.irq_enable = ~uncache_wb_valid_n;
 `endif

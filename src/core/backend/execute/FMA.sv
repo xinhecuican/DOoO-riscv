@@ -67,6 +67,7 @@ module FMASlice (
 );
     localparam int unsigned FP32_EXP_BITS = exp_bits(FP32);
     localparam int unsigned FP32_MAN_BITS = man_bits(FP32);
+    localparam int unsigned FXL = FP32_EXP_BITS + FP32_MAN_BITS + 1;
     logic mul_en_s2, mul_en_s3;
     logic madd_en_s2, madd_en_s3, madd_en_s4;
     logic mul_sub_s2, mul_sub_s3, mul_sub_s4;
@@ -153,7 +154,14 @@ module FMASlice (
                        madd_en_s4 ? ex_status_s4.rd : ex_status.rd;
 
     assign en_o = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) | add_en_s2 & ~(backendCtrl.redirect & add_redirect_s2);
-    assign res = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? mul_res : add_res;
+generate
+    if(FXL < `XLEN)begin
+        assign res = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? {{`XLEN-FXL{1'b1}}, mul_res[FXL-1: 0]} : {{`XLEN-FXL{1'b1}}, add_res[FXL-1: 0]};
+    end
+    else begin
+        assign res = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? mul_res : add_res;
+    end
+endgenerate
     assign ex_status_o = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? ex_status_s3 : add_ex_status_s2;
     assign status = mul_en_s3 & ~(backendCtrl.redirect & redirect_s3) ? mul_status : add_status;
 

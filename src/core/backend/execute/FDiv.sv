@@ -43,7 +43,10 @@ module FDivUnit(
 endmodule
 
 module FDivSlice #(
-    parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0
+    parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
+    parameter int unsigned EXP_BITS = exp_bits(fp_fmt),
+    parameter int unsigned MAN_BITS = man_bits(fp_fmt),
+    parameter int unsigned FXL = EXP_BITS + MAN_BITS + 1
 ) (
     input logic clk,
     input logic rst,
@@ -84,8 +87,8 @@ module FDivSlice #(
         .Rst_RBI(rst),
         .Div_start_SI(div_start),
         .Sqrt_start_SI(sqrt_start),
-        .Operand_a_DI({32'b0, rs1_data}),
-        .Operand_b_DI({32'b0, rs2_data}),
+        .Operand_a_DI({{64-FXL{1'b0}}, rs1_data[FXL-1: 0]}),
+        .Operand_b_DI({{64-FXL{1'b0}}, rs2_data[FXL-1: 0]}),
         .RM_SI({1'b0, round_mode[1: 0]}),
         .Precision_ctl_SI(6'b0),
         .Format_sel_SI(fp_fmt == FP32 ? 2'b00 : 2'b01),
@@ -101,7 +104,7 @@ module FDivSlice #(
     assign wakeup_rd = ex_status.rd;
     always_ff @(posedge clk)begin
         if(div_done)begin
-            res <= div_res[FP_WIDTH-1: 0];
+            res <= {{`XLEN-FP_WIDTH{1'b1}}, div_res[FP_WIDTH-1: 0]};
             status <= div_fflags;
         end
     end

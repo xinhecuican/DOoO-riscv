@@ -34,7 +34,7 @@ rv32a=(
 )
 rv32a_prefix="utils/riscv-tests/isa/rv32ua-p-"
 rv64a=(
-    ${rv64a[@]} "amoadd_d" "amoand_d" "amomax_d" "amomaxu_d"
+    ${rv32a[@]} "amoadd_d" "amoand_d" "amomax_d" "amomaxu_d"
     "amomin_d" "amominu_d" "amoor_d" "amoswap_d" "amoxor_d"
 )
 rv64a_prefix="utils/riscv-tests/isa/rv64ua-p-"
@@ -44,6 +44,10 @@ rv32f=(
     "recoding" "fdiv"
 )
 rv32f_prefix="utils/riscv-tests/isa/rv32uf-p-"
+rv64f=(
+    ${rv32f[@]} "ldst" "move"
+)
+rv64f_prefix="utils/riscv-tests/isa/rv64uf-p-"
 
 benchmarks=(
     "median" "memcpy" "multiply" "qsort" "rsort" "dhrystone" "towers" "spmv"
@@ -64,7 +68,7 @@ if [[ " ${args[@]} " =~ " all " ]]; then
     if [[ " ${args[@]}" =~ " rv32 " ]]; then
         args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
     else
-        args=("rv64i" "rv64m" "rv64a" "benchmarks")
+        args=("rv64i" "rv64m" "rv64a" "rv64f" "benchmarks")
     fi
 fi
 
@@ -108,6 +112,11 @@ for arg in "${args[@]}"; do
         rv64a)
             for test in "${rv64a[@]}"; do
                 selected_tests+=("${test}:${rv64a_prefix}${test}.bin")
+            done
+            ;;
+        rv64f)
+            for test in "${rv64f[@]}"; do
+                selected_tests+=("${test}:${rv64f_prefix}${test}.bin")
             done
             ;;
         benchmarks)

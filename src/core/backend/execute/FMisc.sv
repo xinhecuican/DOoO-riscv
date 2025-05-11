@@ -15,6 +15,10 @@ generate
         logic `N(`XLEN) res;
         FFlags fstatus;
         FMisc #(FP32) fmisc (
+            .flt_we(issue_fmisc_io.bundle[i].flt_we),
+`ifdef RV64I
+            .word(issue_fmisc_io.bundle[i].word),
+`endif
             .rs1_data(issue_fmisc_io.rs1_data[i]),
             .rs2_data(issue_fmisc_io.rs2_data[i]),
             .fltop(issue_fmisc_io.bundle[i].fltop),
@@ -67,6 +71,10 @@ endmodule
 module FMisc #(
     parameter fp_format_e format = fp_format_e'(0)
 )(
+    input logic flt_we,
+`ifdef RV64I
+    input logic word,
+`endif
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
     input logic `N(`FLTOP_WIDTH) fltop,
@@ -80,6 +88,7 @@ module FMisc #(
     // ----------
     localparam int unsigned EXP_BITS = exp_bits(format);
     localparam int unsigned MAN_BITS = man_bits(format);
+    localparam int unsigned FXL = EXP_BITS + MAN_BITS + 1;
     // ----------------
     // Type definition
     // ----------------
@@ -93,7 +102,7 @@ module FMisc #(
     FTypeInfo info_a, info_b;
     fp_t operand_a, operand_b;
     fp_classifier #(EXP_BITS, MAN_BITS, 2) classifier (
-        .operands_i ({rs2_data, rs1_data}),
+        .operands_i ({rs2_data[FXL-1: 0], rs1_data[FXL-1: 0]}),
         .is_boxed_i (2'b11),
         .info_o (info)
     );
@@ -204,38 +213,73 @@ module FMisc #(
   end
 
     logic `N(`XLEN) f2i_res;
-    FFlags f2i_status;
+    FFlags f2i_status, f2i_wstatus;
+    logic `N(32) f2i_wres;
     F2I #(FP32, INT32) f2i (
         uext,
         rs1_data,
         info_a,
         round_mode,
-        f2i_res,
-        f2i_status
+        f2i_wres,
+        f2i_wstatus
     );
+`ifdef RV64I
+    logic `N(`XLEN) f2i_lres;
+    FFlags f2i_lstatus; 
+    F2I #(FP32, INT64) f2i_l (
+        uext,
+        rs1_data,
+        info_a,
+        round_mode,
+        f2i_lres,
+        f2i_lstatus
+    );
+    assign f2i_res = word ? {{`XLEN-FXL{f2i_wres[FXL-1]}}, f2i_wres} : f2i_lres;
+    assign f2i_status = word ? f2i_wstatus : f2i_lstatus;
+`else
+    assign f2i_res = f2i_wres;
+    assign f2i_status = f2i_wstatus;
+`endif
+
     logic `N(`XLEN) i2f_res;
-    FFlags i2f_status;
+    FFlags i2f_status, i2f_wstatus;
+    logic `N(32) i2f_wres;
     I2F #(FP32, INT32) i2f (
         uext,
         rs1_data,
         info_a,
         round_mode,
-        i2f_res,
-        i2f_status
+        i2f_wres,
+        i2f_wstatus
     );
+`ifdef RV64I
+    logic `N(`XLEN) i2f_lres;
+    FFlags i2f_lstatus;
+    I2F #(FP32, INT64) i2f_l (
+        uext,
+        rs1_data,
+        info_a,
+        round_mode,
+        i2f_lres,
+        i2f_lstatus
+    );
+    assign i2f_res = word ? i2f_wres : i2f_lres;
+    assign i2f_status = word ? i2f_wstatus : i2f_lstatus;
+`else
+`endif
 
     always_comb begin
         case(fltop)
         `FLT_MV: begin
-            res = rs1_data;
+            res = {{`XLEN-FXL{flt_we | rs1_data[FXL-1]}}, rs1_data[FXL-1: 0]};
             fstatus = 0;
         end
         `FLT_FMIN, `FLT_FMAX: begin
-            res = minmax_result;
+            res = {{`XLEN-FXL{1'b1}}, minmax_result[FXL-1: 0]};
             fstatus = minmax_status;
         end
         `FLT_SGNJ, `FLT_SGNJN, `FLT_SGNJX: begin
-            res = sgnj_result;
+            res = {{`XLEN-FXL{1'b1}}, sgnj_result[FXL-1: 0]};
             fstatus = sgnj_status;
         end
         `FLT_CVT: begin
@@ -243,7 +287,7 @@ module FMisc #(
             fstatus = f2i_status;
         end
         `FLT_CVTS: begin
-            res = i2f_res;
+            res = {{`XLEN-FXL{flt_we | i2f_res[FXL-1]}}, i2f_res[FXL-1: 0]};
             fstatus = i2f_status;
         end
         `FLT_LE, `FLT_LT, `FLT_EQ:begin

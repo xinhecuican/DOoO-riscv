@@ -14,7 +14,7 @@ module FAdd #(
     input FMulInfo info_fma,
     input logic `N(FP_BITS) rs1_data,
     input logic `N(FP_BITS) rs2_data,
-    output logic `N(`XLEN) res,
+    output logic `N(FP_BITS) res,
     output FFlags status
 );
     typedef struct packed {

@@ -666,41 +666,6 @@ endgenerate
 
 
 // tlb
-`define TLB_ASSIGN(name, IFETCH) \
-    logic ``name``_we, ``name``_pmpcfg_en, ``name``_pmpaddr_en, ``name``_we_o; \
-    logic `N(`XLEN) ``name``_wdata; \
-    assign ``name``_we_o = ``name``_we & (~backendCtrl.redirect | redirect_s2_older); \
-    always_ff @(posedge clk)begin \
-        if(~IFETCH & mstatus.mprv)begin \
-            ``name``.mode <= mstatus.mpp; \
-        end \
-        else begin \
-            ``name``.mode <= mode; \
-        end \
-        ``name``_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older); \
-        ``name``_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg]; \
-        ``name``_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr]; \
-        ``name``_wdata <= wdata_s1; \
-        ``name``.sum <= mstatus.sum; \
-        ``name``.mxr <= mstatus.mxr; \
-        ``name``.asid <= satp.asid; \
-        ``name``.satp_mode <= satp.mode; \
-    end \
-    always_ff @(posedge clk, negedge rst)begin \
-        if(rst == `RST)begin \
-            ``name``.pmpcfg <= 0; \
-            ``name``.pmpaddr <= 0; \
-        end \
-        else begin \
-            if(``name``_we_o & ``name``_pmpcfg_en)begin \
-                ``name``.pmpcfg[pmp_id_s2] <= ``name``_wdata; \
-            end \
-            if(``name``_we_o & ``name``_pmpaddr_en)begin \
-                ``name``.pmpaddr[pmpaddr_id_s2] <= ``name``_wdata; \
-            end \
-        end \
-    end
-
     logic csr_itlb_io_we, csr_itlb_io_pmpcfg_en, csr_itlb_io_pmpaddr_en, csr_itlb_io_we_o;
     logic `N(`XLEN) csr_itlb_io_wdata;
     assign csr_itlb_io_we_o = csr_itlb_io_we & (~backendCtrl.redirect | redirect_s2_older);
@@ -787,10 +752,7 @@ endgenerate
             end
         end
     end
-    // `TLB_ASSIGN(csr_itlb_io, 1)
-    // `TLB_ASSIGN(csr_ltlb_io, 1'b0)
-    // `TLB_ASSIGN(csr_stlb_io, 1'b0)
-`undef TLB_ASSIGN
+
     always_ff @(posedge clk)begin
         csr_l2_io.sum <= mstatus.sum;
         csr_l2_io.mxr <= mstatus.mxr;

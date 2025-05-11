@@ -401,6 +401,9 @@ typedef struct packed {
     logic flt_we;
     logic uext;
     logic [2: 0] rm;
+`ifdef RV64I
+    logic word;
+`endif
 } FMiscIssueBundle;
 
 typedef struct packed {
@@ -544,6 +547,9 @@ typedef struct packed {
     logic we;
 `ifdef RVF
     logic frd_en;
+`ifdef RV64I
+    logic word;
+`endif
 `endif
     logic `N(`PREG_WIDTH) rd;
     RobIdx robIdx;

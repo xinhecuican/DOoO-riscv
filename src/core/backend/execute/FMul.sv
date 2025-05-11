@@ -5,17 +5,18 @@
 module FMul #(
     parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
     parameter int unsigned EXP_BITS = exp_bits(fp_fmt),
-    parameter int unsigned MAN_BITS = man_bits(fp_fmt)
+    parameter int unsigned MAN_BITS = man_bits(fp_fmt),
+    parameter int unsigned FXL = EXP_BITS + MAN_BITS + 1
 )(
     input logic clk,
     input logic rst,
     input roundmode_e round_mode,
-    input logic `N(`XLEN) rs1_data,
-    input logic `N(`XLEN) rs2_data,
+    input logic `N(FXL) rs1_data,
+    input logic `N(FXL) rs2_data,
     input logic `N(`FLTOP_WIDTH) fltop,
     output FMulInfo mulInfo,
     output logic `N(EXP_BITS+MAN_BITS*2+2) toadd_res,
-    output logic `N(`XLEN) res,
+    output logic `N(FXL) res,
     output FFlags status
 );
 
@@ -240,9 +241,7 @@ module FMantMul #(
 generate
     for(genvar i=0; i<2; i++)begin
         for(genvar j=0; j<NUM*2; j++)begin
-`ifdef RV32I
             assign transpose[i][j] = st5[j][i];
-`endif
         end
     end
 endgenerate

@@ -18,6 +18,7 @@ module F2I #(
     // ----------
     localparam int unsigned EXP_BITS = exp_bits(fp_fmt);
     localparam int unsigned MAN_BITS = man_bits(fp_fmt);
+    localparam int unsigned FXL = EXP_BITS + MAN_BITS + 1;
     localparam logic [EXP_BITS-1: 0] max_shamt = ((1 << (EXP_BITS-1))-1)+MAN_BITS;
     localparam logic [EXP_BITS-1: 0] max_int_exp = ((1 << (EXP_BITS-1))-1)+int_width(int_fmt)-1;
     // ----------------
@@ -37,13 +38,13 @@ module F2I #(
     logic [$clog2(MAN_BITS)-1: 0] lpath_shamt, rpath_shamt;
     logic lpath_iv, lpath_may_of, lpath_pos_of, lpath_neg_of, lpath_of, iv_sel_max;
     logic sel_lpath;
-    logic [`XLEN-1: 0] lpath_mant_shift, rpath_mant;
+    logic [FXL-1: 0] lpath_mant_shift, rpath_mant;
     logic rpath_exceed, rpath_sticky;
     logic [MAN_BITS+1: 0] rpath_mant_shift, rpath_sticky_mask;
     logic [MAN_BITS: 0] rpath_round_out;
     logic rpath_inexact, rpath_cout, rpath_up, rpath_iv;
 
-    assign data_i = src;
+    assign data_i = src[FXL-1: 0];
     assign exp_nz = |data_i.exp;
     assign exp = {{EXP_BITS-1{1'b0}}, ~exp_nz} | data_i.exp;
     assign mant = {exp_nz, data_i.mant};
@@ -119,6 +120,7 @@ module I2F #(
 );
     localparam int unsigned EXP_BITS = exp_bits(fp_fmt);
     localparam int unsigned MAN_BITS = man_bits(fp_fmt);
+    localparam int unsigned FXL = EXP_BITS + MAN_BITS + 1;
     localparam int unsigned SFT_BITS = MAN_BITS * 2 + 5;
     typedef struct packed {
         logic                sign;
@@ -128,8 +130,8 @@ module I2F #(
 
     fp_t fp;
     logic sign;
-    logic `N(`XLEN) int_abs;
-    logic `N(`XLEN) int_shift, int_shift_pre; 
+    logic `N(INT_WIDTH) int_abs;
+    logic `N(INT_WIDTH) int_shift, int_shift_pre; 
     logic `N($clog2(INT_WIDTH)) lzc_cnt;
     logic `N(MAN_BITS) raw_mant, round_mant;
     logic `N(EXP_BITS+1) raw_exp;
@@ -138,10 +140,10 @@ module I2F #(
     logic round_ix, round_cout, round_up;
 
     assign sign = src[INT_WIDTH-1] & ~uext;
-    assign int_abs = sign ? -src : src;
+    assign int_abs = sign ? -src[INT_WIDTH-1: 0] : src[INT_WIDTH-1: 0];
     lzc #(INT_WIDTH, 1) lzc_inst (int_abs, lzc_cnt, lzc_empty);
     assign int_shift_pre = int_abs << (lzc_cnt);
-    assign int_shift = {int_shift_pre[`XLEN-2: 0], 1'b0};
+    assign int_shift = {int_shift_pre[INT_WIDTH-2: 0], 1'b0};
     
     assign raw_exp = (INT_WIDTH - 1 - lzc_cnt) + {1'b0, {EXP_BITS-1{~lzc_empty}}};
     assign raw_mant = int_shift[INT_WIDTH-1: INT_WIDTH-MAN_BITS];

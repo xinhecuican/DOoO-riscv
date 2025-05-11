@@ -487,7 +487,11 @@ generate
             pipe_data.exccode <= tlb_exception_s3[i] ? `EXC_LPF :
                                 lmisalign_s3[i] ? `EXC_LAM : `EXC_NONE;
             pipe_data.irq_enable <= 1;
+`ifdef RV64I
+            pipe_data.res <= ldata_shift[i] | {{32{leq_data[i].size == 2'b10}}, 32'b0};
+`else
             pipe_data.res <= ldata_shift[i];
+`endif
             from_pipe <= wb_pipeline_en[i] & leq_data[i].frd_en;
         end
         assign lsu_wb_io.datas[i+`LOAD_PIPELINE] = from_pipe ? pipe_data : load_queue_io.fp_wbData[i];
