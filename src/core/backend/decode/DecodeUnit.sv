@@ -84,24 +84,27 @@ module DecodeUnit(
     logic `N(6) cadd_imm, cadd16_imm;
     logic `N(11) cjal_imm;
     logic `N(8) cbranch_imm;
-    logic `N(5) cmem_imm;
+    logic `N(5) cmem_imm, cld_imm;
     logic `N(8) caddi4_imm;
-    logic `N(6) clwsp_imm, cswsp_imm;
+    logic `N(6) clwsp_imm, cswsp_imm, cldsp_imm, csdsp_imm;
     assign cadd_imm = {cinst[12], cinst[6: 2]};
     assign cadd16_imm = {cinst[12], cinst[4: 3], cinst[5], cinst[2], cinst[6]};
     assign caddi4_imm = {cinst[10: 7], cinst[12: 11], cinst[5], cinst[6]};
     assign cjal_imm = {cinst[12], cinst[8], cinst[10: 9], cinst[6], cinst[7], cinst[2], cinst[11], cinst[5: 3]};
     assign cbranch_imm = {cinst[12], cinst[6: 5], cinst[2], cinst[11: 10], cinst[4: 3]};
     assign cmem_imm = {cinst[5], cinst[12: 10], cinst[6]};
+    assign cld_imm = {cinst[6: 5], cinst[12: 10]};
     assign clwsp_imm = {cinst[3: 2], cinst[12], cinst[6: 4]};
     assign cswsp_imm = {cinst[8: 7], cinst[12: 9]};
+    assign cldsp_imm = {cinst[4: 2], cinst[12], cinst[6: 5]};
+    assign csdsp_imm = {cinst[9: 7], cinst[12: 10]};
 
 
     logic cfunct3_0, cfunct3_1, cfunct3_2, cfunct3_3, cfunct3_4, cfunct3_5, cfunct3_6, cfunct3_7;
     logic sign0, sign1, sign2;
     logic full_rd_2, full_rd_0;
     logic full_rs2_0;
-    logic cfunct6_35;
+    logic cfunct6_35, cfunct6_39;
     logic cadd_imm_0;
     assign cfunct3_0 = ~cfunct3[2] & ~cfunct3[1] & ~cfunct3[0];
     assign cfunct3_1 = ~cfunct3[2] & ~cfunct3[1] & cfunct3[0];
@@ -118,6 +121,7 @@ module DecodeUnit(
     assign full_rd_2 = ~full_rd[4] & ~full_rd[3] & ~full_rd[2] & full_rd[1] & ~full_rd[0];
     assign full_rs2_0 = ~full_rs2[4] & ~full_rs2[3] & ~full_rs2[2] & ~full_rs2[1] & ~full_rs2[0];
     assign cfunct6_35 = cfunct6[5] & ~cfunct6[4] & ~cfunct6[3] & ~cfunct6[2] & cfunct6[1] & cfunct6[0];
+    assign cfunct6_39 = cfunct6[5] & ~cfunct6[4] & ~cfunct6[3] & cfunct6[2] & cfunct6[1] & cfunct6[0];
     assign cadd_imm_0 = ~cadd_imm[5] & ~cadd_imm[4] & ~cadd_imm[3] & ~cadd_imm[2] & ~cadd_imm[1] & ~cadd_imm[0];
 
     logic clw, csw, caddi, cjal, cli, caddisp, clui, csrli, csrai, candi, cslli;
@@ -128,7 +132,11 @@ module DecodeUnit(
     assign clw = sign0 & cfunct3_2;
     assign csw = sign0 & cfunct3_6;
     assign caddi = sign1 & cfunct3_0; // caddi and cnop
+`ifdef RV32I
     assign cjal = sign1 & cfunct3_1;
+`else
+    assign cjal = 0;
+`endif
     assign cli = sign1 & cfunct3_2;
     assign caddisp = sign1 & cfunct3_3 & full_rd_2 & ~cadd_imm_0;
     assign clui = sign1 & cfunct3_3 & ~full_rd_2 & ~cadd_imm_0;
@@ -150,6 +158,17 @@ module DecodeUnit(
     assign cjalr = sign2 & cfunct3_4 & cinst[12] & ~full_rd_0 & full_rs2_0;
     assign cadd = sign2 & cfunct3_4 & cinst[12] & ~full_rs2_0;
     assign cswsp = sign2 & cfunct3_6;
+
+`ifdef RV64I
+    logic cld, csd, caddiw, csubw, caddw, cldsp, csdsp;
+    assign cld = sign0 & cfunct3_3;
+    assign csd = sign0 & cfunct3_7;
+    assign caddiw = sign1 & cfunct3_1;
+    assign csubw = sign1 & cfunct6_39 & ~cinst[6] & ~cinst[5];
+    assign caddw = sign1 & cfunct6_39 & ~cinst[6] & cinst[5];
+    assign cldsp = sign2 & cfunct3_3 & ~full_rd_0;
+    assign csdsp = sign2 & cfunct3_7;
+`endif
     
     logic `N(5) cexp_rs1, cexp_rd;
     assign cexp_rs1 = {2'b01, crs1};
@@ -159,6 +178,34 @@ module DecodeUnit(
     logic `N(`DEC_IMM_WIDTH) cimm;
 
 `ifdef RVF
+
+`ifdef RV64I
+    assign crs1_o = {5{clw | csw | csrli | csrai | candi | csub | cxor | cor | cand | 
+                    cbeqz | cbnez | cld | csd | caddw | csubw}} & cexp_rs1 |
+                    {5{caddi | cslli | cjr | cjalr | cadd | caddiw}} & full_rd |
+                    {5{caddi4spn | caddisp | clwsp | cswsp | cldsp | csdsp}} & 5'h2;
+
+    assign crs2_o = {5{csw | csub | cxor | cor | cand | csubw | caddw | csd}} & cexp_rd |
+                    {5{cmv | cadd | cswsp | csdsp}} & full_rs2;
+
+    assign crd_o = {5{caddi4spn | clw | cld}} & cexp_rd |
+                   {5{csrli | csrai | candi | csub | cxor | cor | cand | caddw | csubw}} & cexp_rs1 |
+                   {5{caddi | cli | clui | cslli | clwsp | cmv | cadd | cldsp | caddiw}} & full_rd |
+                   {5{cjalr}} & 5'h1 |
+                   {5{caddisp}} & 5'h2;
+
+    assign cimm = {2'b0, caddi4_imm & {8{caddi4spn}}, 10'b0} |
+                  {5'b0, cmem_imm & {5{clw | csw}}, 10'b0} |
+                  {4'b0, cld_imm & {5{cld | csd}}, 11'b0} |
+                  {3'b0, cldsp_imm & {6{cldsp}}, 11'b0} |
+                  {3'b0, csdsp_imm & {6{csdsp}}, 11'b0} |
+                  {{{6{cadd_imm[5]}}, cadd_imm} & {12{caddi | cli | csrli | csrai | candi | cslli | caddiw}}, 8'b0} |
+                  {{{2{cadd16_imm[5]}}, cadd16_imm} & {8{caddisp}}, 12'b0} |
+                  {{14{cadd_imm[5]}}, cadd_imm} & {20{clui}} |
+                  {{{11{cbranch_imm[7]}}, cbranch_imm} & {19{cbeqz | cbnez}}, 1'b0} |
+                  {4'b0, clwsp_imm & {6{clwsp}}, 10'b0} |
+                  {4'b0, cswsp_imm & {6{cswsp}}, 10'b0};
+`else
     logic cflw, cfsw, cflwsp, cfswsp;
     assign cflw = sign0 & cfunct3_3;
     assign cfsw = sign0 & cfunct3_7;
@@ -172,7 +219,7 @@ module DecodeUnit(
     assign crs2_o = {5{csw | csub | cxor | cor | cand | cfsw}} & cexp_rd |
                     {5{cmv | cadd | cswsp | cfswsp}} & full_rs2;
 
-    assign crd_o = {5{caddi4spn | clw| cflw}} & cexp_rd |
+    assign crd_o = {5{caddi4spn | clw | cflw}} & cexp_rd |
                    {5{csrli | csrai | candi | csub | cxor | cor | cand}} & cexp_rs1 |
                    {5{caddi | cli | clui | cslli | clwsp | cmv | cadd | cflwsp}} & full_rd |
                    {5{cjal | cjalr}} & 5'h1 |
@@ -184,8 +231,38 @@ module DecodeUnit(
                   {{{2{cadd16_imm[5]}}, cadd16_imm} & {8{caddisp}}, 12'b0} |
                   {{14{cadd_imm[5]}}, cadd_imm} & {20{clui}} |
                   {{{11{cbranch_imm[7]}}, cbranch_imm} & {19{cbeqz | cbnez}}, 1'b0} |
-                  {2'b0, clwsp_imm & {8{clwsp | cflwsp}}, 10'b0} |
-                  {2'b0, cswsp_imm & {8{cswsp | cfswsp}}, 10'b0};
+                  {4'b0, clwsp_imm & {6{clwsp | cflwsp}}, 10'b0} |
+                  {4'b0, cswsp_imm & {6{cswsp | cfswsp}}, 10'b0};
+`endif
+
+`else
+
+`ifdef RV64I
+    assign crs1_o = {5{clw | csw | csrli | csrai | candi | csub | cxor | cor | cand | 
+                    cbeqz | cbnez | cld | csd | caddw | csubw}} & cexp_rs1 |
+                    {5{caddi | cslli | cjr | cjalr | cadd | caddiw}} & full_rd |
+                    {5{caddi4spn | caddisp | clwsp | cswsp | cldsp | csdsp}} & 5'h2;
+
+    assign crs2_o = {5{csw | csub | cxor | cor | cand | caddw | csubw | csd}} & cexp_rs2 |
+                    {5{cmv | cadd | cswsp | csdsp}} & full_rs2;
+
+    assign crd_o = {5{caddi4spn | clw | cld}} & cexp_rd |
+                   {5{csrli | csrai | candi | csub | cxor | cor | cand | caddw | csubw}} & cexp_rs1 |
+                   {5{caddi | cli | clui | cslli | clwsp | cmv | cadd | caddiw | cldsp}} & full_rd |
+                   {5{cjalr}} & 5'h1 |
+                   {5{caddisp}} & 5'h2;
+
+    assign cimm = {2'b0, caddi4_imm & {8{caddi4spn}}, 10'b0} |
+                  {5'b0, mem_imm & {5{clw | csw}}, 10'b0} |
+                  {4'b0, cld_imm & {5{cld | csd}}, 11'b0} |
+                  {3'b0, cldsp_imm & {6{cldsp}}, 11'b0} |
+                  {3'b0, csdsp_imm & {6{csdsp}}, 11'b0} |
+                  {{{6{cadd_imm[5]}}, cadd_imm} & {12{caddi | cli | csrli | csrai | candi | cslli | caddiw}}, 8'b0} |
+                  {{{2{cadd16_imm[5]}}, cadd16_imm} & {8{caddisp}}, 12'b0} |
+                  {{14{cadd_imm[5]}}, cadd_imm} & {20{clui}} |
+                  {{12{cbranch_imm[7]}}, cbranch_imm} & {20{cbeqz | cbnez}} |
+                  {2'b0, clwsp_imm & {8{clwsp}}, 10'b0} |
+                  {2'b0, cswsp_imm & {8{cswsp}}, 10'b0};
 `else
     assign crs1_o = {5{clw | csw | csrli | csrai | candi | csub | cxor | cor | cand | 
                     cbeqz | cbnez}} & cexp_rs1 |
@@ -210,12 +287,18 @@ module DecodeUnit(
                   {2'b0, clwsp_imm & {8{clwsp}}, 10'b0} |
                   {2'b0, cswsp_imm & {8{cswsp}}, 10'b0};
 `endif
+`endif
     assign cvalid = caddi4spn | clw | csw | caddi | cjal | cli | caddisp | clui |
                     csrli | csrai | candi | csub | cxor | cor | cand | cj |
                     cbeqz | cbnez | cslli | clwsp | cjr | cmv | cebreak |
                     cjalr | cadd | cswsp
 `ifdef RVF
+`ifdef RV32I
                     | cflw | cflwsp | cfsw | cfswsp
+`endif
+`endif
+`ifdef RV64I
+                    | cld | csd | cldsp | csdsp | caddiw | csubw | caddw
 `endif
                     ;
     assign info.rvc = ~(inst[1] & inst[0]);
@@ -451,13 +534,17 @@ module DecodeUnit(
     assign info.rm = funct3;
     assign info.flt_mem = loadfp | storefp
 `ifdef RVC
+`ifdef RV32I
     | cflw | cflwsp | cfsw | cfswsp
+`endif
 `endif
     ;
     assign info.flt_we = loadfp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
                         fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvts | fcvtsu | fmv
 `ifdef RVC
+`ifdef RV32I
     | cflw | cflwsp
+`endif
 `endif
 `ifdef RV64I
     | fcvtsl | fcvtslu
@@ -473,7 +560,9 @@ module DecodeUnit(
     assign info.frs2_sel = storefp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
                            fsgnj | fsgnjn | fsgnjx | fmin | fmax | feq | flt | fle
 `ifdef RVC
+`ifdef RV32I
     | cfsw | cfswsp
+`endif
 `endif
                            ;
     assign info.fflag_we = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
@@ -549,8 +638,12 @@ module DecodeUnit(
 `ifdef RVC
         info.intop[3] = info.intop[3] | csub | cslli | csrli | csrai;
         info.intop[2] = info.intop[2] | cand | cor | candi | cxor;
-        info.intop[1] = info.intop[1] | csub;
+        info.intop[1] = info.intop[1] | csub | cor;
         info.intop[0] = info.intop[0] | cand | clui | csrli | csrai | candi;
+`ifdef RV64I
+        info.intop[3] = info.intop[3] | csubw;
+        info.intop[1] = info.intop[1] | csubw;
+`endif
 `endif
 `ifdef RV64I
         info.intop[3] = info.intop[3] | slliw | srliw | sraiw | sllw | srlw | sraw | subw;
@@ -573,6 +666,11 @@ module DecodeUnit(
 `ifdef RVC
         info.memop[2] = info.memop[2] | csw | cswsp;
         info.memop[1] = info.memop[1] | clw | clwsp | csw | cswsp;
+`ifdef RV64I
+        info.memop[2] = info.memop[2] | csd | csdsp;
+        info.memop[1] = info.memop[1] | cld | cldsp | csd | csdsp;
+        info.memop[0] = info.memop[0] | cld | csd | cldsp | csdsp;
+`endif
 `ifdef RVF
         info.memop[2] = info.memop[2] | fsw;
         info.memop[1] = info.memop[1] | flw | fsw;
@@ -621,6 +719,9 @@ module DecodeUnit(
     assign info.immv = slli | srai | srli | addi | slti | xori | ori | andi | sltiu
 `ifdef RVC
     | cslli | csrai | csrli | caddi | caddi4spn | candi | caddisp | cli
+`ifdef RV64I
+    | caddiw
+`endif
 `endif
 `ifdef RV64I
     | addiw | slliw | srliw | sraiw
@@ -649,6 +750,9 @@ module DecodeUnit(
 `ifdef RVC
     | caddi | cli | clui | csrli | csrai | candi | csub | cxor | cor | cand 
     | cslli | cadd | cmv | caddisp | caddi4spn
+`ifdef RV64I
+    | caddiw | caddw | csubw
+`endif
 `endif
 `ifdef RV64I
     | opimm32 | addw | subw | sllw | srlw | sraw
@@ -656,7 +760,10 @@ module DecodeUnit(
     ) & ~ipf & ~iam;
     assign info.branchv = (branch | jal | jalr
 `ifdef RVC
-    | cj | cjal | cbeqz | cbnez | cjr | cjalr
+`ifdef RV32I
+    | cjal
+`endif
+    | cj | cbeqz | cbnez | cjr | cjalr
 `endif
     ) & ~ipf & ~iam;
 
@@ -667,8 +774,13 @@ module DecodeUnit(
 `endif
 `ifdef RVC
             | clw | clwsp | csw | cswsp
+`ifdef RV64I
+            | cld | csd | cldsp | csdsp
+`endif
 `ifdef RVF
+`ifdef RV32I
             | cflw | cflwsp | cfsw | cfswsp
+`endif
 `endif
 `endif
     ) & ~ipf & ~iam;
@@ -712,6 +824,9 @@ module DecodeUnit(
 `endif
 `ifdef RVF
     | fcvt | fcvtu | fcvts | fcvtsu
+`endif
+`ifdef RVC
+    | caddiw | caddw | csubw
 `endif
     ;
 `endif

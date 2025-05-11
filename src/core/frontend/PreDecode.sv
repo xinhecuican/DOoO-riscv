@@ -323,7 +323,11 @@ module PreDecoder(
     assign cjal_imm = {{`VADDR_SIZE-12{cinst[12]}}, cinst[12], cinst[8], cinst[10: 9], cinst[6], cinst[7], cinst[2], cinst[11], cinst[5: 3], 1'b0};
 
     logic cj, cjal, cjr, cjalr, cbeqz, cbnez;
+`ifdef RV32I
     assign cjal = sign1 & funct3_1;
+`else
+    assign cjal = 0;
+`endif
     assign cj = sign1 & funct3_5;
     assign cbeqz = sign1 & funct3_6;
     assign cbnez = sign1 & funct3_7;
