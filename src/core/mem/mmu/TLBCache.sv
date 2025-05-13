@@ -12,7 +12,7 @@ interface TLBCacheIO;
     TLBInfo info_o;
     PTEEntry hit_entry;
     logic `N(`VADDR_SIZE) hit_addr;
-    logic `N(2) wpn;
+    logic `N(`TLB_PN) wpn;
 
     modport cache (input req, info, req_addr, flush,
                    output hit, error, exception, info_o, hit_entry, hit_addr, wpn);
@@ -61,6 +61,17 @@ module TLBCache(
         .BANK(`TLB_P1_BANK)
     ) page_pn1 (.*, .page_io(pn1_io), .cache_io(io), .fence_finish(), .fence_valid()); 
 
+`ifdef SV39
+    TLBPageIO #(`TLB_P2_BANK, `TLB_P2_BANK) pn2_io();
+    TLBPage #(
+        .PN(2),
+        .WAY_NUM(`TLB_P2_WAY),
+        .META_WIDTH(`TLB_P2_BANK),
+        .DEPTH(`TLB_P2_SET),
+        .BANK(`TLB_P2_BANK)
+    ) page_pn2 (.*, .page_io(pn2_io), .cache_io(io), .fence_finish(), .fence_valid()); 
+`endif
+
     assign fence_end = pn0_fence_end;
     always_ff @(posedge clk)begin
         req_buf.req <= io.req & ~io.flush;
@@ -78,6 +89,12 @@ module TLBCache(
     assign hit[0] = pn0_io.hit;
     assign leaf[1] = pn1_entry.x | pn1_entry.w | pn1_entry.r;
     assign leaf[0] = pn0_entry.x | pn0_entry.w | pn0_entry.r;
+`ifdef SV39
+    PTEEntry pn2_entry;
+    assign pn2_entry = pn2_io.entry;
+    assign hit[2] = pn2_io.hit;
+    assign leaf[2] = pn2_entry.x | pn2_entry.w | pn2_entry.r;
+`endif
     assign valid = hit & leaf;
     PRSelector #(`TLB_PN) select_hit (hit, hit_first);
 
@@ -85,10 +102,18 @@ module TLBCache(
     TLBExcDetect exc_detect0 (pn0_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, exception[0]);
     TLBExcDetect exc_detect1 (pn1_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn1_exception);
     assign exception[1] = pn1_exception | (leaf[1] & pn1_io.meta);
+`ifdef SV39
+    logic pn2_exception;
+    TLBExcDetect exc_detect2 (pn2_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn2_exception);
+    assign exception[2] = pn2_exception | (leaf[2] & pn2_io.meta);
+`endif
 
     logic `ARRAY(`TLB_PN, `PADDR_SIZE) paddr;
     PAddrGen gen_paddr0(pn0_entry, req_buf.vaddr, paddr[0]);
     PAddrGen #(1) gen_paddr1(pn1_entry, req_buf.vaddr, paddr[1]);
+`ifdef SV39
+    PAddrGen #(2) gen_paddr2(pn2_entry, req_buf.vaddr, paddr[2]);
+`endif
 
     logic hit_before;
     logic ptw_req_before, error_before;
@@ -101,11 +126,17 @@ module TLBCache(
         ptw_req_before <= req_buf.req & (~(|(hit_first & (leaf | exception)))) & ~req_buf.error & ~io.flush;
         error_before <= req_buf.error;
         io.exception <= |(hit_first & exception);
-        io.hit_entry <= valid[0] ? pn0_io.entry : pn1_io.entry;
+
         io.hit_addr <= req_buf.vaddr;
         io.info_o <= req_buf.info;
+`ifdef SV39
+        io.hit_entry <= valid[0] ? pn0_io.entry :
+                        valid[1] ? pn1_io.entry : pn2_io.entry;
+        io.wpn <= hit_first[2] ? 3'b011 : hit_first[1] ? 3'b001 : 3'b000;
+`else
+        io.hit_entry <= valid[0] ? pn0_io.entry : pn1_io.entry;
         io.wpn <= hit_first[1] ? 2'b01 : 2'b00;
-
+`endif
         cache_ptw_io.info <= req_buf.info;
         cache_ptw_io.vaddr <= req_buf.vaddr;
         cache_ptw_io.valid <= hit_first;
@@ -193,7 +224,10 @@ generate
     for(genvar j=0; j<BANK; j++)begin
         PTEEntry entry;
         assign entry = ptw_page_io.refill_data[j];
-        if(PN == 1)begin
+        if(PN == 2)begin
+            assign unaligned[j] = (entry.ppn.ppn1 != 0) || (entry.ppn.ppn0 != 0);
+        end
+        else if(PN == 1)begin
             assign unaligned[j] = entry.ppn.ppn0 != 0;
         end
         else begin
@@ -405,6 +439,9 @@ generate
         PPNAddr ppn;
         assign ppn.ppn0 = vpn.vpn[0];
         assign ppn.ppn1 = entry.ppn.ppn1;
+`ifdef SV39
+        assign ppn.ppn2 = entry.ppn.ppn2;
+`endif
 
         logic leaf;
         if(LEAF == 0)begin
@@ -414,8 +451,28 @@ generate
             assign leaf = 1'b1;
         end
         assign paddr = leaf ? {ppn, vaddr[`TLB_OFFSET-1: 0]} :
-                       {entry.ppn, {`TLB_OFFSET-`TLB_VPN-2{1'b0}}, vpn.vpn[0], 2'b00};
+                       {entry.ppn, vpn.vpn[0], {`PTE_WIDTH{1'b0}}};
     end
+`ifdef SV39
+    else if(PN == 2)begin
+        VPNAddr vpn;
+        assign vpn = vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
+        PPNAddr ppn;
+        assign ppn.ppn0 = vpn.vpn[0];
+        assign ppn.ppn1 = vpn.vpn[1];
+        assign ppn.ppn2 = entry.ppn.ppn2;
+
+        logic leaf;
+        if(LEAF == 0)begin
+            assign leaf = entry.r | entry.w | entry.x;
+        end
+        else begin
+            assign leaf = 1'b1;
+        end
+        assign paddr = leaf ? {ppn, vaddr[`TLB_OFFSET-1: 0]} :
+                    {entry.ppn, vpn.vpn[1], {`PTE_WIDTH{1'b0}}};
+    end
+`endif
 endgenerate
 endmodule
 
@@ -449,8 +506,8 @@ endgenerate
     assign exception = ~entry.v |
                       (~entry.r & entry.w) |
                       (|entry.rsw) |
-                      (leaf & ~((entry.r & r) |
-                              (entry.x & (x | (r & mxr))) |
+                      (leaf & ~(((entry.r | entry.x & mxr) & r) |
+                              (entry.x & x) |
                               (entry.w & w))) |
                       (leaf & (((mode_i == 2'b01) & ~sum & entry.u) |
                       ((mode_i == 2'b00) & ~entry.u) |

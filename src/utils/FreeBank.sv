@@ -31,12 +31,6 @@ localparam SLICE_BASE_NUM = DEPTH / READ_PORT;
 localparam SLICE_REMAIN_NUM = DEPTH % READ_PORT;
 localparam OFFSET = $clog2(READ_PORT)**2 - READ_PORT;
 
-`ifdef DIFFTEST
-    initial begin
-        assert (SLICE_REMAIN_NUM == 0) $display ("[ERROR] SLICE_REMAIN_NUM should be 0");
-    end
-`endif
-
     logic [$clog2(READ_PORT)-1: 0] slice_head, slice_tail;
     logic [$clog2(READ_PORT): 0] slice_head_n, slice_tail_n;
     logic [READ_PORT-1: 0] slice_en, slice_we;

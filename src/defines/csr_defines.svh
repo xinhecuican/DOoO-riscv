@@ -188,8 +188,8 @@ typedef struct packed {
 } STATUS;
 
 `ifdef RV64I
-`define STATUS_MASK {1'b1, 39'h0, 19'h7fff, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
-`define SSTATUS_MASK {1'b1, 38'h0, 2'h3, 3'h0, 2'h3, 1'b0, 4'hf, 2'h0, 3'h7, 1'b0, 2'h3, 3'h0, 1'b1, 1'b0}
+`define STATUS_MASK {1'b1, 20'h0, 11'hff, 8'h0, 19'h7fff, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
+`define SSTATUS_MASK {1'b1, 29'h0, 2'h3, 12'h0, 2'h3, 1'h0, 4'hf, 2'h0, 3'h7, 1'h0, 2'h3, 3'h0, 1'h1, 1'h0}
 `else
 `define STATUS_MASK {1'b1, 7'h0, 19'h7fff, 1'b0, 1'b1, 1'b0, 1'b1, 1'b0}
 `define SSTATUS_MASK {1'b1, 6'h0, 2'h3, 3'h0, 2'h3, 1'b0, 4'hf, 2'h0, 3'h7, 1'b0, 2'h3, 3'h0, 1'b1, 1'b0}
@@ -232,9 +232,16 @@ typedef struct packed {
 `define COUNTEREN_MASK 32'h7
 
 typedef struct packed {
+`ifdef RV32I
     logic mode;
-    logic `N(`TLB_ASID) asid;
-    logic `N(`TLB_PPN) ppn;
+    logic `N(9) asid;
+    logic `N(22) ppn;
+`else
+    logic `N(4) mode;
+    logic `N(16) asid;
+    logic `N(44) ppn;
+`endif
+
 } SATP;
 
 typedef struct packed {

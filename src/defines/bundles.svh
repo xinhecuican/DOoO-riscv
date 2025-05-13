@@ -580,6 +580,9 @@ typedef struct packed {
 } VPNAddr;
 
 typedef struct packed {
+`ifdef SV39
+    logic `N(`TLB_PPN2) ppn2;
+`endif
     logic `N(`TLB_PPN1) ppn1;
     logic `N(`TLB_PPN0) ppn0;
 } PPNAddr;
@@ -589,6 +592,7 @@ typedef struct packed {
     logic u;
     logic r;
     logic x;
+    logic d;
     logic exc;
     logic uc;
     logic `N(`TLB_PN) size;
@@ -598,6 +602,11 @@ typedef struct packed {
 } L1TLBEntry;
 
 typedef struct packed {
+`ifdef SV39
+    logic n;
+    logic `N(2) pbmt;
+    logic `N(7) unuse;
+`endif
     PPNAddr ppn;
     logic `N(2) rsw;
     logic d;

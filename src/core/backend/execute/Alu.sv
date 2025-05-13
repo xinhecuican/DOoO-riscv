@@ -109,7 +109,7 @@ module BranchModel(
     `CRITICAL(jalr_target, branchRedirect)
     KSA #(`VADDR_SIZE) ksa_jalr(rs1_data, jalr_imm, jalr_target);
     assign br_target = vaddr + s_imm;
-    assign branchRes.target = op == `BRANCH_JALR ? jalr_target : 
+    assign branchRes.target = op == `BRANCH_JALR ? {jalr_target[`VADDR_SIZE-1: 1], 1'b0} : 
                               dir ? br_target : result;
 `ifdef RVC
     assign result = vaddr + {~rvc, rvc, 1'b0};

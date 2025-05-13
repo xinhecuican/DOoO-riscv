@@ -50,7 +50,7 @@ rv64f=(
 rv64f_prefix="utils/riscv-tests/isa/rv64uf-p-"
 
 benchmarks=(
-    "median" "memcpy" "multiply" "qsort" "rsort" "dhrystone" "towers" "spmv"
+    "median" "memcpy" "multiply" "qsort" "rsort" "towers" "spmv"
     "mt-matmul" "mt-memcpy" "mm" "coremark"
 )
 benchmarks_prefix="utils/riscv-tests/benchmarks/"

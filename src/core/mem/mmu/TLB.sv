@@ -117,8 +117,17 @@ endgenerate
 
     `L1_PPN_ASSIGN(0)
     `L1_PPN_ASSIGN(1)
+`ifdef SV39
+    `L1_PPN_ASSIGN(2)
+`endif
 generate
-    if(SOURCE == 2'b01)begin
+    if(MODE == 2'b10)begin
+        assign mode_exc = ((csr_tlb_io.mode == 2'b01) & ~csr_tlb_io.sum & hit_entry.u) |
+                                ((csr_tlb_io.mode == 2'b00) & ~hit_entry.u) |
+                                (~hit_entry.r & ~(hit_entry.x & csr_tlb_io.mxr)) |
+                                ~hit_entry.d | hit_entry.exc;
+    end
+    else if(MODE == 2'b01)begin
         assign mode_exc = ((csr_tlb_io.mode == 2'b01) & ~csr_tlb_io.sum & hit_entry.u) |
                                 ((csr_tlb_io.mode == 2'b00) & ~hit_entry.u) |
                                 (~hit_entry.r & ~(hit_entry.x & csr_tlb_io.mxr)) |
@@ -164,6 +173,7 @@ endgenerate
     assign wentry.u = io.wentry.u;
     assign wentry.r = io.wentry.r;
     assign wentry.x = io.wentry.x;
+    assign wentry.d = io.wentry.d;
     assign wentry.size = io.wpn;
     assign wentry.vpn = io.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign wentry.ppn = io.wentry.ppn;

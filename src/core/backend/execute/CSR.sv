@@ -359,7 +359,11 @@ endgenerate                                                             \
 `endif
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
+`ifdef RV64I
+            mstatus <= '{sxl: 2'b10, uxl: 2'b10, default: 0};
+`else
             mstatus <= 0;
+`endif
             mepc <= 0;
             mcause <= 0;
             scause <= 0;
@@ -699,7 +703,7 @@ endgenerate
     logic `N(`XLEN) csr_ltlb_io_wdata;
     assign csr_ltlb_io_we_o = csr_ltlb_io_we & (~backendCtrl.redirect | redirect_s2_older);
     always_ff @(posedge clk)begin
-        csr_ltlb_io.mode <= mode;
+        csr_ltlb_io.mode <= mstatus.mprv ? mstatus.mpp : mode;
         csr_ltlb_io_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older);
         csr_ltlb_io_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg];
         csr_ltlb_io_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr];
@@ -728,7 +732,7 @@ endgenerate
     logic `N(`XLEN) csr_stlb_io_wdata;
     assign csr_stlb_io_we_o = csr_stlb_io_we & (~backendCtrl.redirect | redirect_s2_older);
     always_ff @(posedge clk)begin
-        csr_stlb_io.mode <= mode;
+        csr_stlb_io.mode <= mstatus.mprv ? mstatus.mpp : mode;
         csr_stlb_io_we <= we_s1 & (~backendCtrl.redirect | redirect_s1_older);
         csr_stlb_io_pmpcfg_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpcfg];
         csr_stlb_io_pmpaddr_en <= wen_s1[`CSR_NUM+`CSRGROUP_pmpaddr];
