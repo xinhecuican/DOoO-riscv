@@ -4,7 +4,9 @@
     localparam S``stagen`` = S``stage``_ALL / 3; \
     localparam S``stagen``_REM = (S``stage``_ALL % 3); \
     localparam S``stagen``_BASE = S``stage``_BASE + S``stage``; \
-    localparam S``stagen``_ALL = (S``stagen`` * 2 + S``stage``_ALL % 3);
+    localparam S``stagen``_ALL = (S``stagen`` * 2 + S``stage``_ALL % 3); \
+    logic `ARRAY(NUM*2+1, S``stagen``_ALL) st``stagen``; \
+    logic `N(HNUM) c``stagen``;
 
 `define ST_REG(num, stage, stagen) \
     logic valid_s``stagen, selh_s``stagen; \
@@ -18,17 +20,11 @@
     end
 
 `define CSA_DEF(stage, stagen) \
-    logic `ARRAY(NUM*2+1, S``stagen``_ALL) st``stagen``; \
-    logic `N(HNUM) c``stagen``; \
     for(genvar i=0; i<S``stagen``; i++)begin : cal_st``stagen \
         for(genvar j=0; j<NUM*2; j++)begin \
-            CSA #(1) csa``stagen( \
-                .a(st``stage``[j][3*i]), \
-                .b(st``stage``[j][3*i+1]), \
-                .cin(st``stage``[j][3*i+2]), \
-                .sum(st``stagen``[j][i]), \
-                .cout(st``stagen``[j+1][i+S``stagen``+S``stagen``_REM]) \
-            ); \
+            wire x = st``stage``[j][3*i] ^ st``stage``[j][3*i+1]; \
+            assign st``stagen``[j][i] = x ^ st``stage``[j][3*i+2]; \
+            assign st``stagen``[j+1][i+S``stagen``+S``stagen``_REM] = (st``stage``[j][3*i] & st``stage``[j][3*i+1]) | (x & st``stage``[j][3*i+2]); \
         end \
         assign st``stagen``[0][i+S``stagen``+S``stagen``_REM] = c``stagen``[i+S``stagen``_BASE]; \
     end \
@@ -41,22 +37,16 @@
 
 `define CSAN_DEF(stage, stagen) \
     logic `ARRAY(NUM*2, S``stage``_ALL) st``stage``_n; \
-    logic `ARRAY(NUM*2+1, S``stagen``_ALL) st``stagen``; \
     for(genvar i=0; i<NUM*2; i++)begin \
         always_ff @(posedge clk)begin \
             st``stage``_n[i] <= st``stage``[i]; \
         end \
     end \
-    logic `N(HNUM) c``stagen``; \
     for(genvar i=0; i<S``stagen``; i++)begin : cal_st``stagen \
         for(genvar j=0; j<NUM*2; j++)begin \
-            CSA #(1) csa``stagen( \
-                .a(st``stage``_n[j][3*i]), \
-                .b(st``stage``_n[j][3*i+1]), \
-                .cin(st``stage``_n[j][3*i+2]), \
-                .sum(st``stagen``[j][i]), \
-                .cout(st``stagen``[j+1][i+S``stagen``+S``stagen``_REM]) \
-            ); \
+            wire x = st``stage``_n[j][3*i] ^ st``stage``_n[j][3*i+1]; \
+            assign st``stagen``[j][i] = x ^ st``stage``_n[j][3*i+2]; \
+            assign st``stagen``[j+1][i+S``stagen``+S``stagen``_REM] = (st``stage``_n[j][3*i] & st``stage``_n[j][3*i+1]) | (x & st``stage``_n[j][3*i+2]); \
         end \
         assign st``stagen``[0][i+S``stagen``+S``stagen``_REM] = c``stagen``[i+S``stagen``_BASE]; \
     end \

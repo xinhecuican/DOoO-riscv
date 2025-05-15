@@ -208,26 +208,28 @@ module FMantMul #(
     input logic `N(WIDTH) data2,
     output logic `N(WIDTH*2) res
 );
-    localparam NUM = WIDTH + 2;
-    localparam HNUM = (NUM / 2); // 13
+    localparam NUM = WIDTH % 2 != 0 ? WIDTH + 3 : WIDTH + 2;
+    localparam HNUM = (NUM / 2); // 13 28
     localparam HM = HNUM-1;
     logic `N(NUM) d1, d2;
     logic `N(NUM/2) n;
     logic `ARRAY(NUM*2, NUM/2) st0;
 
-    assign d1 = {2'b0, data1};
-    assign d2 = {2'b0, data2};
+    assign d1 = data1;
+    assign d2 = data2;
 
     booth_tree #(NUM) booth_tree_inst (.*);
+    localparam S0_ALL = HNUM;
+    localparam S0_BASE = 0;
+    localparam S0 = 0;
 
-    localparam S1 = HNUM / 3;
-    localparam S1_REM = HNUM % 3;
-    localparam S1_BASE = 0;
-    localparam S1_ALL = (S1 * 2 + HNUM % 3); // 9
-    `STA_NUM_DEF(1, 2) // 6
-    `STA_NUM_DEF(2, 3) // 4
-    `STA_NUM_DEF(3, 4) // 3
-    `STA_NUM_DEF(4, 5) // 2
+    `STA_NUM_DEF(0, 1) // 9 19
+    `STA_NUM_DEF(1, 2) // 6 13
+    `STA_NUM_DEF(2, 3) // 4 9
+    `STA_NUM_DEF(3, 4) // 3 6
+    `STA_NUM_DEF(4, 5) // 2 4
+    `STA_NUM_DEF(5, 6) // 2 3
+    `STA_NUM_DEF(6, 7) // 2 2
 
     logic `N(NUM/2) c0;
     assign c0 = n;
@@ -236,16 +238,34 @@ module FMantMul #(
     `CSA_DEF(2, 3)
     `CSA_DEF(3, 4)
     `CSA_DEF(4, 5)
+generate
+    if(WIDTH >= 53)begin
+        `CSA_DEF(5, 6)
+        `CSA_DEF(6, 7)
+    end
+endgenerate
 
     logic `ARRAY(2, NUM*2) transpose;
+    logic cout;
 generate
     for(genvar i=0; i<2; i++)begin
         for(genvar j=0; j<NUM*2; j++)begin
-            assign transpose[i][j] = st5[j][i];
+            if(WIDTH < 53)begin
+                assign transpose[i][j] = st5[j][i];
+            end
+            else begin
+                assign transpose[i][j] = st7[j][i];
+            end
         end
+    end
+    if(WIDTH < 53)begin
+        assign cout = c5[HNUM-2];
+    end
+    else begin
+        assign cout = c7[HNUM-2];
     end
 endgenerate
     always_ff @(posedge clk)begin
-        res <= transpose[0] + transpose[1] + c5[HNUM-2];
+        res <= transpose[0] + transpose[1] + cout;
     end
 endmodule

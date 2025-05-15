@@ -6,6 +6,7 @@
 `define RVM
 `define RVA
 `define RVF
+`define RVD
 `define RVC
 // `define DIFFTEST
 

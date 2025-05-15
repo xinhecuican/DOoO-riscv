@@ -390,30 +390,20 @@ module MaskGen4(
 	input logic [1: 0] in,
 	output logic [3: 0] out
 );
-	always_comb begin
-		case(in)
-		2'b00: out = 4'b0000;
-		2'b01: out = 4'b0001;
-		2'b10: out = 4'b0011;
-		2'b11: out = 4'b0111;
-		endcase
-	end
+	assign out[0] = in[1] | in[0];
+	assign out[1] = in[1];
+	assign out[2] = in[1] & in[0];
+	assign out[3] = 0;
 endmodule
 
 module MaskGen5(
 	input logic [2: 0] in,
 	output logic [4: 0] out
 );
-	always_comb begin
-		case(in)
-		3'b000: out = 5'b00000;
-		3'b001: out = 5'b00001;
-		3'b010: out = 5'b00011;
-		3'b011: out = 5'b00111;
-		3'b100: out = 5'b01111;
-		default: out = 5'b00000;
-		endcase
-	end
+	logic [3: 0] low;
+	MaskGen4 gen_low (in[1: 0], low);
+	assign out[4] = 0;
+	assign out[3: 0] = low | {4{in[2]}};
 endmodule
 
 module MaskGen8(
@@ -463,6 +453,16 @@ module MaskGen22(
 	logic [15: 0] low;
 	MaskGen16 gen_low (in[3: 0], low);
 	assign out[21: 16] = low[3: 0] & {6{in[4]}};
+	assign out[15: 0] = low | {16{in[4]}};
+endmodule
+
+module MaskGen25(
+	input logic [4: 0] in,
+	output logic [24: 0] out
+);
+	logic [15: 0] low;
+	MaskGen16 gen_low(in[3: 0], low);
+	assign out[24: 16] = low[8: 0] & {9{in[4]}};
 	assign out[15: 0] = low | {16{in[4]}};
 endmodule
 

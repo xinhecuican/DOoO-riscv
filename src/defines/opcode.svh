@@ -98,6 +98,8 @@
 `define FLT_LE          `FLTOP_WIDTH'b10100
 `define FLT_CLASS       `FLTOP_WIDTH'b11000
 `define FLT_CVTS        `FLTOP_WIDTH'b00001
+`define FLT_CVTSD       `FLTOP_WIDTH'b11001
+`define FLT_CVTDS       `FLTOP_WIDTH'b11010
 
 // opcode
 

@@ -293,6 +293,9 @@ typedef struct packed {
 `ifdef RV64I
     logic word;
 `endif
+`ifdef RVD
+    logic db;
+`endif
     logic [4: 0] rs1, rs2, rd;
     logic `N(`DEC_IMM_WIDTH) imm;
     logic `N(`EXC_WIDTH) exccode;
@@ -404,16 +407,25 @@ typedef struct packed {
 `ifdef RV64I
     logic word;
 `endif
+`ifdef RVD
+    logic db;
+`endif
 } FMiscIssueBundle;
 
 typedef struct packed {
     logic `N(`FLTOP_WIDTH) fltop;
     logic `N(3) rm;
+`ifdef RVD
+    logic db;
+`endif
 } FMAIssueBundle;
 
 typedef struct packed {
     logic div;
     logic [2: 0] rm;
+`ifdef RVD
+    logic db;
+`endif
 } FDivIssueBundle;
 
 typedef struct packed {

@@ -49,10 +49,11 @@ module MultUnit(
 
     booth_tree #(NUM) booth_tree_inst (.*);
 
-    localparam S1 = HNUM / 3; // 5 11
-    localparam S1_REM = HNUM % 3; // 2 0
-    localparam S1_BASE = 0;
-    localparam S1_ALL = (S1 * 2 + HNUM % 3); // 12 22
+    localparam S0_ALL = HNUM;
+    localparam S0_BASE = 0;
+    localparam S0 = 0;
+
+    `STA_NUM_DEF(0, 1) // 12 22
     `STA_NUM_DEF(1, 2)
     `STA_NUM_DEF(2, 3)
     `STA_NUM_DEF(3, 4)

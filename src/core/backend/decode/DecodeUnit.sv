@@ -15,8 +15,10 @@ module DecodeUnit(
     assign funct3 = inst[14: 12];
     assign funct7 = inst[31: 25];
 
-    logic funct7_0, funct7_32, funct7_4, funct7_2, funct7_1, funct7_8, funct7_12, funct7_44,
-    funct7_16, funct7_20, funct7_80, funct7_96, funct7_104, funct7_112, funct7_120;
+    logic funct7_0, funct7_1, funct7_2, funct7_4, funct7_5, funct7_8, funct7_9, funct7_12, 
+    funct7_13, funct7_16, funct7_17, funct7_21, funct7_32, funct7_33, funct7_44,
+    funct7_45, funct7_20, funct7_80, funct7_81, funct7_96, funct7_97, funct7_104,
+    funct7_105, funct7_112, funct7_113, funct7_120, funct7_121;
     logic rs2_0, rs2_1, rs2_2, rs2_3, rs2_5;
     logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
     logic ebreak_all;
@@ -24,17 +26,29 @@ module DecodeUnit(
     assign funct7_1 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_2 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & funct7[1] & ~funct7[0];
     assign funct7_4 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_5 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_8 = ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_9 = ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_12 = ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_13 = ~funct7[6] & ~funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_16 = ~funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_17 = ~funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_20 = ~funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_21 = ~funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_32 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_33 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_44 = ~funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_45 = ~funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_80 = funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_81 = funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_96 = funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_97 = funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_104 = funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_105 = funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_112 = funct7[6] & funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_113 = funct7[6] & funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_120 = funct7[6] & funct7[5] & funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_121 = funct7[6] & funct7[5] & funct7[4] & funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct3_0 = ~funct3[2] & ~funct3[1] & ~funct3[0];
     assign funct3_1 = ~funct3[2] & ~funct3[1] & funct3[0];
     assign funct3_2 = ~funct3[2] & funct3[1] & ~funct3[0];
@@ -180,25 +194,62 @@ module DecodeUnit(
 `ifdef RVF
 
 `ifdef RV64I
+`ifdef RVD
+    logic cfld, cfldsp, cfsd, cfsdsp;
+    assign cfld = sign0 & cfunct3_1;
+    assign cfsd = sign0 & cfunct3_5;
+    assign cfldsp = sign2 & cfunct3_1;
+    assign cfsdsp = sign2 & cfunct3_5;
+`endif
     assign crs1_o = {5{clw | csw | csrli | csrai | candi | csub | cxor | cor | cand | 
-                    cbeqz | cbnez | cld | csd | caddw | csubw}} & cexp_rs1 |
+                    cbeqz | cbnez | cld | csd | caddw | csubw
+`ifdef RVD
+                    | cfld | cfsd
+`endif
+                    }} & cexp_rs1 |
                     {5{caddi | cslli | cjr | cjalr | cadd | caddiw}} & full_rd |
-                    {5{caddi4spn | caddisp | clwsp | cswsp | cldsp | csdsp}} & 5'h2;
+                    {5{caddi4spn | caddisp | clwsp | cswsp | cldsp | csdsp
+`ifdef RVD
+                    | cfldsp | cfsdsp
+`endif
+                    }} & 5'h2;
 
-    assign crs2_o = {5{csw | csub | cxor | cor | cand | csubw | caddw | csd}} & cexp_rd |
-                    {5{cmv | cadd | cswsp | csdsp}} & full_rs2;
+    assign crs2_o = {5{csw | csub | cxor | cor | cand | csubw | caddw | csd
+`ifdef RVD
+                        | cfsd
+`endif
+    }} & cexp_rd |
+                    {5{cmv | cadd | cswsp | csdsp
+`ifdef RVD
+                    | cfsdsp
+`endif
+                    }} & full_rs2;
 
-    assign crd_o = {5{caddi4spn | clw | cld}} & cexp_rd |
+    assign crd_o = {5{caddi4spn | clw | cld
+`ifdef RVD
+                    | cfld
+`endif
+    }} & cexp_rd |
                    {5{csrli | csrai | candi | csub | cxor | cor | cand | caddw | csubw}} & cexp_rs1 |
-                   {5{caddi | cli | clui | cslli | clwsp | cmv | cadd | cldsp | caddiw}} & full_rd |
+                   {5{caddi | cli | clui | cslli | clwsp | cmv | cadd | cldsp | caddiw
+`ifdef RVD
+                    | cfldsp
+`endif
+                   }} & full_rd |
                    {5{cjalr}} & 5'h1 |
                    {5{caddisp}} & 5'h2;
 
     assign cimm = {2'b0, caddi4_imm & {8{caddi4spn}}, 10'b0} |
                   {5'b0, cmem_imm & {5{clw | csw}}, 10'b0} |
+`ifdef RVD
+                  {4'b0, cld_imm & {5{cld | csd | cfld | cfsd}}, 11'b0} |
+                  {3'b0, cldsp_imm & {6{cldsp | cfldsp}}, 11'b0} |
+                  {3'b0, csdsp_imm & {6{csdsp | cfsdsp}}, 11'b0} |
+`else
                   {4'b0, cld_imm & {5{cld | csd}}, 11'b0} |
                   {3'b0, cldsp_imm & {6{cldsp}}, 11'b0} |
                   {3'b0, csdsp_imm & {6{csdsp}}, 11'b0} |
+`endif
                   {{{6{cadd_imm[5]}}, cadd_imm} & {12{caddi | cli | csrli | csrai | candi | cslli | caddiw}}, 8'b0} |
                   {{{2{cadd16_imm[5]}}, cadd16_imm} & {8{caddisp}}, 12'b0} |
                   {{14{cadd_imm[5]}}, cadd_imm} & {20{clui}} |
@@ -295,6 +346,9 @@ module DecodeUnit(
 `ifdef RVF
 `ifdef RV32I
                     | cflw | cflwsp | cfsw | cfswsp
+`endif
+`ifdef RVD
+                    | cfld | cfldsp | cfsd | cfsdsp
 `endif
 `endif
 `ifdef RV64I
@@ -484,24 +538,69 @@ module DecodeUnit(
 `endif
 
 `ifdef RVF
-    logic flw, fsw, fmadd, fmsub, fnmsub, fnmadd, fadd, fsub, fmul, fdiv,
-    fsqrt, fsgnj, fsgnjn, fsgnjx, fmin, fmax, fcvt, fcvtu, fmvx, feq, flt,
-    fle, fclass, fcvts, fcvtsu, fmv;
-    logic loadfp, storefp, fp, madd, msub, nmsub, nmadd;
+    logic loadfp, storefp, fp;
     assign loadfp = ~op[4] & ~op[3] & ~op[2] & ~op[1] & op[0] & inst[1] & inst[0];
     assign storefp = ~op[4] & op[3] & ~op[2] & ~op[1] & op[0] & inst[1] & inst[0];
     assign fp = op[4] & ~op[3] & op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
+    logic madd, msub, nmsub, nmadd;
     assign madd = op[4] & ~op[3] & ~op[2] & ~op[1] & ~op[0] & inst[1] & inst[0];
     assign msub = op[4] & ~op[3] & ~op[2] & ~op[1] & op[0] & inst[1] & inst[0];
     assign nmadd = op[4] & ~op[3] & ~op[2] & op[1] & op[0] & inst[1] & inst[0];
     assign nmsub = op[4] & ~op[3] & ~op[2] & op[1] & ~op[0] & inst[1] & inst[0];
+`endif
+
+`ifdef RVD
+    logic fld, fsd, fmaddd, fmsubd, fnmsubd, fnmaddd, faddd, fsubd, fmuld, fdivd,
+    fsqrtd, fsgnjd, fsgnjnd, fsgnjxd, fmind, fmaxd, fcvtsd, fcvtds, feqd, fltd,
+    fled, fclassd, fcvtwd, fcvtwud, fcvtdw, fcvtdwu, fcvtld, fcvtlud, fmvxd, fcvtxd, 
+    fcvtdl, fcvtdlu, fmvdx;
+    assign fld = loadfp & funct3_3;
+    assign fsd = storefp & funct3_3;
+    assign fmaddd = madd & ~inst[26] & inst[25];
+    assign fmsubd = msub & ~inst[26] & inst[25];
+    assign fnmsubd = nmsub & ~inst[26] & inst[25];
+    assign fnmaddd = nmadd & ~inst[26] & inst[25];
+    assign faddd = fp & funct7_1;
+    assign fsubd = fp & funct7_5;
+    assign fmuld = fp & funct7_9;
+    assign fdivd = fp & funct7_13;
+    assign fsqrtd = fp & funct7_45;
+    assign fsgnjd = fp & funct7_17 & funct3_0;
+    assign fsgnjnd = fp & funct7_17 & funct3_1;
+    assign fsgnjxd = fp & funct7_17 & funct3_2;
+    assign fmind = fp & funct7_21 & funct3_0;
+    assign fmaxd = fp & funct7_21 & funct3_1;
+    assign fcvtsd = fp & funct7_32 & rs2_1;
+    assign fcvtds = fp & funct7_33 & rs2_0;
+    assign feqd = fp & funct7_81 & funct3_2;
+    assign fltd = fp & funct7_81 & funct3_1;
+    assign fled = fp & funct7_81 & funct3_0;
+    assign fclassd = fp & funct7_113 & rs2_0 & funct3_1;
+    assign fcvtwd = fp & funct7_97 & rs2_0;
+    assign fcvtwud = fp & funct7_97 & rs2_1;
+    assign fcvtdw = fp & funct7_105 & rs2_0;
+    assign fcvtdwu = fp & funct7_105 & rs2_1;
+    assign fcvtld = fp & funct7_97 & rs2_2;
+    assign fcvtlud = fp & funct7_97 & rs2_3;
+    assign fmvxd = fp & funct7_113 & rs2_0 & funct3_0;
+    assign fcvtdl = fp & funct7_105 & rs2_2;
+    assign fcvtdlu = fp & funct7_105 & rs2_3;
+    assign fmvdx = fp & funct7_121 & rs2_0 & funct3_0;
+
+    assign info.db = flw | fsw | fcvtsd | inst[25];
+`endif
+
+`ifdef RVF
+    logic flw, fsw, fmadd, fmsub, fnmsub, fnmadd, fadd, fsub, fmul, fdiv,
+    fsqrt, fsgnj, fsgnjn, fsgnjx, fmin, fmax, fcvt, fcvtu, fmvx, feq, flt,
+    fle, fclass, fcvts, fcvtsu, fmv;
     
     assign flw = loadfp & funct3_2;
     assign fsw = storefp & funct3_2;
-    assign fmadd = madd;
-    assign fmsub = msub;
-    assign fnmadd = nmadd;
-    assign fnmsub = nmsub;
+    assign fmadd = madd & ~inst[26] & ~inst[25];
+    assign fmsub = msub & ~inst[26] & ~inst[25];
+    assign fnmadd = nmadd & ~inst[26] & ~inst[25];
+    assign fnmsub = nmsub & ~inst[26] & ~inst[25];
     assign fadd = fp & funct7_0;
     assign fsub = fp & funct7_4;
     assign fmul = fp & funct7_8;
@@ -518,7 +617,7 @@ module DecodeUnit(
     assign feq = fp & funct7_80 & funct3_2;
     assign flt = fp & funct7_80 & funct3_1;
     assign fle = fp & funct7_80 & funct3_0;
-    assign fclass = fp & funct7_112 & funct3_1;
+    assign fclass = fp & funct7_112 & rs2_0 & funct3_1;
     assign fcvts = fp & funct7_104 & rs2_0;
     assign fcvtsu = fp & funct7_104 & rs2_1;
     assign fmv = fp & funct7_120 & funct3_0;
@@ -534,53 +633,92 @@ module DecodeUnit(
     assign info.rm = funct3;
     assign info.flt_mem = loadfp | storefp
 `ifdef RVC
+`ifdef RVF
 `ifdef RV32I
     | cflw | cflwsp | cfsw | cfswsp
 `endif
 `endif
+`ifdef RVD
+    | cfld | cfldsp | cfsd | cfsdsp
+`endif
+`endif
     ;
-    assign info.flt_we = loadfp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+    assign info.flt_we = loadfp | madd | msub | nmadd | nmsub | fadd | fsub | fmul | fdiv |
                         fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvts | fcvtsu | fmv
 `ifdef RVC
+`ifdef RVF
 `ifdef RV32I
     | cflw | cflwsp
+`endif
+`endif
+`ifdef RVD
+    | cfld | cfldsp
 `endif
 `endif
 `ifdef RV64I
     | fcvtsl | fcvtslu
 `endif
+`ifdef RVD
+    | faddd | fsubd | fmuld | fdivd | fcvtsd | fcvtds | fsqrtd | fsgnjd | fsgnjnd | fsgnjxd
+    | fmind | fmaxd | fcvtdw | fcvtdwu | fcvtdl | fcvtdlu | fmvdx
+`endif
                         ;
-    assign info.frs1_sel = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+    assign info.frs1_sel = madd | msub | nmadd | nmsub | fadd | fsub | fmul | fdiv |
                             fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fcvt | fcvtu |
                             fmvx | feq | flt | fle | fclass
 `ifdef RV64I
                             | fcvtl | fcvtlu
 `endif
+`ifdef RVD
+    | faddd | fsubd | fmuld | fdivd | fsqrtd | fsgnjd | fsgnjnd
+    | fsgnjxd | fmind | fmaxd | fcvtwd | fcvtwud | fcvtld | fcvtlud
+    | fmvxd | feqd | fltd | fled | fclassd | fcvtsd | fcvtds
+`endif
                             ;
-    assign info.frs2_sel = storefp | fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+    assign info.frs2_sel = storefp | madd | msub | nmadd | nmsub | fadd | fsub | fmul | fdiv |
                            fsgnj | fsgnjn | fsgnjx | fmin | fmax | feq | flt | fle
 `ifdef RVC
+`ifdef RVF
 `ifdef RV32I
     | cfsw | cfswsp
 `endif
 `endif
+`ifdef RVD
+    | cfsd | cfsdsp
+`endif
+`endif
+`ifdef RVD
+    | faddd | fsubd | fmuld | fdivd | fsgnjd | fsgnjnd
+    | fsgnjxd | fmind | fmaxd | feqd | fltd | fled
+`endif
                            ;
-    assign info.fflag_we = fmadd | fmsub | fnmadd | fnmsub | fadd | fsub | fmul | fdiv |
+    assign info.fflag_we = madd | msub | nmadd | nmsub | fadd | fsub | fmul | fdiv |
                            fsqrt | fmin | fmax | fcvt | fcvtu | feq | flt | fle | fcvts | fcvtsu
 `ifdef RV64I
                            | fcvtl | fcvtlu | fcvtsl | fcvtslu
+`endif
+`ifdef RVD
+    | faddd | fsubd | fmuld | fdivd | fsqrtd | fmind | fmaxd | fcvtwd | fcvtwud | fcvtld
+    | fcvtlud | feqd | fltd | fled | fcvtdw | fcvtdwu | fcvtdl | fcvtdlu | fcvtsd | fcvtds
 `endif
 ;
     always_comb begin
     info.fltop[4] = feq | flt | fle | fclass | fsub | fcvt | fcvtu;
     info.fltop[3] = fsqrt | fsgnj | fsgnjn | fsgnjx | fmin | fmax | fmv | fmvx | fclass | fsub;
-    info.fltop[2] = fmadd | fmsub | fnmsub | fnmadd | fmin | fmax | fmv | fmvx | fle | fsub;
-    info.fltop[1] = fmul | fdiv | fnmsub | fnmadd | fsgnjn | fsgnjx | fmv | fmvx | flt;
-    info.fltop[0] = fdiv | fmsub | fnmadd | fsgnj | fsgnjx | fmax | feq  | fcvts | fcvtsu;
+    info.fltop[2] = madd | msub | nmsub | nmadd | fmin | fmax | fmv | fmvx | fle | fsub;
+    info.fltop[1] = fmul | fdiv | nmsub | nmadd | fsgnjn | fsgnjx | fmv | fmvx | flt;
+    info.fltop[0] = fdiv | msub | nmadd | fsgnj | fsgnjx | fmax | feq  | fcvts | fcvtsu;
 
 `ifdef RV64I
     info.fltop[4] = info.fltop[4] | fcvtl | fcvtlu;
     info.fltop[0] = info.fltop[0] | fcvtsl | fcvtslu;
+`endif
+`ifdef RVD
+    info.fltop[4] = info.fltop[4] | feqd | fltd | fled | fclassd | fsubd | fcvtwd | fcvtwud | fcvtld | fcvtlud | fcvtsd | fcvtds;
+    info.fltop[3] = info.fltop[3] | fsqrtd | fsgnjd | fsgnjnd | fsgnjxd | fmind | fmaxd | fmvxd | fmvdx | fclassd | fsubd | fcvtsd | fcvtds;
+    info.fltop[2] = info.fltop[2] | fmind | fmaxd | fmvxd | fmvdx | fled | fsubd;
+    info.fltop[1] = info.fltop[1] | fmuld | fdivd | fsgnjnd | fsgnjxd | fmvxd | fmvdx | fltd | fcvtds;
+    info.fltop[0] = info.fltop[0] | fdivd | fsgnjd | fsgnjxd | fmaxd | feqd | fcvtdw | fcvtdwu | fcvtdl | fcvtdlu | fcvtsd;
 `endif
     end
 
@@ -617,6 +755,12 @@ module DecodeUnit(
 `ifdef RV64I
                      & ~fcvtl & ~fcvtlu & ~fcvtsl & ~fcvtslu
 `endif
+`endif
+`ifdef RVD
+                     & ~fld & ~fsd & ~fmaddd & ~fmsubd & ~fnmsubd & ~fnmaddd & ~faddd & ~fsubd
+                     & ~fmuld & ~fdivd & ~fsqrtd & ~fsgnjd & ~fsgnjnd & ~fsgnjxd & ~fmind & ~fmaxd
+                     & ~fcvtwd & ~fcvtwud & ~fcvtld & ~fcvtlud & ~fmvxd & ~feqd & ~fltd & ~fled
+                     & ~fclassd & ~fcvtdw & ~fcvtdwu & ~fcvtdl & ~fcvtdlu & ~fmvdx & ~fcvtsd & ~fcvtds
 `endif
 `ifdef RVC
                      & ~cvalid
@@ -671,13 +815,28 @@ module DecodeUnit(
         info.memop[1] = info.memop[1] | cld | cldsp | csd | csdsp;
         info.memop[0] = info.memop[0] | cld | csd | cldsp | csdsp;
 `endif
+
+`ifdef RVF
+`ifdef RV32I
+        info.memop[2] = info.memop[2] | cfsw | cfswsp;
+        info.memop[1] = info.memop[1] | cflw | cfsw | cflwsp | cfswsp;
+`endif
+`ifdef RVD
+        info.memop[2] = info.memop[2] | cfsd | cfsdsp;
+        info.memop[1] = info.memop[1] | cfld | cfldsp | cfsd | cfsdsp;
+        info.memop[0] = info.memop[0] | cfld | cfsd | cfldsp | cfsdsp;
+`endif
+`endif
+`endif
+
 `ifdef RVF
         info.memop[2] = info.memop[2] | fsw;
         info.memop[1] = info.memop[1] | flw | fsw;
 `endif
-`elsif RVF
-        info.memop[2] = info.memop[2] | fsw;
-        info.memop[1] = info.memop[1] | flw | fsw;
+`ifdef RVD
+        info.memop[2] = info.memop[2] | fsd;
+        info.memop[1] = info.memop[1] | fld | fsd;
+        info.memop[0] = info.memop[0] | fld | fsd;
 `endif
     end
 
@@ -701,6 +860,9 @@ module DecodeUnit(
 `ifdef RV64I
                     | fcvtlu | fcvtslu
 `endif
+`endif
+`ifdef RVD
+                    | fcvtwud | fcvtlud | fcvtdwu | fcvtdlu
 `endif
 `ifdef RVC
                     | csrli
@@ -781,6 +943,9 @@ module DecodeUnit(
 `ifdef RV32I
             | cflw | cflwsp | cfsw | cfswsp
 `endif
+`ifdef RVD
+            | cfld | cfldsp | cfsd | cfsdsp
+`endif
 `endif
 `endif
     ) & ~ipf & ~iam;
@@ -809,9 +974,18 @@ module DecodeUnit(
 `ifdef RV64I
                             | fcvtl | fcvtlu | fcvtsl | fcvtslu
 `endif
+`ifdef RVD
+                        | fsgnjd | fsgnjnd | fsgnjxd | fmvxd | feqd | fltd | fled | fclassd |
+                        fcvtwd | fcvtwud | fcvtld | fcvtlud | fcvtdw | fcvtdwu | fcvtdl | fcvtdlu |
+                        fmvdx | fmind | fmaxd | fcvtsd | fcvtds
+`endif
                            ) & ~ipf & ~iam;
-    assign info.fcalv = (fmadd | fnmadd | fmsub | fnmsub | fadd | fsub | fmul | fdiv |
-                         fsqrt) & ~ipf & ~iam;
+    assign info.fcalv = (madd | nmadd | msub | nmsub | fadd | fsub | fmul | fdiv |
+                         fsqrt
+`ifdef RVD
+                        | faddd | fsubd | fmuld | fdivd | fsqrtd
+`endif
+                         ) & ~ipf & ~iam;
 `endif
 `ifdef RV64I
     assign info.word = addiw | slliw | srliw | sraiw | addw | subw | sllw | srlw | sraw
@@ -825,6 +999,9 @@ module DecodeUnit(
 `ifdef RVF
     | fcvt | fcvtu | fcvts | fcvtsu
 `endif
+`ifdef RVD
+    | fcvtwd | fcvtwud | fcvtdw | fcvtdwu
+`endif
 `ifdef RVC
     | caddiw | caddw | csubw
 `endif
@@ -837,7 +1014,7 @@ module DecodeUnit(
     | amo
 `endif
 `ifdef RVF
-    | fp | madd | msub | nmsub | nmadd | flw | fsw
+    | fp | madd | msub | nmsub | nmadd | loadfp | storefp
 `endif
 `ifdef RV64I
     | opimm32 | opreg32
@@ -854,7 +1031,7 @@ module DecodeUnit(
     | amo
 `endif
 `ifdef RVF
-    |((fp | madd | msub | nmsub | nmadd | fsw) & ~fcvtsu & ~fcvtu
+    |((fp | madd | msub | nmsub | nmadd | storefp) & ~fcvtsu & ~fcvtu
 `ifdef RV64I
     & ~fcvtlu & ~fcvtslu
 `endif
@@ -870,7 +1047,7 @@ module DecodeUnit(
     ;
 
 `ifdef RVF
-    assign info.rs3 = {5{fmadd | fnmadd | fmsub | fnmsub}} & inst[31: 27];
+    assign info.rs3 = {5{madd | nmadd | msub | nmsub}} & inst[31: 27];
 `endif
 
     
@@ -879,7 +1056,7 @@ module DecodeUnit(
     | amo
 `endif
 `ifdef RVF
-    | fp | madd | msub | nmsub | nmadd | flw
+    | fp | madd | msub | nmsub | nmadd | loadfp
 `endif
 `ifdef RV64I
     | opreg32 | opimm32

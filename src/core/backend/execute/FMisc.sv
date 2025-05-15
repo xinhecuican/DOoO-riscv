@@ -12,8 +12,8 @@ module FMiscUnit (
 );
 generate
     for(genvar i=0; i<`FMISC_SIZE; i++)begin
-        logic `N(`XLEN) res;
-        FFlags fstatus;
+        logic `N(`XLEN) res, ress, resd;
+        FFlags fstatus, fstatuss, fstatusd;
         FMisc #(FP32) fmisc (
             .flt_we(issue_fmisc_io.bundle[i].flt_we),
 `ifdef RV64I
@@ -24,9 +24,29 @@ generate
             .fltop(issue_fmisc_io.bundle[i].fltop),
             .round_mode(issue_fmisc_io.bundle[i].rm == 3'b111 ? round_mode : issue_fmisc_io.bundle[i].rm),
             .uext(issue_fmisc_io.bundle[i].uext),
-            .res(res),
-            .fstatus(fstatus)
+            .res(ress),
+            .fstatus(fstatuss)
         );
+`ifdef RVD
+        FMisc #(FP64) fmisc_d (
+            .flt_we(issue_fmisc_io.bundle[i].flt_we),
+`ifdef RV64I
+            .word(issue_fmisc_io.bundle[i].word),
+`endif
+            .rs1_data(issue_fmisc_io.rs1_data[i]),
+            .rs2_data(issue_fmisc_io.rs2_data[i]),
+            .fltop(issue_fmisc_io.bundle[i].fltop),
+            .round_mode(issue_fmisc_io.bundle[i].rm == 3'b111 ? round_mode : issue_fmisc_io.bundle[i].rm),
+            .uext(issue_fmisc_io.bundle[i].uext),
+            .res(resd),
+            .fstatus(fstatusd)
+        );
+        assign res = issue_fmisc_io.bundle[i].db ? resd : ress;
+        assign fstatus = issue_fmisc_io.bundle[i].db ? fstatusd : fstatuss;
+`else
+        assign res = ress;
+        assign fstatus = fstatuss;
+`endif
 
         logic bigger, bigger_s2;
 
@@ -99,11 +119,23 @@ module FMisc #(
     } fp_t;
 
     FTypeInfo `N(2) info;
+    logic `N(2) is_boxed;
     FTypeInfo info_a, info_b;
     fp_t operand_a, operand_b;
+
+generate
+    if(FXL == `XLEN)begin
+        assign is_boxed = 2'b11;
+    end
+    else begin
+        assign is_boxed[0] = &rs1_data[`XLEN-1: FXL];
+        assign is_boxed[1] = &rs2_data[`XLEN-1: FXL];
+    end
+endgenerate
+
     fp_classifier #(EXP_BITS, MAN_BITS, 2) classifier (
         .operands_i ({rs2_data[FXL-1: 0], rs1_data[FXL-1: 0]}),
-        .is_boxed_i (2'b11),
+        .is_boxed_i (is_boxed),
         .info_o (info)
     );
 
@@ -121,8 +153,8 @@ module FMisc #(
     logic operands_equal, operand_a_smaller;
 
     // Equality checks for zeroes too
-    assign operand_a = rs1_data;
-    assign operand_b = rs2_data;
+    assign operand_a = rs1_data[FXL-1: 0];
+    assign operand_b = rs2_data[FXL-1: 0];
     assign operands_equal    = (operand_a == operand_b) || (info_a.is_zero && info_b.is_zero);
     // Invert result if non-zero signs involved (unsigned comparison)
     assign operand_a_smaller = (operand_a < operand_b) ^ (operand_a.sign || operand_b.sign);
@@ -215,7 +247,7 @@ module FMisc #(
     logic `N(`XLEN) f2i_res;
     FFlags f2i_status, f2i_wstatus;
     logic `N(32) f2i_wres;
-    F2I #(FP32, INT32) f2i (
+    F2I #(format, INT32) f2i (
         uext,
         rs1_data,
         info_a,
@@ -226,7 +258,7 @@ module FMisc #(
 `ifdef RV64I
     logic `N(`XLEN) f2i_lres;
     FFlags f2i_lstatus; 
-    F2I #(FP32, INT64) f2i_l (
+    F2I #(format, INT64) f2i_l (
         uext,
         rs1_data,
         info_a,
@@ -234,7 +266,7 @@ module FMisc #(
         f2i_lres,
         f2i_lstatus
     );
-    assign f2i_res = word ? {{`XLEN-FXL{f2i_wres[FXL-1]}}, f2i_wres} : f2i_lres;
+    assign f2i_res = word ? {{`XLEN-32{f2i_wres[31]}}, f2i_wres} : f2i_lres;
     assign f2i_status = word ? f2i_wstatus : f2i_lstatus;
 `else
     assign f2i_res = f2i_wres;
@@ -243,8 +275,8 @@ module FMisc #(
 
     logic `N(`XLEN) i2f_res;
     FFlags i2f_status, i2f_wstatus;
-    logic `N(32) i2f_wres;
-    I2F #(FP32, INT32) i2f (
+    logic `N(FXL) i2f_wres;
+    I2F #(format, INT32) i2f (
         uext,
         rs1_data,
         info_a,
@@ -255,7 +287,7 @@ module FMisc #(
 `ifdef RV64I
     logic `N(`XLEN) i2f_lres;
     FFlags i2f_lstatus;
-    I2F #(FP32, INT64) i2f_l (
+    I2F #(format, INT64) i2f_l (
         uext,
         rs1_data,
         info_a,
@@ -266,6 +298,34 @@ module FMisc #(
     assign i2f_res = word ? i2f_wres : i2f_lres;
     assign i2f_status = word ? i2f_wstatus : i2f_lstatus;
 `else
+`endif
+
+`ifdef RVD
+// fp to fp
+    logic `N(`XLEN) ds_res;
+    FFlags ds_status;
+    logic `N(`XLEN) d2f_res, d2f_wres;
+    FFlags d2f_status;
+generate
+    if(format == FP64)begin
+        F2FUp #(FP32, FP64) f2d (rs1_data, ds_res, ds_status);
+        F2FDown #(FP64, FP32) d2f (
+            rs1_data,
+            info_a,
+            round_mode,
+            d2f_wres,
+            d2f_status
+        );
+        assign d2f_res = {{`XLEN-32{1'b1}}, d2f_wres[31: 0]};
+    end
+    else begin
+        assign ds_res = 0;
+        assign ds_status = 0;
+        assign d2f_res = 0;
+        assign d2f_status = 0;
+    end
+endgenerate
+
 `endif
 
     always_comb begin
@@ -309,6 +369,16 @@ module FMisc #(
             };
             fstatus = 0;
         end
+`ifdef RVD
+        `FLT_CVTSD: begin
+            res = d2f_res;
+            fstatus = d2f_status;
+        end
+        `FLT_CVTDS: begin
+            res = ds_res;
+            fstatus = ds_status;
+        end
+`endif
         default: begin
             res = 0;
             fstatus = 0;

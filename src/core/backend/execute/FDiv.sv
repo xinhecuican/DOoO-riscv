@@ -15,11 +15,14 @@ module FDivUnit(
     input BackendCtrl backendCtrl
 );
     ExStatusBundle ex_status;
-    FDivSlice #(FP32) slice (
+    FDivSlice slice (
         .clk,
         .rst,
         .round_mode(issue_fdiv_io.bundle[0].rm == 3'b111 ? round_mode : issue_fdiv_io.bundle[0].rm),
         .en(issue_fdiv_io.en),
+`ifdef RVD
+        .db(issue_fdiv_io.bundle[0].db),
+`endif
         .div(issue_fdiv_io.bundle[0].div),
         .rs1_data(issue_fdiv_io.rs1_data),
         .rs2_data(issue_fdiv_io.rs2_data),
@@ -42,16 +45,14 @@ module FDivUnit(
     assign fdiv_wb_io.datas[0].irq_enable = 1;
 endmodule
 
-module FDivSlice #(
-    parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
-    parameter int unsigned EXP_BITS = exp_bits(fp_fmt),
-    parameter int unsigned MAN_BITS = man_bits(fp_fmt),
-    parameter int unsigned FXL = EXP_BITS + MAN_BITS + 1
-) (
+module FDivSlice (
     input logic clk,
     input logic rst,
     input roundmode_e round_mode,
     input logic en,
+`ifdef RVD
+    input logic db,
+`endif
     input logic div,
     input logic `N(`XLEN) rs1_data,
     input logic `N(`XLEN) rs2_data,
@@ -68,7 +69,6 @@ module FDivSlice #(
     output FFlags status
 );
     typedef enum  { IDLE, WAIT, WB } State;
-    localparam FP_WIDTH = fp_width(fp_fmt);
     State state;
     ExStatusBundle ex_status;
     logic input_older, output_older;
@@ -77,21 +77,30 @@ module FDivSlice #(
     FFlags div_fflags, fflags;
     logic div_ready, div_done;
     logic wakeup_valid, wb_valid;
+    logic `N(2) format_sel;
 
     LoopCompare #(`ROB_WIDTH) cmp_input (ex_status_i.robIdx, backendCtrl.redirectIdx, input_older);
     LoopCompare #(`ROB_WIDTH) cmp_output (ex_status_o.robIdx, backendCtrl.redirectIdx, output_older);
     assign div_start = en & div & (~backendCtrl.redirect | input_older);
     assign sqrt_start = en & ~div & (~backendCtrl.redirect | input_older);
+
+`ifdef RVD
+    logic db_q;
+    assign format_sel = {1'b0, db};
+`else
+    assign format_sel = 0;
+`endif
+
     div_sqrt_top_mvp div_sqrt (
         .Clk_CI(clk),
         .Rst_RBI(rst),
         .Div_start_SI(div_start),
         .Sqrt_start_SI(sqrt_start),
-        .Operand_a_DI({{64-FXL{1'b0}}, rs1_data[FXL-1: 0]}),
-        .Operand_b_DI({{64-FXL{1'b0}}, rs2_data[FXL-1: 0]}),
+        .Operand_a_DI({{64-`XLEN{1'b0}}, rs1_data}),
+        .Operand_b_DI({{64-`XLEN{1'b0}}, rs2_data}),
         .RM_SI({1'b0, round_mode[1: 0]}),
         .Precision_ctl_SI(6'b0),
-        .Format_sel_SI(fp_fmt == FP32 ? 2'b00 : 2'b01),
+        .Format_sel_SI(format_sel),
         .Kill_SI(state == WAIT && (backendCtrl.redirect & ~output_older)),
         .Result_DO(div_res),
         .Fflags_SO(div_fflags),
@@ -104,7 +113,11 @@ module FDivSlice #(
     assign wakeup_rd = ex_status.rd;
     always_ff @(posedge clk)begin
         if(div_done)begin
-            res <= {{`XLEN-FP_WIDTH{1'b1}}, div_res[FP_WIDTH-1: 0]};
+`ifdef RVD
+            res <= db_q ? div_res : {{`XLEN-32{1'b1}}, div_res[31: 0]};
+`else
+            res <= {{`XLEN-32{1'b1}}, div_res[31: 0]};
+`endif
             status <= div_fflags;
         end
     end
@@ -114,6 +127,9 @@ module FDivSlice #(
             ex_status <= 0;
             wakeup_en <= 0;
             en_o <= 0;
+`ifdef RVD
+            db_q <= 0;
+`endif
         end
         else begin
             case(state)
@@ -121,6 +137,9 @@ module FDivSlice #(
                 if(en & (~backendCtrl.redirect | input_older))begin
                     state <= WAIT;
                     ex_status <= ex_status_i;
+`ifdef RVD
+                    db_q <= db;
+`endif
                 end
             end
             WAIT: begin

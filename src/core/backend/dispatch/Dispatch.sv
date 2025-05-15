@@ -353,6 +353,11 @@ generate
         assign fma_bundle.rm = di.rm;
         assign fdiv_bundle.div = di.fltop == `FLT_DIV;
         assign fdiv_bundle.rm = di.rm;
+`ifdef RVD
+        assign misc_bundle.db = di.db;
+        assign fma_bundle.db = di.db;
+        assign fdiv_bundle.db = di.db;
+`endif
         assign fmisc_io.en[i] = rename_dis_io.op[i].en & di.fmiscv & ~redirect;
         assign fma_io.en[i] = rename_dis_io.op[i].en & di.fcalv & ~div & ~redirect;
         assign fdiv_io.en[i] = rename_dis_io.op[i].en & di.fcalv & div & ~redirect;
