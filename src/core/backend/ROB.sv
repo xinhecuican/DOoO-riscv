@@ -651,7 +651,7 @@ endgenerate
         .coreid(0),
         .valid(trapValid),
         .code(trapCode),
-        .pc(pc[0]),
+        .pc({{`XLEN-`VADDR_SIZE{pc[0][`VADDR_SIZE-1]}}, pc[0][`VADDR_SIZE-1: 0]}),
         .cycleCnt(cycleCnt),
         .instrCnt(instrCnt)
     );
@@ -672,7 +672,7 @@ endgenerate
         .coreid(0),
         .intrNO((diff_exc_exist & diff_irq ? diff_exccode : 0)),
         .cause(diff_cause),
-        .exceptionPC(pc[0]),
+        .exceptionPC({{`XLEN-`VADDR_SIZE{pc[0][`VADDR_SIZE-1]}}, pc[0][`VADDR_SIZE-1: 0]}),
         .exceptionInst(diff_insts[0])
     );
 

@@ -691,7 +691,7 @@ interface DTLBLsuIO;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lidx;
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) laddr;
     logic `ARRAY(`LOAD_PIPELINE, $bits(VPNAddr)) lsel_tag;
-    logic `ARRAY(`LOAD_PIPELINE, 2) lsel;
+    logic `TENSOR(`LOAD_PIPELINE, `TLB_PN, 2) lsel;
     
     logic `N(`LOAD_PIPELINE) lmiss;
     logic `N(`LOAD_PIPELINE) lexception;
@@ -709,7 +709,7 @@ interface DTLBLsuIO;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sidx;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) saddr;
     logic `ARRAY(`STORE_PIPELINE, $bits(VPNAddr)) ssel_tag;
-    logic `ARRAY(`STORE_PIPELINE, 2) ssel;
+    logic `TENSOR(`STORE_PIPELINE, `TLB_PN, 2) ssel;
 
     logic `N(`STORE_PIPELINE) smiss;
     logic `N(`STORE_PIPELINE) sexception;

@@ -182,8 +182,8 @@ endgenerate                                                   \
     `CSR_CMP_DEF(mcounteren, mcounteren,25,0, `COUNTEREN_MASK)
     `CSR_CMP_DEF(scounteren, scounteren,26,0, `COUNTEREN_MASK)
     `CSR_CMP_DEF(mcounterinhibit,mcounterinhibit,27,0, `COUNTEREN_MASK)
-    `CSR_CMP_DEF(menvcfg,menvcfg[31: 0],28,0, 0             )
-    `CSR_CMP_DEF(senvcfg,senvcfg[31: 0],29,0, 0             )
+    `CSR_CMP_DEF(menvcfg,menvcfg,28,0, 0             )
+    `CSR_CMP_DEF(senvcfg,senvcfg,29,0, 0             )
 `ifdef RVF
     `CSR_CMP_DEF(fflags, fcsr[4: 0],    `CSR_NORMAL_NUM,0, 0)
     `CSR_CMP_DEF(frm, fcsr[7: 5],       `CSR_NORMAL_NUM+1,0, 0)
@@ -217,7 +217,13 @@ endgenerate                                                   \
         .data_o(cmp_rdata_pre[`CSRGROUP_mpf+1])
     );
 
-    CSRGroupCmp #($clog2(`PMPCFG_SIZE)) group_cmp_pmpcfg (
+    CSRGroupCmp #($clog2(`PMPCFG_SIZE), 1, `PMPCFG_SIZE, 
+`ifdef RV64I
+        1
+`else
+        0
+`endif
+    ) group_cmp_pmpcfg (
         .csrid(csrid),
         .cmp_csrid(12'h3a0),
         .data_i(pmpcfg),
@@ -301,7 +307,6 @@ endgenerate                                                             \
     `CSR_WRITE_DEF(medeleg,     `MEDELEG_INIT,  1, 0, 0)
     `CSR_WRITE_DEF(mideleg,     0,              1, 0, 0)
     `CSR_WRITE_DEF(mscratch,    0,              1, 0, 0)
-    `CSR_WRITE_DEF(satp,        0,              1, 0, 0)
     `CSR_WRITE_DEF(stvec,       0,              1, 0, 0)
     `CSR_WRITE_DEF(mconfigptr,  0,              0, 0, 0)
     `CSR_WRITE_DEF(sscratch,    0,              1, 0, 0)
@@ -322,14 +327,14 @@ endgenerate                                                             \
     logic `N(`MXL) edelege;
     logic edelege_valid;
     logic ret, ret_priv_error, ret_valid;
-    assign mvec_pc = mtvec[`MXL-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
-    assign svec_pc = stvec[`MXL-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
+    assign mvec_pc = mtvec[`VADDR_SIZE-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
+    assign svec_pc = stvec[`VADDR_SIZE-1: 2] + redirect.exccode[`EXC_WIDTH-1: 0];
     assign mtarget_pc = redirect.irq & (mtvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
                         { mtvec[`VADDR_SIZE-1: 2], 2'b00};
     assign starget_pc = redirect.irq & (stvec[1: 0] == 2'b01) ? {mvec_pc, 2'b00} : 
                         {stvec[`MXL-1: 2], 2'b00};
-    assign target_pc = (redirect.exccode == `EXC_MRET) & ~ret_priv_error ? mepc :
-                       (redirect.exccode == `EXC_SRET) & ~ret_priv_error ? sepc :
+    assign target_pc = (redirect.exccode == `EXC_MRET) & ~ret_priv_error ? mepc[`VADDR_SIZE-1: 0] :
+                       (redirect.exccode == `EXC_SRET) & ~ret_priv_error ? sepc[`VADDR_SIZE-1: 0] :
                        edelege_valid ? starget_pc : mtarget_pc;
 
     assign ecall_exccode = {{`EXC_WIDTH-4{1'b0}}, 2'b10, mode};
@@ -375,6 +380,7 @@ endgenerate                                                             \
 `ifdef RV32I
             mpfhcounter <= 0;
 `endif
+            satp <= 0;
         end
         else begin
 `ifdef RV32I
@@ -398,6 +404,13 @@ endgenerate                                                             \
                 mpfcounter[2] <= minstret_n;
             end
 `endif
+            if(wen_o[satp_id]
+`ifdef SV39
+                & ((wdata_s2[63: 60] == 4'h8) | (wdata_s2[63: 60] == 4'h0))
+`endif
+            )begin
+                satp <= wdata_s2;
+            end
             if(wen_o[mstatus_id])begin
                 mstatus.sie <= wdata_s2[1];
                 mstatus.mie <= wdata_s2[3];
@@ -494,10 +507,10 @@ endgenerate                                                             \
             end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
-                    sepc <= exc_pc;
+                    sepc <= {{`XLEN-`VADDR_SIZE{exc_pc[`VADDR_SIZE-1]}}, exc_pc};
                 end
                 if(~edelege_valid) begin
-                    mepc <= exc_pc;
+                    mepc <= {{`XLEN-`VADDR_SIZE{exc_pc[`VADDR_SIZE-1]}}, exc_pc};
                 end
             end
             if(redirect.en & ~ret_valid)begin
@@ -513,18 +526,18 @@ endgenerate                                                             \
                     if(edelege_valid)begin
                         case(exccode)
                         `EXC_II: stval <= trapInst;
-                        `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: stval <= exc_pc;
+                        `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: stval <= {{`XLEN-`VADDR_SIZE{exc_pc[`VADDR_SIZE-1]}}, exc_pc};
                         `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
-                        `EXC_LPF, `EXC_SPF: stval <= exc_vaddr;
+                        `EXC_LPF, `EXC_SPF: stval <= {{`XLEN-`VADDR_SIZE{exc_vaddr[`VADDR_SIZE-1]}}, exc_vaddr};
                         default: stval <= 0;
                         endcase
                     end
                     else begin
                         case(exccode)
                         `EXC_II: mtval <= trapInst;
-                        `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: mtval <= exc_pc;
+                        `EXC_IAM, `EXC_IAF, `EXC_IPF, `EXC_BP: mtval <= {{`XLEN-`VADDR_SIZE{exc_pc[`VADDR_SIZE-1]}}, exc_pc};
                         `EXC_LAM, `EXC_LAF, `EXC_SAM, `EXC_SAF,
-                        `EXC_LPF, `EXC_SPF: mtval <= exc_vaddr;
+                        `EXC_LPF, `EXC_SPF: mtval <= {{`XLEN-`VADDR_SIZE{exc_vaddr[`VADDR_SIZE-1]}}, exc_vaddr};
                         default: mtval <= 0;
                         endcase
                     end
@@ -816,7 +829,8 @@ endmodule
 module CSRGroupCmp #(
     parameter OFFSET_WIDTH=1,
     parameter CMP_NUM=1,
-    parameter OFFSET_SIZE=(1<<OFFSET_WIDTH)
+    parameter OFFSET_SIZE=(1<<OFFSET_WIDTH),
+    parameter OFFSET_START = 0
 )(
     input logic `ARRAY(CMP_NUM, 12) cmp_csrid,
     input logic `N(12) csrid,
@@ -831,12 +845,12 @@ generate
         assign cmp_en[i] = csrid[11: OFFSET_WIDTH] == cmp_csrid[i][11: OFFSET_WIDTH];
     end
     if(OFFSET_SIZE == (1 << OFFSET_WIDTH))begin
-        assign data_o = data_i[csrid[OFFSET_WIDTH-1: 0]];
+        assign data_o = data_i[csrid[OFFSET_START +: OFFSET_WIDTH]];
     end
     else begin
-        assign data_o = offset >= OFFSET_SIZE ? 0 : data_i[csrid[OFFSET_WIDTH-1: 0]];
+        assign data_o = offset >= OFFSET_SIZE ? 0 : data_i[csrid[OFFSET_START +: OFFSET_WIDTH]];
     end
 endgenerate
     assign en = |cmp_en;
-    assign offset = csrid[OFFSET_WIDTH-1: 0];
+    assign offset = csrid[OFFSET_START +: OFFSET_WIDTH];
 endmodule

@@ -6,11 +6,16 @@
 `define S_MODE 2'b01
 `define M_MODE 2'b11
 
-`define PMA_SIZE 4
-`define PMACFG_SIZE (`PMA_SIZE / 4)
-
+`define PMA_SIZE 2
 `define PMP_SIZE 16
+`ifdef RV32I
+`define PMACFG_SIZE (`PMA_SIZE < 4 ? 1 : `PMA_SIZE / 4)
 `define PMPCFG_SIZE (`PMP_SIZE / 4)
+`endif
+`ifdef RV64I
+`define PMACFG_SIZE (`PMA_SIZE < 8 ? 1 : `PMA_SIZE / 8)
+`define PMPCFG_SIZE (`PMP_SIZE / 8)
+`endif
 `define CSR_GROUP_SIZE (3 \
 `ifdef RV32I \
     + 1 \
@@ -129,6 +134,9 @@ typedef struct packed {
 `ifdef RVF \
         f: 1'b1, \
 `endif \
+`ifdef RVD \
+        d: 1'b1, \
+`endif \
 `ifdef RVC \
         c: 1'b1, \
 `endif \
@@ -229,7 +237,7 @@ typedef struct packed {
 `define CAUSE_MASK {1'b1, {`MXL-7{1'b0}}, 6'h3f}
 `define MEDELEG_INIT {{`MXL-16{1'b0}}, 16'hb3ff}
 `define MEDELEG_MASK {{`MXL-16{1'b0}}, 16'hb3ff}
-`define COUNTEREN_MASK 32'h7
+`define COUNTEREN_MASK 'h7
 
 typedef struct packed {
 `ifdef RV32I
@@ -284,7 +292,12 @@ typedef struct packed {
 `define PMP_TOR     2'b01
 `define PMP_NA4     2'b10
 `define PMP_NAPOT   2'b11
+`ifdef RV32I
 `define PMP_MASK    32'hfffffc00
+`endif
+`ifdef RV64I
+`define PMP_MASK    64'hfffffffffffffc00
+`endif
 `define PMP_NAPOT_MASK ((~(`PMP_MASK)) >> 1)
 
 typedef struct packed {
@@ -307,12 +320,8 @@ typedef struct packed {
 `define PMA_ASSIGN \
     logic `ARRAY(`PMACFG_SIZE, `MXL) pmacfg; \
     logic `ARRAY(`PMA_SIZE, `MXL) pmaaddr; \
-`ifdef SV32 \
-    assign pmacfg[0] = 32'h00002808; \
-    assign pmaaddr[0] = 32'h01000000; \
-    assign pmaaddr[1] = 32'h08000000; \
-    assign pmaaddr[2] = 0; \
-    assign pmaaddr[3] = 0; \
-`endif
+    assign pmacfg[0] = 'h2808; \
+    assign pmaaddr[0] = 'h01000000; \
+    assign pmaaddr[1] = 'h08000000;
 
 `endif

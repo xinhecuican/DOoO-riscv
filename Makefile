@@ -85,7 +85,7 @@ coverage:
 	make -C utils/difftest coverage
 
 sbi:
-	make -C utils/opensbi ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- PLATFORM_RISCV_XLEN=32 PLATFORM=generic FW_PAYLOAD_PATH=${CURDIR}/utils/rv-linux/arch/riscv/boot/Image FW_FDT_PATH=${CURDIR}/utils/opensbi/dts/custom.dtb FW_PAYLOAD_OFFSET=0x400000
+	make -C utils/opensbi ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- PLATFORM=generic FW_PAYLOAD_PATH=${CURDIR}/utils/rv-linux/arch/riscv/boot/Image FW_FDT_PATH=${CURDIR}/utils/opensbi/dts/custom.dtb FW_PAYLOAD_OFFSET=0x400000
 
 convert: build/${TOP}/${TOP}.v
 build/${TOP}/${TOP}.v: ${SRC}

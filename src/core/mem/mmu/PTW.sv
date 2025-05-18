@@ -83,14 +83,13 @@ module PTW(
                        ~pn``stn``_exception & ~pn``st``_io.full & pn``stn``_io.wb_valid & ~flush_q)); \
     assign pn``st``_io.tag = cache_ptw_io.req & cache_ptw_io.valid[stn] & ~(|cache_ptw_io.valid[st: 0]) ?  \
                                 cache_ptw_io.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(st)] : \
-                                pn1_wb_data.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(st)]; \
+                                pn``stn``_wb_data.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(st)]; \
     assign pn``st``_io.data = cache_ptw_io.req & cache_ptw_io.valid[stn] & ~(|cache_ptw_io.valid[st: 0]) ?  \
-                         {cache_ptw_io.vaddr[`TLB_OFFSET-1: 0], cache_ptw_io.info, cache_ptw_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET]} : \
-                         {pn1_wb_data.vaddr[`TLB_OFFSET-1: 0], pn1_wb_data.info, wb_info.entry.ppn}; \
+                         {cache_ptw_io.vaddr[`TLB_VPN_BASE(st)-1: 0], cache_ptw_io.info, cache_ptw_io.paddr[stn][`PADDR_SIZE-1: `TLB_OFFSET]} : \
+                         {pn``stn``_wb_data.vaddr[`TLB_VPN_BASE(st)-1: 0], pn``stn``_wb_data.info, wb_info.entry.ppn}; \
     assign pn``st``_io.data_valid = rlast && (state == WALK_PN``st``); \
     assign pn``st``_io.ready = state == IDLE && !pn``stn``_io.valid; \
     assign pn``st``_io.ctag = req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(st)]; \
-    assign pn``st``_io.wb_ready = (state == WB_PN``st``) & ptw_io.ready & ~flush_q; \
     assign pn``st``_data = pn``st``_io.data_o; \
     assign pn``st``_wb_data = pn``st``_io.wb_data;
 
@@ -99,7 +98,7 @@ module PTW(
         TLBInfo info;
     } PNLData;
 
-`define PN_LAST_BUF_DEF(st, stp) \
+`define PN_LAST_BUF_DEF(st) \
     PNLData pn``st``_data, pn``st``_wb_data; \
     localparam PN``st``_TAG_SIZE = `TLB_VPN; \
     localparam PN``st``_BIT_SIZE = `VADDR_SIZE + $bits(TLBInfo); \
@@ -120,22 +119,26 @@ module PTW(
     assign pn``st``_io.data_valid = rlast && (state == WALK_PN``st``); \
     assign pn``st``_io.ready = state == IDLE; \
     assign pn``st``_io.ctag = req_buf.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(st)]; \
-    assign pn``st``_io.wb_ready = (state == WB_PN``st``) &  \
-                             ((pn_leaf | pn``st``_exception) & ptw_io.ready | \
-                              ~pn_leaf & ~pn``st``_exception & ~pn``stp``_io.full &  \
-                              ~(cache_ptw_io.req & cache_ptw_io.valid[st] & ~(|cache_ptw_io.valid[stp: 0]))) & ~flush_q; \
     assign pn``st``_data = pn``st``_io.data_o; \
     assign pn``st``_wb_data = pn``st``_io.wb_data;
 
+`define PN_WB_READY_DEF(st, stp) \
+    assign pn``st``_io.wb_ready = (state == WB_PN``st``) &  \
+                             ((pn_leaf | pn``st``_exception) & ptw_io.ready | \
+                              ~pn_leaf & ~pn``st``_exception & ~pn``stp``_io.full &  \
+                              ~(cache_ptw_io.req & cache_ptw_io.valid[st] & ~(|cache_ptw_io.valid[stp: 0]))) & ~flush_q;
 
+assign pn0_io.wb_ready = (state == WB_PN0) & ptw_io.ready & ~flush_q;
 `PN_BUF_DEF(0, 1)
 `ifdef SV32
-`PN_LAST_BUF_DEF(1, 0)
+`PN_LAST_BUF_DEF(1)
 `else
 `PN_BUF_DEF(1, 2)
 `endif
+`PN_WB_READY_DEF(1, 0)
 `ifdef SV39
-`PN_LAST_BUF_DEF(2, 1)
+`PN_LAST_BUF_DEF(2)
+`PN_WB_READY_DEF(2, 1)
 `endif
 
     assign pn_leaf = req_buf.wb_entry.r | req_buf.wb_entry.w | req_buf.wb_entry.x;
@@ -219,7 +222,11 @@ logic walk_state, wb_state;
     logic `N(`TLB_PN) refill_pn;
     logic wb_req;
 
-    assign cache_ptw_io.full = pn0_io.full | pn1_io.full;
+    assign cache_ptw_io.full = pn0_io.full | pn1_io.full
+`ifdef SV39
+                                | pn2_io.full
+`endif
+    ;
     assign cache_ptw_io.refill_req = wb_req;
     assign cache_ptw_io.refill_pn = refill_pn;
     assign cache_ptw_io.refill_addr = refill_vaddr;
@@ -377,7 +384,11 @@ logic walk_state, wb_state;
 `endif
                 else if(pn1_io.valid)begin
                     req_buf.vaddr <= pn1_data.vaddr;
+`ifdef SV39
+                    req_buf.paddr <= {pn1_data.ppn, pn1_data.vaddr[`TLB_VPN_BASE(1) +: `TLB_VPN], {`PTE_WIDTH{1'b0}}};
+`else
                     req_buf.paddr <= {csr_io.ppn, pn1_data.vaddr[`VADDR_SIZE-1: `TLB_VPN_BASE(1)], {`PTE_WIDTH{1'b0}}};
+`endif
                     req_buf.info <= pn1_data.info;
                     state <= WALK_PN1;
                 end
@@ -415,7 +426,7 @@ logic walk_state, wb_state;
                     end
                 end
                 else begin
-                    req_buf.paddr <= {req_buf.wb_entry.ppn, req_buf.vaddr`TLB_VPN_BUS(2), 2'b00};
+                    req_buf.paddr <= {req_buf.wb_entry.ppn, req_buf.vaddr`TLB_VPN_BUS(1), {`PTE_WIDTH{1'b0}}};
                     ar_valid <= 1'b1;
                     state <= WALK_PN1;
                 end
@@ -439,7 +450,7 @@ logic walk_state, wb_state;
                     end
                 end
                 else begin
-                    req_buf.paddr <= {req_buf.wb_entry.ppn, req_buf.vaddr`TLB_VPN_BUS(0), 2'b00};
+                    req_buf.paddr <= {req_buf.wb_entry.ppn, req_buf.vaddr`TLB_VPN_BUS(0), {`PTE_WIDTH{1'b0}}};
                     ar_valid <= 1'b1;
                     state <= WALK_PN0;
                 end

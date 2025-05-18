@@ -7,7 +7,7 @@ interface TLBIO #(
     logic req;
     logic `VADDR_BUS vaddr;
     logic flush;
-    logic [1: 0] sel;
+    logic [`TLB_PN-1: 0][1: 0] sel;
     VPNAddr sel_tag;
 
     logic miss;
@@ -63,6 +63,7 @@ module TLB #(
     logic `N(`TLB_PN) hit_mask;
     logic `ARRAY(DEPTH, $bits(L1TLBEntry)+`TLB_PN) mask_entry;
     VPNAddr `N(DEPTH) sel_vaddrs_n, sel_vaddrs_p;
+    VPNAddr sel_wvaddrs_n, sel_wvaddrs_p;
     logic `N(DEPTH) pn_hit;
     VPNAddr lookup_addr;
     PPNAddr lookup_paddr;
@@ -93,19 +94,14 @@ generate
             if(SELV)begin
                 assign sel_pn_hits_p[i][j] = sel_vaddrs_p[i].vpn[j] == io.sel_tag.vpn[j];
                 assign sel_pn_hits_n[i][j] = sel_vaddrs_n[i].vpn[j] == io.sel_tag.vpn[j];
-                assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == io.sel_tag.vpn[j];
+                assign pn_hits[i][j] = io.sel[j][1] ? sel_pn_hits_p[i][j] : 
+                        io.sel[j][0] ? sel_pn_hits_n[i][j] : entrys[i].vpn.vpn[j] == io.sel_tag.vpn[j];
             end
             else begin
                 assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == lookup_addr.vpn[j];
             end
         end
-        if(SELV)begin
-            assign pn_hit[i] = &((io.sel[1] ? sel_pn_hits_p[i] :
-                                  io.sel[0] ? sel_pn_hits_n[i] : pn_hits[i]) | entrys[i].size);
-        end
-        else begin
-            assign pn_hit[i] = &(pn_hits[i] | entrys[i].size);
-        end
+        assign pn_hit[i] = &(pn_hits[i] | entrys[i].size);
         assign mask_entry[i] = {entrys[i], entrys[i].size};
     end
 endgenerate
@@ -230,6 +226,12 @@ generate
     end
 
     if(SELV)begin
+        for(genvar i=0; i<`TLB_PN; i++)begin
+            logic `N(`TLB_VPN) sel_vpn;
+            assign sel_vpn = wentry.vpn.vpn[i];
+            assign sel_wvaddrs_n.vpn[i] = sel_vpn + 1;
+            assign sel_wvaddrs_p.vpn[i] = sel_vpn - 1;
+        end
         always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 sel_vaddrs_p <= 0;
@@ -237,8 +239,8 @@ generate
             end
             else begin
                 if(io.we)begin
-                    sel_vaddrs_p[io.widx] <= wentry.vpn - 1;
-                    sel_vaddrs_n[io.widx] <= wentry.vpn + 1;
+                    sel_vaddrs_p[io.widx] <= sel_wvaddrs_p;
+                    sel_vaddrs_n[io.widx] <= sel_wvaddrs_n;
                 end
             end
         end

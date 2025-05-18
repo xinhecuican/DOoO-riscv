@@ -183,6 +183,9 @@ endgenerate
 
 
     assign vpn = tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+`ifdef SV39
+    assign wppn.ppn2 = tlb_l2_io0.wpn[2] ? vpn.vpn[2] : tlb_l2_io0.entry.ppn.ppn2;
+`endif
     assign wppn.ppn1 = tlb_l2_io0.wpn[1] ? vpn.vpn[1] : tlb_l2_io0.entry.ppn.ppn1;
     assign wppn.ppn0 = tlb_l2_io0.wpn[0] ? vpn.vpn[0] : tlb_l2_io0.entry.ppn.ppn0;
     assign wpaddr = {wppn, tlb_l2_io0.waddr[`TLB_OFFSET-1: 0]};

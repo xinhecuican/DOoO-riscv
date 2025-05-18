@@ -60,7 +60,7 @@ generate
             assign ltlb_io[i].req = tlb_lsu_io.lreq[i] | tlb_lsu_io.amo_req;
             assign ltlb_io[i].vaddr = tlb_lsu_io.amo_req ? tlb_lsu_io.amo_addr : tlb_lsu_io.laddr[i];
             assign ltlb_io[i].sel_tag = tlb_lsu_io.amo_req ? tlb_lsu_io.amo_addr[`VADDR_SIZE-1: `TLB_OFFSET] : tlb_lsu_io.lsel_tag[i];
-            assign ltlb_io[i].sel = tlb_lsu_io.lsel[i] & {2{~tlb_lsu_io.amo_req}};
+            assign ltlb_io[i].sel = tlb_lsu_io.lsel[i] & {2*`TLB_PN{~tlb_lsu_io.amo_req}};
         end
         else begin
 `endif

@@ -46,6 +46,7 @@ module ReplaceQueue(
     DirectoryState `N(`DCACHE_REPLACE_SIZE) state;
     logic `N(`DCACHE_REPLACE_SIZE) valid, prior_valid;
     logic `N(`DCACHE_REPLACE_WIDTH) freeIdx, validIdx, priorIdx, processIdx, processIdx_pre;
+    logic `N(`DCACHE_REPLACE_SIZE) process_dec, process_pre_dec, replace_dec, free_dec;
     logic full;
     logic `N(`DCACHE_REPLACE_SIZE) hit;
     logic `N(`PADDR_SIZE) waddr;
@@ -60,10 +61,9 @@ module ReplaceQueue(
     ReplaceEntry processEntry;
     logic axi_snoop_conflict, snoop_conflict_wait;
 
-    logic `N(`DCACHE_REPLACE_SIZE) snoop_addr_hit, snoop_hit;
+    logic `N(`DCACHE_REPLACE_SIZE) snoop_addr_hit, snoop_hit, snoop_hit_all;
     logic enqueue_hit;
     logic snoop_clean_hit;
-    logic `N(`DCACHE_REPLACE_WIDTH) snoop_hit_idx, snoop_idx;
     logic `TENSOR(`DCACHE_REPLACE_SIZE, `DCACHE_BANK, `DCACHE_BITS) replace_data;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) snoop_data;
     DirectoryState snoop_state;
@@ -74,6 +74,7 @@ module ReplaceQueue(
     assign newEntry.data = io.data;
     assign snoop_clean_hit = io.snoop_en & io.snoop_clean & ((|snoop_hit) | enqueue_hit);
     PEncoder #(`DCACHE_REPLACE_SIZE) encoder_free_idx (~en, freeIdx);
+    PSelector #(`DCACHE_REPLACE_SIZE) selector_free (~en, free_dec);
     always_ff @(posedge clk)begin
         full <= &en;
         if(io.refill_en)begin
@@ -89,7 +90,6 @@ module ReplaceQueue(
         end
         else begin
             if(io.en & ~(|hit) & ~(&en))begin
-                en[freeIdx] <= 1'b1;
                 prior[freeIdx] <= 1'b0;
                 dataValid[freeIdx] <= 1'b0;
             end
@@ -102,11 +102,10 @@ module ReplaceQueue(
                 state[io.replace_idx] <= io.refill_state;
             end
 
-            if((w_axi_io.b_valid | refill_invalid) & ~axi_snoop_conflict & ~snoop_conflict_wait)begin
-                en[processIdx] <= 1'b0;
-            end
-            if(snoop_clean_hit)begin
-                en[snoop_idx] <= 1'b0;
+            for(int i=0; i<`DCACHE_REPLACE_SIZE; i++)begin
+                en[i] <= (en[i] | io.en & ~(|hit) & ~(&en) & free_dec[i]) &
+                        ~((w_axi_io.b_valid | refill_invalid) & ~axi_snoop_conflict & ~snoop_conflict_wait & process_dec[i]) &
+                        ~(snoop_clean_hit & snoop_hit_all[i]);
             end
         end
     end
@@ -129,10 +128,12 @@ endgenerate
 
     assign valid = en & dataValid;
     assign prior_valid = en & dataValid & prior;
-    assign axi_snoop_conflict = snoop_clean_hit & (snoop_idx == processIdx);
+    assign axi_snoop_conflict = snoop_clean_hit & (|(snoop_hit & process_dec));
     PEncoder #(`DCACHE_REPLACE_SIZE) encoder_valid_idx (valid, validIdx);
     PEncoder #(`DCACHE_REPLACE_SIZE) encoder_prior_idx (prior_valid, priorIdx);
     assign processIdx_pre = |prior_valid ? priorIdx : validIdx;
+    Decoder #(`DCACHE_REPLACE_SIZE) decoder_process_pre (processIdx_pre, process_pre_dec);
+    Decoder #(`DCACHE_REPLACE_SIZE) decoder_process (processIdx, process_dec);
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             aw_valid <= 1'b0;
@@ -148,7 +149,7 @@ endgenerate
         else begin
             case(replace_state)
             IDLE: begin
-                if(|valid & ~(snoop_clean_hit & (processIdx_pre == snoop_idx)))begin
+                if(|valid & ~(snoop_clean_hit & (|(process_pre_dec & snoop_hit))))begin
                     aw_dirty <= state[processIdx_pre].dirty;
                     if (entrys[processIdx_pre].en)begin
                         replace_state <= ADDRESS;
@@ -227,8 +228,8 @@ generate
 endgenerate
     assign snoop_hit = snoop_addr_hit & dataValid;
     assign enqueue_hit = io.refill_en & (io.snoop_addr`DCACHE_BLOCK_BUS == io.addr);
-    Encoder #(`DCACHE_REPLACE_SIZE) encoder_snoop (snoop_hit, snoop_hit_idx);
-    assign snoop_idx = enqueue_hit ? io.replace_idx : snoop_hit_idx;
+    Decoder #(`DCACHE_REPLACE_SIZE) decoder_replace (io.replace_idx, replace_dec);
+    assign snoop_hit_all = {`DCACHE_REPLACE_SIZE{enqueue_hit}} & replace_dec | snoop_hit;
     OldestSelect #(`DCACHE_REPLACE_SIZE, 1, `DCACHE_BANK * `DCACHE_BITS) select_snoop_data (snoop_hit, replace_data, , snoop_data);
     OldestSelect #(`DCACHE_REPLACE_SIZE, 1, $bits(DirectoryState)) select_snoop_state (snoop_hit, state, , snoop_state);
     always_ff @(posedge clk)begin

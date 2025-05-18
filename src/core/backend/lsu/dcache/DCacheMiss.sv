@@ -92,8 +92,9 @@ module DCacheMiss(
     logic `ARRAY(`LOAD_PIPELINE+1, $clog2(`LOAD_PIPELINE+1)) req_order;
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) r_req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
-    logic `N(`LOAD_PIPELINE) mshr_remain_valid, rhit_combine, remain_valid;
-    logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) rfree_eq, raddr_eq_pre, raddr_eq, rfree_eq_last;
+    logic `N(`LOAD_PIPELINE) rhit_combine;
+    logic `N(`LOAD_PIPELINE) mshr_remain_valid, remain_valid;
+    logic `ARRAY(`LOAD_PIPELINE, `LOAD_PIPELINE) rfree_eq, raddr_eq_pre, raddr_eq;
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) rfree_idx;
 
     logic write_remain_valid, whit_combine;
@@ -109,8 +110,8 @@ module DCacheMiss(
     logic `N(`DCACHE_BYTE) wmask_all;
     logic w_invalid;
 
-    logic `N(`DCACHE_MISS_SIZE) cache_req_valid, replace_hit_valid, axi_req_valid;
-    logic `N(`DCACHE_MISS_WIDTH) cache_req_idx, cache_req_idx_n, replace_hit_idx, req_idx;
+    logic `N(`DCACHE_MISS_SIZE) cache_req_valid, axi_req_valid;
+    logic `N(`DCACHE_MISS_WIDTH) cache_req_idx, cache_req_idx_n, req_idx;
     logic req_next;
     logic `N(`DCACHE_WAY_WIDTH) way `N(`DCACHE_MISS_SIZE);
     logic `N(`DCACHE_MISS_WIDTH) axi_req_idx, axi_req_idx_n;
@@ -178,20 +179,19 @@ module DCacheMiss(
 
 // enqueue
     CalValidNum #(`LOAD_PIPELINE+1) cal_req_order (free_en, req_order);
-    CalValidNum #(`LOAD_PIPELINE) cal_rorder (io.ren & ~rhit_combine & mshr_remain_valid, r_req_order);
+    assign r_req_order[0] = 0;
+    assign r_req_order[1] = (~io.ren[0] | io.ren[0] & (|rhit[0]) & mshr_remain_valid[0]) ? 0 : 1;
+    assign rfree_eq[1][0] = io.ren[0] & mshr_remain_valid[0] & (remain_valid[0] | (|rhit[0])) & raddr_eq[1][0];
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
             if(i <= j)begin
                 assign rfree_eq[i][j] = 0;
                 assign raddr_eq_pre[i][j] = 0;
-                assign rfree_eq_last[i][j] = 0;
             end
             else begin
                 assign raddr_eq_pre[i][j] = (io.raddr_pre[i]`DCACHE_BLOCK_BUS == io.raddr_pre[j]`DCACHE_BLOCK_BUS);
-                assign rfree_eq[i][j] = io.ren[i] & io.ren[j] & raddr_eq[i][j] &
-                            mshr_remain_valid[i] & mshr_remain_valid[j];
-                assign rfree_eq_last[i][j] = rfree_eq[i][j] & remain_valid[j];
+                // assign rfree_eq[i][j] = io.ren[j] & raddr_eq[i][j] & mshr_remain_valid[j] & (remain_valid[j] | rhit_combine[j]);
             end
         end
     end
@@ -206,7 +206,7 @@ generate
         PEncoder #(`DCACHE_MSHR_BANK) encoder_mshr (~mshr_en[i], mshrFreeIdx[i]);
         assign mshr_remain_valid[i] = |(~mshr_en[i]);
         assign remain_valid[i] = remain_count > r_req_order[i];
-        assign rhit_combine[i] = (|rhit[i]) | (|rfree_eq_last[i]);
+        assign rhit_combine[i] = (|rhit[i]) | (|rfree_eq[i]);
         assign ridx[i] = (|rhit[i]) ? rhit_idx[i] : 
                          |rfree_eq[i] ? freeIdx[rfree_idx[i]] : freeIdx[i];
 
@@ -228,7 +228,7 @@ endgenerate
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign rwaddr_eq_pre[i] = io.raddr_pre[i]`DCACHE_BLOCK_BUS == io.waddr_pre`DCACHE_BLOCK_BUS;
-        assign rwfree_eq[i] = io.ren[i] & wen & rwaddr_eq[i] & mshr_remain_valid[i];
+        assign rwfree_eq[i] = io.ren[i] & wen & rwaddr_eq[i] & mshr_remain_valid[i] & (remain_valid[i] | rhit_combine[i]);
     end
     for(genvar i=0; i<`DCACHE_MISS_SIZE; i++)begin
         assign whit[i] = en[i] & io.waddr`DCACHE_BLOCK_BUS == addr[i];
@@ -325,7 +325,7 @@ endgenerate
             end
             if(wen & ~w_invalid & (write_remain_valid & ~whit_combine))begin
                 en[freeIdx[`LOAD_PIPELINE]] <= 1'b1;
-                cache_req[freeIdx[`LOAD_PIPELINE]] <= ~io.replaceHit;
+                cache_req[freeIdx[`LOAD_PIPELINE]] <= 1'b1;
                 replaceHit[freeIdx[`LOAD_PIPELINE]] <= io.replaceHit;
                 wowned[freeIdx[`LOAD_PIPELINE]] <= io.wowned;
             end
@@ -373,15 +373,13 @@ endgenerate
 
 // req
     assign cache_req_valid = en & cache_req;
-    assign replace_hit_valid = en & replaceHit & ~axi_req;
     assign axi_req_valid = axi_req & ~axi_req_end;
     PEncoder #(`DCACHE_MISS_SIZE) encoder_cache_req(cache_req_valid, cache_req_idx);
-    PEncoder #(`DCACHE_MISS_SIZE) encoder_replace_hit(replace_hit_valid, replace_hit_idx);
     PEncoder #(`DCACHE_MISS_SIZE) encoder_axi_req(axi_req_valid, axi_req_idx);
     PEncoder #(`DCACHE_ID_SIZE) encoder_free_id(~id_valids, free_id);
     assign io.req = |cache_req_valid;
     assign io.req_addr = {addr[cache_req_idx], {`DCACHE_LINE_WIDTH{1'b0}}};
-    assign req_idx = req_next & io.req_success ? cache_req_idx_n : replace_hit_idx;
+    assign req_idx = cache_req_idx_n;
     assign rlast = r_axi_io.r_valid & r_axi_io.r_last;
     assign map_idx = id_map[r_axi_io.r_id];
     always_ff @(posedge clk)begin
@@ -390,8 +388,8 @@ endgenerate
         req_last <= rlast;
         refill_nodata_valid <= rlast & (cacheIdx[r_id] == 0);
         r_resp <= r_axi_io.r_resp[4: 2];
-        if(req_next & io.req_success | (|replace_hit_valid))begin
-            way[req_idx] <= req_next & io.req_success ? io.replaceWay : replaceHitWay[replace_hit_idx];
+        if(req_next & io.req_success)begin
+            way[req_idx] <= replaceHit[cache_req_idx_n] ? replaceHitWay[cache_req_idx_n] : io.replaceWay;
         end
         if((|axi_req_valid) & (|(~id_valids)))begin
             id_map[free_id] <= axi_req_idx;
@@ -429,7 +427,7 @@ endgenerate
             axi_req_idx_n <= 0;
         end
         else begin
-            if(req_next & io.req_success | (|replace_hit_valid))begin
+            if(req_next & io.req_success)begin
                 axi_req[req_idx] <= 1'b1;
                 req_nodata[req_idx] <= 1'b0;
             end

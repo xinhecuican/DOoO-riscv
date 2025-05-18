@@ -14,6 +14,7 @@ module StoreCommitBuffer(
     logic `N(`DCACHE_BLOCK_SIZE) addrs `N(`STORE_COMMIT_SIZE);
     // write back counter info
     logic `N(`STORE_COUNTER_WIDTH) counter `N(`STORE_COMMIT_SIZE);
+    logic `N(2) retry_counter;
     logic `N(`STORE_COMMIT_WIDTH+1) addr_num;
     SCDataIO data_io();
     SCDataModule data_module (.*, .io(data_io));
@@ -111,7 +112,7 @@ endgenerate
     logic thresh_write;
     logic `N(`STORE_COMMIT_SIZE) conflictIdx_decode, refillIdx_decode;
 generate
-    assign write_ready = select_en;
+    assign write_ready = select_en & {`STORE_COMMIT_SIZE{~(|retry_counter)}};
     DirectionSelector #(`STORE_COMMIT_SIZE, `STORE_PIPELINE) write_selector (
         .clk(clk),
         .rst(rst),
@@ -211,6 +212,7 @@ endgenerate
             addr_en <= 0;
             writing <= 0;
             data_valid <= 0;
+            retry_counter <= 0;
         end
         else begin
             for(int i=0; i<`STORE_PIPELINE; i++)begin
@@ -219,12 +221,20 @@ endgenerate
                 end
             end
 
+            if(wio.conflict)begin
+                retry_counter <= 2'b11;
+            end
+            else if(retry_counter != 0)begin
+                retry_counter <= retry_counter - 1;
+            end
+
             if(|write_ready & wio.valid)begin
                 writing[widx] <= 1'b1;
             end
 
             if(wio.conflict)begin
                 writing[wio.conflictIdx] <= 1'b0;
+                retry_counter <= 2'b11;
             end
 
             if(wio.success)begin

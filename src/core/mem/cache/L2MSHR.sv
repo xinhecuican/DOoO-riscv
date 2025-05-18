@@ -248,7 +248,7 @@ module L2MSHR #(
     } ReplaceBuffer;
     ReplaceBuffer replace_buffer;
     logic replace_busy;
-    logic `N(MSHR_SIZE) replace_reqs, replace_data_valids;
+    logic `N(MSHR_SIZE) replace_reqs, replace_data_valids, replace_reqs_select;
     logic replace_req;
     logic `ARRAY(MSHR_SIZE, TAG_WIDTH+1) replace_tags; // tag, dirty
     MSHREntry replace_entry;
@@ -1022,7 +1022,9 @@ endgenerate
                 write_conflict_wait <= wsnoop_conflict;
                 write_id <= slave_io.aw_id[ID_OFFSET +: ID_WIDTH];
                 write_data_index <= 0;
-                write_finish[free_idx1] <= 1'b0;
+                if(~wsnoop_conflict)begin
+                    write_finish[free_idx1] <= 1'b0;
+                end
             end
             if(dir_request_n)begin
                 entry_write[dir_select_idx_n] <= dir_entry_n.write;
@@ -1033,7 +1035,9 @@ endgenerate
             end
             if(slave_io.w_valid & slave_io.w_ready & slave_io.w_last)begin
                 write_waiting <= 1'b0;
-                write_b_ids[write_idx] <= write_id;
+                if(~write_conflict_wait)begin
+                    write_b_ids[write_idx] <= write_id;
+                end
                 write_conflict_wait <= 1'b0;
             end
             else if(write_waiting & (|(snoop_write_conflict_n & write_idx_dec)))begin
@@ -1220,12 +1224,20 @@ generate
         assign replace_data_hits[i] = mshr_data_io.rvalid[i] & (mshr_data_io.mshr_idx_o == replace_buffer.idx);
     end
 endgenerate
-    OldestSelect #(MSHR_SIZE, 1, $bits(MSHREntry)) select_replace_entry (replace_reqs, entrys, replace_req, replace_entry);
-    OldestSelect #(MSHR_SIZE, 1, TAG_WIDTH+1) select_replace_tag (replace_reqs, replace_tags, , replace_tag);
-    PEncoder #(MSHR_SIZE) encoder_replace_idx (replace_reqs, replace_idx);
-    OldestSelect #(MSHR_SIZE, 1, WAY_WIDTH) select_replace_way(replace_reqs, lookup_replace_ways, , replace_way_select);
+    FairSelect #(MSHR_SIZE, $bits(MSHREntry)) select_replace_entry (replace_reqs_select, entrys, replace_req, replace_entry);
+    FairSelect #(MSHR_SIZE, TAG_WIDTH+1) select_replace_tag (replace_reqs_select, replace_tags, , replace_tag);
+    Encoder #(MSHR_SIZE) encoder_replace_idx (replace_reqs_select, replace_idx);
+    FairSelect #(MSHR_SIZE, WAY_WIDTH) select_replace_way(replace_reqs_select, lookup_replace_ways, , replace_way_select);
     assign replace_read_conflict = |(replace_buffer.data_bank & (lookup_data_req | ~mshr_data_io.ready));
     FairSelect #(DATA_BANK, `DCACHE_BITS * `DCACHE_BANK) select_replace_data (replace_data_hits, mshr_data_io.rdata, replace_data_hit, replace_read_data);
+
+    DirectionSelector #(MSHR_SIZE) selector_replace(
+        .*,
+        .en(dir_request_n),
+        .idx(dir_request_select_n),
+        .ready(replace_reqs),
+        .select(replace_reqs_select)
+    );
 
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin

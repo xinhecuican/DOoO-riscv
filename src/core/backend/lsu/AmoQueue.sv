@@ -31,13 +31,13 @@ module AmoQueue(
     State state;
     logic `N(`PREG_WIDTH) rs1, rs2, rd;
     logic we;
-    logic datav, waiting_data;
+    logic datav, waiting_data, data_ready;
     logic `N(`XLEN) rs1_data, rs2_data;
     RobIdx robIdx;
     logic `N(`AMOOP_WIDTH) amoop;
     AmoIssueBundle bundle;
     logic `N(`PADDR_SIZE) paddr;
-    logic misalign_pre;
+    logic misalign_pre, misalign_q;
     logic misalign, tlb_exc;
     logic islr;
     logic `N(`XLEN) rdata;
@@ -57,13 +57,10 @@ module AmoQueue(
     assign amo_reg_io.preg[1] = rs2;
     always_ff @(posedge clk)begin
         waiting_data <= amo_reg_io.en[0];
-        if(datav && state == LOOKUP)begin
+        data_ready <= waiting_data;
+        if(data_ready && state == LOOKUP)begin
             rs1_data <= amo_reg_io.data[0];
-`ifdef RV64I
-            rs2_data <= word ? amo_reg_io.data[1][31: 0] : amo_reg_io.data[1];
-`else
             rs2_data <= amo_reg_io.data[1];
-`endif
         end
         if(tlb_valid)begin
             paddr <= amo_paddr;
@@ -85,10 +82,10 @@ module AmoQueue(
 `ifdef RV64I
     assign amo_io.word = word;
     assign amo_io.mask = {{4{~word | word & paddr[2]}}, {4{~word | word & ~paddr[2]}}};
-    MisalignDetect misalign_detect ({1'b1, ~word}, rs1_data[`DCACHE_BYTE_WIDTH-1: 0], misalign_pre);
+    MisalignDetect misalign_detect ({1'b1, ~word}, amo_reg_io.data[0][`DCACHE_BYTE_WIDTH-1: 0], misalign_pre);
 `else
     assign amo_io.mask = {`DCACHE_BYTE{1'b1}};
-    MisalignDetect misalign_detect (2'b10, rs1_data[`DCACHE_BYTE_WIDTH-1: 0], misalign_pre);
+    MisalignDetect misalign_detect (2'b10, amo_reg_io.data[0][`DCACHE_BYTE_WIDTH-1: 0], misalign_pre);
 `endif
 
     assign wbData.en = state == WB;
@@ -114,6 +111,7 @@ module AmoQueue(
             store_flush <= 1'b0;
             flush_ready <= 1'b0;
             tlb_ready <= 1'b0;
+            misalign_q <= 0;
 `ifdef RV64I
             word <= 0;
 `endif
@@ -132,6 +130,7 @@ module AmoQueue(
                 datav <= 1'b0;
                 misalign <= 1'b0;
                 tlb_exc <= 1'b0;
+                misalign_q <= 0;
                 islr <= bundle.amoop == `AMO_LR;
             end
             case(state)
@@ -144,11 +143,14 @@ module AmoQueue(
                 if(waiting_data)begin
                     datav <= 1'b1;
                 end
+                if(data_ready)begin
+                    misalign_q <= misalign_pre;
+                end
                 if(backendCtrl.redirect & ~amo_older)begin
                     state <= IDLE;
                 end
                 else if(datav & ~fence_valid)begin
-                    if(misalign_pre)begin
+                    if(data_ready & misalign_pre | misalign_q)begin
                         misalign <= 1'b1;
                         state <= WB;
                     end

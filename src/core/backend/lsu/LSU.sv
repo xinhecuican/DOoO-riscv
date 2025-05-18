@@ -91,8 +91,8 @@ module LSU(
 );
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) storeVAddr;
-    logic `ARRAY(`LOAD_PIPELINE, 2) lcarry;
-    logic `ARRAY(`STORE_PIPELINE, 2) scarry;
+    logic `TENSOR(`LOAD_PIPELINE, `TLB_PN, 2) lcarry;
+    logic `TENSOR(`STORE_PIPELINE, `TLB_PN, 2) scarry;
     LoadIssueData `N(`LOAD_PIPELINE) load_issue_data;
     logic `N(`LOAD_PIPELINE) load_en, fwd_data_invalid; // fwd_data_invalid from StoreQueue
     logic sc_buffer_empty;
@@ -948,6 +948,9 @@ module MisalignDetect(
         case(size)
         2'b10: misalign = |offset[1: 0];
         2'b01: misalign = offset[0];
+`ifdef RV64I
+        2'b11: misalign = |offset[2: 0];
+`endif
         default: misalign = 1'b0;
         endcase
     end
