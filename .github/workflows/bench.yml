@@ -48,7 +48,7 @@ jobs:
         git submodule init && git submodule update
         autoconf
         ./configure
-        make XLEN=32 -j8
+        make -j8
 
     - name: Run Tests
       run: |
