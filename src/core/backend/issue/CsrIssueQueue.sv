@@ -39,6 +39,7 @@ module CsrIssueQueue(
     StatusEntry statush, status_n;
     RobIdx writeRobIdx;
     logic `ARRAY(2, `XLEN) csr_rdata;
+    logic `N(2) rs_zero;
 
     assign full = head == tail && (hdir ^ tdir);
     assign dis_csr_io.full = full;
@@ -71,6 +72,8 @@ module CsrIssueQueue(
         issue_csr_io.status.robIdx <= status_n.robIdx;
         if(issue_csr_io.en)begin
             csr_rdata <= csr_reg_io.data;
+            rs_zero[0] <= status_n.rs1 == 0;
+            rs_zero[1] <= status_n.rs2 == 0;
         end
     end
     assign issue_csr_io.rdata = csr_reg_io.data[0];
@@ -225,8 +228,8 @@ endgenerate
 `endif
 
     assign fence_fsqInfo.offset = fsq_offset_n[`PREDICTION_WIDTH-1: 0];
-    assign vma_clear_all = csr_rdata[0][`VADDR_SIZE-1: 0] == 0;
-    assign asid_clear_all = csr_rdata[0][`TLB_ASID-1: 0] == 0;
+    assign vma_clear_all = rs_zero[0];
+    assign asid_clear_all = rs_zero[1];
 
     LoopSub #(`ROB_WIDTH, 1) sub_rob_idx (1'b1, commitBus.robIdx, preRobIdx);
 

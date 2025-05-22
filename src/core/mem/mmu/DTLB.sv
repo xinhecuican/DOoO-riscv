@@ -29,13 +29,13 @@ module DTLB(
     logic replace_cmp_g;
     logic `N($clog2(`DTLB_SIZE)) tlb_widx, replace_widx, replace_miss_idx;
 
-    typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
+    typedef enum  { IDLE, FENCE, FENCE_END } FenceState;
     FenceState fenceState;
     logic fenceReq, fenceWe;
-    logic `N($clog2(`DTLB_SIZE)) fenceIdx;
+    logic `N($clog2(`DTLB_SIZE)) fenceIdx, fenceAllIdx;
     VPNAddr fenceVaddr;
     logic `N(`TLB_ASID) fence_asid;
-    logic fence_asid_all;
+    logic fence_asid_all, fence_addr_all;
 
     ReplaceIO #(
         .DEPTH(1),
@@ -240,42 +240,34 @@ endgenerate
 `endif
     end
 
+    assign fenceWe = (fenceState == FENCE) & (|replace_hit) & ~(fence_addr_all & ~replace_hit[fenceAllIdx]);
+    assign fenceIdx = fence_addr_all ? fenceAllIdx : replace_widx;
+
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             fenceState <= IDLE;
             fenceReq <= 0;
-            fenceWe <= 0;
-            fenceIdx <= 0;
+            fenceAllIdx <= 0;
         end
         else begin
             case(fenceState)
             IDLE: begin
                 if(fenceBus.mmu_flush[1])begin
-                    if(fenceBus.mmu_flush_all[1])begin
-                        fenceIdx <= 0;
-                        fenceWe <= 1'b1;
-                        fenceState <= FENCE_ALL;
-                    end
-                    else begin
-                        fenceReq <= 1'b1;
-                        fenceState <= FENCE;
-                    end
+                    fenceReq <= 1'b1;
+                    fenceState <= FENCE;
+                    fenceAllIdx <= 0;
                 end
             end
             FENCE: begin
-                fenceWe <= |replace_hit;
-                fenceIdx <= replace_widx;
-                fenceState <= FENCE_END;
-            end
-            FENCE_ALL: begin
-                fenceIdx <= fenceIdx + 1;
-                if(fenceIdx == {{$clog2(`DTLB_SIZE)-1{1'b1}}, 1'b0})begin
+                if(~fence_addr_all | (fenceAllIdx == {$clog2(`DTLB_SIZE){1'b1}}))begin
                     fenceState <= FENCE_END;
+                    fenceReq <= 1'b0;
+                end
+                else begin
+                    fenceAllIdx <= fenceAllIdx + 1;
                 end
             end
             FENCE_END:begin
-                fenceWe <= 0;
-                fenceReq <= 0;
                 fenceState <= IDLE;
             end
             endcase
@@ -286,6 +278,7 @@ endgenerate
         if(fenceState == IDLE && fenceBus.mmu_flush[1])begin
             fenceVaddr <= fenceBus.vma_vaddr[1][`VADDR_SIZE-1: `TLB_OFFSET];
             fence_asid <= fenceBus.vma_asid[1];
+            fence_addr_all <= fenceBus.mmu_flush_all[1];
             fence_asid_all <= fenceBus.mmu_asid_all[1];
         end
     end
@@ -313,7 +306,7 @@ generate
     for(genvar i=0; i<`DTLB_SIZE; i++)begin
         assign replace_hit[i] = (replace_en[i] && 
                 (replace_cmp_asid == replace_asid[i][`TLB_ASID: 1] || replace_asid[i][0] || fence_asid_all && fenceReq)) & 
-                (&(replace_pn_hits[i] | replace_pn_valid[i]));
+                ((&(replace_pn_hits[i] | replace_pn_valid[i])) | fenceReq & fence_addr_all);
         for(genvar j=0; j<`TLB_PN; j++)begin
             assign replace_pn_hits[i][j] = replace_vpn[i].vpn[j] == replace_cmp_vaddr.vpn[j];
         end

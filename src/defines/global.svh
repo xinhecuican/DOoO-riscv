@@ -350,7 +350,7 @@ typedef enum logic [1:0] {
 `define TLB_IDX_SIZE $clog2(`LOAD_ISSUE_BANK_SIZE) + $clog2(`LOAD_PIPELINE)
 `ifdef SV32
     `define TLB_MODE 1
-    `define TLB_ASID 9
+    `define TLB_ASID 4
     `define TLB_PPN 22
     `define TLB_VPN 10
     `define TLB_PPN1 12
@@ -359,7 +359,7 @@ typedef enum logic [1:0] {
     `define PTE_SIZE 4
 `elsif SV39
     `define TLB_MODE 4
-    `define TLB_ASID 16
+    `define TLB_ASID 8
     `define TLB_PPN 44
     `define TLB_VPN 9
     `define TLB_PPN2 26

@@ -23,6 +23,7 @@ module PreDecode(
     logic `N(`VADDR_SIZE) next_pc;
     logic `N(`PREDICTION_WIDTH) shiftOffset, shiftIdx;
     logic `N(`BLOCK_INST_SIZE) ipf;
+    logic exc_valid;
     logic `N(`VADDR_SIZE) start_addr_n;
 
     logic `N(`BLOCK_INST_SIZE) jump_en_pre;
@@ -136,6 +137,7 @@ endgenerate
             shiftIdx <= 0;
             shiftOffset <= 0;
             ipf <= 0;
+            exc_valid <= 0;
             start_addr_n <= 0;
             jump_en <= 0;
             jumpSelectIdx <= 0;
@@ -168,6 +170,7 @@ endgenerate
             selectOffset <= jumpSelectIdx_pre;
             shiftIdx <= cache_pd_io.shiftIdx;
             rvc_en_n <= rvc_en;
+            exc_valid <= (|cache_pd_io.exception);
 `else
             bundles_next <= bundles;
             en_next <= cache_pd_io.en;
@@ -178,13 +181,14 @@ endgenerate
             jumpSelectIdx <= jumpSelectIdx_pre;
             selectOffset <= jumpSelectIdx_pre;
             shiftIdx <= cache_pd_io.shiftOffset;
-
+            exc_valid <= (|cache_pd_io.exception) | (stream.start_addr[1: 0] != 0);
 `endif
             stream_valid <= cache_pd_io.en[0];
             fsqIdx <= cache_pd_io.fsqIdx;
             stream_next <= cache_pd_io.stream;
             shiftOffset <= cache_pd_io.shiftOffset;
             ipf <= cache_pd_io.exception;
+            
             start_addr_n <= cache_pd_io.start_addr;
             next_pc <= cache_pd_io.stream.start_addr + `BLOCK_SIZE;
         end
@@ -196,17 +200,17 @@ endgenerate
     // if nobranch_error is set, redirect this stream as nobranch stream and execute again
     logic nobranch_error, jump_error;
 `ifdef RVC
-    assign nobranch_error = (stream_valid & (stream_next.taken & 
+    assign nobranch_error = (stream_valid & ~exc_valid & (stream_next.taken & 
                             (~bundles_next[tailIdx].branch | 
                             ((bundles_next[tailIdx].rvc ^ stream_next.rvc) | half_rvi)) | 
                             (instNumNext == 0)));
 `else
-    assign nobranch_error = (stream_valid & stream_next.taken & (~bundles_next[tailIdx].branch));
+    assign nobranch_error = (stream_valid & stream_next.taken & ~exc_valid & (~bundles_next[tailIdx].branch));
 `endif
     logic `N(`VADDR_SIZE) ras_addr;
     assign ras_addr = pd_redirect.ras_addr;
 
-    assign jump_error = jump_en & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
+    assign jump_error = jump_en & ~exc_valid & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
                             (stream_next.taken & ((tailIdx != selectIdx) |
                             (bundles_next[tailIdx].jump & (stream_next.target != bundles_next[tailIdx].target)))));
 

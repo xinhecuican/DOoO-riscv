@@ -46,13 +46,13 @@ module TLB #(
     logic pmp_v, pmp_r, pmp_w, pmp_x, pma_uc;
     logic `N(`PADDR_SIZE-`TLB_OFFSET) pma_addr;
 
-    typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
+    typedef enum  { IDLE, FENCE, FENCE_END } FenceState;
     FenceState fenceState;
     logic fenceReq, fenceWe;
-    logic `N(ADDR_WIDTH) fenceIdx;
+    logic `N(ADDR_WIDTH) fenceIdx, widx, fenceAllIdx;
     logic `N(`VADDR_SIZE-`TLB_OFFSET) fenceVaddr;
     logic `N(`TLB_ASID) fence_asid;
-    logic fence_asid_all;
+    logic fence_asid_all, fence_addr_all;
 
 // lookup
     logic `N(DEPTH) hit;
@@ -101,7 +101,12 @@ generate
                 assign pn_hits[i][j] = entrys[i].vpn.vpn[j] == lookup_addr.vpn[j];
             end
         end
-        assign pn_hit[i] = &(pn_hits[i] | entrys[i].size);
+        if(FENCEV)begin
+            assign pn_hit[i] = (&(pn_hits[i] | entrys[i].size)) | fenceReq & fence_addr_all;
+        end
+        else begin
+            assign pn_hit[i] = (&(pn_hits[i] | entrys[i].size));
+        end
         assign mask_entry[i] = {entrys[i], entrys[i].size};
     end
 endgenerate
@@ -194,6 +199,7 @@ endgenerate
 
 generate
     if(FENCEV)begin
+        assign widx = fenceWe ? fenceIdx : io.widx;
         always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 en <= 0;
@@ -201,11 +207,11 @@ generate
             end
             else begin
                 if(fenceWe)begin
-                    en[fenceIdx] <= 1'b0;
+                    en[widx] <= 1'b0;
                 end
                 else if(io.we)begin
-                    entrys[io.widx] <= wentry;
-                    en[io.widx] <= 1'b1;
+                    entrys[widx] <= wentry;
+                    en[widx] <= 1'b1;
                 end
             end
         end
@@ -254,45 +260,39 @@ generate
             if(fenceState == IDLE && fenceBus.mmu_flush[SOURCE])begin
                 fenceVaddr <= fenceBus.vma_vaddr[SOURCE][`VADDR_SIZE-1: `TLB_OFFSET];
                 fence_asid <= fenceBus.vma_asid[SOURCE];
+                fence_addr_all <= fenceBus.mmu_flush_all[SOURCE];
                 fence_asid_all <= fenceBus.mmu_asid_all[SOURCE];
             end
         end
+
+        assign fenceWe = (fenceState == FENCE) & (|hit) & ~(fence_addr_all & ~hit[fenceAllIdx]);
+        assign fenceIdx = fence_addr_all ? fenceAllIdx : hit_idx;
+
         always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 fenceState <= IDLE;
                 fenceReq <= 0;
-                fenceWe <= 0;
-                fenceIdx <= 0;
+                fenceAllIdx <= 0;
             end
             else begin
                 case(fenceState)
                 IDLE: begin
                     if(fenceBus.mmu_flush[SOURCE])begin
-                        if(fenceBus.mmu_flush_all[SOURCE])begin
-                            fenceIdx <= 0;
-                            fenceWe <= 1'b1;
-                            fenceState <= FENCE_ALL;
-                        end
-                        else begin
-                            fenceReq <= 1'b1;
-                            fenceState <= FENCE;
-                        end
+                        fenceAllIdx <= 0;
+                        fenceState <= FENCE;
+                        fenceReq <= 1'b1;
                     end
                 end
                 FENCE: begin
-                    fenceWe <= |hit;
-                    fenceIdx <= hit_idx;
-                    fenceState <= FENCE_END;
-                end
-                FENCE_ALL: begin
-                    fenceIdx <= fenceIdx + 1;
-                    if(fenceIdx == {{ADDR_WIDTH-1{1'b1}}, 1'b0})begin
+                    if(~fence_addr_all | (fenceAllIdx == {ADDR_WIDTH{1'b1}}))begin
                         fenceState <= FENCE_END;
+                        fenceReq <= 1'b0;
+                    end
+                    else begin
+                        fenceAllIdx <= fenceAllIdx + 1;
                     end
                 end
                 FENCE_END:begin
-                    fenceWe <= 0;
-                    fenceReq <= 0;
                     fenceState <= IDLE;
                 end
                 endcase

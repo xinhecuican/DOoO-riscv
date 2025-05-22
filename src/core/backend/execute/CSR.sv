@@ -78,7 +78,7 @@ module CSR(
     logic `N(`MXL) sepc;
     logic `N(`MXL) sscratch;
     CAUSE scause;
-    SATP satp;
+    SATP satp, satp_d;
     logic `N(`MXL) scounteren;
     logic `N(64) senvcfg;
 
@@ -362,6 +362,9 @@ endgenerate                                                             \
     assign mcycle_n = mpfcounter[0] + 1;
     assign minstret_n = mpfcounter[2] + commitBus.num;
 `endif
+
+    assign satp_d = wdata_s2;
+
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
 `ifdef RV64I
@@ -406,10 +409,12 @@ endgenerate                                                             \
 `endif
             if(wen_o[satp_id]
 `ifdef SV39
-                & ((wdata_s2[63: 60] == 4'h8) | (wdata_s2[63: 60] == 4'h0))
+                & ((satp_d.mode == 4'h8) | (satp_d.mode == 4'h0))
 `endif
             )begin
-                satp <= wdata_s2;
+                satp.mode <= satp_d.mode;
+                satp.asid <= satp_d.asid[`TLB_ASID-1: 0];
+                satp.ppn <= satp_d.ppn;
             end
             if(wen_o[mstatus_id])begin
                 mstatus.sie <= wdata_s2[1];

@@ -199,13 +199,14 @@ module TLBPage #(
     ReplaceIO #(DEPTH, WAY_NUM) replace_io();
     PLRU #(DEPTH, WAY_NUM) plru(.*);
 
-    typedef enum  { IDLE, FENCE, FENCE_ALL, FENCE_END } FenceState;
+    typedef enum  { IDLE, FENCE_REQ, FENCE_WE, FENCE_END } FenceState;
     FenceState fenceState;
     logic fenceReq, fenceWe, fenceReq_n;
     logic `N(ADDR_WIDTH) fenceIdx;
     logic `N(WAY_NUM) fence_way;
     logic `N(TAG_WIDTH) fence_tag;
     logic `N(`TLB_ASID) fence_asid;
+    logic fence_addr_all;
     logic fence_asid_all;
     logic req_n;
     logic `N(TAG_WIDTH) tag;
@@ -273,11 +274,12 @@ endgenerate
     logic `ARRAY(BANK, `PTE_BITS) way_data;
     logic `ARRAY(BANK, META_WIDTH/BANK) meta;
     logic `N(`TLB_ASID) lookup_asid;
-    assign lookup_asid = fenceReq_n ? fence_asid : csr_io.asid;
+    assign lookup_asid = fenceWe ? fence_asid : csr_io.asid;
 generate
     for(genvar i=0; i<WAY_NUM; i++)begin
-        assign tag_hits[i] = rtag[i].en & (rtag[i].tag == tag) &
-                            ((rtag[i].asid == lookup_asid) | fenceReq_n & fence_asid_all);
+        assign tag_hits[i] = rtag[i].en & 
+                            ((rtag[i].tag == tag) | (fenceState != IDLE) & fence_addr_all) &
+                            ((rtag[i].asid == lookup_asid) | (fenceState != IDLE) & fence_asid_all);
     end
     
     assign page_io.hit = req_n & (|tag_hits);
@@ -300,15 +302,17 @@ endgenerate
     always_ff @(posedge clk)begin
         fenceReq_n <= fenceReq;
     end
+
+    assign fenceReq = fenceState == FENCE_REQ;
+    assign fenceWe = (fenceState == FENCE_WE) | (fenceState == FENCE_REQ) & fence_addr_all & fence_asid_all;
+    assign fence_way = tag_hits | {WAY_NUM{(fenceState == FENCE_REQ) & fence_addr_all & fence_asid_all}};
+
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             fenceState <= IDLE;
-            fenceReq <= 0;
-            fenceWe <= 0;
             fenceIdx <= 0;
             fence_valid <= 0;
             fence_finish <= 0;
-            fence_way <= 0;
             fence_tag <= 0;
             fence_asid <= 0;
             fence_asid_all <= 0;
@@ -319,37 +323,41 @@ endgenerate
                 if(fenceBus.mmu_flush[2])begin
                     if(fenceBus.mmu_flush_all[2])begin
                         fenceIdx <= 0;
-                        fenceWe <= 1'b1;
-                        fence_way <= {WAY_NUM{1'b1}};
-                        fenceState <= FENCE_ALL;
                     end
                     else begin
                         fenceIdx <= fenceBus.vma_vaddr[2]`TLB_VPN_IBUS(PN, DEPTH, BANK);
-                        fenceReq <= 1'b1;
-                        fenceState <= FENCE;
                         fence_tag <= fenceBus.vma_vaddr[2]`TLB_VPN_TBUS(PN, DEPTH, BANK);
-                        fence_asid <= fenceBus.vma_asid[2];
-                        fence_asid_all <= fenceBus.mmu_asid_all[2];
                     end
+                    fence_asid <= fenceBus.vma_asid[2];
+                    fence_asid_all <= fenceBus.mmu_asid_all[2];
+                    fence_addr_all <= fenceBus.mmu_flush_all[2];
                     fence_valid <= 1'b1;
+                    fenceState <= FENCE_REQ;
                 end
             end
-            FENCE: begin
-                fenceReq <= 1'b0;
-                if(fenceReq_n)begin
-                    fenceWe <= |tag_hits;
-                    fence_way <= tag_hits;
-                    fenceState <= FENCE_END;
+            FENCE_REQ: begin
+                if(fence_addr_all & fence_asid_all)begin
+                    if(fenceIdx == {ADDR_WIDTH{1'b1}})begin
+                        fenceState <= FENCE_END;
+                    end
+                    else begin
+                        fenceIdx <= fenceIdx + 1;
+                    end
+                end
+                else begin
+                    fenceState <= FENCE_WE;
                 end
             end
-            FENCE_ALL: begin
-                fenceIdx <= fenceIdx + 1;
-                if(fenceIdx == {{ADDR_WIDTH-1{1'b1}}, 1'b0})begin
+            FENCE_WE: begin
+                if(~fence_addr_all | (fenceIdx == {ADDR_WIDTH{1'b1}}))begin
                     fenceState <= FENCE_END;
+                end
+                else begin
+                    fenceIdx <= fenceIdx + 1;
+                    fenceState <= FENCE_REQ;
                 end
             end
             FENCE_END:begin
-                fenceWe <= 0;
                 fenceState <= IDLE;
                 fence_valid <= 1'b0;
             end
