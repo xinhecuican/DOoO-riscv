@@ -226,6 +226,7 @@ typedef struct packed {
     logic `VADDR_BUS start_addr;
     logic `VADDR_BUS target_pc;
     RedirectInfo redirectInfo;
+    logic btb_update;
     BTBUpdateInfo btbEntry;
     PredictionMeta meta;
 } BranchUpdateInfo;

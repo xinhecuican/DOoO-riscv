@@ -89,7 +89,8 @@ endgenerate
 
     PredictionResultGen result_gen (
         .pc(ubtb_io.pc),
-        .hit((|lookup_hits)),
+        .hit(lookup_hit),
+        .btb_hit(lookup_hit),
         .entry(lookup_entry_i),
         .prediction(cond_history),
         .ras_addr(),
@@ -145,7 +146,7 @@ endgenerate
             ctrs <= '{default: 0};
         end
         else begin
-            if(ubtb_io.update & ubtb_io.updateInfo.btbEntry.en)begin
+            if(ubtb_io.update & ubtb_io.updateInfo.btb_update)begin
                 for(int i=0; i<`UBTB_SIZE; i++)begin
                     if(update_way[i])begin
                         entrys[i] <= {update_tag, ubtb_io.updateInfo.btbEntry};
@@ -166,7 +167,7 @@ endgenerate
     end
 
 `ifdef DIFFTEST
-    `Log(DLog::Debug, T_BTB, ubtb_io.update & ubtb_io.updateInfo.btbEntry.en,
+    `Log(DLog::Debug, T_UBTB, ubtb_io.update & ubtb_io.updateInfo.btbEntry.en,
     $sformatf("update ubtb. %h->%h[%h]", ubtb_io.updateInfo.start_addr, updateSelectIdx, update_tag))
 `endif
 endmodule

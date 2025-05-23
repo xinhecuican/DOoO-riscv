@@ -272,6 +272,7 @@ endinterface
 interface PreDecodeRedirect;
     logic en;
     logic exc_en;
+    logic entry_error;
     logic direct;
     FsqIdx fsqIdx;
     FetchStream stream;
@@ -281,8 +282,8 @@ interface PreDecodeRedirect;
     logic `N(`FSQ_WIDTH) fsqIdx_pre;
     logic `N(`VADDR_SIZE) ras_addr;
 
-    modport predecode(output en, exc_en, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, input ras_addr);
-    modport redirect(input en, exc_en, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, output ras_addr);
+    modport predecode(output en, exc_en, entry_error, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, input ras_addr);
+    modport redirect(input en, exc_en, entry_error, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, output ras_addr);
 endinterface
 
 interface PreDecodeIBufferIO;

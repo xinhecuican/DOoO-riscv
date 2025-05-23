@@ -24,7 +24,7 @@ module FSQ (
     logic last_stage_we;
     logic cache_req;
     logic cache_req_ok;
-    BTBUpdateInfo oldEntry;
+    BTBUpdateInfo oldEntry, oldErrorEntry;
     logic `N(`FSQ_SIZE) directionTable;
     logic tdir, hdir, shdir;
     logic `N(`FSQ_WIDTH) searchIdx;
@@ -461,7 +461,7 @@ endgenerate
 
     WBInfo wbInfos `N(`FSQ_SIZE);
     WBInfo commitWBInfo;
-    logic `N(`FSQ_SIZE) pred_error_en;
+    logic `N(`FSQ_SIZE) pred_error_en, entry_error;
     logic pred_error;
 
     assign rd_br = fsq_back_io.redirectBr;
@@ -470,14 +470,15 @@ endgenerate
         if(rst == `RST)begin
             wbInfos <= '{default: 0};
             pred_error_en <= 0;
+            entry_error <= 0;
         end
         else begin
-            if(pd_redirect.en & pd_redirect.direct)begin
+            if(pd_redirect.en)begin
                 wbInfos[pd_redirect.fsqIdx.idx] <= {
 `ifdef DIFFTEST
                 1'b1,
 `endif    
-                1'b0, 1'b1, 
+                1'b0, pd_redirect.direct,
 `ifdef RVC
                 pd_redirect.stream.rvc, pd_redirect.size,
 `endif
@@ -503,6 +504,12 @@ endgenerate
             end
             if(pd_redirect.en & pd_redirect.direct)begin
                 pred_error_en[pd_redirect.fsqIdx.idx] <= 1'b1;
+            end
+            if(queue_we)begin
+                entry_error[write_index] <= 1'b0;
+            end
+            if(pd_redirect.en & pd_redirect.entry_error)begin
+                entry_error[pd_redirect.fsqIdx.idx] <= 1'b1;
             end
         end
     end
@@ -548,8 +555,9 @@ endgenerate
     assign commitFsqInfo.size = commitWBInfo.size;
 `endif
     assign commitFsqInfo.offset = commitWBInfo.offset;
+    assign oldErrorEntry = entry_error[commit_head] ? 0 : oldEntry;
     BTBEntryGen commit_btb_entry_gen (
-        .oldEntry(oldEntry),
+        .oldEntry(oldErrorEntry),
         .pc(commitStream.start_addr),
         .fsqInfo(commitFsqInfo),
         .normalOffset(commitStream.size),
@@ -571,7 +579,7 @@ endgenerate
     logic `N(`VADDR_SIZE) update_start_addr;
     logic `N(`VADDR_SIZE) update_target_pc, update_target_pc_pre;
     BTBUpdateInfo update_btb_entry, update_btb_entry_pre;
-    logic update_indirect;
+    logic update_indirect, btb_update;
     logic `N(`SLOT_NUM) update_real_taken;
     logic `N(`SLOT_NUM) update_alloc_slot;
     assign bpu_fsq_io.updateInfo.meta = updateMeta;
@@ -583,6 +591,7 @@ endgenerate
     assign bpu_fsq_io.updateInfo.allocSlot = update_alloc_slot;
     assign bpu_fsq_io.updateInfo.tailTaken = update_tail_taken;
     assign bpu_fsq_io.updateInfo.redirectInfo = commit_redictInfo;
+    assign bpu_fsq_io.updateInfo.btb_update = btb_update;
 `ifdef DIFFTEST
     assign bpu_fsq_io.updateInfo.fsqIdx = commit_head;
 `endif
@@ -595,7 +604,8 @@ endgenerate
         update_taken <= commitWBInfo.taken;
         update_start_addr <= commitStream.start_addr;
         update_target_pc <= update_target_pc_pre;
-        update_btb_entry_pre <= pred_error ? commitUpdateEntry : oldEntry;
+        update_btb_entry_pre <= pred_error ? commitUpdateEntry : oldErrorEntry;
+        btb_update <= entry_error[commit_head] | pred_error & commitUpdateEntry.en;
         update_real_taken <= realTaken;
         update_alloc_slot <= allocSlot;
         update_tail_taken <= pred_error ? (commitWBInfo.br_type != CONDITION) & ~commitWBInfo.exception :

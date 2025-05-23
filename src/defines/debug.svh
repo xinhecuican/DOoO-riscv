@@ -5,15 +5,17 @@
 `define T_LOG_ALL
 // `define ENABLE_LOG_ADDR
 `define LOG_ADDR 'h9fe41180
-// `define T_DEBUG
+`define T_DEBUG
+// `define T_UBTB
 // `define T_BTB
 // `define T_FSQ
-// `define T_RAS
+`define T_RAS
 // `define T_TAGE
 // `define T_BR_HIST
-`define T_DCACHE
-`define T_L2CACHE
-`define T_SCB
+// `define T_PREDECODE
+// `define T_DCACHE
+// `define T_L2CACHE
+// `define T_SCB
 // `define T_ICACHE
 // `define T_COMMIT
 

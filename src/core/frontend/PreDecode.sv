@@ -198,7 +198,7 @@ endgenerate
     assign selectBundle = bundles_next[selectIdx];
 
     // if nobranch_error is set, redirect this stream as nobranch stream and execute again
-    logic nobranch_error, jump_error;
+    logic nobranch_error, jump_error, entry_error, jump_unmatch;
 `ifdef RVC
     assign nobranch_error = (stream_valid & ~exc_valid & (stream_next.taken & 
                             (~bundles_next[tailIdx].branch | 
@@ -210,13 +210,16 @@ endgenerate
     logic `N(`VADDR_SIZE) ras_addr;
     assign ras_addr = pd_redirect.ras_addr;
 
-    assign jump_error = jump_en & ~exc_valid & ((~stream_next.taken) | // 存在直接跳转分支预测不跳转
-                            (stream_next.taken & ((tailIdx != selectIdx) |
-                            (bundles_next[tailIdx].jump & (stream_next.target != bundles_next[tailIdx].target)))));
+    assign jump_unmatch = (stream_next.taken & ((tailIdx != selectIdx) |
+                (bundles_next[tailIdx].jump & (stream_next.target != bundles_next[tailIdx].target))));
+    assign jump_error = jump_en & ~exc_valid & ((~stream_next.taken) | jump_unmatch);
+
+    assign entry_error = nobranch_error | jump_en & ~exc_valid & jump_unmatch;
 
     assign redirect_en = jump_error | nobranch_error;
     assign pd_redirect.en = redirect_en & ~frontendCtrl.ibuf_full;
     assign pd_redirect.exc_en = stream_valid;
+    assign pd_redirect.entry_error = entry_error;
     assign pd_redirect.size = jump_en ? rvc_idx_n[selectIdx] + shiftIdx : rvc_idx_n[tailIdx] + shiftIdx;
     assign pd_redirect.direct = jump_en;
     assign pd_redirect.fsqIdx = fsqIdx;
@@ -269,6 +272,12 @@ generate
     end
 endgenerate
     PREncoder #(`BLOCK_INST_SIZE) encoder_jump_idx(jump_en_pre, jumpSelectIdx_pre);
+
+`ifdef DIFFTEST
+    `Log(DLog::Debug, T_PREDECODE, jump_error & ~frontendCtrl.ibuf_full, "ifu jump error")
+    `Log(DLog::Debug, T_PREDECODE, nobranch_error & ~frontendCtrl.ibuf_full, "ifu nobranch error")
+`endif
+
 endmodule
 
 module PreDecoder(

@@ -216,6 +216,7 @@ module PredictionResultGen #(
 )(
     input logic `VADDR_BUS pc,
     input logic hit,
+    input logic btb_hit,
     input BTBUpdateInfo entry,
     input logic `N(`SLOT_NUM) prediction,
     input logic `VADDR_BUS ras_addr,
@@ -341,7 +342,7 @@ generate
     end
     if(REDIRECTV)begin
         assign result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
-                    tail_taken & (tail_indirect_target != result_i.stream.target));
+                    ~(|predTaken) & tail_taken & (tail_indirect_target != result_i.stream.target));
     end
     else begin
         assign result_o.redirect = 0;
@@ -421,16 +422,17 @@ module S2Control(
         `BTB_SET_WIDTH + `INST_OFFSET + $clog2(`BTB_WAY), 
         `BTB_TAG_SIZE
     ) gen_tag(pc, lookup_tag);
-    assign hit = entry.en && (lookup_tag == tag);
-    assign btb_hit = hit | result_i.btb_hit;
-    assign entry_i = hit ? entry : result_i.btbEntry;
+    assign btb_hit = entry.en && (lookup_tag == tag);
+    assign hit = btb_hit | result_i.btb_hit;
+    assign entry_i = btb_hit ? entry : result_i.btbEntry;
     assign entry_s2 = entry_i;
     PredictionResultGen #(
         .RASV(1),
         .REDIRECTV(1)
     ) result_gen (
         .pc,
-        .hit(btb_hit),
+        .hit(hit),
+        .btb_hit(btb_hit),
         .entry(entry_i),
         .prediction,
         .ras_addr(ras_addr),
@@ -459,6 +461,7 @@ module S3Control(
     ) result_gen (
         .pc,
         .hit(result_i.btb_hit & result_i.en),
+        .btb_hit(1'b0),
         .entry(result_i.btbEntry),
         .prediction,
         .ras_addr,

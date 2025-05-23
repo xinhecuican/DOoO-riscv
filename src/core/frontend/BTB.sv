@@ -7,7 +7,15 @@ module BTBTagGen #(
     input logic `VADDR_BUS pc,
     output logic `N(WIDTH) tag
 );
-    assign tag = pc[OFFSET + WIDTH - 1 : OFFSET] ^ pc[`VADDR_SIZE-1: `VADDR_SIZE - WIDTH];
+    parameter SIG_BIT = OFFSET + WIDTH;
+    parameter MAX_SIZE = `VADDR_SIZE > SIG_BIT + WIDTH ? SIG_BIT + WIDTH : `VADDR_SIZE;
+    logic `N(MAX_SIZE-SIG_BIT) pc_reverse;
+generate
+    for(genvar i=0; i<MAX_SIZE-SIG_BIT; i++)begin
+        assign pc_reverse[i] = pc[MAX_SIZE-i-1];;
+    end
+endgenerate
+    assign tag = pc[SIG_BIT - 1 : OFFSET] ^ pc_reverse;
 endmodule
 
 module BTBIndexGen(
@@ -71,7 +79,7 @@ module BTB (
             );
             assign bank_ctrl[i].raddr = index;
             assign bank_ctrl[i].waddr = updateIdx;
-            assign bank_ctrl[i].we = btb_io.update & bank_we[i] & btb_io.updateInfo.btbEntry.en;
+            assign bank_ctrl[i].we = btb_io.update & bank_we[i] & btb_io.updateInfo.btb_update;
             assign bank_ctrl[i].wdata = {update_tag, btb_io.updateInfo.btbEntry};
         end
     endgenerate
@@ -84,4 +92,8 @@ module BTB (
         end
     end
 
+`ifdef DIFFTEST
+    `Log(DLog::Debug, T_BTB, btb_io.update & btb_io.updateInfo.btb_update,
+    $sformatf("BTB update: addr: %h idx: %d bank: %b", btb_io.updateInfo.start_addr, updateIdx, bank_we))
+`endif
 endmodule

@@ -2,7 +2,7 @@
 
 | isa |
 | - |
-| rv32imafc |
+| rv32imafc / rv64gc |
 
 # 鸣谢
 
