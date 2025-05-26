@@ -14,7 +14,6 @@ module Tage(
 		logic `N(`SLOT_NUM) update_u_en;
 		logic `N(`SLOT_NUM) provider;
 		logic `N(`SLOT_NUM) alloc;
-		logic `N(`SLOT_NUM) predError;
 		logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) update_u;
 		logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) update_ctr;
 		logic `N(`TAGE_TAG_SIZE) update_tag;
@@ -81,7 +80,6 @@ module Tage(
 				.lookup_tag(bank_ctrl[i].lookup_tag),
 				.provider(bank_ctrl[i].provider),
 				.alloc(bank_ctrl[i].alloc),
-				.predError(bank_ctrl[i].predError),
 				.update_u_en(bank_ctrl[i].update_u_en),
 				.update_u(bank_ctrl[i].update_u),
 				.reset_u(reset_u),
@@ -132,16 +130,16 @@ module Tage(
 			end
 			PSelector #(`TAGE_BANK) selector_provider(table_hits_reorder[br], provider[br]);
 			assign tage_prediction[br] = |table_hits_reorder[br] ? |(pred_reverse[br] & provider[br]) : base_ctr[br][`TAGE_BASE_CTR-1];
-			assign tage_io.prediction[br] = tage_prediction[br];
+			assign tage_io.prediction[br] = altCtr[br][`TAGE_ALT_CTR-1] ? base_ctr[br][`TAGE_BASE_CTR-1] : tage_prediction[br];
 			logic `N($clog2(`TAGE_BANK)) provider_idx;
 			PEncoder #(`TAGE_BANK) encoder_provider (table_hits_reorder[br], provider_idx);
 			assign tage_io.provider_ctr[br] = |table_hits_reorder[br] ? lookup_ctr[provider_idx] : {1'b1, {`TAGE_CTR_SIZE-1{1'b0}}};
-			assign tage_io.meta.altPred[br] = base_ctr[br][`TAGE_BASE_CTR-1];
+			assign tage_io.meta.tagePred[br] = tage_prediction[br];
 		end
 	endgenerate
 	assign tage_io.meta.provider = provider;
 	assign tage_io.meta.base_ctr = base_ctr;
-	assign tage_io.meta.predTaken = tage_prediction;
+	assign tage_io.meta.predTaken = tage_io.prediction;
 
 	// update
 	logic `N(`SLOT_NUM) predError, predTaken;
@@ -166,8 +164,12 @@ module Tage(
 	assign u_provider = meta.provider;
 	assign update_u_origin = meta.u;
 	assign update_en = u_slot_en;
-	assign altPred = meta.altPred;
-	assign dec_use = altPred ^ predTaken;
+generate
+	for(genvar i=0; i<`SLOT_NUM; i++)begin
+		assign altPred[i] = meta.base_ctr[i][`TAGE_BASE_CTR-1];
+	end
+endgenerate
+	assign dec_use = altPred ^ meta.tagePred;
 
 	CAMQueue #(
 		`TAGE_COMMIT_SIZE, 
@@ -209,16 +211,29 @@ generate
 	for(genvar i=0; i<`SLOT_NUM; i++)begin
 		logic `N(`TAGE_BANK) provider_mask_low, provider_mask;
 		LowMaskGen #(`TAGE_BANK) low_mask_provider (u_provider[i], provider_mask_low);
-		assign provider_mask = ~(|u_provider[i]) ? {`TAGE_BANK{1'b1}} : provider_mask_low;
+		assign provider_mask = ~(|u_provider[i]) ? {`TAGE_BANK{1'b1}} : provider_mask_low & ~u_provider[i];
 		ParallelAdder #(1, `TAGE_BANK) adder_update_u (update_u_valid[i], update_u_cnt[i]);
-		PRSelector #(`TAGE_BANK) selector_alloc (~update_u_valid[i] & provider_mask, alloc[i]);
-		assign alloc_combine[i] = (|alloc);
+		PRSelector #(`TAGE_BANK) selector_alloc (~update_u_valid[i] & provider_mask & {`TAGE_BANK{predError[i]}}, alloc[i]);
+		assign alloc_combine[i] = (|alloc[i]);
 		for(genvar j=0; j<`TAGE_BANK; j++)begin
 			logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) bank_u;
 			assign bank_u = update_u_origin[j];
 			UpdateCounter #(`TAGE_U_SIZE) updateCounter (bank_u[i], ~predError[i], update_u[j][i]);
-			assign update_u_en[j][i] = (~(alloc_combine[i]) & predError[i]) |
+			assign update_u_en[j][i] = (~alloc_combine[i] & predError[i]) |
 									   (u_provider[i][j] & dec_use[i]);
+		end
+
+		logic `N(`TAGE_ALT_CTR) altCtr_d;
+		UpdateCounter #(`TAGE_ALT_CTR) updateAltCtr (altCtr[i], ~(tage_io.updateInfo.realTaken[i] ^ altPred[i]), altCtr_d);
+		always_ff @(posedge clk, negedge rst)begin
+			if(rst == `RST)begin
+				altCtr[i] <= 0;
+			end
+			else begin
+				if(update_en[i] & dec_use)begin
+					altCtr[i] <= altCtr_d;
+				end
+			end
 		end
 	end
 
@@ -306,9 +321,8 @@ generate
 		assign bank_ctrl[i].update_en = update_en;
 		assign bank_ctrl[i].provider = {u_provider[1][i], u_provider[0][i]};
 		assign bank_ctrl[i].alloc = bank_alloc;
-		assign bank_ctrl[i].predError = predError;
-		assign bank_ctrl[i].update_u = update_u;
-		assign bank_ctrl[i].update_u_en = update_u_en;
+		assign bank_ctrl[i].update_u = update_u[i];
+		assign bank_ctrl[i].update_u_en = update_u_en[i];
 		assign bank_ctrl[i].update_ctr = update_ctr;
 		assign bank_ctrl[i].update_idx = update_idx;
 		assign bank_ctrl[i].update_tag = update_tag;
@@ -334,7 +348,6 @@ module TageTable #(
 	input logic `N(`SLOT_NUM) update_en,
 	input logic `N(`SLOT_NUM) provider,
 	input logic `N(`SLOT_NUM) alloc,
-	input logic `N(`SLOT_NUM) predError,
 	input logic `N(`SLOT_NUM) update_u_en,
 	input logic `N(`SLOT_NUM) reset_u,
 	input logic `ARRAY(`SLOT_NUM, `TAGE_U_SIZE) update_u,
@@ -401,7 +414,7 @@ module TageTable #(
 			.waddr(update_idx),
 			.raddr(lookup_idx),
 			.rdata(lookup_u[i]),
-			.wdata(update_u[i]),
+			.wdata(update_u[i] & {`TAGE_U_SIZE{~alloc[i]}}),
 			.ready()
 		);
 	end

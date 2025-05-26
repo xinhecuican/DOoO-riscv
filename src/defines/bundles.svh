@@ -74,10 +74,10 @@ typedef struct packed {
 typedef struct packed {
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_CTR_SIZE) tage_ctrs;
     logic `ARRAY(`TAGE_BANK, `SLOT_NUM * `TAGE_U_SIZE) u;
-    logic `ARRAY(`TAGE_BASE_CTR, `SLOT_NUM) base_ctr;
+    logic `ARRAY(`SLOT_NUM, `TAGE_BASE_CTR) base_ctr;
     logic `ARRAY(`SLOT_NUM, `TAGE_BANK) provider;
     logic `N(`SLOT_NUM) predTaken;
-    logic `N(`SLOT_NUM) altPred;
+    logic `N(`SLOT_NUM) tagePred;
 } TageMeta;
 
 typedef struct packed {
