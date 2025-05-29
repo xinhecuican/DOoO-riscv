@@ -88,7 +88,8 @@ module DCacheMiss(
     logic `N(`STORE_COMMIT_WIDTH) scIdxs `N(`DCACHE_MISS_SIZE);
 
     logic `N(`LOAD_PIPELINE+1) free_en;
-    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhits;
+    logic `N(`LOAD_PIPELINE) rhit;
     logic `ARRAY(`LOAD_PIPELINE+1, $clog2(`LOAD_PIPELINE+1)) req_order;
     logic `ARRAY(`LOAD_PIPELINE, $clog2(`LOAD_PIPELINE)) r_req_order;
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_WIDTH) rhit_idx, ridx;
@@ -180,8 +181,8 @@ module DCacheMiss(
 // enqueue
     CalValidNum #(`LOAD_PIPELINE+1) cal_req_order (free_en, req_order);
     assign r_req_order[0] = 0;
-    assign r_req_order[1] = (~io.ren[0] | io.ren[0] & (|rhit[0]) & mshr_remain_valid[0]) ? 0 : 1;
-    assign rfree_eq[1][0] = io.ren[0] & mshr_remain_valid[0] & (remain_valid[0] | (|rhit[0])) & raddr_eq[1][0];
+    assign r_req_order[1] = (~io.ren[0] | io.ren[0] & (rhit[0]) & mshr_remain_valid[0]) ? 0 : 1;
+    assign rfree_eq[1][0] = io.ren[0] & mshr_remain_valid[0] & (remain_valid[0] | (rhit[0])) & raddr_eq[1][0];
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         for(genvar j=0; j<`LOAD_PIPELINE; j++)begin
@@ -199,15 +200,16 @@ generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign freeIdx[i] = free_io.r_idxs[req_order[i]];
         for(genvar j=0; j<`DCACHE_MISS_SIZE; j++)begin
-            assign rhit[i][j] = en[j] & (io.raddr[i]`DCACHE_BLOCK_BUS == addr[j]);
+            assign rhits[i][j] = en[j] & (io.raddr[i]`DCACHE_BLOCK_BUS == addr[j]);
         end
-        Encoder #(`DCACHE_MISS_SIZE) encoder_rhit(rhit[i], rhit_idx[i]);
+        assign rhit[i] = |rhits[i];
+        Encoder #(`DCACHE_MISS_SIZE) encoder_rhit(rhits[i], rhit_idx[i]);
         PEncoder #(`LOAD_PIPELINE) encoder_rfree_eq_idx (rfree_eq[i], rfree_idx[i]);
         PEncoder #(`DCACHE_MSHR_BANK) encoder_mshr (~mshr_en[i], mshrFreeIdx[i]);
         assign mshr_remain_valid[i] = |(~mshr_en[i]);
         assign remain_valid[i] = remain_count > r_req_order[i];
-        assign rhit_combine[i] = (|rhit[i]) | (|rfree_eq[i]);
-        assign ridx[i] = (|rhit[i]) ? rhit_idx[i] : 
+        assign rhit_combine[i] = (rhit[i]) | (|rfree_eq[i]);
+        assign ridx[i] = (rhit[i]) ? rhit_idx[i] : 
                          |rfree_eq[i] ? freeIdx[rfree_idx[i]] : freeIdx[i];
 
         always_ff @(posedge clk)begin
@@ -583,7 +585,16 @@ generate
 endgenerate
 
 // miss end
-    assign miss_end = en & data_valid & ~refill_valid & ~mshr_waiting;
+    logic `ARRAY(`LOAD_PIPELINE, `DCACHE_MISS_SIZE) rhit_conflict;
+    logic `N(`DCACHE_MISS_SIZE) rhit_conflict_combine;
+generate
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign rhit_conflict[i] = {`DCACHE_MISS_SIZE{io.ren[i]}} & rhits[i];
+    end
+    ParallelOR #(`DCACHE_MISS_SIZE, `LOAD_PIPELINE) or_rhit_conflict(rhit_conflict, rhit_conflict_combine);
+endgenerate
+    assign miss_end = en & data_valid & ~refill_valid & ~mshr_waiting &
+                    ~rhit_conflict_combine;
     PEncoder #(`DCACHE_MISS_SIZE) encoder_miss_end (miss_end, miss_end_idx);
 
     `PERF(dcache_miss, r_axi_io.ar_valid & r_axi_io.ar_ready)

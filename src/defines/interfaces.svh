@@ -50,10 +50,11 @@ interface BpuTageIO(
     logic ready;
     logic `VADDR_BUS pc;
     logic `N(`SLOT_NUM) prediction;
+    logic `N(`SLOT_NUM) use_tage;
     logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) provider_ctr;
     TageMeta meta;
 
-    modport tage (input pc, history, redirect, update, updateInfo, output prediction, provider_ctr, meta, ready);
+    modport tage (input pc, history, redirect, update, updateInfo, output prediction, use_tage, provider_ctr, meta, ready);
 endinterface
 
 interface BpuSCIO(
@@ -64,11 +65,12 @@ interface BpuSCIO(
 );
     logic `VADDR_BUS pc;
     SCMeta meta;
+    logic `N(`SLOT_NUM) use_tage;
     logic `ARRAY(`SLOT_NUM, `TAGE_CTR_SIZE) tage_ctrs;
     logic `N(`SLOT_NUM) tage_prediction;
     logic `N(`SLOT_NUM) prediction;
 
-    modport sc (input pc, history, redirect, update, updateInfo, tage_ctrs, tage_prediction, 
+    modport sc (input pc, history, redirect, update, updateInfo, use_tage, tage_ctrs, tage_prediction, 
                 output prediction, meta);
 endinterface //BpuSCIO
 

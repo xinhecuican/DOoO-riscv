@@ -45,6 +45,7 @@ module BranchPredictor(
     assign sc_io.pc = pc;
     assign sc_io.tage_prediction = tage_io.prediction;
     assign sc_io.tage_ctrs = tage_io.provider_ctr;
+    assign sc_io.use_tage = tage_io.use_tage;
     SC sc(.*, .io(sc_io));
 `endif
     assign ittage_io.pc = pc;

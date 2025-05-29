@@ -108,8 +108,8 @@
 `define SC_TABLE_NUM (`SC_HIST_NUM+`SC_IMLI_NUM)
 `define SC_THRESH_DEPTH 64
 `define SC_THRESH_CTR 8
-`define SC_GTHRESH_CTR 9
-`define SC_GTHRESH_INIT 'd35
+`define SC_GTHRESH_CTR 11
+`define SC_GTHRESH_INIT 'he0
 
 `define ITTAGE_TAG_SIZE 9
 `define ITTAGE_U_SIZE 1

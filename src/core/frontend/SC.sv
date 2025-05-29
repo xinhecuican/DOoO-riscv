@@ -12,6 +12,7 @@ module SC(
     logic `ARRAY(`SLOT_NUM, `SC_GTHRESH_CTR+1) lookup_thresh;
 
     localparam SC_ALL_SIZE = `SC_CTR_SIZE-1+$clog2(`SC_TABLE_NUM);
+    localparam SC_CTR_ALL_SIZE = `SC_CTR_SIZE+$clog2(`SC_TABLE_NUM);
     logic `TENSOR(`SC_TABLE_NUM, `SLOT_NUM, `SC_CTR_SIZE) sc_ctrs;
     logic `N(`SLOT_NUM) prediction, sc_prediction;
 
@@ -115,19 +116,20 @@ endgenerate
 
 // lookup
     logic `ARRAY(`SLOT_NUM, SC_ALL_SIZE) sc_thresh_all;
-    logic `ARRAY(`SLOT_NUM, `SC_CTR_SIZE+$clog2(`SC_TABLE_NUM)) sc_ctrs_all;
-    logic `TENSOR(`SLOT_NUM, `SC_TABLE_NUM, `SC_CTR_SIZE-1) sc_thresh_val;
+    logic `ARRAY(`SLOT_NUM, SC_CTR_ALL_SIZE) sc_ctrs_all;
+    // logic `TENSOR(`SLOT_NUM, `SC_TABLE_NUM, `SC_CTR_SIZE-1) sc_thresh_val;
     logic `TENSOR(`SLOT_NUM, `SC_TABLE_NUM, `SC_CTR_SIZE) sc_ctrs_rev;
 
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
         for(genvar j=0; j<`SC_TABLE_NUM; j++)begin
-            assign sc_thresh_val[i][j] = sc_ctrs[j][i][`SC_CTR_SIZE-1] ? sc_ctrs[j][i][`SC_CTR_SIZE-2: 0] : 
-                                        {1'b1, {`SC_CTR_SIZE-1{1'b0}}} - sc_ctrs[j][i];
+            // assign sc_thresh_val[i][j] = sc_ctrs[j][i][`SC_CTR_SIZE-1] ? sc_ctrs[j][i][`SC_CTR_SIZE-2: 0] : 
+                                        // {1'b1, {`SC_CTR_SIZE-1{1'b0}}} - sc_ctrs[j][i];
             assign sc_ctrs_rev[i][j] = sc_ctrs[j][i];
         end
-        ParallelAdder #(`SC_CTR_SIZE-1, `SC_TABLE_NUM) adder_ctrs_thresh (sc_thresh_val[i], sc_thresh_all[i]);
+        // ParallelAdder #(`SC_CTR_SIZE-1, `SC_TABLE_NUM) adder_ctrs_thresh (sc_thresh_val[i], sc_thresh_all[i]);
         ParallelAdder #(`SC_CTR_SIZE, `SC_TABLE_NUM) adder_ctrs (sc_ctrs_rev[i], sc_ctrs_all[i]);
+        assign sc_thresh_all[i] = sc_ctrs_all[i][SC_CTR_ALL_SIZE-1] ? sc_ctrs_all[i][SC_CTR_ALL_SIZE-2: 0] : {1'b1, {SC_CTR_ALL_SIZE-1{1'b0}}} - sc_ctrs_all[i];
         logic low_conf, mid_conf, high_conf;
         assign low_conf = (io.tage_ctrs[i] == TAGE_WEAK_TAKEN) || 
                           (io.tage_ctrs[i] == (TAGE_WEAK_TAKEN - 1));
@@ -138,9 +140,9 @@ generate
         assign lookup_thresh[i] = thresh_data[i] + gthresh[i];
         
         logic use_sc;
-        assign use_sc = low_conf ||
+        assign use_sc = io.use_tage[i] && (low_conf ||
                         (mid_conf && (sc_thresh_all[i] > lookup_thresh[i][`SC_THRESH_CTR-1: 2])) ||
-                        (high_conf && (sc_thresh_all[i] > lookup_thresh[i][`SC_THRESH_CTR-1: 1]));
+                        (high_conf && (sc_thresh_all[i] > lookup_thresh[i][`SC_THRESH_CTR-1: 1])));
 
         assign sc_prediction[i] = sc_ctrs_all[i][`SC_CTR_SIZE+$clog2(`SC_TABLE_NUM)-1];
         assign prediction[i] = use_sc ? sc_prediction[i] : io.tage_prediction[i];

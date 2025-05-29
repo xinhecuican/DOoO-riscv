@@ -135,6 +135,7 @@ module Tage(
 			PEncoder #(`TAGE_BANK) encoder_provider (table_hits_reorder[br], provider_idx);
 			assign tage_io.provider_ctr[br] = |table_hits_reorder[br] ? lookup_ctr[provider_idx] : {1'b1, {`TAGE_CTR_SIZE-1{1'b0}}};
 			assign tage_io.meta.tagePred[br] = tage_prediction[br];
+			assign tage_io.use_tage[br] = ~altCtr[br][`TAGE_ALT_CTR-1] & (|table_hits_reorder[br]);
 		end
 	endgenerate
 	assign tage_io.meta.provider = provider;
