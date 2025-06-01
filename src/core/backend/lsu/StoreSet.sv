@@ -126,7 +126,7 @@ endgenerate
             if(ssit_we & (|{ssit_entrys[1].en, ssit_entrys[0].en}))begin
                 rst_counter <= rst_counter + 1;
             end
-            ssit_rst <= ssit_we & (|{ssit_entrys[1].en, ssit_entrys[0].en}) & (|rst_counter);
+            ssit_rst <= ssit_we & (|{ssit_entrys[1].en, ssit_entrys[0].en}) & (&rst_counter);
         end
     end
 endmodule

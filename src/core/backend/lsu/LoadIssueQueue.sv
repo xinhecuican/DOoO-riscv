@@ -32,10 +32,10 @@ module LoadIssueQueue(
     LoadUnitIO.load load_io,
     DTLBLsuIO.lq tlb_lsu_io,
 `ifdef FEAT_MEMPRED
-    logic `N(`LOAD_PIPELINE) lfst_en,
-    RobIdx `N(`LOAD_PIPELINE) lfst_idx,
-    logic `N(`STORE_PIPELINE) lfst_finish,
-    RobIdx `N(`STORE_PIPELINE) lfst_finish_idx,
+    input logic `N(`LOAD_PIPELINE) lfst_en,
+    input RobIdx `N(`LOAD_PIPELINE) lfst_idx,
+    input logic `N(`STORE_PIPELINE) lfst_finish,
+    input RobIdx `N(`STORE_PIPELINE) lfst_finish_idx,
 `endif
     input BackendCtrl backendCtrl
 );

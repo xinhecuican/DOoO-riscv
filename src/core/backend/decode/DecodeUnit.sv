@@ -256,7 +256,7 @@ module DecodeUnit(
                   {{{11{cbranch_imm[7]}}, cbranch_imm} & {19{cbeqz | cbnez}}, 1'b0} |
                   {4'b0, clwsp_imm & {6{clwsp}}, 10'b0} |
                   {4'b0, cswsp_imm & {6{cswsp}}, 10'b0};
-`else
+`else // RV64I
     logic cflw, cfsw, cflwsp, cfswsp;
     assign cflw = sign0 & cfunct3_3;
     assign cfsw = sign0 & cfunct3_7;
@@ -286,7 +286,7 @@ module DecodeUnit(
                   {4'b0, cswsp_imm & {6{cswsp | cfswsp}}, 10'b0};
 `endif
 
-`else
+`else // RVF
 
 `ifdef RV64I
     assign crs1_o = {5{clw | csw | csrli | csrai | candi | csub | cxor | cor | cand | 

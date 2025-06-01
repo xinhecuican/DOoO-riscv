@@ -76,7 +76,7 @@ generate;
 `endif
                                 }, 
 `ifdef FEAT_MEMPRED
-                                ssit_idx: fold_addr ^ pd_ibuffer_io.offset[i],
+                                ssit_idx: fold_addr ^ {pd_ibuffer_io.offset[i], {`SSIT_WIDTH-`PREDICTION_WIDTH{1'b0}}},
 `endif
                                 inst: pd_ibuffer_io.inst[i]};
     end

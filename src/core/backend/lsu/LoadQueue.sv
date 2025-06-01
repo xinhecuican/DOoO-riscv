@@ -64,7 +64,9 @@ module LoadQueue(
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_QUEUE_WIDTH) vio_idx;
     LoadVioData `N(`LOAD_PIPELINE) vio_datas;
     RobIdx `N(`LOAD_PIPELINE) vio_robIdx;
-
+`ifdef FEAT_MEMPRED
+    FsqIdxInfo `N(`LOAD_PIPELINE) vio_wfsqInfo;
+`endif
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         assign eqIdx[i] = io.data[i].lqIdx.idx[`LOAD_QUEUE_WIDTH-1: $clog2(`LOAD_PIPELINE)];
@@ -142,6 +144,9 @@ generate
             .mask_vec,
             .vio_en(vio_en[i]),
             .vio_robIdx(vio_robIdx[i]),
+`ifdef FEAT_MEMPRED
+            .vio_wfsqInfo(vio_wfsqInfo[i]),
+`endif
             .vio_data_o(vio_datas[i])
         );
         assign vio_idx[i] = {vio_datas[i].idx, i[0]};
@@ -234,6 +239,9 @@ endgenerate
     FsqIdxInfo lq_vio_fsqInfo;
     logic `N(`LOAD_QUEUE_SIZE) head_mask;
     logic vio_bigger;
+`ifdef FEAT_MEMPRED
+    FsqIdxInfo lq_vio_wfsqInfo;
+`endif
     
     MaskGen #(`LOAD_QUEUE_SIZE) decoder_head (head, head_mask);
 generate
@@ -254,6 +262,9 @@ endgenerate
         lq_vio_dir <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_datas[1].dir : vio_datas[0].dir;
         lq_vio_robIdx <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_robIdx[1] : vio_robIdx[0];
         lq_vio_fsqInfo <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_datas[1].fsqInfo : vio_datas[0].fsqInfo;
+`ifdef FEAT_MEMPRED
+        lq_vio_wfsqInfo <= vio_en[1] & vio_bigger | ~vio_en[0] ? vio_wfsqInfo[1] : vio_wfsqInfo[0];
+`endif
     end
     assign io.lq_violation.en = lq_violation_en;
     assign io.lq_violation.addr = 0;
@@ -262,6 +273,9 @@ endgenerate
     assign io.lq_violation.lqIdx.dir = lq_vio_dir;
     assign io.lq_violation.robIdx = lq_vio_robIdx;
     assign io.lq_violation.fsqInfo = lq_vio_fsqInfo;
+`ifdef FEAT_MEMPRED
+    assign io.lq_violation.wfsqInfo = lq_vio_wfsqInfo;
+`endif
 endmodule
 
 module LoadQueueBank #(
@@ -321,6 +335,9 @@ module LoadQueueBank #(
     input logic `ARRAY(`STORE_PIPELINE, BANK_SIZE) mask_vec,
     output logic vio_en,
     output RobIdx vio_robIdx,
+`ifdef FEAT_MEMPRED
+    output FsqIdxInfo vio_wfsqInfo,
+`endif
     output LoadVioData vio_data_o
 );
     logic `N(BANK_SIZE) valid, miss, addrValid, dataValid, writeback, uncache;
@@ -565,12 +582,19 @@ endgenerate
 
 // violation
     logic `ARRAY(`STORE_PIPELINE, BANK_SIZE) cmp_vec, valid_vec, violation_vec;
+    logic `ARRAY(BANK_SIZE, `STORE_PIPELINE) violation_vec_rev;
     logic `N(BANK_SIZE) vio_vec, vio_vec_n, vio_vec_redirect;
 
     RobIdx `N(BANK_SIZE) vio_robIdxs;
 
     LoadVioData `N(BANK_SIZE) vio_datas;
+    SelectVioData `N(BANK_SIZE) select_vio_datas;
+    SelectVioData select_vio_data;
     logic `N(`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH) addr_mask `N(BANK_SIZE);
+`ifdef FEAT_MEMPRED
+    FsqIdxInfo `N(`STORE_PIPELINE) wfsqInfo;
+    logic `ARRAY(BANK_SIZE, $clog2(`STORE_PIPELINE)) w_vio_bank, w_vio_bank_n;
+`endif
 
     always_ff @(posedge clk)begin
         if(en)begin
@@ -588,29 +612,47 @@ generate
                     (write_violation[i].addr[`PADDR_SIZE-1: `DCACHE_BYTE_WIDTH] ==
                     addr_mask[j][`PADDR_SIZE+`DCACHE_BYTE-`DCACHE_BYTE_WIDTH-1: `DCACHE_BYTE]) &
                     (|(write_violation[i].mask & addr_mask[j][`DCACHE_BYTE-1: 0]));
-            assign valid_vec[i][j] = ~overflow[i] & valid[j] & addrValid[j] & (~redirect | bigger[j]); 
+            assign valid_vec[i][j] = ~overflow[i] & valid[j] & addrValid[j] & (~redirect | bigger[j]);
+            assign violation_vec_rev[j][i] = violation_vec[i][j];
         end
+`ifdef FEAT_MEMPRED
+        always_ff @(posedge clk)begin
+            wfsqInfo[i] <= write_violation[i].fsqInfo;
+        end
+`endif
     end
 endgenerate
     assign violation_vec = cmp_vec & mask_vec & valid_vec;
     ParallelOR #(BANK_SIZE, `STORE_PIPELINE) or_violation_vec(violation_vec, vio_vec);
     always_ff @(posedge clk)begin
         vio_vec_n <= vio_vec;
+`ifdef FEAT_MEMPRED
+        w_vio_bank_n <= w_vio_bank;
+`endif
     end
 generate
     for(genvar i=0; i<BANK_SIZE; i++)begin
         assign vio_vec_redirect[i] = vio_vec_n[i] & (~redirect | bigger[i]);
+        assign select_vio_datas[i].data = vio_datas[i];
+`ifdef FEAT_MEMPRED
+        PEncoder #(`STORE_PIPELINE) encoder_vio_wbank(violation_vec_rev[i], w_vio_bank[i]);
+        assign select_vio_datas[i].wbank = w_vio_bank_n[i];
+`endif
     end
 endgenerate
 
-    LoopOldestSelect #(BANK_SIZE, `ROB_WIDTH, $bits(LoadVioData)) select_vio (
+    LoopOldestSelect #(BANK_SIZE, `ROB_WIDTH, $bits(SelectVioData)) select_vio (
         .en(vio_vec_redirect),
         .cmp(vio_robIdxs),
-        .data_i(vio_datas),
+        .data_i(select_vio_datas),
         .en_o(vio_en),
         .cmp_o(vio_robIdx),
-        .data_o(vio_data_o)
+        .data_o(select_vio_data)
     );
+    assign vio_data_o = select_vio_data.data;
+`ifdef FEAT_MEMPRED
+    assign vio_wfsqInfo = wfsqInfo[select_vio_data.wbank];
+`endif
 endmodule
 
 module LoadUncacheBuffer(

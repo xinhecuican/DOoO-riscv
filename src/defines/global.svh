@@ -218,6 +218,7 @@ typedef enum logic [1:0] {
 `define LSU_SIZE `LOAD_PIPELINE
 `define LOAD_REFILL_SIZE 2
 `define SSIT_SIZE 1024
+`define SSIT_TAG_WIDTH 6
 `define SSIT_WIDTH $clog2(`SSIT_SIZE)
 `define SSIT_RESET_WIDTH 6
 `define LFST_SIZE 32

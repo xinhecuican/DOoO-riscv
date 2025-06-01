@@ -569,6 +569,13 @@ typedef struct packed {
 } LoadVioData;
 
 typedef struct packed {
+    LoadVioData data;
+`ifdef FEAT_MEMPRED
+    logic `N($clog2(`STORE_PIPELINE)) wbank;
+`endif
+} SelectVioData;
+
+typedef struct packed {
     logic en;
     StoreIdx sqIdx;
     logic `N(`TLB_OFFSET) vaddrOffset;

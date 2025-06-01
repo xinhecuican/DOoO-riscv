@@ -111,7 +111,7 @@ module ReplaceQueue(
     end
 
 // write conflict detect
-    assign waddr = io.snoop_en ? io.snoop_addr : io.waddr;
+    assign waddr = io.waddr;
 generate
     for(genvar i=0; i<`DCACHE_REPLACE_SIZE; i++)begin
         assign hit[i] = en[i] & dataValid[i] & entrys[i].en & (waddr`DCACHE_BLOCK_BUS == entrys[i].addr);
