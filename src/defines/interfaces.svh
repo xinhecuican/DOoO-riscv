@@ -297,17 +297,31 @@ interface PreDecodeIBufferIO;
     logic iam; // for exception, instruction address misaligned
     logic `N(`FSQ_WIDTH) fsqIdx;
     logic `N(`PREDICTION_WIDTH) shiftIdx;
+    logic `N(`VADDR_SIZE) start_addr;
 
-    modport predecode(output en, ipf, num, inst, offset, iam, fsqIdx, shiftIdx);
-    modport instbuffer(input en, ipf, num, inst, offset, iam, fsqIdx, shiftIdx);
+    modport predecode(output en, ipf, num, inst, offset, iam, fsqIdx, shiftIdx, start_addr);
+    modport instbuffer(input en, ipf, num, inst, offset, iam, fsqIdx, shiftIdx, start_addr);
 endinterface
 
 interface IfuBackendIO;
     FetchBundle fetchBundle;
     logic stall;
+`ifdef FEAT_MEMPRED
+    logic ssit_en;
+    logic `ARRAY(2, `FSQ_WIDTH) ssit_raddr;
+    logic `ARRAY(2, `SSIT_WIDTH) ssit_rdata;
+`endif
 
-    modport ifu(output fetchBundle, input stall);
-    modport backend(input fetchBundle, output stall);
+    modport ifu(output fetchBundle, input stall
+`ifdef FEAT_MEMPRED
+            , input ssit_en, ssit_raddr, output ssit_rdata
+`endif
+    );
+    modport backend(input fetchBundle, output stall
+`ifdef FEAT_MEMPRED
+            , output ssit_en, ssit_raddr, input ssit_rdata
+`endif
+    );
 endinterface
 
 interface DecodeRenameIO;
@@ -563,6 +577,10 @@ endinterface
 interface BackendRedirectIO;
     BackendRedirectInfo branchRedirect;
     BackendRedirectInfo memRedirect;
+`ifdef FEAT_MEMPRED
+    logic mem_raw;
+    FsqIdxInfo wfsqInfo;
+`endif
     BranchRedirectInfo branchInfo;
     RobIdx memRedirectIdx;
 
@@ -571,7 +589,11 @@ interface BackendRedirectIO;
     CSRRedirectInfo csrOut;
 
     modport redirect(input branchRedirect, memRedirect, memRedirectIdx, branchInfo, output out, branchOut, csrOut);
-    modport mem(output memRedirect, memRedirectIdx);
+    modport mem(output memRedirect, memRedirectIdx
+`ifdef FEAT_MEMPRED
+                , mem_raw, wfsqInfo
+`endif
+    );
 endinterface
 
 interface RobRedirectIO;
@@ -649,6 +671,32 @@ interface DCacheAmoIO;
                     ,output word
 `endif
     );
+endinterface
+
+interface StoreSetIO;
+    logic `N(`FETCH_WIDTH) en;
+    logic `ARRAY(`FETCH_WIDTH, `SSIT_WIDTH) raddr;
+    SSITEntry `N(`FETCH_WIDTH) ssit_entrys;
+    logic ssit_we;
+    logic `ARRAY(2, `SSIT_WIDTH) ssit_widx;
+
+    logic `ARRAY(`LOAD_PIPELINE, `LFST_WIDTH) lfst_raddr;
+    logic `N(`LOAD_PIPELINE) lfst_en;
+    RobIdx `N(`LOAD_PIPELINE) lfst_idx;
+
+    logic `N(`FETCH_WIDTH) lfst_we;
+    logic `ARRAY(`FETCH_WIDTH, `LFST_WIDTH) lfst_waddr;
+    RobIdx `N(`FETCH_WIDTH) lfst_widx;
+    logic `N(`STORE_PIPELINE) lfst_finish;
+    logic `ARRAY(`STORE_PIPELINE, `LFST_WIDTH) lfst_finish_waddr;
+    RobIdx `N(`STORE_PIPELINE) lfst_finish_idx;
+
+    modport ss(input en, raddr, lfst_raddr, lfst_we, lfst_waddr, lfst_widx, ssit_we, ssit_widx,
+                input lfst_finish, lfst_finish_waddr, lfst_finish_idx,
+                output ssit_entrys, lfst_en, lfst_idx);
+    modport rename(output en, raddr);
+    modport dis(input ssit_entrys, output lfst_raddr, lfst_we, lfst_waddr, lfst_widx);
+    modport lsu(input lfst_en, lfst_idx, output lfst_finish, lfst_finish_waddr, lfst_finish_idx);
 endinterface
 
 interface LoadForwardIO;

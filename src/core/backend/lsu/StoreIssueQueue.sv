@@ -192,7 +192,11 @@ module StoreAddrBank(
         .addr0(freeIdx),
         .addr1(selectIdxNext),
         .we(io.en),
-        .wdata({io.data.uext, size, io.data.imm, io.data.sqIdx, io.data.lqIdx, io.status.robIdx, io.data.fsqInfo}),
+        .wdata({io.data.uext, size, io.data.imm, io.data.sqIdx, io.data.lqIdx, io.status.robIdx, io.data.fsqInfo
+`ifdef FEAT_MEMPRED
+        ,io.data.ssitEntry
+`endif
+        }),
         .rdata1(data_o),
         .ready()
     );

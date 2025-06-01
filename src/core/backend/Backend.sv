@@ -145,6 +145,23 @@ module Backend(
     assign fenceBus_o.inst_flush = fenceBus.inst_flush;
     assign fenceBus.inst_flush_end = fenceBus_o.inst_flush_end;
 `endif
+`ifdef FEAT_MEMPRED
+    StoreSetIO storeset_io();
+    logic `N(`PREDICTION_WIDTH) ssit_load_offset_n, ssit_store_offset_n;
+    logic ssit_we;
+    always_ff @(posedge clk)begin
+        ssit_load_offset_n <= backendRedirect.memRedirect.fsqInfo.offset;
+        ssit_store_offset_n <= backendRedirect.wfsqInfo.offset;
+        ssit_we <= backendRedirect.mem_raw;
+    end
+    assign ifu_backend_io.ssit_en = backendRedirect.mem_raw;
+    assign ifu_backend_io.ssit_raddr[0] = backendRedirect.memRedirect.fsqInfo.idx;
+    assign ifu_backend_io.ssit_raddr[1] = backendRedirect.wfsqInfo.idx;
+    assign storeset_io.ssit_we = ssit_we;
+    assign storeset_io.ssit_widx[0] = ifu_backend_io.ssit_rdata[0] ^ ssit_load_offset_n;
+    assign storeset_io.ssit_widx[1] = ifu_backend_io.ssit_rdata[1] ^ ssit_store_offset_n;
+    StoreSet storeset(.*, .io(storeset_io));
+`endif
 
     Decode decode(.*,
                   .insts(ifu_backend_io.fetchBundle));

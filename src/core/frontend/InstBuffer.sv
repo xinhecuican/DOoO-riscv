@@ -15,6 +15,9 @@ module InstBuffer (
         logic ipf;
         FsqIdxInfo fsqInfo;
         logic [31: 0] inst;
+`ifdef FEAT_MEMPRED
+        logic `N(`SSIT_WIDTH) ssit_idx;
+`endif
     } IBufData;
 
     typedef struct packed{
@@ -56,6 +59,13 @@ endgenerate
     assign out_en_shift = out_en_compose << head[$clog2(`IBUF_BANK_NUM)-1: 0];
     assign inst_buffer_re = out_en_shift[`IBUF_BANK_NUM-1: 0] |
                             out_en_shift[`IBUF_BANK_NUM * 2 - 1: `IBUF_BANK_NUM];
+
+`ifdef FEAT_MEMPRED
+    logic `N(`SSIT_WIDTH) fold_addr;
+    always_comb begin
+        fold_addr = ssitFoldPC(pd_ibuffer_io.start_addr);
+    end
+`endif
 generate;
     for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
         assign in_data[i] = '{iam: pd_ibuffer_io.iam, 
@@ -65,6 +75,9 @@ generate;
                                 , size: i+pd_ibuffer_io.shiftIdx
 `endif
                                 }, 
+`ifdef FEAT_MEMPRED
+                                ssit_idx: fold_addr ^ pd_ibuffer_io.offset[i],
+`endif
                                 inst: pd_ibuffer_io.inst[i]};
     end
     assign in_data_w = in_data;
@@ -98,6 +111,9 @@ generate;
         assign fetchBundle.inst[i] = read_data.inst;
         assign fetchBundle.iam[i] = read_data.iam;
         assign fetchBundle.ipf[i] = read_data.ipf;
+`ifdef FEAT_MEMPRED
+        assign fetchBundle.ssit_idx[i] = read_data.ssit_idx;
+`endif
     end
 endgenerate
     assign fetchBundle.en = out_en_compose;

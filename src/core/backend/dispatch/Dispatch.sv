@@ -23,6 +23,9 @@ module Dispatch(
     DisIssueIO.dis dis_fma_io,
     DisIssueIO.dis dis_fdiv_io,
 `endif
+`ifdef FEAT_MEMPRED
+    StoreSetIO.dis storeset_io,
+`endif
     CommitBus.in commitBus,
     FenceBus.dis fenceBus,
     input CommitWalk commitWalk,
@@ -189,6 +192,9 @@ generate
 `ifdef RVF
                         fp_en: di.frs1_sel | di.flt_we,
 `endif
+`ifdef FEAT_MEMPRED
+                        ssitEntry: storeset_io.ssit_entrys[i],
+`endif
                         fsqInfo: rename_dis_io.op[i].fsqInfo,
                         lqIdx: lq_eq_tail[i], sqIdx: sq_eq_tail[i]};
         assign di = rename_dis_io.op[i].di;
@@ -198,7 +204,19 @@ generate
         assign store_io.en[i] = rename_dis_io.op[i].en & di.memv & di.memop[`MEMOP_WIDTH-1] &
                                 (~(redirect));
         assign store_io.data[i] = data;
+`ifdef FEAT_MEMPRED
+        assign storeset_io.lfst_we[i] = store_io.en[i] & data.ssitEntry.en;
+        assign storeset_io.lfst_waddr[i] = data.ssitEntry.idx;
+        assign storeset_io.lfst_widx[i] = store_io.dis_status[i].robIdx;
+`endif
     end
+`ifdef FEAT_MEMPRED
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        MemIssueBundle data;
+        assign data = load_io.data_o[i];
+        assign storeset_io.lfst_raddr[i] = data.ssitEntry.idx;
+    end
+`endif
 endgenerate
     MemDispatchQueue #(
         .DATA_WIDTH($bits(MemIssueBundle)),

@@ -10,8 +10,15 @@ interface StoreQueueIO;
     RobIdx wb_robIdx;
     logic wb_req;
     logic wb_valid;
+`ifdef FEAT_MEMPRED
+    SSITEntry wb_ssitEntry;
+`endif
 
-    modport queue(input en, uncache, data, paddr, mask, output sqIdx, wb_req, wb_valid, wb_robIdx);
+    modport queue(input en, uncache, data, paddr, mask, output sqIdx, wb_req, wb_valid, wb_robIdx
+`ifdef FEAT_MEMPRED
+    , wb_ssitEntry
+`endif
+    );
 endinterface
 
 module StoreQueue(
@@ -68,6 +75,10 @@ module StoreQueue(
     logic `N(`DCACHE_BYTE) uncache_strb;
     logic uncache_req, uncache_wreq;
     RobIdx uncache_robIdx;
+`ifdef FEAT_MEMPRED
+    SSITEntry `N(`STORE_QUEUE_SIZE) ssitEntrys;
+    SSITEntry uncache_ssitEntry;
+`endif
 
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
@@ -168,6 +179,9 @@ endgenerate
                     addrValid[addr_eqIdx[i]] <= 1'b1;
                     data_dir[addr_eqIdx[i]] <= io.data[i].sqIdx.dir;
                     uncache[addr_eqIdx[i]] <= io.uncache[i];
+`ifdef FEAT_MEMPRED
+                    ssitEntrys[addr_eqIdx[i]] <= io.data[i].ssitEntry;
+`endif
                 end
                 if(issue_queue_io.data_en[i])begin
                     dataValid[data_eqIdx[i]] <= 1'b1;
@@ -240,13 +254,22 @@ endgenerate
 
     assign io.wb_req = uncacheState == WRITEBACK;
     assign io.wb_robIdx = uncache_robIdx;
-
+`ifdef FEAT_MEMPRED
+    assign io.wb_ssitEntry = uncache_ssitEntry;
+`endif
     lzc #(`DCACHE_BYTE) lzc_uncache_offset (addr_mask[commitHead][`DCACHE_BYTE-1: 0], uncache_offset, );
     ParallelAdder #(1, `DCACHE_BYTE) adder_uncache_size (addr_mask[commitHead][`DCACHE_BYTE-1: 0], uncache_size_pre);
 
     RobIdx commitRobIdx;
     always_ff @(posedge clk)begin
         commitRobIdx <= commitBus.robIdx;
+`ifdef FEAT_MEMPRED
+        if(valid[commitHead] & uncache[commitHead] &
+            (commitBus.robIdx == redirect_robIdxs[commitHead]) &
+            ~fence_valid & ~backendCtrl.redirect)begin
+            uncache_ssitEntry <= ssitEntrys[commitHead];
+        end
+`endif
     end
 
     always_ff @(posedge clk, negedge rst)begin

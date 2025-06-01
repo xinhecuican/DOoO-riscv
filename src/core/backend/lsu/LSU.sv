@@ -73,6 +73,9 @@ module LSU(
 `ifdef RVF
     WakeupBus.in fp_wakeupBus,
 `endif
+`ifdef FEAT_MEMPRED
+    StoreSetIO.lsu storeset_io,
+`endif
     WriteBackIO.fu lsu_wb_io,
     CommitBus.mem commitBus,
     input BackendCtrl backendCtrl,
@@ -146,6 +149,12 @@ module LSU(
 `endif
     LoadIssueQueue load_issue_queue(
         .*,
+`ifdef FEAT_MEMPRED
+        .lfst_en(storeset_io.lfst_en),
+        .lfst_idx(storeset_io.lfst_idx),
+        .lfst_finish(storeset_io.lfst_finish),
+        .lfst_finish_idx(storeset_io.lfst_finish_idx),
+`endif
         .wakeupBus(int_wakeupBus)
     );
     DCache dcache(.*);
@@ -597,7 +606,9 @@ endgenerate
     logic `N(`STORE_PIPELINE) suncache_s4;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr_s4;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s4;
-
+`ifdef FEAT_MEMPRED
+    SSITEntry `N(`STORE_PIPELINE) ssit_entry_s3, ssit_entry_s4;
+`endif
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic bigger;
@@ -610,6 +621,10 @@ generate
         always_ff @(posedge clk)begin
             store_en_s3[i] <= store_en[i] & ~store_redirect_s2[i];
             store_robIdx_s3[i] <= store_issue_data[i].robIdx;
+`ifdef FEAT_MEMPRED
+            ssit_entry_s3[i] <= store_issue_data[i].ssitEntry;
+            ssit_entry_s4[i] <= ssit_entry_s3[i];
+`endif
             exccode_s3[i] <= stlb_exception_s2[i] ? `EXC_SPF: 
                              smisalign_s2[i] ? `EXC_SAM : `EXC_NONE;
             store_exc_s3[i] <= stlb_exception_s2[i] | smisalign_s2[i];
@@ -632,12 +647,23 @@ generate
                 storeWBData[i].exccode <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? exccode_s4[i]  : `EXC_NONE;
                 // store queue只有uncache会写回，此时禁止irq
                 storeWBData[i].irq_enable <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i];
+`ifdef FEAT_MEMPRED
+                storeset_io.lfst_finish[i] <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] & ssit_entry_s4[i].en |
+                                store_queue_io.wb_req & store_queue_io.wb_ssitEntry.en;
+                storeset_io.lfst_finish_idx[i] <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? store_robIdx_s4[i] : store_queue_io.wb_robIdx;
+                storeset_io.lfst_finish_waddr[i] <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] ? ssit_entry_s4[i].idx : store_queue_io.wb_ssitEntry.idx;
+`endif
             end
             else begin
                 storeWBData[i].en <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i];
                 storeWBData[i].robIdx <= store_robIdx_s4[i];
                 storeWBData[i].exccode <= exccode_s4[i];
                 storeWBData[i].irq_enable <= 1'b1;
+`ifdef FEAT_MEMPRED
+                storeset_io.lfst_finish[i] <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] & ssit_entry_s4[i].en;
+                storeset_io.lfst_finish_idx[i] <= store_robIdx_s4[i];
+                storeset_io.lfst_finish_waddr[i] <= ssit_entry_s4[i].idx;
+`endif
             end
         end
     end
@@ -866,6 +892,10 @@ endgenerate
     assign redirect_io.memRedirect.robIdx.dir = fenceBus.fence_end ? fenceBus.preRobIdx.dir : robIdx_p[`ROB_WIDTH-1] & ~out.robIdx.idx[`ROB_WIDTH-1] ? ~out.robIdx.dir : out.robIdx.dir;
     assign redirect_io.memRedirect.fsqInfo = fenceBus.fence_end ? fenceBus.fsqInfo : out.fsqInfo;
     assign redirect_io.memRedirectIdx = fenceBus.fence_end ? fenceBus.robIdx : out.robIdx;
+`ifdef FEAT_MEMPRED
+    assign redirect_io.mem_raw = out.en & (~redirect_s3 | out_older) & ~fenceBus.fence_end;
+    assign redirect_io.wfsqInfo = out.wfsqInfo;
+`endif
 endmodule
 
 module ViolationCompare(
@@ -885,6 +915,9 @@ module ViolationCompare(
     assign out.lqIdx = cmp2.lqIdx;
     assign out.robIdx = cmp2.robIdx;
     assign out.fsqInfo = cmp2.fsqInfo;
+`ifdef FEAT_MEMPRED
+    assign out.wfsqInfo = cmp1.fsqInfo;
+`endif
     // BUG: consider load queue full
     assign out.en = cmp1.en & cmp2.en & (older | equal) & conflict & ~overflow;
 endmodule

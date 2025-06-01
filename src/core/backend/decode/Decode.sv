@@ -37,6 +37,9 @@ endgenerate
                 dec_rename_io.op[i].di <= decodeInfo[i];
                 dec_rename_io.op[i].fsqInfo <= insts.fsqInfo[i];
                 dec_rename_io.op[i].inst <= insts.inst[i];
+`ifdef FEAT_MEMPRED
+                dec_rename_io.op[i].ssit_idx <= insts.ssit_idx[i];
+`endif
             end
         end
     end

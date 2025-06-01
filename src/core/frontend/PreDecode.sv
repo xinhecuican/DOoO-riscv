@@ -6,6 +6,11 @@ module PreDecode(
     CachePreDecodeIO.pd cache_pd_io,
     PreDecodeRedirect.predecode pd_redirect,
     PreDecodeIBufferIO.predecode pd_ibuffer_io,
+`ifdef FEAT_MEMPRED
+    input logic ssit_en,
+    input logic [1: 0][`FSQ_WIDTH-1: 0] ssit_raddr,
+    output logic [1: 0][`SSIT_WIDTH-1: 0] ssit_ridx,
+`endif
     input FrontendCtrl frontendCtrl
 );
     PreDecodeBundle bundles`N(`BLOCK_INST_SIZE);
@@ -259,6 +264,34 @@ endgenerate
 `endif
     assign pd_ibuffer_io.ipf = ipf;
     assign pd_ibuffer_io.shiftIdx = shiftIdx;
+    assign pd_ibuffer_io.start_addr = stream_next.start_addr;
+`ifdef FEAT_MEMPRED
+    logic ssit_we;
+    logic `N(`FSQ_WIDTH) ssit_waddr;
+    logic `N(`SSIT_WIDTH) ssit_wdata;
+    always_ff @(posedge clk) begin
+        ssit_we <= |pd_ibuffer_io.en;
+        ssit_waddr <= fsqIdx.idx;
+        ssit_wdata <= ssitFoldPC(stream_next.start_addr);
+    end
+    MPRAM #(
+        .WIDTH(`SSIT_WIDTH),
+        .DEPTH(`FSQ_SIZE),
+        .READ_PORT(2),
+        .WRITE_PORT(1)
+    ) ssit_ram (
+        .clk,
+        .rst,
+        .rst_sync(1'b0),
+        .we(ssit_we),
+        .waddr(ssit_waddr),
+        .wdata(ssit_wdata),
+        .en({2{ssit_en}}),
+        .raddr(ssit_raddr),
+        .rdata(ssit_ridx),
+        .ready()
+    );
+`endif
 
 generate
     for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin

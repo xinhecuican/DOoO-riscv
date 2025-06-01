@@ -31,6 +31,12 @@ module LoadIssueQueue(
     WakeupBus.in wakeupBus,
     LoadUnitIO.load load_io,
     DTLBLsuIO.lq tlb_lsu_io,
+`ifdef FEAT_MEMPRED
+    logic `N(`LOAD_PIPELINE) lfst_en,
+    RobIdx `N(`LOAD_PIPELINE) lfst_idx,
+    logic `N(`STORE_PIPELINE) lfst_finish,
+    RobIdx `N(`STORE_PIPELINE) lfst_finish_idx,
+`endif
     input BackendCtrl backendCtrl
 );
 
@@ -58,6 +64,12 @@ generate
         assign bank_io[i].en = dis_load_io.en[order[i]] & ~dis_load_io.full;
         assign bank_io[i].status = dis_load_io.status[order[i]];
         assign bank_io[i].data = dis_load_io.data[order[i]];
+`ifdef FEAT_MEMPRED
+        assign bank_io[i].lfst_en = lfst_en[order[i]];
+        assign bank_io[i].lfst_idx = lfst_idx[order[i]];
+        assign bank_io[i].lfst_finish = lfst_finish;
+        assign bank_io[i].lfst_finish_idx = lfst_finish_idx;
+`endif
         assign bank_io[i].reply_fast = load_io.reply_fast[i];
         assign bank_io[i].reply_slow = load_io.reply_slow[i];
         assign bank_io[i].success = load_io.success[i];
@@ -113,9 +125,18 @@ interface LoadIssueBankIO;
     logic tlb_exception;
     logic tlb_error;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) tlb_bank_idx;
+`ifdef FEAT_MEMPRED
+    logic lfst_en;
+    RobIdx  lfst_idx;
+    logic `N(`STORE_PIPELINE) lfst_finish;
+    RobIdx `N(`STORE_PIPELINE) lfst_finish_idx;
+`endif
 
     modport bank(input en, status, data, reply_fast, reply_slow, success, success_idx,
                  tlb_en, tlb_exception, tlb_error, tlb_bank_idx,
+`ifdef FEAT_MEMPRED
+                input lfst_en, lfst_idx, lfst_finish, lfst_finish_idx,
+`endif
                  output full, reg_en, rs1, bankNum, data_o, issue_idx, robIdx_o, exception_o);
 endinterface
 
@@ -146,6 +167,10 @@ module LoadIssueBank(
     logic reg_en;
     RobIdx select_robIdx;
     logic `N(`LOAD_ISSUE_BANK_SIZE) selectIdx_decode, replyfast_decode, replyslow_decode, tlbbank_decode;
+`ifdef FEAT_MEMPRED
+    logic `N(`LOAD_ISSUE_BANK_SIZE) lfst_en;
+    RobIdx `N(`LOAD_ISSUE_BANK_SIZE) lfst_idx;
+`endif
 
     assign size = io.data.memop[1: 0];
     SDPRAM #(
@@ -170,7 +195,11 @@ module LoadIssueBank(
 
 generate
     for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-        assign ready[i] = en[i] & status_ram[i].rs1v & ~issue[i];
+        assign ready[i] = en[i] & status_ram[i].rs1v & ~issue[i]
+`ifdef FEAT_MEMPRED
+                        & ~lfst_en[i]
+`endif
+        ;
     end
 endgenerate
     DirectionSelector #(`LOAD_ISSUE_BANK_SIZE) selector (
@@ -273,4 +302,42 @@ endgenerate
             io.data_o <= data_o;
         end
     end
+
+`ifdef FEAT_MEMPRED
+    logic `ARRAY(`STORE_PIPELINE, `LOAD_ISSUE_BANK_SIZE) lfst_eq;
+    logic `N(`LOAD_ISSUE_BANK_SIZE) lfst_eq_all;
+    logic lfst_older;
+    logic `N(`LOAD_ISSUE_BANK_SIZE) lfst_redirect_older;
+
+generate
+    for(genvar i=0; i<`STORE_PIPELINE; i++)begin
+        for(genvar j=0; j<`LOAD_ISSUE_BANK_SIZE; j++)begin
+            assign lfst_eq[i][j] = lfst_en[j] & io.lfst_finish[i] & (io.lfst_finish_idx[i] == lfst_idx[j]);
+        end
+    end
+    for(genvar i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
+        LoopCompare #(`ROB_WIDTH) cmp_lfst_redirect(
+            backendCtrl.redirectIdx, lfst_idx[i], lfst_redirect_older[i]);
+    end
+endgenerate
+    ParallelOR #(`LOAD_ISSUE_BANK_SIZE, `STORE_PIPELINE) or_lfst_eq (lfst_eq, lfst_eq_all);
+    LoopCompare #(`ROB_WIDTH) cmp_lfst (io.lfst_idx, io.status.robIdx, lfst_older);
+    always_ff @(posedge clk)begin
+        if(io.en & io.lfst_en)begin
+            lfst_idx[freeIdx] <= io.lfst_idx;
+        end
+    end
+    always_ff @(posedge clk, negedge rst)begin
+        if(rst == `RST)begin
+            lfst_en <= 0;
+        end
+        else begin
+            for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
+                lfst_en[i] <= (lfst_en[i] | io.en & free_en[i] & io.lfst_en & lfst_older) &
+                            ~lfst_eq_all[i] & ~(backendCtrl.redirect & lfst_redirect_older[i]);
+            end
+        end
+    end
+`endif
+
 endmodule

@@ -30,7 +30,13 @@ module IFU (
     BranchPredictor branch_predictor(.*);
     FSQ fsq(.*);
     ICache icache(.*);
-    PreDecode predecode(.*);
+    PreDecode predecode(.*
+`ifdef FEAT_MEMPRED
+                , .ssit_en(ifu_backend_io.ssit_en),
+                .ssit_raddr(ifu_backend_io.ssit_raddr),
+                .ssit_ridx(ifu_backend_io.ssit_rdata)
+`endif
+    );
     InstBuffer instBuffer(.*,
                           .full(frontendCtrl.ibuf_full),
                           .stall(ifu_backend_io.stall));

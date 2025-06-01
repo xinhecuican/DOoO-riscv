@@ -16,6 +16,9 @@ module Rename(
     ,DiffRAT.rat diff_fp_rat
 `endif
 `endif
+`ifdef FEAT_MEMPRED
+    ,StoreSetIO.rename storeset_io
+`endif
 );
     logic `ARRAY(`FETCH_WIDTH, `ROB_WIDTH) robIdx;
     logic `N(`FETCH_WIDTH) int_rd_en;
@@ -166,6 +169,15 @@ endgenerate
             end
         end
     end
+
+`ifdef FEAT_MEMPRED
+generate
+    for(genvar i=0; i<`FETCH_WIDTH; i++)begin
+        assign storeset_io.en[i] = dec_rename_io.op[i].en & ~stall;
+        assign storeset_io.raddr[i] = dec_rename_io.op[i].ssit_idx;
+    end
+endgenerate
+`endif
 
 endmodule
 

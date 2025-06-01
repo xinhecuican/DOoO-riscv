@@ -217,6 +217,11 @@ typedef enum logic [1:0] {
 `define STORE_COMMIT_THRESH 5
 `define LSU_SIZE `LOAD_PIPELINE
 `define LOAD_REFILL_SIZE 2
+`define SSIT_SIZE 1024
+`define SSIT_WIDTH $clog2(`SSIT_SIZE)
+`define SSIT_RESET_WIDTH 6
+`define LFST_SIZE 32
+`define LFST_WIDTH $clog2(`LFST_SIZE)
 
 // regfile
 `define INT_REG_READ_PORT (`ALU_SIZE * 2 + `LOAD_PIPELINE + `STORE_PIPELINE * 2)

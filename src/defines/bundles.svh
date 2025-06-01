@@ -250,6 +250,9 @@ typedef struct packed {
     logic `N(`FETCH_WIDTH) ipf;
     FsqIdxInfo `N(`FETCH_WIDTH) fsqInfo;
     logic `ARRAY(`FETCH_WIDTH, 32) inst;
+`ifdef FEAT_MEMPRED
+    logic `ARRAY(`FETCH_WIDTH, `SSIT_WIDTH) ssit_idx;
+`endif
 } FetchBundle;
 
 typedef struct packed {
@@ -310,6 +313,9 @@ typedef struct packed {
     FsqIdxInfo fsqInfo;
     DecodeInfo di;
     logic `N(32) inst;
+`ifdef FEAT_MEMPRED
+    logic `N(`SSIT_WIDTH) ssit_idx;
+`endif
 } OPBundle;
 
 typedef struct packed {
@@ -366,6 +372,11 @@ typedef struct packed {
 } StoreIdx;
 
 typedef struct packed {
+    logic en;
+    logic `N(`LFST_WIDTH) idx;
+} SSITEntry;
+
+typedef struct packed {
     logic uext;
 `ifdef RVF
     logic fp_en;
@@ -375,6 +386,9 @@ typedef struct packed {
     LoadIdx lqIdx;
     StoreIdx sqIdx;
     FsqIdxInfo fsqInfo;
+`ifdef FEAT_MEMPRED
+    SSITEntry ssitEntry;
+`endif
 } MemIssueBundle;
 
 typedef struct packed {
@@ -531,6 +545,9 @@ typedef struct packed {
     LoadIdx lqIdx;
     RobIdx robIdx;
     FsqIdxInfo fsqInfo;
+`ifdef FEAT_MEMPRED
+    SSITEntry ssitEntry;
+`endif
 } StoreIssueData;
 
 typedef struct packed {
@@ -540,6 +557,9 @@ typedef struct packed {
     LoadIdx lqIdx;
     RobIdx robIdx;
     FsqIdxInfo fsqInfo;
+`ifdef FEAT_MEMPRED
+    FsqIdxInfo wfsqInfo;
+`endif
 } ViolationData;
 
 typedef struct packed {
