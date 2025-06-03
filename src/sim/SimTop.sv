@@ -70,10 +70,10 @@ module SimTop(
     end
 
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2+`DCACHE_ID_WIDTH, 1
+        `PADDR_SIZE, `XLEN, `L2ID_WIDTH, 1
     ) mem_axi();
     AxiIO #(
-        `PADDR_SIZE, `XLEN, 2+`DCACHE_ID_WIDTH, 1
+        `PADDR_SIZE, `XLEN, `L2ID_WIDTH, 1
     ) core_mem_axi();
     AxiIO #(
         `PADDR_SIZE, `XLEN, 1, 1
@@ -323,7 +323,7 @@ module SimTop(
     );
 
 // mem
-    typedef logic [1+`DCACHE_ID_WIDTH: 0] mem_id_t;
+    typedef logic [`L2ID_WIDTH-1: 0] mem_id_t;
     `AXI_TYPEDEF_AW_CHAN_T(AxiMemAW, addr_t, mem_id_t, user_t)
     `AXI_TYPEDEF_W_CHAN_T(AxiMemW, data_t, strb_t, user_t)
     `AXI_TYPEDEF_B_CHAN_T(AxiMemB, mem_id_t, user_t)

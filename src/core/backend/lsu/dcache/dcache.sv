@@ -579,7 +579,7 @@ endgenerate
     `LOG_ARRAY(T_DCACHE, dbg_refillData, miss_io.refillData, `DCACHE_BANK)
     `LOG_ARRAY(T_DCACHE, dbg_wdata, dbg_wdatan, `DCACHE_BANK)
     `Log(DLog::Debug, T_DCACHE, miss_io.refill_en & miss_io.refill_valid,
-        $sformatf("dcache refill. [%8h %d %b] %s", miss_io.refillAddr, miss_io.refillWay, miss_io.refill_write, dbg_refillData), 1'b1, miss_io.refillAddr)
+        $sformatf("dcache refill. [%8h %d %b] %s", miss_io.refillAddr, miss_io.refillWay, miss_io.refill_state, dbg_refillData), 1'b1, miss_io.refillAddr)
     `Log(DLog::Debug, T_DCACHE, wreq_n & whit,
         $sformatf("dcache write. [%h %d] %s", waddr_n, w_wayIdx, dbg_wdata), 1'b1, waddr_n)
     `Log(DLog::Debug, T_DCACHE, snoop_req,

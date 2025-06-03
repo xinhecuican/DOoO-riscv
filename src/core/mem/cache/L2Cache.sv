@@ -7,6 +7,7 @@ module L2Cache #(
     parameter DATA_BANK = 1, // CACHE SET BANK
     parameter ID_WIDTH=2,
     parameter ID_OFFSET=1,
+    parameter MST_ID_WIDTH=1,
     parameter SLAVE = 1,
     parameter WAY_NUM = 4,
     parameter SET = 64,
@@ -82,6 +83,7 @@ module L2Cache #(
         .DATA_BANK(DATA_BANK),
         .ID_WIDTH(ID_WIDTH),
         .ID_OFFSET(ID_OFFSET),
+        .MST_ID_WIDTH(MST_ID_WIDTH),
         .SLAVE(SLAVE),
         .WAY_NUM(WAY_NUM),
         .SET(SET),

@@ -141,6 +141,7 @@ module L2CacheWrapper #(
         .DATA_BANK(`L2DATA_BANK),
         .ID_WIDTH(2+`DCACHE_ID_WIDTH),
         .ID_OFFSET(0),
+        .MST_ID_WIDTH(`L2ID_WIDTH),
         .SLAVE(1),
         .WAY_NUM(`L2WAY_NUM),
         .SET(`L2SET),

@@ -22,7 +22,7 @@ module CPUCore (
         `PADDR_SIZE, `XLEN, `DCACHE_ID_WIDTH, 1
     ) tlb_io();
     CacheBus #(
-        `PADDR_SIZE, `XLEN, 2+`DCACHE_ID_WIDTH, 1
+        `PADDR_SIZE, `XLEN, `L2ID_WIDTH, 1
     ) master_io();
     SnoopIO #(
         `PADDR_SIZE, `XLEN, `L2MSHR_WIDTH

@@ -158,8 +158,10 @@ module Backend(
     assign ifu_backend_io.ssit_raddr[0] = backendRedirect.memRedirect.fsqInfo.idx;
     assign ifu_backend_io.ssit_raddr[1] = backendRedirect.wfsqInfo.idx;
     assign storeset_io.ssit_we = ssit_we;
-    assign storeset_io.ssit_widx[0] = ifu_backend_io.ssit_rdata[0] ^ ssit_load_offset_n;
-    assign storeset_io.ssit_widx[1] = ifu_backend_io.ssit_rdata[1] ^ ssit_store_offset_n;
+    assign storeset_io.ssit_widx[0] = ifu_backend_io.ssit_rdata[0] ^
+                                {ssit_load_offset_n, {`SSIT_WIDTH-`PREDICTION_WIDTH{1'b0}}};
+    assign storeset_io.ssit_widx[1] = ifu_backend_io.ssit_rdata[1] ^ 
+                                {ssit_store_offset_n, {`SSIT_WIDTH-`PREDICTION_WIDTH{1'b0}}};
     StoreSet storeset(.*, .io(storeset_io));
 `endif
 

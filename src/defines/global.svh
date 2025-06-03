@@ -422,4 +422,6 @@ typedef enum logic [1:0] {
 `define L2SLAVE_WAY 2
 `define L2PREPEND_PIPE 1
 `define L2APPEND_PIPE 1
+`define L2ID_SIZE 4
+`define L2ID_WIDTH $clog2(`L2ID_SIZE)
 `endif

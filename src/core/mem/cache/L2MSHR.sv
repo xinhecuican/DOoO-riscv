@@ -27,6 +27,7 @@ module L2MSHR #(
     parameter DATA_BANK = 1, // CACHE SET BANK
     parameter ID_WIDTH=2,
     parameter ID_OFFSET=1,
+    parameter MST_ID_WIDTH=1,
     parameter SLAVE = 1,
     parameter WAY_NUM = 4,
     parameter SET = 64,
@@ -124,15 +125,15 @@ module L2MSHR #(
     DirWInfo `N(MSHR_SIZE) dir_winfos;
     logic `ARRAY(MSHR_SIZE, 4) dir_op;
 
+    logic `N(MSHR_SIZE) data_valid_combine;
+    logic `ARRAY(MSHR_SIZE, SLAVE_BANK) refill_data_banks;
+    logic `TENSOR(MSHR_SIZE, SLAVE_BANK, SLAVE_BITS) refill_datas;
     logic `ARRAY(MSHR_SIZE, SLAVE_BANK) refill_valids;
     logic `ARRAY(SLAVE_BANK, MSHR_SIZE) refill_valids_rev;
-    logic `N(SLAVE_BANK) refill_valids_bank;
-    logic `N(SLAVE_BANK_WIDTH) refill_bank_idx;
-    logic `ARRAY(SLAVE_BANK, SLAVE_BITS) refill_data;
+    logic `ARRAY(MSHR_SIZE, SLAVE_BITS) refill_data;
     logic `ARRAY(MSHR_SIZE, ID_WIDTH) refill_ids;
     DirectoryState `N(MSHR_SIZE) refill_resps;
-    logic refill_snoop_resp_req, refill_l3_resp_req;
-    logic `ARRAY(SLAVE_BANK, MSHR_SIZE) refill_valid;
+    logic refill_snoop_resp_req;
     logic `N(MSHR_SIZE) refill_valid_select;
     logic `N(SLAVE_BANK) refill_bank_select;
     logic `N(MSHR_WIDTH) refill_idx, refill_direct_idx, refill_data_idx;
@@ -200,22 +201,22 @@ module L2MSHR #(
     DirWInfo dir_slave_winfo, dir_winfo;
     logic `N(MSHR_WIDTH) dir_slave_widx, dir_widx;
 
-    typedef enum {L3_IDLE, L3_REQUEST} L3State;
-    typedef struct packed {
-        logic request;
-        logic `N(MSHR_WIDTH) idx;
-        logic `N(ID_WIDTH) id;
-        logic `N(4) op;
-        logic `N(`PADDR_SIZE) addr;
-        logic `N(CACHE_BANK_WIDTH) data_index;
-    } L3Buffer;
-    L3State l3_state;
     MSHREntry l3_entry;
-    L3Buffer l3_buffer;
     logic `N(MSHR_SIZE) l3_requests;
     logic `N(MSHR_SIZE) l3_idx_dec, l3_buffer_idx_dec;
     logic `N(MSHR_WIDTH) l3_idx;
     logic l3_request;
+    logic `N(MSHR_SIZE) l3_read_once, l3_req_write, l3_req_write_end, l3_req_last;
+    logic `N(MSHR_SIZE) l3_data_valid, l3_req_send, l3_req_valid;
+    logic `ARRAY(MSHR_SIZE, CACHE_BANK_WIDTH) l3_data_idx;
+    logic `ARRAY(MSHR_SIZE, SET_WIDTH) l3_widx;
+    logic `N(DATA_BANK) l3_data_bank;
+    logic `N(MST_SNOOP_ID_WIDTH) mst_r_id;
+    logic `ARRAY(DATA_BANK, MSHR_SIZE) l3_write_bank_dec;
+    logic `N(MSHR_SIZE) replace_idx_dec, l3_req_write_select, l3_write_data_bank, l3_rid_dec;
+    logic `N(MSHR_WIDTH) l3_req_write_idx;
+    logic mst_r_ack;
+    logic `N(4) l3_op;
 
     logic `TENSOR(MSHR_SIZE, SLAVE_BANK, SLAVE_BITS) write_buffer;
     logic `N(MSHR_SIZE) write_data_valid, write_idx_dec;
@@ -374,8 +375,7 @@ generate
         end
     end
     Decoder #(MSHR_SIZE) decoder_snoop_idx (snoop_buffer.idx, snoop_idx_dec);
-    Decoder #(MSHR_SIZE) decoder_l3_buffer_idx (l3_buffer.idx, l3_buffer_idx_dec);
-    
+
     localparam PARTITION = CACHE_BITS / SLAVE_BITS;
     for(genvar i=0; i<SLAVE_BANK; i++)begin : refill_buffer
         logic `ARRAY(MSHR_SIZE, SLAVE_BITS) data, cache_data;
@@ -387,7 +387,7 @@ generate
         assign snoop_we = {MSHR_SIZE{snoop_cd_valid & ~snoop_buffer.slave_replace &
                             (snoop_buffer.data_index == i)}} & snoop_idx_dec;
         assign we = data_we | snoop_we |
-                    {MSHR_SIZE{master_io.r_valid & (l3_buffer.data_index == (i / PARTITION))}} & l3_buffer_idx_dec;
+                    {MSHR_SIZE{master_io.r_valid & (l3_data_idx[master_io.r_id] == (i / PARTITION))}} & l3_rid_dec;
         for(genvar j=0; j<DATA_BANK; j++)begin
             assign bank_data[j] = mshr_data_io.rdata[j][i];
         end
@@ -396,6 +396,7 @@ generate
             logic `ARRAY(PARTITION, SLAVE_BITS) bank_select_data_part, mst_data_part;
             assign refill_valids[j][i] = data_valid[j];
             assign refill_valids_rev[i][j] = data_valid[j];
+            assign refill_datas[j][i] = data[j];
             assign wdata[j] = data_we[j] ? bank_select_data_part[i % PARTITION] : 
                             snoop_we[j] ? snoop_cd_data.data : mst_data_part[i % PARTITION];
             FairSelect #(DATA_BANK, CACHE_BITS) select_data (data_bank_valids_rev[j], bank_data, data_we[j], bank_select_data);
@@ -403,7 +404,6 @@ generate
             assign mst_data_part = master_io.r_data;
             assign refill_buffer_data[j][i] = data[j];
         end
-        OldestSelect #(MSHR_SIZE, 1, SLAVE_BITS) select_data (data_valid, data, , refill_data[i]);
 
         always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
@@ -421,13 +421,14 @@ generate
 
             end
         end
-        PSelector #(MSHR_SIZE) encoder_refill_valid (refill_valids_rev[i], refill_valid[i]);
     end
-    ParallelOR #(SLAVE_BANK, MSHR_SIZE) or_refill_valids(refill_valids, refill_valids_bank);
-    PRSelector #(SLAVE_BANK) selector_refill_bank (refill_valids_bank, refill_bank_select);
-    PREncoder #(SLAVE_BANK) encoder_refill_bank (refill_valids_bank, refill_bank_idx);
-    assign refill_valid_select = refill_valid[refill_bank_idx];
-    Encoder #(MSHR_SIZE) encoder_refill_idx(refill_valid_select, refill_data_idx);
+    for(genvar i=0; i<MSHR_SIZE; i++)begin
+        PRSelector #(SLAVE_BANK) select_refill_data_idx (refill_valids[i], refill_data_banks[i]);
+        OldestSelect #(SLAVE_BANK, 1, SLAVE_BITS, 1) select_refill_data (refill_valids[i], refill_datas[i], data_valid_combine[i], refill_data[i]);
+    end
+    assign refill_bank_select = refill_data_banks[refill_data_idx];
+    PSelector #(MSHR_SIZE) encoder_refill_valid (data_valid_combine, refill_valid_select);
+    PEncoder #(MSHR_SIZE) encoder_refill_idx(data_valid_combine, refill_data_idx);
     PEncoder #(MSHR_SIZE) encoder_direct_idx(refill_direct, refill_direct_idx);
     assign refill_idx = |refill_direct ? refill_direct_idx : refill_data_idx;
 endgenerate
@@ -436,7 +437,6 @@ endgenerate
             refill_ids <= 0;
             refill_resps <= 0;
             refill_snoop_resp_req <= 0;
-            refill_l3_resp_req <= 0;
             dir_resp_reqs <= 0;
             refill_finish <= 0;
             refill_no_rack <= 0;
@@ -455,7 +455,7 @@ endgenerate
                 refill_resps[dir_select_idx_n] <= mshr_dir_io.hit_state;
             end
 
-            if((snoop_state == SNOOP_IDLE) & (|(snoop_request & dir_resp_reqs)))begin
+            if((snoop_state == SNOOP_IDLE) & (|snoop_request) & dir_resp_reqs[snoop_idx])begin
                 refill_snoop_resp_req <= 1'b1;
             end
             if((|snoop_buffer.response) & refill_snoop_resp_req)begin
@@ -464,18 +464,14 @@ endgenerate
                 refill_snoop_resp_req <= 1'b0;
             end
 
-            if((l3_state == L3_IDLE) & (l3_request))begin
-                refill_l3_resp_req <= 1'b1;
-            end
-            if(master_io.r_valid & refill_l3_resp_req)begin
-                refill_l3_resp_req <= 1'b0;
+            if(master_io.r_valid & master_io.r_last)begin
                 if(LLC)begin
-                    refill_resps[l3_buffer.idx] <= 3'b100;
+                    refill_resps[master_io.r_id] <= 3'b100;
                 end
                 else begin
-                    refill_resps[l3_buffer.idx] <= master_io.r_resp[4: 2];
+                    refill_resps[master_io.r_id] <= master_io.r_resp[4: 2];
                 end
-                dir_resp_reqs[l3_buffer.idx] <= 1'b0;
+                dir_resp_reqs[master_io.r_id] <= 1'b0;
             end
 
             if(slave_io.r_valid & slave_io.r_ready & slave_io.r_last & (|refill_direct))begin
@@ -495,8 +491,9 @@ endgenerate
 
         end
     end
-    OldestSelect #(SLAVE_BANK, 1, SLAVE_BITS, 1) select_refill_data (refill_valids_bank, refill_data, refill_r_valid, refill_r_data);
-    assign slave_io.r_valid = (|refill_direct) | (|refill_valids_bank);
+
+    assign refill_r_data = refill_data[refill_data_idx];
+    assign slave_io.r_valid = (|refill_direct) | (|data_valid_combine);
     assign slave_io.r_id = refill_ids[refill_idx];
     assign slave_io.r_data = refill_r_data;
     assign slave_io.r_resp = {refill_resps[refill_idx], 2'b00};
@@ -859,23 +856,21 @@ endgenerate
     assign mst_snoop_resp.cd.last = mst_snoop_data_idx == CACHE_BANK - 1;
 
 // to l3
-    logic l3_req_last, l3_req_write, l3_req_write_end, l3_data_valid;
-    logic l3_read_once;
-    logic `ARRAY(CACHE_BANK, CACHE_BITS) l3_data;
-    logic `N(DATA_BANK) l3_data_bank, l3_write_data_bank;
-    logic `N(MST_SNOOP_ID_WIDTH) mst_r_id;
-    logic mst_r_ack;
-    logic `N(4) l3_op;
-    OldestSelect #(MSHR_SIZE, 1, $bits(MSHREntry)) select_l3_entry (l3_requests, entrys, l3_request, l3_entry);
-    OldestSelect #(MSHR_SIZE, 1, 4) select_l3_op (l3_requests, dir_op, , l3_op);
-    PSelector #(MSHR_SIZE) selector_l3_idx (l3_requests, l3_idx_dec);
-    PEncoder #(MSHR_SIZE) encoder_l3_idx (l3_requests, l3_idx);
+    assign l3_req_valid = l3_requests & ~l3_req_send;
+    OldestSelect #(MSHR_SIZE, 1, $bits(MSHREntry)) select_l3_entry (l3_req_valid, entrys, l3_request, l3_entry);
+    OldestSelect #(MSHR_SIZE, 1, 4) select_l3_op (l3_req_valid, dir_op, , l3_op);
+    PSelector #(MSHR_SIZE) selector_l3_idx (l3_req_valid, l3_idx_dec);
+    PEncoder #(MSHR_SIZE) encoder_l3_idx (l3_req_valid, l3_idx);
+    Decoder #(MSHR_SIZE) decode_replace_idx( replace_buffer.idx, replace_idx_dec);
+    PEncoder #(MSHR_SIZE) encoder_l3_write_idx (l3_req_write, l3_req_write_idx);
+    PSelector #(MSHR_SIZE) selector_l3_req_write (l3_req_write, l3_req_write_select);
+    Decoder #(MSHR_SIZE) decode_l3_rid (master_io.r_id, l3_rid_dec);
 
 generate
     if(ISL2)begin
         always_ff @(posedge clk)begin
-            if(master_io.r_valid & master_io.r_ready)begin
-                l3_data[l3_buffer.data_index] <= master_io.r_data;
+            if(master_io.ar_valid & master_io.ar_ready)begin
+                l3_widx[l3_idx] <= l3_entry.paddr[OFFSET_WIDTH +: SET_WIDTH];
             end
         end
         always_ff @(posedge clk, negedge rst)begin
@@ -883,117 +878,121 @@ generate
                 l3_req_write <= 0;
                 l3_req_write_end <= 0;
                 l3_data_valid <= 0;
-                mst_r_id <= 0;
-                mst_r_ack <= 0;
+                l3_read_once <= 0;
             end
             else begin
-                if((l3_state == L3_REQUEST) & l3_data_valid & l3_read_once &
-                   (~replace_reqs[l3_buffer.idx] | replace_busy & 
-                   replace_buffer.replace_data_valid & (replace_buffer.idx == l3_buffer.idx)))begin
-                    l3_req_write <= 1'b1;
+                for(int i=0; i<MSHR_SIZE; i++)begin
+                    l3_req_write[i] <= (l3_req_write[i] | l3_requests[i] & l3_req_send[i] & 
+                        l3_data_valid[i] & l3_read_once[i] & (~replace_reqs[i] | 
+                        replace_busy & replace_buffer.replace_data_valid & replace_idx_dec[i])) &
+                        ~(~(|(l3_data_bank & write_bank_req)) & l3_req_write_select[i]);
+                    l3_req_write_end[i] <= (l3_req_write_end[i] | l3_write_data_bank[i] |
+                                master_io.r_valid & master_io.r_ready & master_io.r_last &
+                                        l3_rid_dec[i] & ~l3_read_once[i]) &
+                                ~(master_io.ar_valid & master_io.ar_ready & l3_idx_dec[i]);
                 end
-                if(~(|(l3_data_bank & write_bank_req)) & l3_req_write)begin 
-                    l3_req_write <= 1'b0;
-                    l3_data_valid <= 1'b0;
+                if(master_io.ar_valid & master_io.ar_ready)begin
+                    l3_data_valid[l3_idx] <= 1'b0;
+                    l3_read_once[l3_idx] <= l3_op == `ACEOP_READ_ONCE;
                 end
-                if(l3_state == L3_IDLE && l3_request)begin
-                    l3_req_write_end <= 1'b0;
+                if(master_io.r_valid & master_io.r_ready & master_io.r_last)begin
+                    l3_data_valid[master_io.r_id] <= 1'b1;
                 end
-                else if(|l3_write_data_bank | (l3_state == L3_REQUEST) & ~l3_read_once)begin
-                    l3_req_write_end <= 1'b1;
-                end
-                if(l3_state == L3_IDLE && l3_request)begin
-                    l3_data_valid <= 1'b0;
-                end
-                else if(master_io.r_valid & master_io.r_last)begin
-                    l3_data_valid <= 1'b1;
-                end
-                if(master_io.r_valid & master_io.r_last)begin
-                    mst_r_id <= mst_snoop_req.ar_snoop_id;
-                    mst_r_ack <= 1'b1;
-                end
-                if(mst_r_ack)begin
-                    mst_r_ack <= 1'b0;
+                if(~(|(l3_data_bank & write_bank_req)) & (|l3_req_write))begin
+                    l3_data_valid[l3_req_write_idx] <= 1'b0;
                 end
             end
         end
 
         for(genvar i=0; i<DATA_BANK; i++)begin
-            assign l3_write_data_bank[i] = mshr_data_io.wvalid[i] & (mshr_data_io.wmshr_idx_o[i] == l3_buffer.idx);
+            logic `N(MSHR_SIZE) wmshr_idx_dec;
+            Decoder #(MSHR_SIZE) decoder_wmshr_idx (mshr_data_io.wmshr_idx_o[i], wmshr_idx_dec);
+            assign l3_write_bank_dec[i] = {MSHR_SIZE{mshr_data_io.wvalid[i]}} & wmshr_idx_dec;
         end
+        ParallelOR #(MSHR_SIZE, DATA_BANK) or_l3_write_bank (l3_write_bank_dec, l3_write_data_bank);
     end
 endgenerate
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             l3_requests <= 0;
-            l3_state <= L3_IDLE;
+            l3_req_send <= 0;
             l3_req_last <= 1'b0;
-            l3_buffer <= 0;
-            l3_read_once <= 1'b0;
+            l3_data_idx <= 0;
+            mst_r_id <= 0;
+            mst_r_ack <= 0;
         end
         else begin
+            for(int i=0; i<MSHR_SIZE; i++)begin
+                l3_requests[i] <= (l3_requests[i] | ~dir_clean_invalid & dir_read & dir_request_select_n[i] &
+                (~mshr_dir_io.hit & ~mshr_slave_io.hit & ~(dir_make_unique_all & LLC))) &
+                ~((master_io.r_valid & master_io.r_last & l3_rid_dec[i] | l3_req_send[i] & l3_req_last[i] & ISL2) &
+                    (~ISL2 | ISL2 & ~replace_reqs[i] & l3_req_write_end[i]));
+            end
             if(dir_read & (~mshr_dir_io.hit & ~mshr_slave_io.hit & 
             ~(dir_make_unique_all & LLC)) & ~dir_clean_invalid)begin
                 l3_requests[dir_select_idx_n] <= 1'b1;
             end
-            case(l3_state)
-            L3_IDLE: begin
-                if(l3_request)begin
-                    l3_state <= L3_REQUEST;
-                    l3_buffer.idx <= l3_idx;
-                    l3_buffer.addr <= l3_entry.paddr;
-                    l3_buffer.request <= 1'b1;
-                    l3_buffer.id <= l3_entry.id;
-                    l3_buffer.op <= l3_op == `ACEOP_READ_ONCE ? `ACEOP_READ_SHARED : l3_op;
-                    l3_buffer.data_index <= 0;
-                    l3_read_once <= l3_op == `ACEOP_READ_ONCE;
-                    l3_req_last <= 1'b0;
-                end
+            if(dir_request_n)begin
+                l3_req_send[dir_select_idx_n] <= 1'b0;
             end
-            L3_REQUEST: begin
-                if(master_io.ar_valid & master_io.ar_ready)begin
-                    l3_buffer.request <= 1'b0;
-                end
-                if(master_io.r_valid)begin
-                    l3_buffer.data_index <= l3_buffer.data_index + 1;
-                end
-                if(master_io.r_valid & master_io.r_last & ISL2)begin
-                    l3_req_last <= 1'b1;
-                end
-                // if is l2 and req from icache, then we need to place data to data bank
-                if((master_io.r_valid & master_io.r_last | l3_req_last & ISL2) &
-                   (~ISL2 | ISL2 & ~replace_reqs[l3_buffer.idx] & l3_req_write_end))begin
-                    l3_state <= L3_IDLE;
-                    l3_requests[l3_buffer.idx] <= 1'b0;
-                end
+            if(master_io.ar_valid & master_io.ar_ready)begin
+                l3_req_send[l3_idx] <= 1'b1;
+                l3_req_last[l3_idx] <= 1'b0;
             end
-            endcase
+            if(master_io.r_valid & master_io.r_ready)begin
+                l3_data_idx[master_io.r_id] <= l3_data_idx[master_io.r_id] + 1;
+            end
+            if(master_io.r_valid & master_io.r_ready & master_io.r_last)begin
+                mst_r_id <= mst_snoop_req.ar_snoop_id;
+                mst_r_ack <= 1'b1;
+                l3_req_last[master_io.r_id] <= 1'b1;
+            end
+            if(mst_r_ack)begin
+                mst_r_ack <= 1'b0;
+            end
         end
     end
 
-    assign master_io.ar_valid = l3_buffer.request;
-    assign master_io.ar_id = l3_buffer.id;
-    assign master_io.ar_addr = l3_buffer.addr;
+    assign master_io.ar_valid = l3_request;
+    assign master_io.ar_id = l3_idx;
+    assign master_io.ar_addr = l3_entry.paddr;
     assign master_io.ar_len = CACHE_BANK - 1;
     assign master_io.ar_size = $clog2(`CACHELINE_SIZE / CACHE_BANK);
     assign master_io.ar_burst = 2'b01;
     assign master_io.ar_user = 0;
-    assign master_io.ar_snoop = l3_buffer.op;
+    assign master_io.ar_snoop = l3_op == `ACEOP_READ_ONCE ? `ACEOP_READ_SHARED : l3_op;
     assign master_io.r_ready = 1'b1;
     assign mst_snoop_resp.r_snoop_id = mst_r_id;
     assign mst_snoop_resp.rack = mst_r_ack;
 
 // write
     logic `N(MSHR_SIZE) write_reqs_combine;
-    logic write_conflict_wait;
-    always_ff @(posedge clk)begin
-        if(slave_io.w_valid & slave_io.w_ready & ~write_conflict_wait)begin
-            write_buffer[write_idx][write_data_index] <= slave_io.w_data;
-        end
-        if(snoop_cd_valid & snoop_buffer.slave_replace)begin
-            write_buffer[snoop_buffer.idx][snoop_buffer.data_index] <= snoop_cd_data.data;
+    logic write_conflict_wait, write_data_cond, snoop_data_cond, l3_data_cond;
+    logic `N(SLAVE_BANK) write_data_idx_dec, snoop_data_idx_dec, l3_data_idx_dec;
+
+    assign write_data_cond = slave_io.w_valid & slave_io.w_ready & ~write_conflict_wait;
+    assign snoop_data_cond = snoop_cd_valid & snoop_buffer.slave_replace;
+    assign l3_data_cond = ISL2 & master_io.r_valid & master_io.r_ready & l3_read_once[master_io.r_id];
+    Decoder #(SLAVE_BANK) decoder_write_data (write_data_index, write_data_idx_dec);
+    Decoder #(SLAVE_BANK) decoder_snoop_data (snoop_buffer.data_index, snoop_data_idx_dec);
+    Decoder #(CACHE_BANK) decoder_l3_data (l3_data_idx[master_io.r_id], l3_data_idx_dec);
+generate
+    for(genvar i=0; i<MSHR_SIZE; i++)begin
+        for(genvar j=0; j<SLAVE_BANK; j++)begin
+            always_ff @(posedge clk)begin
+                if(write_data_cond & write_idx_dec[i] & write_data_idx_dec[j])begin
+                    write_buffer[i][j] <= slave_io.w_data;
+                end
+                if(snoop_data_cond & snoop_idx_dec[i] & snoop_data_idx_dec[j])begin
+                    write_buffer[i][j] <= snoop_cd_data.data; 
+                end
+                if(l3_data_cond & l3_rid_dec[i] & l3_data_idx_dec[j])begin
+                    write_buffer[i][j] <= master_io.r_data;
+                end
+            end
         end
     end
+endgenerate
 
     PEncoder #(MSHR_SIZE) encoder_write_b_idx(write_data_finish, write_data_finish_idx);
     Decoder #(MSHR_SIZE) decoder_write_idx (write_idx, write_idx_dec);
@@ -1109,7 +1108,18 @@ generate
                 assign lookup_bank_rev[j][i] = lookup_bank[i][j];
             end
         end
-        Decoder #(DATA_BANK) decoder_l3_bank (l3_buffer.addr[OFFSET_WIDTH +: DATA_BANK_WIDTH], l3_data_bank);
+        logic `ARRAY(MSHR_SIZE, DATA_BANK) l3_req_write_bank;
+        always_ff @(posedge clk, negedge rst)begin
+            if(rst == `RST)begin
+                l3_req_write_bank <= 0;
+            end
+            else begin
+                if(master_io.ar_valid & master_io.ar_ready)begin
+                    l3_req_write_bank[l3_idx] <= l3_entry.paddr[OFFSET_WIDTH +: DATA_BANK_WIDTH];
+                end
+            end
+        end
+        assign l3_data_bank = l3_req_write_bank[l3_req_write_idx];
     end
 
     for(genvar i=0; i<DATA_BANK; i++)begin : lookup
@@ -1142,7 +1152,6 @@ generate
         PSelector #(MSHR_SIZE) selector_write_bank_idx (write_bank_requests, write_bank_idx_dec[i]);
         OldestSelect #(MSHR_SIZE, 1, SET_WIDTH) select_write_addr (write_bank_requests, lookup_write_addrs, write_bank_req[i], write_addr);
         OldestSelect #(MSHR_SIZE, 1, WAY_WIDTH) select_write_way (write_bank_requests, lookup_data_ways, , write_way);
-        assign write_data = write_buffer[write_bank_idx[i]];
 
         if(!ISL2)begin
             assign mshr_data_io.we[i] = write_bank_req[i];
@@ -1154,19 +1163,21 @@ generate
             else begin
                 assign mshr_data_io.waddr[i] = write_addr[SET_WIDTH-1: DATA_BANK_WIDTH];
             end
-            assign mshr_data_io.wdata[i] = write_data;
+            assign mshr_data_io.wdata[i] = write_buffer[write_bank_idx[i]];
         end
         else begin
-            assign mshr_data_io.we[i] = write_bank_req[i] | l3_req_write & l3_data_bank[i];
-            assign mshr_data_io.wway[i] = write_bank_req[i] ? write_way : lookup_replace_ways[l3_buffer.idx];
-            assign mshr_data_io.wmshr_idx[i] = write_bank_req[i] ? write_bank_idx[i] : l3_buffer.idx;
+            assign mshr_data_io.we[i] = write_bank_req[i] | (|l3_req_write) & l3_data_bank[i];
+            assign mshr_data_io.wway[i] = write_bank_req[i] ? write_way : lookup_replace_ways[l3_req_write_idx];
+            assign mshr_data_io.wmshr_idx[i] = write_bank_req[i] ? write_bank_idx[i] : l3_req_write_idx;
             if(DATA_BANK == 1)begin
-                assign mshr_data_io.waddr[i] = write_bank_req[i] ? write_addr : l3_buffer.addr[OFFSET_WIDTH +: SET_WIDTH];
+                assign mshr_data_io.waddr[i] = write_bank_req[i] ? write_addr : l3_widx[l3_req_write_idx];
             end
             else begin
-                assign mshr_data_io.waddr[i] = write_bank_req[i] ? write_addr[SET_WIDTH-1: DATA_BANK_WIDTH] : l3_buffer.addr[OFFSET_WIDTH +: SET_WIDTH - DATA_BANK_WIDTH];
+                assign mshr_data_io.waddr[i] = write_bank_req[i] ? write_addr[SET_WIDTH-1: DATA_BANK_WIDTH] : l3_widx[l3_req_write_idx][SET_WIDTH-1: DATA_BANK_WIDTH];
             end
-            assign mshr_data_io.wdata[i] = write_bank_req[i] ? write_data : l3_data;
+            logic `N(MSHR_WIDTH) write_buffer_idx;
+            assign write_buffer_idx = write_bank_req[i] ? write_bank_idx[i] : l3_req_write_idx;
+            assign mshr_data_io.wdata[i] = write_buffer[write_buffer_idx];
         end
     end
 endgenerate
@@ -1299,7 +1310,7 @@ endgenerate
     end
 
     assign master_io.aw_valid = replace_buffer.aw_valid;
-    assign master_io.aw_id = replace_buffer.id;
+    assign master_io.aw_id = 0;
     assign master_io.aw_addr = replace_buffer.addr;
     assign master_io.aw_burst = 2'b01;
     assign master_io.aw_size = $clog2(`DCACHE_BYTE);
