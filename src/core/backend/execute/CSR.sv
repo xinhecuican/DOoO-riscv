@@ -323,7 +323,7 @@ endgenerate                                                             \
     logic `N(`VADDR_SIZE-2) mvec_pc, svec_pc;
     logic `N(`VADDR_SIZE) mtarget_pc, starget_pc;
     logic `N(`EXC_WIDTH) ecall_exccode;
-    logic `N(`MXL) exccode_decode;
+    logic `N(32) exccode_decode;
     logic `N(`MXL) edelege;
     logic edelege_valid;
     logic ret, ret_priv_error, ret_valid;
@@ -344,7 +344,7 @@ endgenerate                                                             \
     assign ret_valid = ret & ~ret_priv_error;
     assign exccode = redirect.exccode == `EXC_EC ? ecall_exccode : 
                      (ret & ret_priv_error) ? `EXC_II : redirect.exccode;
-    Decoder #(`MXL) deocder_exccode (exccode, exccode_decode);
+    Decoder #(32) deocder_exccode (exccode, exccode_decode);
     assign edelege = medeleg & exccode_decode;
     assign edelege_valid = (|edelege) & (mode != 2'b11) | (redirect.irq & redirect.irq_deleg);
     Decoder #(32) decoder_mpf_counter (mpf_offset, mpf_offset_decode);

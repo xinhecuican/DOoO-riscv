@@ -285,7 +285,7 @@ endgenerate
         i2f_wstatus
     );
 `ifdef RV64I
-    logic `N(`XLEN) i2f_lres;
+    logic `N(FXL) i2f_lres;
     FFlags i2f_lstatus;
     I2F #(format, INT64) i2f_l (
         uext,

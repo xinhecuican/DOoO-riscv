@@ -524,8 +524,10 @@ module CalValidNum4(
 	input logic [3: 0] en,
 	output logic [3: 0][1: 0] out
 );
+	logic en_xor; // 1为奇数，0为偶数
 	CalValidNum3 calValidNum(en[2: 0], out[2: 0]);
-	assign out[3] = {en[0] & en[1] | en[0] & en[2] | en[1] & en[2], en[0] ^ en[1] ^ en[2]};
+	assign en_xor = ^en[2: 0];
+	assign out[3] = {~en_xor & (|en[2: 0]), en_xor};
 endmodule
 
 `define CAL_VALID_NUM_TEMPLATE(num, half, num_log, half_log) \

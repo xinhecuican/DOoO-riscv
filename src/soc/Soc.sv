@@ -10,8 +10,8 @@ module Soc(
     output logic txd
 );
     AxiIO #(
-        `PADDR_SIZE, `XLEN, `L2ID_WIDTH, 1
-    ) mem_axi();
+        `PADDR_SIZE, `XLEN, 1, 1
+    ) core_peri_axi();
     AxiIO #(
         `PADDR_SIZE, `XLEN, `L2ID_WIDTH, 1
     ) core_mem_axi();

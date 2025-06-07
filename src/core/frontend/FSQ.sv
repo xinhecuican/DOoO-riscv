@@ -131,9 +131,9 @@ module FSQ (
         .ready()
     );
 
-    // for predecode redirect
+    // for predecode redirectdeocder_exccode
     MPRAM #(
-        .WIDTH($bits(`VADDR_SIZE)),
+        .WIDTH(`VADDR_SIZE),
         .DEPTH(`FSQ_SIZE),
         .READ_PORT(1),
         .WRITE_PORT(1)

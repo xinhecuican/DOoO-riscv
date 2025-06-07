@@ -116,15 +116,16 @@ module FMASlice (
     end
 
 
-    logic `N(`XLEN) mul_res, mul_wres;
+    logic `N(`XLEN) mul_res;
+    logic `N(FXL) mul_wres;
     logic `N(FP32_EXP_BITS+FP32_MAN_BITS*2+2) toadd_wres;
     FFlags mul_status, mul_wstatus;
     FMul #(FP32) fmul (
         .clk,
         .rst,
         .round_mode,
-        .rs1_data,
-        .rs2_data,
+        .rs1_data(rs1_data[FXL-1: 0]),
+        .rs2_data(rs2_data[FXL-1: 0]),
         .fltop,
         .mulInfo(mulInfo_w),
         .toadd_res(toadd_wres),
@@ -167,7 +168,8 @@ module FMASlice (
     logic `N(FP32_EXP_BITS+FP32_MAN_BITS*2+2) add_rs1, add_rs2;
     logic add_sub;
     logic add_fma;
-    logic `N(`XLEN) add_res, add_wres;
+    logic `N(`XLEN) add_res;
+    logic `N(FP32_MAN_BITS*2+FP32_EXP_BITS+2) add_wres;
     FFlags add_status, add_wstatus;
 
     assign add_fma = madd_en_s4;
@@ -189,7 +191,7 @@ module FMASlice (
 
 `ifdef RVD
     logic `N(FP64_EXP_BITS+FP64_MAN_BITS*2+2) add_lrs1, add_lrs2;
-    logic `N(`XLEN) add_lres;
+    logic `N(FP64_EXP_BITS+FP64_MAN_BITS*2+2) add_lres;
     FFlags add_lstatus;
     
     assign add_lrs1 = madd_en_s4 ? toadd_res_n : {rs1_data, {FP64_MAN_BITS+1{1'b0}}};
@@ -203,7 +205,7 @@ module FMASlice (
         .res(add_lres),
         .status(add_lstatus)
     );
-    assign add_res = db_s5 ? add_lres : {{`XLEN-FXL{1'b1}}, add_wres[FXL-1: 0]};
+    assign add_res = db_s5 ? add_lres[DXL-1: 0] : {{`XLEN-FXL{1'b1}}, add_wres[FXL-1: 0]};
     assign add_status = db_s5 ? add_lstatus : add_wstatus;
 `else
     assign add_res = {{`XLEN-FXL{1'b1}}, add_wres[FXL-1: 0]};

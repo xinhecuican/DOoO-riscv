@@ -13,11 +13,12 @@ CONFIG ?= ""
 CLK_FREQ_MHZ ?= 100
 CLK_PERIOD = $(shell expr 1000 / ${CLK_FREQ_MHZ})
 TOP ?= Soc
-SYNTH_V ?= build/${TOP}.synth.v
-SYNTH_FIX_V ?= build/${TOP}.synth.fix.v
-SYNTH_DC_V ?= build/${TOP}.synth.dc.v
+BUILD_DIR = build
+SYNTH_V ?= ${BUILD_DIR}/${TOP}.synth.v
+SYNTH_FIX_V ?= ${BUILD_DIR}/${TOP}.synth.fix.v
+SYNTH_DC_V ?= ${BUILD_DIR}/${TOP}.synth.dc.v
 SDC_FILE ?= config/sdc/Soc.sdc
-TIMING_RPT ?= build/${TOP}.rpt
+TIMING_RPT ?= ${BUILD_DIR}/${TOP}.rpt
 SYNTH_LOG = ${LOG_PATH}synth
 FOUNDRY ?= sky130
 DESIGN_CONFIG = ../../config/config.mk
@@ -115,13 +116,16 @@ ${SYNTH_DC_V}: scripts/syn_dc.tcl ${SRC}
 	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
 	env CLK_FREQ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} LOG_DIR=${SYNTH_LOG} SYNTH=${SYNTH_DC_V} TOP=Soc FILES="${SRC}" dc_shell -64bit -f scripts/syn_dc.tcl > ${SYNTH_LOG}/synth.log
 
+sta: scripts/sta_dc.tcl build/${TOP}.sdf
+	env CLK_FREQ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} LOG_DIR=${SYNTH_LOG} BUILD_DIR=${BUILD_DIR} TOP=Soc FILES="${SRC}" pt_shell -f scripts/sta_dc.tcl > ${SYNTH_LOG}/sta.log
+
 # fix-fanout: ${SYNTH_FIX_V}
 # ${SYNTH_FIX_V}: scripts/fix-fanout.tcl ${SDC_FILE} ${SYNTH_V}
 # 	utils/iEDA/bin/iEDA -script $^ ${TOP} $@ ${FOUNDRY} 2>&1 | tee ${SYNTH_LOG}/fix-fanout.log
 
-sta: ${TIMING_RPT}
-${TIMING_RPT}: scripts/opensta.tcl ${SDC_FILE} ${SYNTH_V}
-	env CLK_FREQ_MHZ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} SYNTH=${SYNTH_V} SDC_FILE=${SDC_FILE} TOP=${TOP} LOG_DIR=${SYNTH_LOG} sta -exit -threads 4 scripts/opensta.tcl > ${SYNTH_LOG}/sta.log
+# sta: ${TIMING_RPT}
+# ${TIMING_RPT}: scripts/opensta.tcl ${SDC_FILE} ${SYNTH_V}
+# 	env CLK_FREQ_MHZ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} SYNTH=${SYNTH_V} SDC_FILE=${SDC_FILE} TOP=${TOP} LOG_DIR=${SYNTH_LOG} sta -exit -threads 4 scripts/opensta.tcl > ${SYNTH_LOG}/sta.log
 
 flow: build/${TOP}/${TOP}.v
 	make -C utils/flow DESIGN_CONFIG=${DESIGN_CONFIG}

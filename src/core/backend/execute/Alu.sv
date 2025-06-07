@@ -69,7 +69,8 @@ module BranchModel(
     output BranchUnitRes branchRes,
     output logic `N(`XLEN) result
 );
-    logic `N(`XLEN) s_imm, jalr_imm;
+    logic `N(`XLEN) s_imm;
+    logic `N(`VADDR_SIZE) jalr_imm;
     logic cmp, scmp, cmp_result;
     logic equal;
     logic dir;
@@ -107,7 +108,7 @@ module BranchModel(
     assign s_imm = {{`XLEN-13{imm[12]}}, imm[12: 1], 1'b0};
     assign jalr_imm = {{`XLEN-12{imm[19]}}, imm[19: 8]};
     `CRITICAL(jalr_target, branchRedirect)
-    KSA #(`VADDR_SIZE) ksa_jalr(rs1_data, jalr_imm, jalr_target);
+    KSA #(`VADDR_SIZE) ksa_jalr(rs1_data[`VADDR_SIZE-1: 0], jalr_imm, jalr_target);
     assign br_target = vaddr + s_imm;
     assign branchRes.target = op == `BRANCH_JALR ? {jalr_target[`VADDR_SIZE-1: 1], 1'b0} : 
                               dir ? br_target : result;

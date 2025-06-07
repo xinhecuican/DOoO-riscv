@@ -3,13 +3,14 @@
 
 module F2I #(
     parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
-    parameter logic [`INT_FORMAT_BITS-1:0] int_fmt = 0
+    parameter logic [`INT_FORMAT_BITS-1:0] int_fmt = 0,
+    parameter IXL = int_width(int_fmt)
 )(
     input logic uext,
     input logic `N(`XLEN) src,
     input FTypeInfo info,
     input roundmode_e round_mode,
-    output logic `N(`XLEN) dest,
+    output logic `N(IXL) dest,
     output FFlags status
 );
 
@@ -100,7 +101,7 @@ endgenerate
     assign rpath_iv = uext & data_i.sign & (|rpath_mant);
 
     logic of, iv, ix;
-    logic `N(`XLEN) int_abs, int_res;
+    logic `N(IXL) int_abs, int_res;
     assign of = exp_of | (sel_lpath & lpath_of) | (~sel_lpath & rpath_of);
     assign iv = of | (sel_lpath & lpath_iv) | (~sel_lpath & rpath_iv);
     assign ix = ~iv & ~sel_lpath & rpath_inexact;
@@ -128,18 +129,19 @@ endmodule
 module I2F #(
     parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
     parameter logic [`INT_FORMAT_BITS-1:0] int_fmt = 0,
-    parameter int INT_WIDTH = int_width(int_fmt)
+    localparam int INT_WIDTH = int_width(int_fmt),
+    localparam int unsigned EXP_BITS = exp_bits(fp_fmt),
+    localparam int unsigned MAN_BITS = man_bits(fp_fmt),
+    localparam int unsigned FXL = EXP_BITS + MAN_BITS + 1
 )(
     input logic uext,
     input logic `N(`XLEN) src,
     input FTypeInfo info,
     input roundmode_e round_mode,
-    output logic `N(`XLEN) dest,
+    output logic `N(FXL) dest,
     output FFlags status
 );
-    localparam int unsigned EXP_BITS = exp_bits(fp_fmt);
-    localparam int unsigned MAN_BITS = man_bits(fp_fmt);
-    localparam int unsigned FXL = EXP_BITS + MAN_BITS + 1;
+
     localparam int unsigned SFT_BITS = MAN_BITS * 2 + 5;
     typedef struct packed {
         logic                sign;

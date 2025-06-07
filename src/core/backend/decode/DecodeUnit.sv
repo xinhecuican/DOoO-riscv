@@ -587,7 +587,7 @@ module DecodeUnit(
     assign fcvtdlu = fp & funct7_105 & rs2_3;
     assign fmvdx = fp & funct7_121 & rs2_0 & funct3_0;
 
-    assign info.db = flw | fsw | fcvtsd | inst[25];
+    assign info.db = fld | fsd | fcvtsd | inst[25];
 `endif
 
 `ifdef RVF
