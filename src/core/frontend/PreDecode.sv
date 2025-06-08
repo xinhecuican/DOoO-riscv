@@ -48,7 +48,9 @@ endgenerate
     logic `N(`BLOCK_INST_SIZE) rvc_mask /*verilator split_var*/;
     logic `N(`BLOCK_INST_SIZE) rvc_en, rvc_en_n;
     logic `N(`BLOCK_INST_SIZE+1) rvc_en_compress;
-    logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx, rvc_idx_n, rvc_offset;
+    logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx_n, rvc_offset;
+    logic `ARRAY(`BLOCK_INST_SIZE/2, `BLOCK_INST_WIDTH-1) rvc_idx_low, rvc_idx_high, rvc_idx_low_n, rvc_idx_high_n;
+    logic `N(`BLOCK_INST_WIDTH) rvc_num_half, rvc_num_half_n;
     logic `N(`BLOCK_INST_WIDTH+1) rvc_num;
     logic `N(`PREDICTION_WIDTH) tailIdx_pre, tail_rvi_idx;
     logic `ARRAY(`BLOCK_INST_SIZE, `VADDR_SIZE) addrs;
@@ -75,10 +77,16 @@ generate
             equal, offset, valid, rvc_offset[i]
         );
     end
+    for(genvar i=0; i<`BLOCK_INST_SIZE/2; i++)begin
+        assign rvc_idx_n[i] = {1'b0, rvc_idx_low_n[i]};
+        assign rvc_idx_n[i+`BLOCK_INST_SIZE/2] = rvc_idx_high_n[i] + rvc_num_half_n;
+    end
 endgenerate
     assign rvc_en = ~rvc_mask & cache_pd_io.en;
     ParallelAdder #(1, `BLOCK_INST_SIZE) adder_rvc_en(rvc_en, rvc_num);
-    CalValidNum #(`BLOCK_INST_SIZE) cal_rvc_idx(rvc_en, rvc_idx);
+    ParallelAdder #(1, `BLOCK_INST_SIZE/2) adder_rvc_half(rvc_en[`BLOCK_INST_SIZE/2-1: 0], rvc_num_half);
+    CalValidNum #(`BLOCK_INST_SIZE/2) cal_rvc_idx_low(rvc_en[`BLOCK_INST_SIZE/2-1: 0], rvc_idx_low);
+    CalValidNum #(`BLOCK_INST_SIZE/2) cal_rvc_idx_high(rvc_en[`BLOCK_INST_SIZE-1: `BLOCK_INST_SIZE/2], rvc_idx_high);
     MaskGen #(`BLOCK_INST_SIZE+1) mask_rvc_en(rvc_num, rvc_en_compress);
     PEncoder #(`BLOCK_INST_SIZE) encoder_tail_idx(rvc_en, tailIdx_pre);
     // pipeline cal tail_rvi_idx if needed
@@ -149,7 +157,9 @@ endgenerate
             selectOffset <= 0;
             stream_valid <= 0;
 `ifdef RVC
-            rvc_idx_n <= 0;
+            rvc_idx_low_n <= 0;
+            rvc_idx_high_n <= 0;
+            rvc_num_half_n <= 0;
             rvc_en_n <= 0;
 `endif
         end
@@ -164,9 +174,11 @@ endgenerate
                 if(cache_pd_io.en[0])begin
                     bundles_next[i] <= bundles[i];
                     data_next[i] <= {cache_pd_io.data[i+1], cache_pd_io.data[i]};
-                    rvc_idx_n[i] <= rvc_idx[i];
                 end
             end
+            rvc_idx_low_n <= rvc_idx_low;
+            rvc_idx_high_n <= rvc_idx_high;
+            rvc_num_half_n <= rvc_num_half;
             en_next <= rvc_en_compress;
             instNumNext <= rvc_num;
             tailIdx <= tailIdx_pre;

@@ -524,32 +524,29 @@ module CalValidNum4(
 	input logic [3: 0] en,
 	output logic [3: 0][1: 0] out
 );
-	logic en_xor; // 1为奇数，0为偶数
 	CalValidNum3 calValidNum(en[2: 0], out[2: 0]);
-	assign en_xor = ^en[2: 0];
-	assign out[3] = {~en_xor & (|en[2: 0]), en_xor};
+	assign out[3] = {en[0] & en[1] | en[0] & en[2] | en[1] & en[2], ^en[2: 0]};
 endmodule
 
-`define CAL_VALID_NUM_TEMPLATE(num, half, num_log, half_log) \
+`define CAL_VALID_NUM_TEMPLATE(num, num_log) \
 module CalValidNum``num``( \
 	input logic [``num``-1: 0] en, \
-	output logic [``num``-1: 0][``num_log``-1: 0] out \
+	output logic [``num``-1: 0][``num_log``-1: 0] out /*verilator split_var*/\
 ); \
-	logic [``half``-1: 0][``half_log``-1: 0] out_low, out_high; \
-	logic [``num_log``-1: 0] num1; \
-	CalValidNum``half  low (en[``half``-1: 0], out_low); \
-	CalValidNum``half  high (en[``num``-1: ``half``], out_high); \
-	ParallelAdder #(1, ``half``) adder_low (en[``half``-1: 0], num1); \
+	assign out[0] = 0; \
 generate \
-	for(genvar i=0; i<``half``; i++)begin \
-		assign out[i] = {1'b0, out_low[i]}; \
-		assign out[i+``half``] = out_high[i] + num1; \
+	for(genvar i=1; i<``num``; i++)begin \
+		localparam WIDTH = $clog2(i+1) > 1 ? $clog2(i+1) : 1; \
+		assign out[i][WIDTH-1: 0] = out[i-1][WIDTH-1: 0] + en[i-1]; \
+		if(WIDTH < ``num_log``)begin \
+			assign out[i][``num_log``-1: WIDTH] = 0; \
+		end \
 	end \
 endgenerate \
 endmodule
 
-`CAL_VALID_NUM_TEMPLATE(8, 4, 3, 2)
-`CAL_VALID_NUM_TEMPLATE(16, 8, 4, 3)
+`CAL_VALID_NUM_TEMPLATE(8, 3)
+`CAL_VALID_NUM_TEMPLATE(16, 4)
 
 module Arbiter2 #(
 	parameter DATA_WIDTH=4

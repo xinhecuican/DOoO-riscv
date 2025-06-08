@@ -233,8 +233,8 @@ module FMantMul #(
 
     logic `N(NUM/2) c0;
     assign c0 = n;
-    `CSA_DEF(0, 1)
-    `CSAN_DEF(1, 2)
+    `CSAN_DEF(0, 1)
+    `CSA_DEF(1, 2)
     `CSA_DEF(2, 3)
     `CSA_DEF(3, 4)
     `CSA_DEF(4, 5)
@@ -247,6 +247,7 @@ endgenerate
 
     logic `ARRAY(2, NUM*2) transpose;
     logic cout;
+    logic `N(WIDTH*2) res_pre;
 generate
     for(genvar i=0; i<2; i++)begin
         for(genvar j=0; j<NUM*2; j++)begin
@@ -259,13 +260,18 @@ generate
         end
     end
     if(WIDTH < 53)begin
-        assign cout = c5[HNUM-2];
+        always_ff @(posedge clk)begin
+            cout <= c5[HNUM-2];
+        end
     end
     else begin
-        assign cout = c7[HNUM-2];
+        always_ff @(posedge clk)begin
+            cout <= c7[HNUM-2];
+        end
     end
 endgenerate
     always_ff @(posedge clk)begin
-        res <= transpose[0] + transpose[1] + cout;
+        res_pre <= transpose[0] + transpose[1];
     end
+    assign res = res_pre + cout;
 endmodule

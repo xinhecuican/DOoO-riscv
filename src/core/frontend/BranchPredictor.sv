@@ -313,6 +313,9 @@ endgenerate
                                                      pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
 
 generate
+    logic tail_diff, tail_target_diff, tail_target_diff_cond;
+    assign tail_target_diff_cond = entry.tailSlot.target != result_i.stream.target[1 +: `JALR_OFFSET] ||
+        result_i.btbEntry.tailSlot.tar_state != tail_tar_state;
     if(RASV & INDV)begin
         always_comb begin
             case(entry.tailSlot.br_type)
@@ -320,30 +323,58 @@ generate
             INDIRECT, INDIRECT_CALL: tail_indirect_target = ind_addr;
             default: tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
             endcase
+            case(entry.tailSlot.br_type)
+            POP, POP_PUSH, INDIRECT, INDIRECT_CALL: begin
+                tail_diff = 1'b1;
+                tail_target_diff = 1'b0;
+            end
+            default: begin
+                tail_diff = 1'b0;
+                tail_target_diff = tail_target_diff_cond;
+            end
+            endcase
         end
     end
     else if(RASV)begin
         always_comb begin
             case(entry.tailSlot.br_type)
-            POP, POP_PUSH: tail_indirect_target = ras_addr;
-            default: tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+            POP, POP_PUSH: begin
+                tail_indirect_target = ras_addr;
+                tail_diff = 1'b1;
+                tail_target_diff = 1'b0;
+            end
+            default: begin
+                tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+                tail_diff = 1'b0;
+                tail_target_diff = tail_target_diff_cond;
+            end
             endcase
         end
     end
     else if(INDV)begin
         always_comb begin
             case(entry.tailSlot.br_type)
-            INDIRECT, INDIRECT_CALL: tail_indirect_target = ind_addr;
-            default: tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+            INDIRECT, INDIRECT_CALL: begin
+                tail_indirect_target = ind_addr;
+                tail_diff = 1'b1;
+                tail_target_diff = 1'b0;
+            end
+            default: begin
+                tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+                tail_diff = 1'b0;
+                tail_target_diff = tail_target_diff_cond;
+            end
             endcase
         end
     end
     else begin
         assign tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
+        assign tail_diff = 1'b0;
+        assign tail_target_diff = tail_target_diff_cond;
     end
     if(REDIRECTV)begin
         assign result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
-                    ~(|predTaken) & tail_taken & (tail_indirect_target != result_i.stream.target));
+                    ~(|predTaken) & tail_taken & (tail_diff | tail_target_diff));
     end
     else begin
         assign result_o.redirect = 0;
