@@ -45,10 +45,9 @@ module FMul #(
     assign exp_nz_b = |fp_b.exp;
 
     logic `N(MAN_BITS+1) raw_mant_a, raw_mant_b, denormal_mant;
-    logic `N(MAN_BITS+1) shift_mant_a, shift_mant_b;
     logic `N(EXP_BITS) raw_exp_a, raw_exp_b;
     logic `N(EXP_BITS+1) raw_exp_pre;
-    logic `N($clog2(MAN_BITS+1)) lzc_cnt;
+    logic `N($clog2(MAN_BITS+1)) lzc_cnt, lzc_cnt_n;
     assign raw_exp_a = fp_a.exp | {{EXP_BITS-1{1'b0}}, ~exp_nz_a};
     assign raw_exp_b = fp_b.exp | {{EXP_BITS-1{1'b0}}, ~exp_nz_b};
     assign raw_exp_pre = raw_exp_a + raw_exp_b;
@@ -56,46 +55,56 @@ module FMul #(
     assign raw_mant_b = {exp_nz_b, fp_b.mant};
     assign denormal_mant = ~exp_nz_a ? raw_mant_a : raw_mant_b;
     lzc #(MAN_BITS+1, 1) lzc_inst (denormal_mant, lzc_cnt, );
-    assign shift_mant_a = ~exp_nz_a & exp_nz_b ? raw_mant_a << lzc_cnt : raw_mant_a;
-    assign shift_mant_b = ~exp_nz_b & exp_nz_a ? raw_mant_b << lzc_cnt : raw_mant_b;
 
     logic `N(EXP_BITS+1) raw_exp;
     logic `N(MAN_BITS*2+2) raw_mant;
-    logic sign;
+    logic `N(EXP_BITS) shr_cnt, mant_shl_cnt, mant_shr_cnt;
+    logic `N(MAN_BITS*2+2) shift_mant_s2;
+    logic `N(MAN_BITS*2+2) sticky_shift_mask_s2, sticky_mask_s2, add_sticky_mask_s2;
+    logic sign, sticky_s2, add_sticky_s2;
     always_ff @(posedge clk)begin
         raw_exp <= raw_exp_pre > lzc_cnt ? raw_exp_pre - lzc_cnt : 0;
         sign <= fp_a.sign ^ fp_b.sign ^ sub;
+        lzc_cnt_n <= lzc_cnt;
     end
 
-    logic `N(EXP_BITS) shr_cnt, shr_cnt_mod;
-    logic `N(EXP_BITS+1) raw_exp_n;
-    logic sign_n, need_shr, exp_z;
-    always_ff @(posedge clk)begin
-        shr_cnt <= BIAS_SIZE - (MAN_BITS+4) >= raw_exp ? MAN_BITS + 4 :
+    assign shr_cnt = BIAS_SIZE - (MAN_BITS+4) >= raw_exp ? MAN_BITS + 4 :
                    BIAS_SIZE >= raw_exp ? BIAS_SIZE + 1 - raw_exp : 0;
-        need_shr <= BIAS_SIZE >= raw_exp;
+    assign mant_shl_cnt = lzc_cnt_n - shr_cnt;
+    assign mant_shr_cnt = shr_cnt - lzc_cnt_n;
+
+    FMantMul #(MAN_BITS+1) mul (clk, raw_mant_a, raw_mant_b, raw_mant);
+    
+    assign shift_mant_s2 = lzc_cnt_n > shr_cnt ? raw_mant << mant_shl_cnt : raw_mant >> mant_shr_cnt;
+    assign sticky_shift_mask_s2 = lzc_cnt_n > shr_cnt ? 0 : (1 << mant_shr_cnt) - 1;
+    assign sticky_mask_s2 = {sticky_shift_mask_s2[MAN_BITS+1: 0], {MAN_BITS{1'b1}}};
+    assign add_sticky_mask_s2 = sticky_shift_mask_s2;
+    assign sticky_s2 = |(raw_mant & sticky_mask_s2);
+    assign add_sticky_s2 = |(raw_mant & add_sticky_mask_s2);
+
+    logic `N(EXP_BITS+1) raw_exp_n;
+    logic `N(MAN_BITS*2+2) shift_mant_s3;
+    logic `N(MAN_BITS*2+3) shift_mant;
+    logic sign_n, need_shr, exp_z;
+    logic sticky_s3, add_sticky_s3;
+    always_ff @(posedge clk)begin
+        need_shr <= (BIAS_SIZE < raw_exp) & raw_mant[MAN_BITS*2+1];
         exp_z <= raw_exp == BIAS_SIZE;
         raw_exp_n <= raw_exp;
         sign_n <= sign;
+        sticky_s3 <= sticky_s2;
+        add_sticky_s3 <= add_sticky_s2;
+        shift_mant_s3 <= shift_mant_s2;
     end
 
-    FMantMul #(MAN_BITS+1) mul (clk, shift_mant_a, shift_mant_b, raw_mant);
-
     logic `N(EXP_BITS+1) shift_exp, shift_exp_normal;
-    logic `N(MAN_BITS*2+2) shift_mant;
     assign shift_exp = raw_exp_n + raw_mant[MAN_BITS*2+1];
     assign shift_exp_normal = shift_exp < BIAS_SIZE ? 0 : shift_exp - BIAS_SIZE;
-    assign shr_cnt_mod = shr_cnt + (~need_shr & raw_mant[MAN_BITS*2+1]);
-    assign shift_mant = raw_mant >> shr_cnt_mod; 
+    assign shift_mant = shift_mant_s3 >> need_shr; 
 
     logic sticky, add_sticky;
-    logic `N(MAN_BITS*2+2) sticky_mask, add_sticky_mask;
-    logic `N(MAN_BITS*2+2) sticky_shift_mask;
-    assign sticky_shift_mask = (1 << shr_cnt_mod) - 1;
-    assign sticky_mask = {sticky_shift_mask[MAN_BITS+1: 0], {MAN_BITS{1'b1}}};
-    assign sticky = |(raw_mant & sticky_mask);
-    assign add_sticky_mask = sticky_shift_mask;
-    assign add_sticky = |(raw_mant & add_sticky_mask);
+    assign sticky = sticky_s3 | shift_mant_s3[MAN_BITS-1] & need_shr;
+    assign add_sticky = add_sticky_s3 | shift_mant_s3[0] & need_shr;
 
     logic `N(MAN_BITS) round_out, round_mant;
     logic round_ix, round_cout, round_up;
@@ -233,10 +242,10 @@ module FMantMul #(
 
     logic `N(NUM/2) c0;
     assign c0 = n;
-    `CSAN_DEF(0, 1)
+    `CSA_DEF(0, 1)
     `CSA_DEF(1, 2)
     `CSA_DEF(2, 3)
-    `CSA_DEF(3, 4)
+    `CSAN_DEF(3, 4)
     `CSA_DEF(4, 5)
 generate
     if(WIDTH >= 53)begin
@@ -260,18 +269,12 @@ generate
         end
     end
     if(WIDTH < 53)begin
-        always_ff @(posedge clk)begin
-            cout <= c5[HNUM-2];
-        end
+        assign cout = c5[HNUM-2];
     end
     else begin
-        always_ff @(posedge clk)begin
-            cout <= c7[HNUM-2];
-        end
+        assign cout = c7[HNUM-2];
     end
 endgenerate
-    always_ff @(posedge clk)begin
-        res_pre <= transpose[0] + transpose[1];
-    end
+    KSA #(NUM*2) ksa (transpose[0], transpose[1], res_pre);
     assign res = res_pre + cout;
 endmodule

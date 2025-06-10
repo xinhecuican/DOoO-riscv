@@ -1,7 +1,7 @@
 `include "../src/defines/fp_defines.svh"
 `include "../src/defines/defines.svh"
 
-// sv2v --write=build/fmul_tb.v -I=src/defines -I=build --top=fmul_tb testbench/fmul_tb.sv src/core/backend/execute/FMul.sv src/core/backend/execute/FMisc.sv src/core/backend/execute/Mult.sv testbench/FMUL.v src/utils/lzc.sv
+// sv2v --write=build/fmul_tb.v -I=src/defines -I=build --top=fmul_tb testbench/fmul_tb.sv src/core/backend/execute/FMul.sv src/core/backend/execute/FMisc.sv src/core/backend/execute/Mult.sv testbench/FMUL.v src/utils/lzc.sv src/utils/ksa.sv
 // iverilog -g2012 build/fmul_tb.v -s fmul_tb -o build/sim.out
 // vvp -n build/sim.out
 module fmul_tb();

@@ -3,19 +3,20 @@
 interface TLBCacheIO;
     logic req;
     TLBInfo info;
-    logic `VADDR_BUS req_addr;
+    logic `N(`TLB_VPN_SIZE) req_addr;
     logic flush;
 
     logic hit;
     logic error;
     logic exception;
+    logic exc_static;
     TLBInfo info_o;
     PTEEntry hit_entry;
-    logic `N(`VADDR_SIZE) hit_addr;
+    logic `N(`TLB_VPN_SIZE) hit_addr;
     logic `N(`TLB_PN) wpn;
 
     modport cache (input req, info, req_addr, flush,
-                   output hit, error, exception, info_o, hit_entry, hit_addr, wpn);
+                   output hit, error, exception, exc_static, info_o, hit_entry, hit_addr, wpn);
 endinterface
 
 module TLBCache(
@@ -31,7 +32,7 @@ module TLBCache(
     typedef struct packed {
         logic req;
         logic error;
-        logic `N(`VADDR_SIZE) vaddr;
+        logic `N(`TLB_VPN_SIZE) vaddr;
         TLBInfo info;
     } RequestBuffer;
     RequestBuffer req_buf;
@@ -81,7 +82,7 @@ module TLBCache(
         pn0_fence_end_n <= pn0_fence_end;
     end
 
-    logic `N(`TLB_PN) hit, hit_first, leaf, exception, valid;
+    logic `N(`TLB_PN) hit, hit_first, leaf, exception, valid, exc_static;
     PTEEntry pn1_entry, pn0_entry;
     assign pn1_entry = pn1_io.entry;
     assign pn0_entry = pn0_io.entry;
@@ -98,14 +99,16 @@ module TLBCache(
     assign valid = hit & leaf;
     PRSelector #(`TLB_PN) select_hit (hit, hit_first);
 
-    logic pn1_exception;
-    TLBExcDetect exc_detect0 (pn0_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, exception[0]);
-    TLBExcDetect exc_detect1 (pn1_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn1_exception);
+    logic pn1_exception, pn1_exc_static;
+    TLBExcDetect exc_detect0 (pn0_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, exception[0], exc_static[0]);
+    TLBExcDetect exc_detect1 (pn1_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn1_exception, pn1_exc_static);
     assign exception[1] = pn1_exception | (leaf[1] & pn1_io.meta);
+    assign exc_static[1] = pn1_exc_static | (leaf[1] & pn1_io.meta);
 `ifdef SV39
-    logic pn2_exception;
-    TLBExcDetect exc_detect2 (pn2_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn2_exception);
+    logic pn2_exception, pn2_exc_static;
+    TLBExcDetect exc_detect2 (pn2_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn2_exception, pn2_exc_static);
     assign exception[2] = pn2_exception | (leaf[2] & pn2_io.meta);
+    assign exc_static[2] = pn2_exc_static | (leaf[2] & pn2_io.meta);
 `endif
 
     logic `ARRAY(`TLB_PN, `PADDR_SIZE) paddr;
@@ -126,7 +129,7 @@ module TLBCache(
         ptw_req_before <= req_buf.req & (~(|(hit_first & (leaf | exception)))) & ~req_buf.error & ~io.flush;
         error_before <= req_buf.error;
         io.exception <= |(hit_first & exception);
-
+        io.exc_static <= |(hit_first & exc_static);
         io.hit_addr <= req_buf.vaddr;
         io.info_o <= req_buf.info;
 `ifdef SV39
@@ -266,7 +269,7 @@ endgenerate
 
     always_ff @(posedge clk)begin
         tag <= fenceReq ? fence_tag : cache_io.req_addr`TLB_VPN_TBUS(PN, DEPTH, BANK);
-        offset <= cache_io.req_addr[`TLB_VPN_BASE(PN)+BANK_WIDTH-1: `TLB_VPN_BASE(PN)];
+        offset <= cache_io.req_addr[`TLB_VPN_BASE(PN)+BANK_WIDTH-`TLB_OFFSET-1: `TLB_VPN_BASE(PN)-`TLB_OFFSET];
         req_n <= cache_io.req & ~cache_io.flush;
     end
 
@@ -325,8 +328,8 @@ endgenerate
                         fenceIdx <= 0;
                     end
                     else begin
-                        fenceIdx <= fenceBus.vma_vaddr[2]`TLB_VPN_IBUS(PN, DEPTH, BANK);
-                        fence_tag <= fenceBus.vma_vaddr[2]`TLB_VPN_TBUS(PN, DEPTH, BANK);
+                        fenceIdx <= fenceBus.vma_vaddr[2][`VADDR_SIZE-1: `TLB_OFFSET]`TLB_VPN_IBUS(PN, DEPTH, BANK);
+                        fence_tag <= fenceBus.vma_vaddr[2][`VADDR_SIZE-1: `TLB_OFFSET]`TLB_VPN_TBUS(PN, DEPTH, BANK);
                     end
                     fence_asid <= fenceBus.vma_asid[2];
                     fence_asid_all <= fenceBus.mmu_asid_all[2];
@@ -434,16 +437,16 @@ module PAddrGen #(
     parameter LEAF=0
 )(
     input PTEEntry entry,
-    input `VADDR_BUS vaddr,
+    input `N(`TLB_VPN_SIZE) vaddr,
     output `PADDR_BUS paddr
 );
 generate
     if(PN == 0)begin
-        assign paddr = {entry.ppn, vaddr[`TLB_OFFSET-1: 0]};
+        assign paddr = {entry.ppn, `TLB_OFFSET'b0};
     end
     else if(PN == 1)begin
         VPNAddr vpn;
-        assign vpn = vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
+        assign vpn = vaddr;
         PPNAddr ppn;
         assign ppn.ppn0 = vpn.vpn[0];
         assign ppn.ppn1 = entry.ppn.ppn1;
@@ -458,13 +461,13 @@ generate
         else begin
             assign leaf = 1'b1;
         end
-        assign paddr = leaf ? {ppn, vaddr[`TLB_OFFSET-1: 0]} :
+        assign paddr = leaf ? {ppn, `TLB_OFFSET'b0} :
                        {entry.ppn, vpn.vpn[0], {`PTE_WIDTH{1'b0}}};
     end
 `ifdef SV39
     else if(PN == 2)begin
         VPNAddr vpn;
-        assign vpn = vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
+        assign vpn = vaddr;
         PPNAddr ppn;
         assign ppn.ppn0 = vpn.vpn[0];
         assign ppn.ppn1 = vpn.vpn[1];
@@ -477,7 +480,7 @@ generate
         else begin
             assign leaf = 1'b1;
         end
-        assign paddr = leaf ? {ppn, vaddr[`TLB_OFFSET-1: 0]} :
+        assign paddr = leaf ? {ppn, `TLB_OFFSET'b0} :
                     {entry.ppn, vpn.vpn[1], {`PTE_WIDTH{1'b0}}};
     end
 `endif
@@ -494,7 +497,8 @@ module TLBExcDetect#(
     input logic mprv,
     input logic [1: 0] mpp,
     input logic [1: 0] mode,
-    output logic exception
+    output logic exception,
+    output logic exc_static
 );
     logic leaf;
     logic r, w, x;
@@ -520,4 +524,7 @@ endgenerate
                       (leaf & (((mode_i == 2'b01) & ~sum & entry.u) |
                       ((mode_i == 2'b00) & ~entry.u) |
                       (~entry.a | (w & ~entry.d))));
+    assign exc_static = ~entry.v |
+                        (~entry.r & entry.w) |
+                        (|entry.rsw);
 endmodule

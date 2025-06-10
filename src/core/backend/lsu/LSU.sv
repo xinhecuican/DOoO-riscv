@@ -256,7 +256,7 @@ endgenerate
     end
 `endif
 
-    assign tlb_lsu_io.lreq = load_io.en & ~load_io.exception;
+    assign tlb_lsu_io.lreq = load_io.en;
     assign tlb_lsu_io.lreq_s2 = load_en & ~lmisalign_s2 & ~redirect_clear_s2 
 `ifdef RVA
     & ~amo_conflict
@@ -277,7 +277,7 @@ generate
     end
 endgenerate
     assign rio.req_cancel = redirect_clear_req;
-    assign tlb_exception_s2 = tlb_lsu_io.lexception | tlb_exception_s2_pre;
+    assign tlb_exception_s2 = tlb_lsu_io.lexception;
     assign luncache_s2 = tlb_lsu_io.luncache;
     always_ff @(posedge clk)begin
         loadAddrNext <= loadVAddr;
@@ -286,7 +286,6 @@ endgenerate
         load_en <= load_io.en & ~redirect_clear_req;
         load_issue_idx <= load_io.issue_idx;
         lmisalign_s2 <= lmisalign;
-        tlb_exception_s2_pre <= load_io.exception;
     end
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
@@ -554,7 +553,6 @@ generate
             store_issue_data[i] <= store_io.storeIssueData[i];
             storeAddrNext[i] <= storeVAddr[i];
             smisalign_s2[i] <= smisalign[i];
-            stlb_exception[i] <= store_io.exception[i];
             sissue_idx_s2[i] <= sissue_idx[i];
         end
         getMask get_mask(storeAddrNext[i][`DCACHE_BYTE_WIDTH-1: 0], store_issue_data[i].size, smask[i]);
@@ -562,7 +560,7 @@ generate
         assign spaddr[i] = {sptag[i], storeAddrNext[i][`TLB_OFFSET-1: 0]};
     end
 
-    assign stlb_exception_s2 = stlb_exception | tlb_lsu_io.sexception;
+    assign stlb_exception_s2 = tlb_lsu_io.sexception;
     assign suncache_s2 = tlb_lsu_io.suncache;
 
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
@@ -574,7 +572,7 @@ generate
 endgenerate
 
     assign sissue_idx = store_io.issue_idx;
-    assign tlb_lsu_io.sreq = store_io.en & ~store_io.exception;
+    assign tlb_lsu_io.sreq = store_io.en;
     assign tlb_lsu_io.sreq_s2 = store_en & ~smisalign_s2 & ~store_redirect_s2;
     assign tlb_lsu_io.sidx = sissue_idx;
     assign tlb_lsu_io.saddr = storeVAddr;

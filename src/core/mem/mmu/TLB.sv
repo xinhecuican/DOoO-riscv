@@ -17,13 +17,14 @@ interface TLBIO #(
 
     logic we;
     logic wen;
+    logic wexc_static;
     logic `N(ADDR_WIDTH) widx;
     TLBInfo wbInfo;
     PTEEntry wentry;
     logic `N(2) wpn;
-    logic `N(`VADDR_SIZE) waddr;
+    logic `N(`TLB_VPN_SIZE) waddr;
 
-    modport tlb(input req, flush, vaddr, sel, sel_tag, we, wen, wbInfo, wentry, wpn, widx, waddr, output miss, uncache, exception, paddr);
+    modport tlb(input req, flush, vaddr, sel, sel_tag, we, wen, wexc_static, wbInfo, wentry, wpn, widx, waddr, output miss, uncache, exception, paddr);
 endinterface
 
 module TLB #(
@@ -176,7 +177,7 @@ endgenerate
     assign wentry.x = io.wentry.x;
     assign wentry.d = io.wentry.d;
     assign wentry.size = io.wpn;
-    assign wentry.vpn = io.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+    assign wentry.vpn = io.waddr;
     assign wentry.ppn = io.wentry.ppn;
     assign wentry.uc = pma_uc;
     assign wentry.asid = csr_tlb_io.asid;
@@ -186,13 +187,13 @@ endgenerate
     assign w = SOURCE == 2'b10;
 generate
     if(SOURCE == 2'b00)begin
-        assign wentry.exc = ~io.wentry.x | pmp_v  & ~pmp_x;
+        assign wentry.exc = ~io.wentry.x | pmp_v  & ~pmp_x | io.wexc_static;
     end
     else if(SOURCE == 2'b01)begin
-        assign wentry.exc = pmp_v & ~pmp_r;
+        assign wentry.exc = pmp_v & ~pmp_r | io.wexc_static;
     end
     else if(SOURCE == 2'b10)begin
-        assign wentry.exc = (~io.wentry.w) | (~io.wentry.d) | pmp_v & ~pmp_w;
+        assign wentry.exc = (~io.wentry.w) | (~io.wentry.d) | pmp_v & ~pmp_w | io.wexc_static;
     end
 endgenerate
 

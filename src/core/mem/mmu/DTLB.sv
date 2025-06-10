@@ -66,15 +66,16 @@ generate
 `endif
         assign ltlb_io[i].req = tlb_lsu_io.lreq[i];
         assign ltlb_io[i].vaddr = tlb_lsu_io.laddr[i];
-        assign ltlb_io[i].flush = tlb_lsu_io.flush;
+        assign ltlb_io[i].flush = 1'b0;
         assign ltlb_io[i].sel = tlb_lsu_io.lsel[i];
         assign ltlb_io[i].sel_tag = tlb_lsu_io.lsel_tag[i];
 `ifdef RVA
         end
 `endif
 
-        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception | fenceWe;
+        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error | fenceWe;
         assign ltlb_io[i].wen = ~fenceWe;
+        assign ltlb_io[i].wexc_static = tlb_l2_io0.exc_static;
         assign ltlb_io[i].widx = fenceWe ? fenceIdx : tlb_widx;
         assign ltlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign ltlb_io[i].wentry = tlb_l2_io0.entry;
@@ -94,12 +95,13 @@ generate
         );
         assign stlb_io[i].req = tlb_lsu_io.sreq[i];
         assign stlb_io[i].vaddr = tlb_lsu_io.saddr[i];
-        assign stlb_io[i].flush = tlb_lsu_io.flush;
+        assign stlb_io[i].flush = 1'b0;
         assign stlb_io[i].sel = tlb_lsu_io.ssel[i];
         assign stlb_io[i].sel_tag = tlb_lsu_io.ssel_tag[i];
 
-        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception | fenceWe;
+        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error | fenceWe;
         assign stlb_io[i].wen = ~fenceWe;
+        assign stlb_io[i].wexc_static = tlb_l2_io0.exc_static;
         assign stlb_io[i].widx = fenceWe ? fenceIdx : tlb_widx;
         assign stlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign stlb_io[i].wentry = tlb_l2_io0.entry;
@@ -113,16 +115,16 @@ generate
     end
 endgenerate
 
-    TLBRepeater repeater0(.*, .flush(tlb_lsu_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io1));
-    TLBRepeater repeater1(.*, .flush(tlb_lsu_io.flush), .in(tlb_l2_io1), .out(tlb_l2_io));
+    TLBRepeater repeater0(.*, .flush(1'b0), .in(tlb_l2_io0), .out(tlb_l2_io1));
+    TLBRepeater repeater1(.*, .flush(1'b0), .in(tlb_l2_io1), .out(tlb_l2_io));
 
 `ifdef RVA
     logic amo_req, amo_req_s2, amo_req_s3;
-    logic `N(`VADDR_SIZE) amo_vaddr;
+    logic `N(`TLB_VPN_SIZE) amo_vaddr;
     always_ff @(posedge clk)begin
         amo_req <= tlb_lsu_io.amo_req;
-        amo_vaddr <= tlb_lsu_io.amo_addr;
-        amo_req_s2 <= amo_req & ltlb_io[0].miss & ~ltlb_io[0].exception & ~tlb_lsu_io.flush;
+        amo_vaddr <= tlb_lsu_io.amo_addr[`VADDR_SIZE-1: `TLB_OFFSET];
+        amo_req_s2 <= amo_req & ltlb_io[0].miss & ~ltlb_io[0].exception;
         amo_req_s3 <= amo_req_s2;
     end
 `endif
@@ -131,7 +133,7 @@ endgenerate
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) lvaddr;
     logic `N($clog2(`LOAD_PIPELINE)) lreq_idx;
     logic lreq_s2;
-    logic `N(`VADDR_SIZE) lreq_addr_s2;
+    logic `N(`TLB_VPN_SIZE) lreq_addr_s2;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) lidx;
     logic `N(`LOAD_ISSUE_BANK_WIDTH+$clog2(`LOAD_PIPELINE)) lidx_s2;
 generate
@@ -157,7 +159,7 @@ generate
     PREncoder #(`LOAD_PIPELINE) encoder_lreq (lreq, lreq_idx); 
     always_ff @(posedge clk)begin
         lreq_s2 <= |lreq;
-        lreq_addr_s2 <= lvaddr[lreq_idx];
+        lreq_addr_s2 <= lvaddr[lreq_idx][`VADDR_SIZE-1: `TLB_OFFSET];
         lidx_s2 <= {lreq_idx, lidx[lreq_idx]};
         lreq_all_s2 <= lreq;
         lreq_all_s3 <= lreq_all_s2;
@@ -168,7 +170,7 @@ endgenerate
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr;
     logic `N($clog2(`STORE_PIPELINE)) sreq_idx;
     logic sreq_s2;
-    logic `N(`VADDR_SIZE) sreq_addr_s2;
+    logic `N(`TLB_VPN_SIZE) sreq_addr_s2;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sidx;
     logic `N(`STORE_ISSUE_BANK_WIDTH+$clog2(`STORE_PIPELINE)) sidx_s2;
 generate
@@ -184,7 +186,7 @@ generate
     PREncoder #(`STORE_PIPELINE) encoder_sreq (sreq, sreq_idx);
     always_ff @(posedge clk)begin
         sreq_s2 <= |sreq;
-        sreq_addr_s2 <= svaddr[sreq_idx];
+        sreq_addr_s2 <= svaddr[sreq_idx][`VADDR_SIZE-1: `TLB_OFFSET];
         sreq_all_s2 <= sreq;
         sidx_s2 <= {sreq_idx, sidx[sreq_idx]};
         sreq_all_s3 <= sreq_all_s2;
@@ -197,19 +199,19 @@ endgenerate
         lreq_cancel_s3 <= lreq_cancel_s2;
         sreq_cancel_s3 <= sreq_cancel_s2;
 `ifdef RVA
-        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | amo_req_s2 | tlb_lsu_io.flush}});
-        sreq_cancel_s4 <= sreq_all_s2 & (sreq_cancel_s3 | {`STORE_PIPELINE{amo_req_s2 | tlb_lsu_io.flush}});
+        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | amo_req_s2}});
+        sreq_cancel_s4 <= sreq_all_s2 & (sreq_cancel_s3 | {`STORE_PIPELINE{amo_req_s2}});
 `else
-        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2 | tlb_lsu_io.flush}});
-        sreq_cancel_s4 <= sreq_all_s2 & ({`STORE_PIPELINE{tlb_lsu_io.flush}} | sreq_cancel_s3);
+        lreq_cancel_s4 <= lreq_all_s2 & (lreq_cancel_s3 | {`LOAD_PIPELINE{sreq_s2}});
+        sreq_cancel_s4 <= sreq_all_s2 & (sreq_cancel_s3);
 `endif
 `ifdef RVA
-        tlb_l2_io.req <= (sreq_s2  | lreq_s2 | amo_req_s2) & ~tlb_lsu_io.flush;
+        tlb_l2_io.req <= (sreq_s2  | lreq_s2 | amo_req_s2);
         tlb_l2_io.info.source <= amo_req_s2 ? 2'b11 : sreq_s2 ? 2'b10 : 2'b01;
         tlb_l2_io.info.idx <= sreq_s2 ? sidx_s2 : lidx_s2;
         tlb_l2_io.req_addr <= amo_req_s2 ? amo_vaddr : sreq_s2 ? sreq_addr_s2 : lreq_addr_s2;
 `else
-        tlb_l2_io.req <= (sreq_s2 | lreq_s2) & ~tlb_lsu_io.flush;
+        tlb_l2_io.req <= (sreq_s2 | lreq_s2);
         tlb_l2_io.info.source <= sreq_s2 ? 2'b10 : 2'b01;
         tlb_l2_io.info.idx <= sreq_s2 ? sidx_s2 : lidx_s2;
         tlb_l2_io.req_addr <= sreq_s2 ? sreq_addr_s2 : lreq_addr_s2;
@@ -219,11 +221,11 @@ endgenerate
     assign tlb_lsu_io.scancel = sreq_cancel_s4 | sreq_all_s3 & {`STORE_PIPELINE{~tlb_l2_io.ready}};
 
     always_ff @(posedge clk)begin
-        tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & ~tlb_lsu_io.flush & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
+        tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
         tlb_lsu_io.lwb_exception <= {`LOAD_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.lwb_error <= {`LOAD_PIPELINE{tlb_l2_io0.error}};
         tlb_lsu_io.lwb_idx <= {`LOAD_PIPELINE{tlb_l2_io0.info_o.idx[`LOAD_ISSUE_BANK_WIDTH-1: 0]}};
-        tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & ~tlb_lsu_io.flush & (tlb_l2_io0.info_o.source == 2'b10)}} & swb_pipeline;
+        tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & (tlb_l2_io0.info_o.source == 2'b10)}} & swb_pipeline;
         tlb_lsu_io.swb_exception <= {`STORE_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.swb_error <= {`STORE_PIPELINE{tlb_l2_io0.error}};
         tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx[`STORE_ISSUE_BANK_WIDTH-1: 0]}};
@@ -292,8 +294,8 @@ endgenerate
             if(fenceWe)begin
                 replace_en[fenceIdx] <= 1'b0;
             end
-            else if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception)begin
-                replace_vpn[tlb_widx] <= tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+            else if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error)begin
+                replace_vpn[tlb_widx] <= tlb_l2_io0.waddr;
                 replace_en[tlb_widx] <= 1'b1;
                 replace_pn_valid[tlb_widx] <= tlb_l2_io0.wpn;
                 replace_asid[tlb_widx] <= {csr_stlb_io.asid, tlb_l2_io0.entry.g};
@@ -301,7 +303,7 @@ endgenerate
         end
     end
 generate
-    assign replace_cmp_vaddr = fenceState == FENCE ? fenceVaddr : tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+    assign replace_cmp_vaddr = fenceState == FENCE ? fenceVaddr : tlb_l2_io0.waddr;
     assign replace_cmp_asid = fenceState == FENCE ? fence_asid : csr_stlb_io.asid;
     for(genvar i=0; i<`DTLB_SIZE; i++)begin
         assign replace_hit[i] = (replace_en[i] && 

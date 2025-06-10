@@ -70,9 +70,5 @@ module CPUCore (
     L2CacheWrapper #(
         snoop_req_t, snoop_resp_t, mst_snoop_req_t, mst_snoop_resp_t
     ) l2cache_wrapper (.*, .master_io(master_io.master));
-    L2TLB l2_tlb(.*,
-                .csr_io(csr_l2_io), 
-                .flush(fsq_back_io.redirect.en), 
-                .axi_io(tlb_io.masterr)
-    );
+    L2TLB l2_tlb(.*, .csr_io(csr_l2_io), .axi_io(tlb_io.masterr));
 endmodule

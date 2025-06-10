@@ -4,7 +4,6 @@ interface StoreUnitIO;
     logic `N(`STORE_ISSUE_BANK_NUM) en;
     StoreIssueData `N(`STORE_ISSUE_BANK_NUM) storeIssueData;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) issue_idx;
-    logic `N(`STORE_ISSUE_BANK_NUM) exception;
     logic `N(`STORE_DIS_PORT) dis_en;
     RobIdx `N(`STORE_DIS_PORT) dis_rob_idx;
     StoreIdx `N(`STORE_DIS_PORT) dis_sq_idx;
@@ -21,7 +20,7 @@ interface StoreUnitIO;
     logic full;
     logic dis_stall;
 
-    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size, issue_idx, exception, dis_stall, input reply, success, success_idx, full
+    modport store (output en, storeIssueData, dis_en, dis_rob_idx, dis_sq_idx, data_en, data_sqIdx, data_size, issue_idx, dis_stall, input reply, success, success_idx, full
 `ifdef RVF
     ,output data_fp_sel
 `endif
@@ -85,7 +84,6 @@ generate
         assign store_reg_io.en[i] = addr_io[i].reg_en;
         assign store_reg_io.preg[i] = addr_io[i].rs1;
         assign store_io.storeIssueData[i] = addr_io[i].data_o;
-        assign store_io.exception[i] = addr_io[i].exception_o;
         assign store_io.issue_idx[i] = addr_io[i].issue_idx;
 
         assign data_io[i].en = addr_io[i].en;
@@ -142,7 +140,6 @@ interface StoreAddrBankIO;
     logic `N(`STORE_ISSUE_BANK_WIDTH) issue_idx;
     StoreIssueData data_o;
     RobIdx robIdx_o;
-    logic exception_o;
     ReplyRequest reply;
     logic success;
     logic `N(`STORE_ISSUE_BANK_WIDTH) success_idx;
@@ -151,7 +148,7 @@ interface StoreAddrBankIO;
     logic tlb_error;
     logic `N(`STORE_ISSUE_BANK_WIDTH) tlb_bank_idx;
 
-    modport bank(input en, status, data, reply, success, success_idx, tlb_en, tlb_exception, tlb_error, tlb_bank_idx, output full, reg_en, rs1, bankNum, data_o, robIdx_o, exception_o, issue_idx);
+    modport bank(input en, status, data, reply, success, success_idx, tlb_en, tlb_exception, tlb_error, tlb_bank_idx, output full, reg_en, rs1, bankNum, data_o, robIdx_o, issue_idx);
 endinterface
 
 module StoreAddrBank(
@@ -167,7 +164,7 @@ module StoreAddrBank(
         RobIdx robIdx;
     } StatusBundle;
 
-    logic `N(`STORE_ISSUE_BANK_SIZE) en, issue, exception, tlbmiss;
+    logic `N(`STORE_ISSUE_BANK_SIZE) en, issue, tlbmiss;
     StatusBundle `N(`STORE_ISSUE_BANK_SIZE) status_ram;
     logic `N(`STORE_ISSUE_BANK_SIZE) free_en, tlbmiss_valid;
     logic `N($clog2(`STORE_ISSUE_BANK_SIZE)) freeIdx;
@@ -251,7 +248,6 @@ endgenerate
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
         io.issue_idx <= selectIdxNext;
-        io.exception_o <= exception[selectIdxNext];
     end
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
@@ -259,7 +255,6 @@ endgenerate
             en <= 0;
             io.data_o <= 0;
             issue <= 0;
-            exception <= 0;
             tlbmiss <= 0;
         end
         else begin
@@ -276,21 +271,16 @@ endgenerate
                 status_ram[freeIdx].rs1v <= io.status.rs1v;
                 status_ram[freeIdx].rs1 <= io.status.rs1;
                 status_ram[freeIdx].robIdx <= io.status.robIdx;
-                exception[freeIdx] <= 1'b0;
             end
 
             for(int i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin
-                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & (tlbmiss[i] | tlbmiss_valid[i]))) |
-                            (((|ready) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
+                issue[i] <= (issue[i] | (((|ready) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
                             ~(io.reply.en & (io.reply.reason != 2'b11) & reply_decode[i]) &
-                            ~(io.tlb_en & tlbbank_decode[i]) &
+                            ~(io.tlb_en & en[i] & tlbmiss[i] & (~io.tlb_error | tlbbank_decode[i])) &
                             ~(io.en & free_en[i]);
-                tlbmiss[i] <= (tlbmiss[i] | tlbmiss_valid[i]) &
-                              ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;                  
-            end
-
-            if(io.tlb_en & ~io.tlb_error & io.tlb_exception)begin
-                exception[io.tlb_bank_idx] <= 1'b1;
+                tlbmiss[i] <= ((tlbmiss[i] & ~(io.tlb_en & (~io.tlb_error | tlbbank_decode[i]))) |
+                                tlbmiss_valid[i]) &
+                              ~(io.en & free_en[i]);                  
             end
 
             for(int i=0; i<`STORE_ISSUE_BANK_SIZE; i++)begin

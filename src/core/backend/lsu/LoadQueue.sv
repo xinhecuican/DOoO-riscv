@@ -583,7 +583,8 @@ endgenerate
 // violation
     logic `ARRAY(`STORE_PIPELINE, BANK_SIZE) cmp_vec, valid_vec, violation_vec;
     logic `ARRAY(BANK_SIZE, `STORE_PIPELINE) violation_vec_rev;
-    logic `N(BANK_SIZE) vio_vec, vio_vec_n, vio_vec_redirect;
+    logic `N(BANK_SIZE) vio_vec, vio_vec_n, vio_vec_redirect, vio_vec_select, eqIdx_dec;
+    logic `N($clog2(BANK_SIZE)) vio_vec_idx;
 
     RobIdx `N(BANK_SIZE) vio_robIdxs;
 
@@ -641,14 +642,19 @@ generate
     end
 endgenerate
 
-    LoopOldestSelect #(BANK_SIZE, `ROB_WIDTH, $bits(SelectVioData)) select_vio (
-        .en(vio_vec_redirect),
-        .cmp(vio_robIdxs),
-        .data_i(select_vio_datas),
-        .en_o(vio_en),
-        .cmp_o(vio_robIdx),
-        .data_o(select_vio_data)
+    Decoder #(BANK_SIZE) dec_eq_idx (eqIdx, eqIdx_dec);
+    DirectionSelector #(BANK_SIZE) select_vio_vec (
+        .clk,
+        .rst,
+        .en,
+        .idx(eqIdx_dec),
+        .ready(vio_vec_redirect),
+        .select(vio_vec_select)
     );
+    Encoder #(BANK_SIZE) encoder_vio_idx (vio_vec_select, vio_vec_idx);
+    assign vio_robIdx = vio_robIdxs[vio_vec_idx];
+    assign select_vio_data = select_vio_datas[vio_vec_idx];
+    assign vio_en = |vio_vec_redirect;
     assign vio_data_o = select_vio_data.data;
 `ifdef FEAT_MEMPRED
     assign vio_wfsqInfo = wfsqInfo[select_vio_data.wbank];

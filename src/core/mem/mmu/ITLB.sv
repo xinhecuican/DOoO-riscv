@@ -24,7 +24,6 @@ module ITLB(
     TLBIO #(`ITLB_SIZE) itlb_io `N(2) ();
     logic miss_end;
     logic `N(2) exception, miss;
-    logic `N(`PADDR_SIZE) wpaddr;
     VPNAddr vpn;
     PPNAddr wppn;
 
@@ -32,7 +31,7 @@ module ITLB(
     logic tlb_valid;
     assign tlb_l2_io0.req = req_buf.req & ~flush_n;
     assign tlb_l2_io0.info = req_buf.idx;
-    assign tlb_l2_io0.req_addr = req_buf.req_addr;
+    assign tlb_l2_io0.req_addr = req_buf.req_addr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign tlb_valid = tlb_l2_io0.dataValid & tlb_l2_io0.info_o.idx == req_buf.idx;
     TLBRepeater #(.FRONT(1)) repeater0(.*, .flush(itlb_cache_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io));
 
@@ -47,8 +46,9 @@ generate
         assign itlb_io[i].vaddr = itlb_cache_io.vaddr[i];
         assign itlb_io[i].flush = itlb_cache_io.flush;
 
-        assign itlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
+        assign itlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error;
         assign itlb_io[i].wen = 1'b1;
+        assign itlb_io[i].wexc_static = tlb_l2_io0.exc_static;
         assign itlb_io[i].widx = replace_io.miss_way;
         assign itlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign itlb_io[i].wentry = tlb_l2_io0.entry;
@@ -138,7 +138,7 @@ endgenerate
                     req_buf.exception[0] <= 1'b1; 
                 end
                 if(tlb_valid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
-                    req_buf.paddr[0] <= wpaddr;
+                    req_buf.paddr[0] <= {wppn, req_buf.vaddr[0][`TLB_OFFSET-1: 0]};
                 end
                 if(tlb_valid & ~tlb_l2_io0.error)begin
                     if(req_buf.miss[1])begin
@@ -159,7 +159,7 @@ endgenerate
                     req_buf.req <= 1'b1;
                 end
                 if(tlb_valid & ~tlb_l2_io0.exception & ~tlb_l2_io0.error)begin
-                    req_buf.paddr[1] <= wpaddr;
+                    req_buf.paddr[1] <= {wppn, req_buf.vaddr[1][`TLB_OFFSET-1: 0]};
                 end
                 if(tlb_valid & ~tlb_l2_io0.error & tlb_l2_io0.exception)begin
                     req_buf.exception[1] <= 1'b1; 
@@ -182,11 +182,10 @@ endgenerate
     end
 
 
-    assign vpn = tlb_l2_io0.waddr[`VADDR_SIZE-1: `TLB_OFFSET];
+    assign vpn = tlb_l2_io0.waddr;
 `ifdef SV39
     assign wppn.ppn2 = tlb_l2_io0.wpn[2] ? vpn.vpn[2] : tlb_l2_io0.entry.ppn.ppn2;
 `endif
     assign wppn.ppn1 = tlb_l2_io0.wpn[1] ? vpn.vpn[1] : tlb_l2_io0.entry.ppn.ppn1;
     assign wppn.ppn0 = tlb_l2_io0.wpn[0] ? vpn.vpn[0] : tlb_l2_io0.entry.ppn.ppn0;
-    assign wpaddr = {wppn, tlb_l2_io0.waddr[`TLB_OFFSET-1: 0]};
 endmodule

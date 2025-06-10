@@ -5,8 +5,6 @@ interface LoadUnitIO;
     LoadIssueData `N(`LOAD_ISSUE_BANK_NUM) loadIssueData;
     logic `N($clog2(`LOAD_DIS_PORT)+1) eqNum;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) issue_idx;
-    logic `N(`LOAD_ISSUE_BANK_NUM) exception;
-
     logic `N(`LOAD_DIS_PORT) dis_en;
     RobIdx `N(`LOAD_DIS_PORT) dis_rob_idx;
     LoadIdx `N(`LOAD_DIS_PORT) dis_lq_idx;
@@ -18,7 +16,7 @@ interface LoadUnitIO;
     logic `N(`LOAD_PIPELINE) success;
     logic `ARRAY(`LOAD_PIPELINE, `LOAD_ISSUE_BANK_WIDTH) success_idx;
 
-    modport load (output en, loadIssueData, eqNum, issue_idx, dis_en, dis_rob_idx, dis_lq_idx, exception, dis_stall,
+    modport load (output en, loadIssueData, eqNum, issue_idx, dis_en, dis_rob_idx, dis_lq_idx, dis_stall,
                   input reply_fast, reply_slow, success, success_idx, full);
     modport queue (input dis_en, eqNum, dis_rob_idx, dis_lq_idx, dis_stall, output full);
 endinterface
@@ -88,7 +86,6 @@ generate
         assign load_io.issue_idx[i] = bank_io[i].issue_idx;
         assign load_io.dis_rob_idx[i] = dis_load_io.status[order[i]].robIdx;
         assign load_io.dis_lq_idx[i] = mem_issue_bundle[order[i]].lqIdx;
-        assign load_io.exception[i] = bank_io[i].exception_o;
 
         LoopCompare #(`ROB_WIDTH) cmp_bigger(bank_io[i].robIdx_o, backendCtrl.redirectIdx, bigger[i]);
     end
@@ -116,7 +113,6 @@ interface LoadIssueBankIO;
     LoadIssueData data_o;
     logic `N(`LOAD_ISSUE_BANK_WIDTH) issue_idx;
     RobIdx robIdx_o;
-    logic exception_o;
     ReplyRequest reply_fast;
     ReplyRequest reply_slow;
     logic success;
@@ -137,7 +133,7 @@ interface LoadIssueBankIO;
 `ifdef FEAT_MEMPRED
                 input lfst_en, lfst_idx, lfst_finish, lfst_finish_idx,
 `endif
-                 output full, reg_en, rs1, bankNum, data_o, issue_idx, robIdx_o, exception_o);
+                 output full, reg_en, rs1, bankNum, data_o, issue_idx, robIdx_o);
 endinterface
 
 module LoadIssueBank(
@@ -158,7 +154,7 @@ module LoadIssueBank(
     logic `N(`LOAD_ISSUE_BANK_SIZE) free_en;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) freeIdx;
     // exception: tlb miss exception
-    logic `N(`LOAD_ISSUE_BANK_SIZE) ready, issue, exception, tlbmiss;
+    logic `N(`LOAD_ISSUE_BANK_SIZE) ready, issue, tlbmiss;
     logic `N(`LOAD_ISSUE_BANK_SIZE) select_en, tlbmiss_valid;
     logic `N($clog2(`LOAD_ISSUE_BANK_SIZE)) selectIdx, selectIdxNext;
     LoadIssueData data_o;
@@ -248,7 +244,6 @@ endgenerate
     always_ff @(posedge clk)begin
         selectIdxNext <= selectIdx;
         io.issue_idx <= selectIdxNext;
-        io.exception_o <= exception[selectIdxNext];
     end
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
@@ -256,7 +251,6 @@ endgenerate
             en <= 0;
             io.data_o <= 0;
             issue <= 0;
-            exception <= 0;
             tlbmiss <= 0;
         end
         else begin
@@ -273,22 +267,17 @@ endgenerate
                 status_ram[freeIdx].rs1v <= io.status.rs1v;
                 status_ram[freeIdx].rs1 <= io.status.rs1;
                 status_ram[freeIdx].robIdx <= io.status.robIdx;
-                exception[freeIdx] <= 1'b0;
             end
 
             for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin
-                issue[i] <= ((issue[i] & ~(backendCtrl.redirect & (tlbmiss[i] | tlbmiss_valid[i]))) |
-                            (((ready[i]) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
+                issue[i] <= (issue[i] | (((ready[i]) & ~backendCtrl.redirect) & selectIdx_decode[i])) &
                             ~(io.reply_fast.en & replyfast_decode[i]) &
                             ~(io.reply_slow.en & (io.reply_slow.reason != 2'b11) & replyslow_decode[i]) &
-                            ~(io.tlb_en & tlbbank_decode[i]) &
+                            ~(io.tlb_en & en[i] & tlbmiss[i] & (~io.tlb_error | tlbbank_decode[i])) &
                             ~(io.en & free_en[i]);
-                tlbmiss[i] <= (tlbmiss[i] | tlbmiss_valid[i]) &
-                              ~(io.tlb_en & tlbbank_decode[i]) & ~backendCtrl.redirect;
-            end
-
-            if(io.tlb_en & ~io.tlb_error & io.tlb_exception)begin
-                exception[io.tlb_bank_idx] <= 1'b1;
+                tlbmiss[i] <= ((tlbmiss[i] & ~(io.tlb_en & (~io.tlb_error | tlbbank_decode[i]))) |
+                                tlbmiss_valid[i]) &
+                              ~(io.en & free_en[i]);
             end
 
             for(int i=0; i<`LOAD_ISSUE_BANK_SIZE; i++)begin

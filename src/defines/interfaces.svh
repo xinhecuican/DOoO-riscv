@@ -808,20 +808,21 @@ endinterface
 
 interface TlbL2IO;
     logic req;
-    logic `VADDR_BUS req_addr;
+    logic `N(`TLB_VPN_SIZE) req_addr;
     TLBInfo info;
 
     logic ready;
     logic dataValid;
     logic error;
     logic exception;
+    logic exc_static;
     TLBInfo info_o;
     PTEEntry entry;
     logic `N(`TLB_PN) wpn;
-    logic `N(`VADDR_SIZE) waddr;
+    logic `N(`TLB_VPN_SIZE) waddr;
 
-    modport tlb(output req, req_addr, info, input ready, dataValid, error, exception, info_o, entry, wpn, waddr);
-    modport l2 (input req, req_addr, info, output ready, dataValid, error, exception, info_o, entry, wpn, waddr);
+    modport tlb(output req, req_addr, info, input ready, dataValid, error, exception, exc_static, info_o, entry, wpn, waddr);
+    modport l2 (input req, req_addr, info, output ready, dataValid, error, exception, exc_static, info_o, entry, wpn, waddr);
 endinterface
 
 interface CsrL2IO;
@@ -840,7 +841,7 @@ endinterface
 interface CachePTWIO;
     logic req;
     TLBInfo info;
-    logic `N(`VADDR_SIZE) vaddr;
+    logic `N(`TLB_VPN_SIZE) vaddr;
     logic `N(`TLB_PN) valid;
     logic `ARRAY(`TLB_PN, `PADDR_SIZE) paddr;
     logic full;
@@ -848,7 +849,7 @@ interface CachePTWIO;
     logic refill_req;
     logic refill_ready;
     logic `N(`TLB_PN) refill_pn;
-    logic `N(`VADDR_SIZE) refill_addr;
+    logic `N(`TLB_VPN_SIZE) refill_addr;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) refill_data;
 
     modport cache(output req, info, vaddr, valid, paddr, refill_ready, input full, refill_req, refill_pn, refill_addr, refill_data);

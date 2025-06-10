@@ -43,28 +43,32 @@
 module DirectionSelector #(
     parameter DEPTH = 8,
     parameter WRITE_PORT=1,
+    parameter READ_PORT=1,
     parameter ADDR_WIDTH = $clog2(DEPTH)
 ) (
     input logic clk,
     input logic rst,
     input logic [WRITE_PORT-1: 0] en,
     input logic [WRITE_PORT-1: 0][DEPTH-1:0] idx,
-    input logic [DEPTH-1:0] ready,
-    output logic [DEPTH-1:0] select
+    input logic [READ_PORT-1: 0][DEPTH-1:0] ready,
+    output logic [READ_PORT-1: 0][DEPTH-1:0] select
 );
-  logic [DEPTH-1:0][DEPTH-1:0] bigger, bigger_mask;
+  logic [DEPTH-1:0][DEPTH-1:0] bigger;
 
   generate
-    for (genvar i = 0; i < DEPTH; i++) begin
+    for(genvar i = 0; i < READ_PORT; i++)begin
+      logic [DEPTH-1: 0][DEPTH-1: 0] bigger_mask;
       for (genvar j = 0; j < DEPTH; j++) begin
-        if(i == j)begin
-          assign bigger_mask[i][j] = 1'b1;
+        for (genvar k = 0; k < DEPTH; k++) begin
+          if(j == k)begin
+            assign bigger_mask[j][k] = 1'b1;
+          end
+          else begin
+            assign bigger_mask[j][k] = ~(bigger[j][k] & ready[i][k]);
+          end
         end
-        else begin
-          assign bigger_mask[i][j] = ~(bigger[i][j] & ready[j]);
-        end
+        assign select[i][j] = (&bigger_mask[j]) & ready[i][j];
       end
-      assign select[i] = (&bigger_mask[i]) & ready[i];
     end
   endgenerate
 
