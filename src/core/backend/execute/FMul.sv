@@ -85,7 +85,7 @@ module FMul #(
     logic `N(EXP_BITS+1) raw_exp_n;
     logic `N(MAN_BITS*2+2) shift_mant_s3;
     logic `N(MAN_BITS*2+3) shift_mant;
-    logic sign_n, need_shr, exp_z;
+    logic sign_n, need_shr, exp_z, mant_inc;
     logic sticky_s3, add_sticky_s3;
     always_ff @(posedge clk)begin
         need_shr <= (BIAS_SIZE < raw_exp) & raw_mant[MAN_BITS*2+1];
@@ -95,10 +95,11 @@ module FMul #(
         sticky_s3 <= sticky_s2;
         add_sticky_s3 <= add_sticky_s2;
         shift_mant_s3 <= shift_mant_s2;
+        mant_inc <= raw_mant[MAN_BITS*2+1];
     end
 
     logic `N(EXP_BITS+1) shift_exp, shift_exp_normal;
-    assign shift_exp = raw_exp_n + raw_mant[MAN_BITS*2+1];
+    assign shift_exp = raw_exp_n + mant_inc;
     assign shift_exp_normal = shift_exp < BIAS_SIZE ? 0 : shift_exp - BIAS_SIZE;
     assign shift_mant = shift_mant_s3 >> need_shr; 
 
