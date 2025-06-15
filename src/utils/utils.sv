@@ -40,7 +40,7 @@ generate
 		localparam STEP_NUM = 1 << i;
 		localparam FULL_STEP_NUM = RADIX / STEP;
 		localparam REMAIN = RADIX % STEP;
-		localparam REMAIN_NUM = REMAIN < STEP_NUM ? 0 : STEP_NUM - REMAIN;
+		localparam REMAIN_NUM = REMAIN < STEP_NUM ? 0 : REMAIN - STEP_NUM;
 		localparam ALL_NUM = FULL_STEP_NUM * STEP_NUM + REMAIN_NUM;
 		logic [ALL_NUM-1: 0] out_t;
 		for(genvar j=0; j<FULL_STEP_NUM; j++)begin
@@ -82,6 +82,7 @@ generate;
 	case(RADIX)
 	1: PEncoder1 pencoder(in, out);
 	2: PEncoder2 pencoder(in, out);
+	3: PEncoder3 pencoder(in, out);
 	4: PEncoder4 pencoder(in, out);
 	7: PEncoder7 pencoder(in, out);
 	8: PEncoder8 pencoder(in, out);
@@ -111,6 +112,7 @@ module PREncoder #(
 generate;
 	case(RADIX)
 	2: PREncoder2 pencoder(in, out);
+	3: PREncoder3 pencoder(in, out);
 	4: PREncoder4 pencoder(in, out);
 	8: PREncoder8 pencoder(in, out);
 	16: PREncoder16 pencoder(in, out);

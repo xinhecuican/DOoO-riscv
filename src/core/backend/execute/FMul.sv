@@ -4,6 +4,7 @@
 
 module FMul #(
     parameter logic [`FP_FORMAT_BITS-1:0] fp_fmt = 0,
+    parameter WITH_MUL = 1,
     parameter int unsigned EXP_BITS = exp_bits(fp_fmt),
     parameter int unsigned MAN_BITS = man_bits(fp_fmt),
     parameter int unsigned FXL = EXP_BITS + MAN_BITS + 1
@@ -14,6 +15,7 @@ module FMul #(
     input logic `N(FXL) rs1_data,
     input logic `N(FXL) rs2_data,
     input logic `N(`FLTOP_WIDTH) fltop,
+    input logic `N(MAN_BITS*2+2) mul_res,
     output FMulInfo mulInfo,
     output logic `N(EXP_BITS+MAN_BITS*2+2) toadd_res,
     output logic `N(FXL) res,
@@ -72,8 +74,15 @@ module FMul #(
                    BIAS_SIZE >= raw_exp ? BIAS_SIZE + 1 - raw_exp : 0;
     assign mant_shl_cnt = lzc_cnt_n - shr_cnt;
     assign mant_shr_cnt = shr_cnt - lzc_cnt_n;
-
-    FMantMul #(MAN_BITS+1) mul (clk, raw_mant_a, raw_mant_b, raw_mant);
+generate
+    if(WITH_MUL)begin
+        FMantMul #(MAN_BITS+1) mul (clk, raw_mant_a, raw_mant_b, raw_mant);
+    end
+    else begin
+        assign raw_mant = mul_res;
+    end
+endgenerate
+    
     
     assign shift_mant_s2 = lzc_cnt_n > shr_cnt ? raw_mant << mant_shl_cnt : raw_mant >> mant_shr_cnt;
     assign sticky_shift_mask_s2 = lzc_cnt_n > shr_cnt ? 0 : (1 << mant_shr_cnt) - 1;
@@ -276,6 +285,6 @@ generate
         assign cout = c7[HNUM-2];
     end
 endgenerate
-    KSA #(NUM*2) ksa (transpose[0], transpose[1], res_pre);
+    KSA #(WIDTH*2) ksa (transpose[0][WIDTH*2-1: 0], transpose[1][WIDTH*2-1: 0], res_pre);
     assign res = res_pre + cout;
 endmodule

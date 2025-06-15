@@ -180,6 +180,14 @@ module PEncoder2(
 	assign out = in[1];
 endmodule
 
+module PEncoder3(
+	input logic [2: 0] in,
+	output logic [1: 0] out
+);
+	assign out[0] = in[1] & ~in[2];
+	assign out[1] = in[2];
+endmodule
+
 module PEncoder4 (
 	input logic [3: 0] in,
 	output logic [1: 0] out
@@ -281,6 +289,14 @@ module PREncoder2(
 	output logic [0: 0] out
 );
 	assign out = in[1] & ~in[0];
+endmodule
+
+module PREncoder3(
+	input logic [2: 0] in,
+	output logic [1: 0] out
+);
+	assign out[0] = in[1] & ~in[0];
+	assign out[1] = in[2] & ~in[1] & ~in[0];
 endmodule
 
 module PREncoder4 (

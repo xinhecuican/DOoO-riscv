@@ -278,6 +278,7 @@ endgenerate
     logic `ARRAY(BANK, META_WIDTH/BANK) meta;
     logic `N(`TLB_ASID) lookup_asid;
     assign lookup_asid = fenceWe ? fence_asid : csr_io.asid;
+    logic `N(`TLB_VPN_SIZE) fence_vma_addr;
 generate
     for(genvar i=0; i<WAY_NUM; i++)begin
         assign tag_hits[i] = rtag[i].en & 
@@ -309,7 +310,7 @@ endgenerate
     assign fenceReq = fenceState == FENCE_REQ;
     assign fenceWe = (fenceState == FENCE_WE) | (fenceState == FENCE_REQ) & fence_addr_all & fence_asid_all;
     assign fence_way = tag_hits | {WAY_NUM{(fenceState == FENCE_REQ) & fence_addr_all & fence_asid_all}};
-
+    assign fence_vma_addr = fenceBus.vma_vaddr[2][`VADDR_SIZE-1: `TLB_OFFSET];
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
             fenceState <= IDLE;
@@ -328,8 +329,8 @@ endgenerate
                         fenceIdx <= 0;
                     end
                     else begin
-                        fenceIdx <= fenceBus.vma_vaddr[2][`VADDR_SIZE-1: `TLB_OFFSET]`TLB_VPN_IBUS(PN, DEPTH, BANK);
-                        fence_tag <= fenceBus.vma_vaddr[2][`VADDR_SIZE-1: `TLB_OFFSET]`TLB_VPN_TBUS(PN, DEPTH, BANK);
+                        fenceIdx <= fence_vma_addr`TLB_VPN_IBUS(PN, DEPTH, BANK);
+                        fence_tag <= fence_vma_addr`TLB_VPN_TBUS(PN, DEPTH, BANK);
                     end
                     fence_asid <= fenceBus.vma_asid[2];
                     fence_asid_all <= fenceBus.mmu_asid_all[2];

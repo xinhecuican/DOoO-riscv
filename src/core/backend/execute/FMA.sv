@@ -115,17 +115,32 @@ module FMASlice (
         add_ex_status_s2 <= madd_en_s4 ? ex_status_s4 : ex_status;
     end
 
+    localparam WITH_MUL = 0;
+    logic `N(FP32_MAN_BITS+1) raw_mant_a_w, raw_mant_b_w;
+    assign raw_mant_a_w = {|rs1_data[FXL-2 -: FP32_EXP_BITS], rs1_data[0 +: FP32_MAN_BITS]};
+    assign raw_mant_b_w = {|rs2_data[FXL-2 -: FP32_EXP_BITS], rs2_data[0 +: FP32_MAN_BITS]};
+`ifdef RVD
+    logic `N(FP64_MAN_BITS*2+2) mant_res;
+    logic `N(FP64_MAN_BITS+1) raw_mant_a, raw_mant_b;
+    assign raw_mant_a = db ? {|rs1_data[DXL-2 -: FP64_EXP_BITS], rs1_data[0 +: FP64_MAN_BITS]} : raw_mant_a_w;
+    assign raw_mant_b = db ? {|rs2_data[DXL-2 -: FP64_EXP_BITS], rs2_data[0 +: FP64_MAN_BITS]} : raw_mant_b_w;
+    FMantMul #(FP64_MAN_BITS+1) mul (clk, raw_mant_a, raw_mant_b, mant_res);
+`else
+    logic `N(FP32_MAN_BITS*2+2) mant_res;
+    FMantMul #(FP32_MAN_BITS+1) mul (clk, raw_mant_a_w, raw_mant_b_w, mant_res);
+`endif
 
     logic `N(`XLEN) mul_res;
     logic `N(FXL) mul_wres;
     logic `N(FP32_EXP_BITS+FP32_MAN_BITS*2+2) toadd_wres;
     FFlags mul_status, mul_wstatus;
-    FMul #(FP32) fmul (
+    FMul #(FP32, WITH_MUL) fmul (
         .clk,
         .rst,
         .round_mode,
         .rs1_data(rs1_data[FXL-1: 0]),
         .rs2_data(rs2_data[FXL-1: 0]),
+        .mul_res(mant_res[FP32_MAN_BITS*2+2]),
         .fltop,
         .mulInfo(mulInfo_w),
         .toadd_res(toadd_wres),
@@ -137,8 +152,9 @@ module FMASlice (
     logic `N(`XLEN) mul_lres;
     logic `N(FP64_EXP_BITS+FP64_MAN_BITS*2+2) toadd_lres, toadd_res_n;
     FFlags mul_lstatus;
-    FMul #(FP64) fmul_l (
+    FMul #(FP64, WITH_MUL) fmul_l (
         .*,
+        .mul_res(mant_res),
         .mulInfo(mulInfo_l),
         .toadd_res(toadd_lres),
         .res(mul_lres),

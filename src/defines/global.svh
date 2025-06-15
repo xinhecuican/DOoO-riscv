@@ -374,6 +374,9 @@ typedef enum logic [1:0] {
     `define TLB_PN 3 
     `define PTE_SIZE 8
 `endif
+`define TLB_PPN0_BASE 0
+`define TLB_PPN1_BASE `TLB_PPN0
+`define TLB_PPN2_BASE (`TLB_PPN1_BASE + `TLB_PPN1)
 `define PTE_BITS (`PTE_SIZE * 8)
 `define PTE_WIDTH $clog2(`PTE_SIZE)
 `define TLB_VPN_SIZE (`VADDR_SIZE - `TLB_OFFSET)
@@ -404,6 +407,8 @@ typedef enum logic [1:0] {
 `define TLB_PTB0_SIZE 8
 `define TLB_PTB1_SIZE 4
 `define TLB_PTB2_SIZE 4
+`define PTW_SIZE 4
+`define PTW_WIDTH $clog2(`PTW_SIZE)
 
 typedef enum logic [1:0] {
     UC,

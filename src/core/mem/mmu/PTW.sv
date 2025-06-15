@@ -20,183 +20,123 @@ module PTW(
     CachePTWIO.ptw cache_ptw_io,
     CsrL2IO.tlb csr_io,
     CacheBus.masterr axi_io,
-    PTWL2IO.ptw ptw_io,
-    output logic ptw_wb
+    PTWL2IO.ptw ptw_io
 );
-    typedef enum  { IDLE, WALK_PN1, WB_PN1, WALK_PN0, WB_PN0 
-`ifdef SV39
-    , WALK_PN2, WB_PN2
-`endif
-    } State;
+
     typedef struct packed {
-        logic `N(`PADDR_SIZE) paddr;
-        logic `N(`TLB_VPN_SIZE) vaddr;
-        TLBInfo info;
-        PTEEntry wb_entry;
-    } RequestBuffer;
-    typedef struct packed {
-        logic valid;
-        logic `N(`TLB_VPN_SIZE) vaddr;
-        TLBInfo info;
-        PTEEntry entry;
-    } WritebackInfo;
-    State state;
-    RequestBuffer req_buf;
-    WritebackInfo wb_info;
+        logic `N(`TLB_PN) wpn;
+        logic `N(`TLB_PN) conflict_pn;
+        logic `N(`TLB_PPN) paddr;
+    } PTWEntry;
+    logic `N(`PTW_SIZE) en, waiting;
+    PTWEntry `N(`PTW_SIZE) entrys;
+    VPNAddr `N(`PTW_SIZE) vaddrs;
+    TLBInfo `N(`PTW_SIZE) infos;
+    PTWEntry entry_i, entry_w;
+    logic `N(`PTW_WIDTH) free_idx;
+    logic `N($clog2(`TLB_PN)) last_pn_idx;
+    logic `N(`TLB_PN) cache_pn_mask;
+
+    VPNAddr cache_vaddr;
+    logic `ARRAY(`PTW_SIZE, `TLB_PN) pn_conflicts;
+    logic `N(`TLB_PN) pn_conflict, pn_conflict_sel;
+    logic `N(`PTW_SIZE) pn_same;
+
+    
+    logic `N(`PTW_SIZE) lookup_reqs;
+    logic `N(`PTW_WIDTH) lookup_idx;
+    PTWEntry lookup_entry;
+    logic `N(`TLB_PN) lookup_pn, wpn_sel;
+    logic `N($clog2(`TLB_PN)) lookup_pn_idx;
+    VPNAddr lookup_vaddr, lookup_vaddr_p;
+    logic `N(`PADDR_SIZE) lookup_paddr;
+
+    typedef enum  { IDLE, LOOKUP, REFILL } RefillState;
+    RefillState refill_state;
     logic `ARRAY(`DCACHE_BANK, `DCACHE_BITS) rdata;
     logic `N($clog2(`DCACHE_BANK)) ridx;
-    logic rlast;
-    logic ar_valid;
-    logic flush_q, fence_flush_q, flush_valid;
+    logic rlast, wvalid;
+    logic `N(`PTW_SIZE) wvalids;
+    PTWEntry wb_entry;
+    logic `N(`PTW_WIDTH) wb_idx, wb_idx_n;
+    logic `N($clog2(`TLB_PN)) wpn_idx;
+    logic `N(`PTW_SIZE) wb_idx_dec, pn_unalign, wpn;
+    VPNAddr wb_vaddr;
+    TLBInfo wb_info;
+    PTEEntry wb_pte;
+    logic wb_ready, wb_exception;
+    logic `N(`DCACHE_BANK_WIDTH) wb_offset;
+    logic pn_exception, pn_exc_static, pn_leaf;
+    logic flush_q;
 
-    logic `N(`TLB_PN) pn_valids;
-    logic pn_leaf;
-    logic pn1_exception, pn_exception, pn_exc_static, pn1_exc_static, pn1_unalign;
-`ifdef SV39
-    logic pn2_exception, pn2_exc_static, pn2_unalign;
-`endif
+    assign cache_vaddr = cache_ptw_io.vaddr;
+    PEncoder #(`PTW_SIZE) encoder_free_idx (~en, free_idx);
+generate
+    for(genvar i=0; i<`PTW_SIZE; i++)begin
+        logic `N(`TLB_PN) pn_equal, pn_equal_cmb;
+        for(genvar j=0; j<`TLB_PN; j++)begin
+            assign pn_equal[j] = cache_vaddr.vpn[j] == vaddrs[i].vpn[j];
+            assign pn_equal_cmb[j] = &pn_equal[`TLB_PN-1: j];
+            assign pn_conflicts[i][j] = en[i] & entrys[i].wpn[j] & pn_equal_cmb[j];
+        end
+        assign pn_same[i] = en[i] & (&pn_equal) & (infos[i].source == cache_ptw_io.info.source);
+    end
+    ParallelOR #(`TLB_PN, `PTW_SIZE) or_pn_conflicts(pn_conflicts, pn_conflict);
+    PRSelector #(`TLB_PN) selector_pn_conflict (pn_conflict, pn_conflict_sel);
+endgenerate
 
-    typedef struct packed {
-        logic `N(`TLB_VPN_SIZE) vaddr;
-        TLBInfo info;
-        PPNAddr ppn;
-    } PNData;
+    PREncoder #(`TLB_PN) encoder_last_pn (cache_ptw_io.valid, last_pn_idx);
+    MaskGen #(`TLB_PN) maskgen_cache_pn (last_pn_idx, cache_pn_mask);
+    assign cache_ptw_io.full = &en;
+    assign entry_i.wpn = {`TLB_PN{~(|cache_ptw_io.valid)}} | cache_pn_mask;
+    assign entry_i.conflict_pn = pn_conflict_sel;
+    assign entry_i.paddr = |cache_ptw_io.valid ? cache_ptw_io.paddr[last_pn_idx][`PADDR_SIZE-1: `TLB_OFFSET] : csr_io.ppn;
 
-`define PN_BUF_DEF(st, stn) \
-    PNData pn``st``_data, pn``st``_wb_data; \
-    localparam PN``st``_TAG_SIZE = `TLB_VPN * (`TLB_PN - st); \
-    localparam PN``st``_BIT_SIZE = `TLB_VPN_SIZE + $bits(TLBInfo) + `TLB_PPN; \
-    PTBufferIO #( \
-        .TAG_WIDTH(PN``st``_TAG_SIZE), \
-        .DATA_WIDTH(PN``st``_BIT_SIZE - PN``st``_TAG_SIZE) \
-    ) pn``st``_io(); \
-    PTBuffer #( \
-        .TAG_WIDTH(PN``st``_TAG_SIZE), \
-        .DATA_WIDTH(PN``st``_BIT_SIZE-PN``st``_TAG_SIZE), \
-        .DEPTH(`TLB_PTB``st``_SIZE), \
-        .MULTI(1) \
-    ) pn``st``_buffer (.*, .io(pn``st``_io)); \
-    assign pn``st``_io.flush = fence_flush; \
-    assign pn``st``_io.en = cache_ptw_io.req & cache_ptw_io.valid[stn] & ~(|cache_ptw_io.valid[st: 0]) | \
-                       (state == WB_PN``stn`` && (~pn_leaf &  \
-                       ~pn``stn``_exception & ~pn``st``_io.full & pn``stn``_io.wb_valid & ~flush_q)); \
-    assign pn``st``_io.tag = cache_ptw_io.req & cache_ptw_io.valid[stn] & ~(|cache_ptw_io.valid[st: 0]) ?  \
-                                cache_ptw_io.vaddr[`TLB_VPN_SIZE-1: `TLB_VPN * st] : \
-                                pn``stn``_wb_data.vaddr[`TLB_VPN_SIZE-1: `TLB_VPN * st]; \
-    localparam STAGE``st`` = st; \
-generate \
-    if(STAGE``st`` != 0)begin \
-        assign pn``st``_io.data = cache_ptw_io.req & cache_ptw_io.valid[stn] & ~(|cache_ptw_io.valid[st: 0]) ?  \
-                            {cache_ptw_io.vaddr[`TLB_VPN * st - 1: 0], cache_ptw_io.info, cache_ptw_io.paddr[stn][`PADDR_SIZE-1: `TLB_OFFSET]} : \
-                            {pn``stn``_wb_data.vaddr[`TLB_VPN * st -1: 0], pn``stn``_wb_data.info, wb_info.entry.ppn}; \
-    end \
-    else begin \
-        assign pn``st``_io.data = cache_ptw_io.req & cache_ptw_io.valid[stn] & ~(|cache_ptw_io.valid[st: 0]) ?  \
-                            {cache_ptw_io.info, cache_ptw_io.paddr[stn][`PADDR_SIZE-1: `TLB_OFFSET]} : \
-                            {pn``stn``_wb_data.info, wb_info.entry.ppn}; \
-    end \
-endgenerate \
-    assign pn``st``_io.data_valid = rlast && (state == WALK_PN``st``); \
-    assign pn_valids[``st``] = pn``st``_io.valid; \
-    assign pn``st``_io.ready = state == IDLE && !(|pn_valids[`TLB_PN-1: ``stn``]); \
-    assign pn``st``_io.ctag = req_buf.vaddr[`TLB_VPN_SIZE-1: `TLB_VPN * st]; \
-    assign pn``st``_data = pn``st``_io.data_o; \
-    assign pn``st``_wb_data = pn``st``_io.wb_data;
-
-    typedef struct packed {
-        logic `N(`TLB_VPN_SIZE) vaddr;
-        TLBInfo info;
-    } PNLData;
-
-`define PN_LAST_BUF_DEF(st) \
-    PNLData pn``st``_data, pn``st``_wb_data; \
-    localparam PN``st``_TAG_SIZE = `TLB_VPN; \
-    localparam PN``st``_BIT_SIZE = `TLB_VPN_SIZE + $bits(TLBInfo); \
-    PTBufferIO #( \
-        .TAG_WIDTH(PN``st``_TAG_SIZE), \
-        .DATA_WIDTH(PN``st``_BIT_SIZE - PN``st``_TAG_SIZE) \
-    ) pn``st``_io(); \
-    PTBuffer #( \
-        .TAG_WIDTH(PN``st``_TAG_SIZE), \
-        .DATA_WIDTH(PN``st``_BIT_SIZE-PN``st``_TAG_SIZE), \
-        .DEPTH(`TLB_PTB``st``_SIZE), \
-        .MULTI(1) \
-    ) pn``st``_buffer (.*, .io(pn``st``_io)); \
-    assign pn``st``_io.flush = fence_flush; \
-    assign pn``st``_io.en = cache_ptw_io.req & (~(|cache_ptw_io.valid)); \
-    assign pn``st``_io.tag = cache_ptw_io.vaddr[`TLB_VPN_SIZE-1: `TLB_VPN * st]; \
-    assign pn``st``_io.data = {cache_ptw_io.vaddr[`TLB_VPN * st-1: 0], cache_ptw_io.info}; \
-    assign pn``st``_io.data_valid = rlast && (state == WALK_PN``st``); \
-    assign pn_valids[``st``] = pn``st``_io.valid; \
-    assign pn``st``_io.ready = state == IDLE; \
-    assign pn``st``_io.ctag = req_buf.vaddr[`TLB_VPN_SIZE-1: `TLB_VPN * st]; \
-    assign pn``st``_data = pn``st``_io.data_o; \
-    assign pn``st``_wb_data = pn``st``_io.wb_data;
-
-`define PN_WB_READY_DEF(st, stp) \
-    assign pn``st``_io.wb_ready = (state == WB_PN``st``) &  \
-                             ((pn_leaf | pn``st``_exception) & ptw_io.ready | \
-                              ~pn_leaf & ~pn``st``_exception & ~pn``stp``_io.full &  \
-                              ~(cache_ptw_io.req & cache_ptw_io.valid[st] & ~(|cache_ptw_io.valid[stp: 0]))) & ~flush_q;
-
-// TODO: tlb不需要redirect, 一旦issue queuetlb缺失便暂停
-// 直到tlb填充后所有暂停的项都重新访问
-
-assign pn0_io.wb_ready = (state == WB_PN0) & ptw_io.ready & ~flush_q;
-`PN_BUF_DEF(0, 1)
-`ifdef SV32
-`PN_LAST_BUF_DEF(1)
-`else
-`PN_BUF_DEF(1, 2)
-`endif
-`PN_WB_READY_DEF(1, 0)
-`ifdef SV39
-`PN_LAST_BUF_DEF(2)
-`PN_WB_READY_DEF(2, 1)
-`endif
-
-    assign pn_leaf = req_buf.wb_entry.r | req_buf.wb_entry.w | req_buf.wb_entry.x;
-    assign pn1_unalign = pn_leaf & (|req_buf.wb_entry.ppn[0]);
-    TLBExcDetect exc_detect (req_buf.wb_entry, req_buf.info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn_exception, pn_exc_static);
-    assign pn1_exception = pn_exception | pn1_unalign;
-    assign pn1_exc_static = pn_exc_static | pn1_unalign;
-`ifdef SV39
-    assign pn2_unalign = pn_leaf & (|req_buf.wb_entry.ppn[1: 0]);
-    assign pn2_exception = pn_exception | pn2_unalign;
-    assign pn2_exc_static = pn_exc_static | pn2_unalign;
-`endif
-
-logic walk_state, wb_state;
-    assign walk_state = 
-`ifdef SV39
-                        state == WALK_PN2 ||
-`endif
-                        state == WALK_PN1 || state == WALK_PN0;
-    assign wb_state =
-`ifdef SV39
-                        state == WB_PN2 ||
-`endif
-                        state == WB_PN1 || state == WB_PN0;
+    assign entry_w.wpn = wb_entry.wpn & ~lookup_pn;
+    assign entry_w.conflict_pn = wb_entry.conflict_pn & ~lookup_pn;
+    assign entry_w.paddr = wb_pte.ppn;
 
     always_ff @(posedge clk)begin
-        rlast <= axi_io.r_valid & axi_io.r_last;
-        if(axi_io.r_valid & axi_io.r_ready)begin
-            rdata[ridx] <= axi_io.r_data;
+        if(cache_ptw_io.req & ~cache_ptw_io.full & ~(|pn_same))begin
+            entrys[free_idx] <= entry_i;
+            vaddrs[free_idx] <= cache_ptw_io.vaddr;
+            infos[free_idx] <= cache_ptw_io.info;
+        end
+        if(wvalid & wb_ready)begin
+            entrys[wb_idx_n] <= entry_w;
         end
     end
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
-            ridx <= 1'b0;
+            en <= 0;
+            waiting <= 0;
+        end
+        else if(fence_flush)begin
+            en <= 0;
         end
         else begin
-            if(axi_io.r_valid & axi_io.r_ready)begin
-                ridx <= ridx + 1;
+            if(cache_ptw_io.req & ~cache_ptw_io.full & ~(|pn_same))begin
+                en[free_idx] <= 1'b1;
+                waiting[free_idx] <= |pn_conflicts;
+            end
+
+            if(wvalid & wb_ready)begin
+                en[wb_idx_n] <= ~(pn_leaf | wb_exception);
+                waiting[wb_idx_n] <= waiting[wb_idx_n] & ~(|(wb_entry.conflict_pn & lookup_pn));
             end
         end
     end
-    assign axi_io.ar_id = 0;
-    assign axi_io.ar_valid = ar_valid;
-    assign axi_io.ar_addr = {req_buf.paddr[`PADDR_SIZE-1: `DCACHE_LINE_WIDTH], {`DCACHE_LINE_WIDTH{1'b0}}};
+
+    assign lookup_reqs = en & ~waiting & {`PTW_SIZE{refill_state == IDLE}};
+    PEncoder #(`PTW_SIZE) encoder_lookup_idx (lookup_reqs, lookup_idx);
+    PSelector #(`PTW_SIZE) select_wpn (lookup_entry.wpn, wpn_sel);
+    PEncoder #(`PTW_SIZE) select_lookup_pn (lookup_entry.wpn, lookup_pn_idx);
+    assign lookup_entry = entrys[lookup_idx];
+    assign lookup_vaddr_p = vaddrs[lookup_idx];
+    assign lookup_paddr = {lookup_entry.paddr, lookup_vaddr_p.vpn[lookup_pn_idx], {`PTE_WIDTH{1'b0}}};
+    assign axi_io.ar_id = lookup_idx;
+    assign axi_io.ar_valid = (|lookup_reqs) & ~fence_flush;
+    assign axi_io.ar_addr = {lookup_paddr[`PADDR_SIZE-1: `DCACHE_LINE_WIDTH], {`DCACHE_LINE_WIDTH{1'b0}}};
     assign axi_io.ar_len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign axi_io.ar_size = $clog2(`DATA_BYTE);
     assign axi_io.ar_burst = 2'b01;
@@ -204,414 +144,105 @@ logic walk_state, wb_state;
     assign axi_io.ar_snoop = `ACEOP_READ_ONCE;
     assign axi_io.r_ready = 1'b1;
 
-    assign ptw_io.waddr = wb_info.vaddr;
-    assign ptw_io.info = wb_info.info;
-    assign ptw_io.entry = wb_info.entry;
-    always_comb begin
-        case(state)
-`ifdef SV39
-        WB_PN2: begin
-            ptw_io.wpn = 'b11;
-            ptw_io.exception = pn2_exception;
-            ptw_io.exc_static = pn2_exc_static;
-            ptw_io.valid = (pn_leaf | pn2_exception) & ~flush_valid;
-        end
-`endif
-        WB_PN1: begin
-            ptw_io.wpn = 'b1;
-            ptw_io.exception = pn1_exception;
-            ptw_io.exc_static = pn1_exc_static;
-            ptw_io.valid = (pn_leaf | pn1_exception) & ~flush_valid;
-        end
-        WB_PN0: begin
-            ptw_io.wpn = 'b0;
-            ptw_io.exception = pn_exception;
-            ptw_io.exc_static = pn_exc_static;
-            ptw_io.valid = ~flush_valid;
-        end
-        default: begin
-            ptw_io.wpn = 'b0;
-            ptw_io.exception = 1'b0;
-            ptw_io.exc_static = 0;
-            ptw_io.valid = 0;
-        end
-        endcase
-    end
-
-    logic `N(`TLB_VPN_SIZE) refill_vaddr;
-    logic `N(`TLB_PN) refill_pn;
-    logic wb_req;
-
-    assign cache_ptw_io.full = pn0_io.full | pn1_io.full
-`ifdef SV39
-                                | pn2_io.full
-`endif
-    ;
-    assign cache_ptw_io.refill_req = wb_req;
-    assign cache_ptw_io.refill_pn = refill_pn;
-    assign cache_ptw_io.refill_addr = refill_vaddr;
+    assign cache_ptw_io.refill_req = rlast & ~fence_flush & ~flush_q;
+    assign cache_ptw_io.refill_pn = lookup_pn;
+    assign cache_ptw_io.refill_addr = lookup_vaddr;
     assign cache_ptw_io.refill_data = rdata;
 
-    always_ff @(posedge clk)begin
-        if(rlast)begin
-            refill_vaddr <= req_buf.vaddr;
-            refill_pn <= {
+    assign pn_unalign[0] = 0;
+    assign pn_unalign[1] = pn_leaf & (|wb_pte.ppn.ppn0);
 `ifdef SV39
-                state == WALK_PN2,
+    assign pn_unalign[2] = pn_leaf & ((|wb_pte.ppn.ppn1) | (|wb_pte.ppn.ppn0));
 `endif
-                state == WALK_PN1, state == WALK_PN0};
+generate
+    for(genvar i=0; i<`PTW_SIZE; i++)begin
+        logic `N(`TLB_PN) pn_equal, pn_bank_equal, pn_equal_cmb;
+        for(genvar j=0; j<`TLB_PN; j++)begin
+            assign pn_equal[j] = lookup_vaddr.vpn[j] == vaddrs[i].vpn[j];
+            assign pn_bank_equal[j] = lookup_vaddr.vpn[j][`TLB_VPN - 1 :`DCACHE_BANK_WIDTH] ==
+                                      vaddrs[i].vpn[j][`TLB_VPN  - 1 : `DCACHE_BANK_WIDTH];
+            if(j < `TLB_PN-1)begin
+                assign pn_equal_cmb[j] = (&pn_equal[`TLB_PN-1: j+1]) & pn_bank_equal[j] & entrys[i].wpn[j];
+            end
+            else begin
+                assign pn_equal_cmb[j] = pn_bank_equal[j] & entrys[i].wpn[j];
+            end
+        end
+        assign wvalids[i] = en[i] & (|(pn_equal_cmb & lookup_pn)) & 
+                            ~(wb_idx_dec[i] & wvalid & wb_ready);
+    end
+endgenerate
+    PEncoder #(`PTW_SIZE) encoder_wb_idx (wvalids, wb_idx);
+    Decoder #(`PTW_SIZE) decoder_wb_idx (wb_idx_n, wb_idx_dec);
+    TLBExcDetect exc_detect (wb_pte, wb_info.source, csr_io.mxr, csr_io.sum, csr_io.mprv, csr_io.mpp, csr_io.mode, pn_exception, pn_exc_static);
+    Encoder #(`TLB_PN) encoder_wpn (lookup_pn, wpn_idx);
+    MaskGen #(`TLB_PN) maskgen_wpn (wpn_idx, wpn);
+    assign wb_offset = vaddrs[wb_idx].vpn[wpn_idx][`DCACHE_BANK_WIDTH-1:0];
+    assign pn_leaf = wb_pte.r | wb_pte.w | wb_pte.x;
+    assign wb_ready = ~pn_leaf | ptw_io.ready;
+    assign wb_exception = |(({`PTW_SIZE{pn_exception}} | pn_unalign) & lookup_pn);
+
+    assign ptw_io.valid = wvalid & (pn_leaf | wb_exception);
+    assign ptw_io.exception = wb_exception;
+    assign ptw_io.exc_static = |((pn_exc_static | pn_unalign) & lookup_pn);
+    assign ptw_io.info = wb_info;
+    assign ptw_io.entry = wb_pte;
+    assign ptw_io.waddr = wb_vaddr;
+    assign ptw_io.wpn = wpn;
+
+    always_ff @(posedge clk)begin
+        if(axi_io.r_valid & axi_io.r_ready)begin
+            rdata[ridx] <= axi_io.r_data;
+        end
+        rlast <= axi_io.r_valid & axi_io.r_ready & axi_io.r_last;
+        if(|wvalids)begin
+            wb_idx_n <= wb_idx;
+            wb_entry <= entrys[wb_idx];
+            wb_vaddr <= vaddrs[wb_idx];
+            wb_info <= infos[wb_idx];
+            wb_pte <= rdata[wb_offset];
         end
     end
-
-    assign flush_valid = flush_q | fence_flush;
-    always_ff @(posedge clk or negedge rst)begin
+    always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
-            wb_req <= 0;
+            refill_state <= IDLE;
+            ridx <= 0;
+            wvalid <= 0;
+            lookup_vaddr <= 0;
+            lookup_pn <= 0;
             flush_q <= 0;
-            fence_flush_q <= 0;
-            ptw_wb <= 1'b0;
         end
         else begin
-            if(fence_flush | fence_flush_q)begin
-                wb_req <= 1'b0;
+            if(axi_io.r_valid & axi_io.r_ready)begin
+                ridx <= ridx + 1;
             end
-            else if(rlast)begin
-                wb_req <= 1'b1;
+            case(refill_state)
+            IDLE:begin
+                if(axi_io.ar_valid & axi_io.ar_ready & ~fence_flush)begin
+                    refill_state <= LOOKUP;
+                    lookup_vaddr <= vaddrs[lookup_idx];
+                    lookup_pn <= wpn_sel;
+                end
             end
-            else if(cache_ptw_io.refill_ready)begin
-                wb_req <= 1'b0;
-            end
-
-            if(rlast & ~flush_valid)begin
-                ptw_wb <= 1'b1;
-            end
-`ifdef SV39
-            else if(state == WB_PN2 && !pn_leaf && !pn2_exception)begin
-                ptw_wb <= 1'b0;
-            end
-`endif
-            else if(state == WB_PN1 && !pn_leaf && !pn1_exception)begin
-                ptw_wb <= 1'b0;
-            end
-            else if(!wb_state)begin
-                ptw_wb <= 1'b0;
-            end
-
-            if(walk_state)begin
+            LOOKUP:begin
+                if(axi_io.r_valid & axi_io.r_ready & axi_io.r_last)begin
+                    refill_state <= REFILL;
+                end
                 if(fence_flush)begin
                     flush_q <= 1'b1;
                 end
-                if(fence_flush)begin
-                    fence_flush_q <= 1'b1;
-                end
             end
-            if(wb_state)begin
-                flush_q <= 1'b0;
-                fence_flush_q <= 1'b0;
-            end
-        end
-    end
-
-    always_ff @(posedge clk, negedge rst)begin
-        if(rst == `RST)begin
-            wb_info <= 0;
-        end
-        else begin
-            case(state)
-`ifdef SV39
-            WALK_PN2: begin
-                if(rlast)begin
-                    wb_info.vaddr <= req_buf.vaddr;
-                    wb_info.info <= req_buf.info;
-                    wb_info.valid <= 1'b1;
-                    wb_info.entry <= rdata[req_buf.vaddr[`TLB_VPN * 2 +: `DCACHE_BANK_WIDTH]];
+            REFILL:begin
+                if(fence_flush | flush_q)begin
+                    refill_state <= IDLE;
+                    flush_q <= 1'b0;
                 end
-            end
-            WB_PN2: begin
-                if(pn2_io.wb_valid & pn2_io.wb_ready)begin
-                    wb_info.vaddr <= pn2_wb_data.vaddr;
-                    wb_info.info <= pn2_wb_data.info;
-                    wb_info.entry <= rdata[pn2_wb_data.vaddr[`TLB_VPN * 2 +: `DCACHE_BANK_WIDTH]];
-                end
-            end 
-`endif
-            WALK_PN1: begin
-                if(rlast)begin
-                    wb_info.vaddr <= req_buf.vaddr;
-                    wb_info.info <= req_buf.info;
-                    wb_info.valid <= 1'b1;
-                    wb_info.entry <= rdata[req_buf.vaddr[`TLB_VPN +: `DCACHE_BANK_WIDTH]];
-                end
-            end
-            WB_PN1: begin
-                if(pn1_io.wb_valid & pn1_io.wb_ready)begin
-                    wb_info.vaddr <= pn1_wb_data.vaddr;
-                    wb_info.info <= pn1_wb_data.info;
-                    wb_info.entry <= rdata[pn1_wb_data.vaddr[`TLB_VPN +: `DCACHE_BANK_WIDTH]];
-                end
-            end
-            WALK_PN0: begin
-                if(rlast)begin
-                    wb_info.vaddr <= req_buf.vaddr;
-                    wb_info.info <= req_buf.info;
-                    wb_info.valid <= 1'b1;
-                    wb_info.entry <= rdata[req_buf.vaddr[0 +: `DCACHE_BANK_WIDTH]];
-                end
-            end
-            WB_PN0: begin
-                if(pn0_io.wb_valid & pn0_io.wb_ready)begin
-                    wb_info.vaddr <= pn0_wb_data.vaddr;
-                    wb_info.info <= pn0_wb_data.info;
-                    wb_info.entry <= rdata[req_buf.vaddr[0 +: `DCACHE_BANK_WIDTH]];
-                end
-            end
-            default:begin
-            end
-            endcase
-        end
-    end
-
-    // IDLE: select entry from pn0_buffer or pn1_buffer
-    // WALK_PN1, WALK_PN0: lookup from memory
-    // WB_PN1: writeback data in req_buf and pn1_buffer(if is leaf)
-    //   1. if pn_leaf || pn1_exception, then writeback to lsu
-    //   2. in ~pn_leaf & ~pn1_exception, write data to pn0_buffer
-    //      if pn0_buffer is full, then switch state to WALK_PN0
-    // WB_PN0: writeback data in req_buf and pn0_buffer
-
-    always_ff @(posedge clk or negedge rst)begin
-        if(rst == `RST)begin
-            state <= IDLE;
-            req_buf <= '{default: 0};
-            ar_valid <= 1'b0;
-        end
-        else begin
-            if(axi_io.ar_ready)begin
-                ar_valid <= 1'b0;
-            end
-            case(state)
-            IDLE:begin
-                if(fence_flush)begin
-                    
-                end
-`ifdef SV39
-                else if(pn2_io.valid)begin
-                    req_buf.vaddr <= pn2_data.vaddr;
-                    req_buf.paddr <= {csr_io.ppn, pn2_data.vaddr[`TLB_VPN_SIZE-1: `TLB_VPN * 2], {`PTE_WIDTH{1'b0}}};
-                    req_buf.info <= pn2_data.info;
-                    state <= WALK_PN2;
-                end
-`endif
-                else if(pn1_io.valid)begin
-                    req_buf.vaddr <= pn1_data.vaddr;
-`ifdef SV39
-                    req_buf.paddr <= {pn1_data.ppn, pn1_data.vaddr[`TLB_VPN +: `TLB_VPN], {`PTE_WIDTH{1'b0}}};
-`else
-                    req_buf.paddr <= {csr_io.ppn, pn1_data.vaddr[`TLB_VPN_SIZE-1: `TLB_VPN], {`PTE_WIDTH{1'b0}}};
-`endif
-                    req_buf.info <= pn1_data.info;
-                    state <= WALK_PN1;
-                end
-                else if(pn0_io.valid)begin
-                    req_buf.vaddr <= pn0_data.vaddr;
-                    req_buf.paddr <= {pn0_data.ppn, pn0_data.vaddr[0 +: `TLB_VPN], {`PTE_WIDTH{1'b0}}};
-                    req_buf.info <= pn0_data.info;
-                    state <= WALK_PN0;
-                end
-
-                if((pn1_io.valid | pn0_io.valid
-`ifdef SV39
-                    | pn2_io.valid
-`endif
-                ) & ~fence_flush)begin
-                    ar_valid <= 1'b1;
-                end
-            end
-`ifdef SV39
-            WALK_PN2: begin
-                if(rlast)begin
-                    state <= WB_PN2;
-                    req_buf.wb_entry <= rdata[req_buf.vaddr[`TLB_VPN * 2 +: `DCACHE_BANK_WIDTH]];
-                end
-            end
-            WB_PN2: begin
-                if(flush_valid)begin
-                    state <= IDLE;
-                end
-                else if(pn2_io.wb_valid & ~(~pn_leaf & ~pn2_exception & pn1_io.full))begin
-                end
-                else if(pn_leaf | pn2_exception)begin
-                    if(ptw_io.ready)begin
-                        state <= IDLE;
-                    end
-                end
-                else begin
-                    req_buf.paddr <= {req_buf.wb_entry.ppn, req_buf.vaddr`TLB_VPN_BUS_CUT(1), {`PTE_WIDTH{1'b0}}};
-                    ar_valid <= 1'b1;
-                    state <= WALK_PN1;
-                end
-            end
-`endif
-            WALK_PN1: begin
-                if(rlast)begin
-                    state <= WB_PN1;
-                    req_buf.wb_entry <= rdata[req_buf.vaddr[`TLB_VPN +: `DCACHE_BANK_WIDTH]];
-                end
-            end
-            WB_PN1: begin
-                if(flush_valid)begin
-                    state <= IDLE;
-                end
-                else if(pn1_io.wb_valid & ~(~pn_leaf & ~pn1_exception & pn0_io.full))begin
-                end
-                else if(pn_leaf | pn1_exception)begin
-                    if(ptw_io.ready)begin
-                        state <= IDLE;
-                    end
-                end
-                else begin
-                    req_buf.paddr <= {req_buf.wb_entry.ppn, req_buf.vaddr`TLB_VPN_BUS_CUT(0), {`PTE_WIDTH{1'b0}}};
-                    ar_valid <= 1'b1;
-                    state <= WALK_PN0;
-                end
-            end
-            WALK_PN0: begin
-                if(rlast)begin
-                    state <= WB_PN0;
-                    req_buf.wb_entry <= rdata[req_buf.vaddr[0 +: `DCACHE_BANK_WIDTH]];
-                end
-            end
-            WB_PN0: begin
-                if(flush_valid | ~pn0_io.wb_valid & ptw_io.ready)begin
-                    state <= IDLE;
+                wvalid <= (|wvalids) & ~fence_flush & ~flush_q;
+                if(~(|wvalids))begin
+                    refill_state <= IDLE;
                 end
             end
             endcase
         end
     end
-
-    `PERF(ptw_miss, axi_io.ar_valid & axi_io.ar_ready)
-endmodule
-
-interface PTBufferIO #(
-    parameter TAG_WIDTH=10,
-    parameter DATA_WIDTH=10
-);
-    logic en;
-    logic `N(TAG_WIDTH) tag;
-    logic `N(DATA_WIDTH) data;
-    logic data_valid;
-    logic `N(TAG_WIDTH) ctag;
-    logic flush;
-
-    logic full;
-    logic valid;
-    logic ready;
-    logic `N(TAG_WIDTH + DATA_WIDTH) data_o;
-    logic wb_valid;
-    logic wb_ready;
-    logic `N(TAG_WIDTH + DATA_WIDTH) wb_data;
-
-    modport buffer (input en, ready, data_valid, tag, ctag, flush, data, wb_ready, output full, valid, data_o, wb_valid, wb_data);
-endinterface
-
-module PTBuffer #(
-    parameter TAG_WIDTH=10,
-    parameter DATA_WIDTH=10,
-    parameter DEPTH=8,
-    parameter MULTI=0,
-    parameter ADDR_WIDTH=$clog2(DEPTH)
-)(
-    input logic clk,
-    input logic rst,
-    PTBufferIO.buffer io
-);
-    logic `N(DEPTH) en;
-    logic `N(TAG_WIDTH) tag `N(DEPTH);
-    logic `N(DATA_WIDTH) data `N(DEPTH);
-    
-    logic `N(ADDR_WIDTH) free_idx;
-    logic `N(ADDR_WIDTH) wb_idx;
-
-    assign io.full = &en;
-    PEncoder #(DEPTH) encoder_free(~en, free_idx);
-
-    logic `N(ADDR_WIDTH) valid_idx;
-    assign io.valid = |(en);
-    PEncoder #(DEPTH) encoder_valid ((en), valid_idx);
-    assign io.data_o = {tag[valid_idx], data[valid_idx]};
-
-    always_ff @(posedge clk)begin
-        if(io.en)begin
-            tag[free_idx] <= io.tag;
-            data[free_idx] <= io.data;
-        end
-    end
-
-
-generate
-    if(MULTI)begin
-        logic `N(DEPTH) data_valid, wb_valid;
-        logic `N(DEPTH) tag_cmp;
-        logic `N(DEPTH) select_idx_dec;
-
-        for(genvar i=0; i<DEPTH; i++)begin
-            assign tag_cmp[i] = en[i] & (tag[i] == io.ctag);
-        end
-        assign io.wb_valid = |data_valid;
-        PSelector #(DEPTH) selector_wb_valid (data_valid, wb_valid);
-        Encoder #(DEPTH) encoder_wb_idx (wb_valid, wb_idx);
-        assign io.wb_data = {tag[wb_idx], data[wb_idx]};
-        always_ff @(posedge clk, negedge rst)begin
-            if(rst == `RST)begin
-                data_valid <= 0;
-                en <= 0;
-            end
-            else if(io.flush)begin
-                data_valid <= 0;
-                en <= 0;
-            end
-            else begin
-                if(io.en)begin
-                    en[free_idx] <= 1'b1;
-                end
-                if(io.valid & io.ready)begin
-                    en[valid_idx] <= 1'b0;
-                end
-                if(io.wb_valid & io.wb_ready)begin
-                    en[wb_idx] <= 1'b0;
-                end
-
-                for(int i=0; i<DEPTH; i++)begin
-                    data_valid[i] <= (data_valid[i] & ~io.data_valid | io.data_valid & tag_cmp[i]) &
-                                  ~(io.wb_ready & wb_valid[i]);
-                end 
-            end
-        end
-    end
-    else begin
-        always_ff @(posedge clk)begin
-            if(io.valid & io.ready)begin
-                wb_idx <= valid_idx;
-            end
-        end
-        always_ff @(posedge clk or negedge rst)begin
-            if(rst == `RST)begin
-                en <= 0;
-            end
-            else if(io.flush)begin
-                en <= 0;
-            end
-            else begin
-                if(io.en)begin
-                    en[free_idx] <= 1'b1;
-                end
-                if(io.valid & io.ready)begin
-                    en[valid_idx] <= 1'b0;
-                end
-            end
-        end
-    end
-endgenerate
-
 endmodule

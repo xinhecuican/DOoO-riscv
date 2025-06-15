@@ -14,11 +14,6 @@ module DTLB(
     TlbL2IO tlb_l2_io0();
     TlbL2IO tlb_l2_io1();
 
-    logic `N(`LOAD_PIPELINE) lwb_pipeline;
-    Decoder #(`LOAD_PIPELINE) decoder_load_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `LOAD_ISSUE_BANK_WIDTH], lwb_pipeline);
-    logic `N(`STORE_PIPELINE) swb_pipeline;
-    Decoder #(`STORE_PIPELINE) decoder_store_pipe (tlb_l2_io0.info_o.idx[`TLB_IDX_SIZE-1: `STORE_ISSUE_BANK_WIDTH], swb_pipeline);
-
     logic `N(`DTLB_SIZE) replace_en, replace_hit;
     logic `ARRAY(`DTLB_SIZE, `TLB_ASID+1) replace_asid;
     logic `ARRAY(`DTLB_SIZE, `TLB_PN) replace_pn_valid;
@@ -221,11 +216,11 @@ endgenerate
     assign tlb_lsu_io.scancel = sreq_cancel_s4 | sreq_all_s3 & {`STORE_PIPELINE{~tlb_l2_io.ready}};
 
     always_ff @(posedge clk)begin
-        tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & (tlb_l2_io0.info_o.source == 2'b01)}} & lwb_pipeline;
+        tlb_lsu_io.lwb <= {`LOAD_PIPELINE{tlb_l2_io0.dataValid & (tlb_l2_io0.info_o.source == 2'b01)}};
         tlb_lsu_io.lwb_exception <= {`LOAD_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.lwb_error <= {`LOAD_PIPELINE{tlb_l2_io0.error}};
         tlb_lsu_io.lwb_idx <= {`LOAD_PIPELINE{tlb_l2_io0.info_o.idx[`LOAD_ISSUE_BANK_WIDTH-1: 0]}};
-        tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & (tlb_l2_io0.info_o.source == 2'b10)}} & swb_pipeline;
+        tlb_lsu_io.swb <= {`STORE_PIPELINE{tlb_l2_io0.dataValid & (tlb_l2_io0.info_o.source == 2'b10)}};
         tlb_lsu_io.swb_exception <= {`STORE_PIPELINE{tlb_l2_io0.exception}};
         tlb_lsu_io.swb_error <= {`STORE_PIPELINE{tlb_l2_io0.error}};
         tlb_lsu_io.swb_idx <= {`STORE_PIPELINE{tlb_l2_io0.info_o.idx[`STORE_ISSUE_BANK_WIDTH-1: 0]}};

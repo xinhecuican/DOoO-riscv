@@ -27,9 +27,9 @@ module L2TLB(
     TLBCache tlb_cache (.*, .io(tlbCache_io), .fenceBus(fenceBus_i.mmu));
     PTW ptw(.*, .fence_flush(fenceBus.mmu_flush[2]));
 
-    assign dtlb_io.ready = dtlb_ready & ~fence & ~ptw_wb;
-    assign itlb_io.ready = itlb_ready & ~fence & ~ptw_wb;
-    assign tlbCache_io.req = cache_req_i & ~ptw_wb & ~fence;
+    assign dtlb_io.ready = dtlb_ready & ~fence;
+    assign itlb_io.ready = itlb_ready & ~fence;
+    assign tlbCache_io.req = cache_req_i & ~fence;
     assign fenceBus_i.mmu_flush = fenceBus.mmu_flush;
     assign fenceBus_i.mmu_flush_all = fenceBus.mmu_flush_all;
     assign fenceBus_i.mmu_asid_all = fenceBus.mmu_asid_all;
