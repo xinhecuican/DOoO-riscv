@@ -124,10 +124,19 @@ module FMASlice (
     logic `N(FP64_MAN_BITS+1) raw_mant_a, raw_mant_b;
     assign raw_mant_a = db ? {|rs1_data[DXL-2 -: FP64_EXP_BITS], rs1_data[0 +: FP64_MAN_BITS]} : raw_mant_a_w;
     assign raw_mant_b = db ? {|rs2_data[DXL-2 -: FP64_EXP_BITS], rs2_data[0 +: FP64_MAN_BITS]} : raw_mant_b_w;
-    FMantMul #(FP64_MAN_BITS+1) mul (clk, raw_mant_a, raw_mant_b, mant_res);
+generate
+    if(!WITH_MUL)begin
+        FMantMul #(FP64_MAN_BITS+1) mul (clk, raw_mant_a, raw_mant_b, mant_res);
+    end
+endgenerate
+    
 `else
     logic `N(FP32_MAN_BITS*2+2) mant_res;
-    FMantMul #(FP32_MAN_BITS+1) mul (clk, raw_mant_a_w, raw_mant_b_w, mant_res);
+generate
+    if(!WITH_MUL)begin
+        FMantMul #(FP32_MAN_BITS+1) mul (clk, raw_mant_a_w, raw_mant_b_w, mant_res);
+    end
+endgenerate
 `endif
 
     logic `N(`XLEN) mul_res;
@@ -140,7 +149,7 @@ module FMASlice (
         .round_mode,
         .rs1_data(rs1_data[FXL-1: 0]),
         .rs2_data(rs2_data[FXL-1: 0]),
-        .mul_res(mant_res[FP32_MAN_BITS*2+2]),
+        .mul_res(mant_res[FP32_MAN_BITS*2+1: 0]),
         .fltop,
         .mulInfo(mulInfo_w),
         .toadd_res(toadd_wres),
