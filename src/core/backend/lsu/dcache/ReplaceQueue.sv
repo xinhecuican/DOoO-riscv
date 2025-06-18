@@ -222,7 +222,7 @@ endgenerate
 // snoop
 generate
     for(genvar i=0; i<`DCACHE_REPLACE_SIZE; i++)begin
-        assign snoop_addr_hit[i] = en[i] & (entrys[i].addr == io.snoop_addr`DCACHE_BLOCK_BUS);
+        assign snoop_addr_hit[i] = en[i] & entrys[i].en & (entrys[i].addr == io.snoop_addr`DCACHE_BLOCK_BUS);
         assign replace_data[i] = entrys[i].data;
     end
 endgenerate

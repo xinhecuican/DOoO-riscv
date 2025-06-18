@@ -3,8 +3,8 @@
 
 `define ENABLE_LOG
 `define T_LOG_ALL
-// `define ENABLE_LOG_ADDR
-`define LOG_ADDR 'h810a06c0
+`define ENABLE_LOG_ADDR
+`define LOG_ADDR 'h814b8b00
 `define T_DEBUG
 // `define T_UBTB
 // `define T_BTB

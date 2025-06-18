@@ -418,7 +418,7 @@ typedef enum logic [1:0] {
 } CoherentState;
 
 // l2 cache
-`define L2MSHR_SIZE 4
+`define L2MSHR_SIZE 8
 `define L2MSHR_WIDTH $clog2(`L2MSHR_SIZE)
 `define L2CACHE_BANK 8
 `define L2DATA_BANK 1
@@ -429,6 +429,6 @@ typedef enum logic [1:0] {
 `define L2SLAVE_WAY 2
 `define L2PREPEND_PIPE 1
 `define L2APPEND_PIPE 1
-`define L2ID_SIZE 4
+`define L2ID_SIZE `L2MSHR_SIZE
 `define L2ID_WIDTH $clog2(`L2ID_SIZE)
 `endif
