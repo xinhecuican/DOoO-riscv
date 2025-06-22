@@ -42,15 +42,19 @@ module ReplaceQueue(
     ReplaceState replace_state;
 
     ReplaceEntry entrys `N(`DCACHE_REPLACE_SIZE);
-    logic `N(`DCACHE_REPLACE_SIZE) en, dataValid, prior;
+    logic `N(`DCACHE_REPLACE_SIZE) en, dataValid, replaced;
     DirectoryState `N(`DCACHE_REPLACE_SIZE) state;
-    logic `N(`DCACHE_REPLACE_SIZE) valid, prior_valid;
-    logic `N(`DCACHE_REPLACE_WIDTH) freeIdx, validIdx, priorIdx, processIdx, processIdx_pre;
+    logic `N(`DCACHE_REPLACE_SIZE) valid;
+    logic `N(`DCACHE_REPLACE_WIDTH) freeIdx, processIdx, processIdx_pre;
     logic `N(`DCACHE_REPLACE_SIZE) process_dec, process_pre_dec, replace_dec, free_dec;
-    logic full;
+    logic full, replace_valid_cond;
     logic `N(`DCACHE_REPLACE_SIZE) hit;
     logic `N(`PADDR_SIZE) waddr;
     ReplaceEntry newEntry;
+    logic `ARRAY(`DCACHE_ID_SIZE, `DCACHE_REPLACE_WIDTH) id_map;
+    logic `N(`DCACHE_ID_SIZE) id_valids, free_id, process_id_dec, b_id_dec;
+    logic `N(`DCACHE_ID_WIDTH) free_id_idx, process_id;
+    logic `N(`DCACHE_REPLACE_SIZE) refill_id_dec;
 
     logic aw_valid;
     logic `N($clog2(TRANSFER_BANK)) widx;
@@ -72,7 +76,7 @@ module ReplaceQueue(
     assign newEntry.en = io.entry_en;
     assign newEntry.addr = io.addr;
     assign newEntry.data = io.data;
-    assign snoop_clean_hit = io.snoop_en & io.snoop_clean & ((|snoop_hit) | enqueue_hit);
+    assign snoop_clean_hit = io.snoop_en & io.snoop_clean;
     PEncoder #(`DCACHE_REPLACE_SIZE) encoder_free_idx (~en, freeIdx);
     PSelector #(`DCACHE_REPLACE_SIZE) selector_free (~en, free_dec);
     always_ff @(posedge clk)begin
@@ -84,27 +88,27 @@ module ReplaceQueue(
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             dataValid <= 0;
-            prior <= 0;
             en <= 0;
+            replaced <= 0;
             state <= 0;
         end
         else begin
             if(io.en & ~(|hit) & ~(&en))begin
-                prior[freeIdx] <= 1'b0;
                 dataValid[freeIdx] <= 1'b0;
-            end
-            if(io.en & (|hit))begin
-                prior[freeIdx] <= 1'b1;
+                replaced[freeIdx] <= 1'b0;
             end
 
             if(io.refill_en)begin
                 dataValid[io.replace_idx] <= 1'b1;
                 state[io.replace_idx] <= io.refill_state;
             end
+            if((replace_state == IDLE) & replace_valid_cond)begin
+                replaced[processIdx_pre] <= 1'b1;
+            end
 
             for(int i=0; i<`DCACHE_REPLACE_SIZE; i++)begin
                 en[i] <= (en[i] | io.en & ~(|hit) & ~(&en) & free_dec[i]) &
-                        ~((w_axi_io.b_valid | refill_invalid) & ~axi_snoop_conflict & ~snoop_conflict_wait & process_dec[i]) &
+                        ~(w_axi_io.b_valid & refill_id_dec[i] | refill_invalid & process_dec[i]) &
                         ~(snoop_clean_hit & snoop_hit_all[i]);
             end
         end
@@ -126,14 +130,26 @@ endgenerate
 
 // axi
 
-    assign valid = en & dataValid;
-    assign prior_valid = en & dataValid & prior;
+    assign valid = en & dataValid & ~replaced;
     assign axi_snoop_conflict = snoop_clean_hit & (|(snoop_hit & process_dec));
-    PEncoder #(`DCACHE_REPLACE_SIZE) encoder_valid_idx (valid, validIdx);
-    PEncoder #(`DCACHE_REPLACE_SIZE) encoder_prior_idx (prior_valid, priorIdx);
-    assign processIdx_pre = |prior_valid ? priorIdx : validIdx;
-    Decoder #(`DCACHE_REPLACE_SIZE) decoder_process_pre (processIdx_pre, process_pre_dec);
+    DirectionSelector #(`DCACHE_REPLACE_SIZE) valid_selector (
+        .clk,
+        .rst,
+        .en(io.en & ~(|hit) & ~(&en)),
+        .idx(free_dec),
+        .ready(valid),
+        .select(process_pre_dec)
+    );
+    Encoder #(`DCACHE_REPLACE_SIZE) encoder_processIdx_pre (process_pre_dec, processIdx_pre);
     Decoder #(`DCACHE_REPLACE_SIZE) decoder_process (processIdx, process_dec);
+    PEncoder #(`DCACHE_ID_SIZE) encoder_free_id (~id_valids, free_id_idx);
+    PSelector #(`DCACHE_ID_SIZE) selector_free_id (~id_valids, free_id);
+    Decoder #(`DCACHE_ID_SIZE) decoder_process_id (process_id, process_id_dec);
+    Decoder #(`DCACHE_REPLACE_SIZE) decoder_refill_id (id_map[w_axi_io.b_id], refill_id_dec);
+    Decoder #(`DCACHE_ID_SIZE) decoder_b_id (w_axi_io.b_id, b_id_dec);
+
+    assign replace_valid_cond = |valid & |(~id_valids) & ~(snoop_clean_hit & (|(process_pre_dec & snoop_hit)));
+
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             aw_valid <= 1'b0;
@@ -145,15 +161,20 @@ endgenerate
             replace_state <= IDLE;
             refill_invalid <= 1'b0;
             snoop_conflict_wait <= 1'b0;
+            id_map <= 0;
+            id_valids <= 0;
+            process_id <= 0;
         end
         else begin
             case(replace_state)
             IDLE: begin
-                if(|valid & ~(snoop_clean_hit & (|(process_pre_dec & snoop_hit))))begin
+                if(replace_valid_cond)begin
                     aw_dirty <= state[processIdx_pre].dirty;
+                    process_id <= free_id_idx;
                     if (entrys[processIdx_pre].en)begin
                         replace_state <= ADDRESS;
                         aw_valid <= 1'b1;
+                        id_map[free_id_idx] <= processIdx_pre;
                     end
                     else begin
                         replace_state <= WAIT_B;
@@ -180,30 +201,28 @@ endgenerate
                         wvalid <= 1'b0;
                         replace_state <= WAIT_B;
                     end
-                    if(widx == TRANSFER_BANK - 2)begin
-                        wlast <= 1'b1;
-                    end
-                    else begin
-                        wlast <= 1'b0;
-                    end
+                    wlast <= widx == TRANSFER_BANK - 2;
                 end
                 if(axi_snoop_conflict)begin
                     snoop_conflict_wait <= 1'b1;
                 end
             end
             WAIT_B: begin
-                if(w_axi_io.b_valid | refill_invalid | axi_snoop_conflict | snoop_conflict_wait)begin
-                    replace_state <= IDLE;
-                    refill_invalid <= 1'b0;
-                    snoop_conflict_wait <= 1'b0;
-                end
+                replace_state <= IDLE;
+                refill_invalid <= 1'b0;
+                snoop_conflict_wait <= 1'b0;
             end
             endcase
+            for(int i=0; i<`DCACHE_ID_SIZE; i++)begin
+                id_valids[i] <= (id_valids[i] | (replace_state == IDLE) & replace_valid_cond & entrys[processIdx_pre].en & free_id[i]) &
+                               ~(w_axi_io.b_valid & w_axi_io.b_ready & b_id_dec[i]) &
+                               ~(snoop_clean_hit & snoop_hit[id_map[i]]);
+            end
         end
     end
 
     assign w_axi_io.aw_valid = aw_valid;
-    assign w_axi_io.aw_id = 0;
+    assign w_axi_io.aw_id = process_id;
     assign w_axi_io.aw_addr = {processEntry.addr, {`DCACHE_LINE_WIDTH{1'b0}}};
     assign w_axi_io.aw_len = `DCACHE_LINE / `DATA_BYTE - 1;
     assign w_axi_io.aw_size = $clog2(`DATA_BYTE);

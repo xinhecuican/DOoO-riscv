@@ -46,7 +46,7 @@ module PTW(
     logic `N(`PTW_SIZE) lookup_reqs;
     logic `N(`PTW_WIDTH) lookup_idx;
     PTWEntry lookup_entry;
-    logic `N(`TLB_PN) lookup_pn, wpn_sel;
+    logic `N(`TLB_PN) lookup_pn, wpn_sel, lookup_pn_mask;
     logic `N($clog2(`TLB_PN)) lookup_pn_idx;
     VPNAddr lookup_vaddr, lookup_vaddr_p;
     logic `N(`PADDR_SIZE) lookup_paddr;
@@ -81,6 +81,9 @@ generate
         end
         assign pn_same[i] = en[i] & (&pn_equal) & (infos[i].source == cache_ptw_io.info.source);
     end
+    for(genvar i=0; i<`TLB_PN; i++)begin
+        assign lookup_pn_mask[i] = |lookup_pn[i: 0];
+    end
     ParallelOR #(`TLB_PN, `PTW_SIZE) or_pn_conflicts(pn_conflicts, pn_conflict);
     PRSelector #(`TLB_PN) selector_pn_conflict (pn_conflict, pn_conflict_sel);
 endgenerate
@@ -92,7 +95,7 @@ endgenerate
     assign entry_i.conflict_pn = pn_conflict_sel;
     assign entry_i.paddr = |cache_ptw_io.valid ? cache_ptw_io.paddr[last_pn_idx][`PADDR_SIZE-1: `TLB_OFFSET] : csr_io.ppn;
 
-    assign entry_w.wpn = wb_entry.wpn & ~lookup_pn;
+    assign entry_w.wpn = wb_entry.wpn & ~lookup_pn_mask;
     assign entry_w.conflict_pn = wb_entry.conflict_pn & ~lookup_pn;
     assign entry_w.paddr = wb_pte.ppn;
 
