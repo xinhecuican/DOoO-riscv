@@ -110,9 +110,14 @@ generate
         end
         assign mask_entry[i] = {entrys[i], entrys[i].size};
     end
+    // if(SOURCE == 2'b00)begin
+    //     PEncoder #(DEPTH) encoder_hit (hit, hit_idx);
+    // end
+    // else begin
+        Encoder #(DEPTH) encoder_hit (hit, hit_idx);
+    // end
 endgenerate
     assign hit = asid_hit & pn_hit;
-    Encoder #(DEPTH) encoder_hit (hit, hit_idx);
     FairSelect #(DEPTH, $bits(L1TLBEntry)+`TLB_PN) select_hit (hit, mask_entry, lookup_hit, {hit_entry, hit_mask});
 
 `define L1_PPN_ASSIGN(i) assign lookup_paddr.ppn``i = hit_mask[i] ? lookup_addr.vpn[``i] : hit_entry.ppn.ppn``i;
@@ -176,7 +181,7 @@ endgenerate
     assign wentry.r = io.wentry.r;
     assign wentry.x = io.wentry.x;
     assign wentry.d = io.wentry.d;
-    assign wentry.size = io.wpn;
+    assign wentry.size = io.wpn & {`TLB_PN{~io.wexc_static}};
     assign wentry.vpn = io.waddr;
     assign wentry.ppn = io.wentry.ppn;
     assign wentry.uc = pma_uc;

@@ -216,7 +216,7 @@ endgenerate
             for(int i=0; i<`DCACHE_ID_SIZE; i++)begin
                 id_valids[i] <= (id_valids[i] | (replace_state == IDLE) & replace_valid_cond & entrys[processIdx_pre].en & free_id[i]) &
                                ~(w_axi_io.b_valid & w_axi_io.b_ready & b_id_dec[i]) &
-                               ~(snoop_clean_hit & snoop_hit[id_map[i]]);
+                               ~(snoop_clean_hit & id_valids[i] & snoop_hit[id_map[i]]);
             end
         end
     end

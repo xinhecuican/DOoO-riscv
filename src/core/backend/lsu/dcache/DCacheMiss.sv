@@ -244,7 +244,7 @@ endgenerate
     assign whit_combine = |whit | (|rwfree_eq);
     assign w_invalid = rlast | req_last | (|(whit & axi_req_end));
     Encoder #(`DCACHE_MISS_SIZE) encoder_whit(whit, whitIdx);
-    PEncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
+    PREncoder #(`LOAD_PIPELINE) encoder_rwfree_idx (rwfree_eq, rwfree_idx);
     ParallelAND #(`DCACHE_BYTE, `DCACHE_BANK) or_wmask (io.wmask, wmask_all);
     assign widx = |whit ? whitIdx : 
                   |rwfree_eq ? freeIdx[rwfree_idx] : freeIdx[`LOAD_PIPELINE];

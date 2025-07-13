@@ -60,7 +60,8 @@ module PTW(
     PTWEntry wb_entry;
     logic `N(`PTW_WIDTH) wb_idx, wb_idx_n;
     logic `N($clog2(`TLB_PN)) wpn_idx;
-    logic `N(`PTW_SIZE) wb_idx_dec, pn_unalign, wpn;
+    logic `N(`PTW_SIZE) wb_idx_dec;
+    logic `N(`TLB_PN) pn_unalign, wpn;
     VPNAddr wb_vaddr;
     TLBInfo wb_info;
     PTEEntry wb_pte;
@@ -183,11 +184,11 @@ endgenerate
     assign wb_offset = vaddrs[wb_idx].vpn[wpn_idx][`DCACHE_BANK_WIDTH-1:0];
     assign pn_leaf = wb_pte.r | wb_pte.w | wb_pte.x;
     assign wb_ready = ~pn_leaf | ptw_io.ready;
-    assign wb_exception = |(({`PTW_SIZE{pn_exception}} | pn_unalign) & lookup_pn);
+    assign wb_exception = |(({`TLB_PN{pn_exception}} | pn_unalign) & lookup_pn);
 
     assign ptw_io.valid = wvalid & (pn_leaf | wb_exception);
     assign ptw_io.exception = wb_exception;
-    assign ptw_io.exc_static = |((pn_exc_static | pn_unalign) & lookup_pn);
+    assign ptw_io.exc_static = |(({`TLB_PN{pn_exc_static}} | pn_unalign) & lookup_pn);
     assign ptw_io.info = wb_info;
     assign ptw_io.entry = wb_pte;
     assign ptw_io.waddr = wb_vaddr;

@@ -34,6 +34,7 @@ endgenerate
         end
         in.error <= out.error;
         in.exception <= out.exception;
+        in.exc_static <= out.exc_static;
         in.info_o <= out.info_o;
         in.entry <= out.entry;
         in.wpn <= out.wpn;

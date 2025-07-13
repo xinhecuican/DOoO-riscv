@@ -37,7 +37,7 @@ module DTLB(
         .WAY_NUM(`DTLB_SIZE)
     ) replace_io();
     PLRU #(1, `DTLB_SIZE) replace (.*);
-    assign replace_io.hit_en = tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~tlb_l2_io0.exception;
+    assign replace_io.hit_en = tlb_l2_io0.dataValid & ~tlb_l2_io0.error;
     assign replace_io.hit_invalid = 0;
     assign replace_io.hit_way = |replace_hit ? replace_hit : replace_io.miss_way;
     assign replace_io.miss_index = 0;

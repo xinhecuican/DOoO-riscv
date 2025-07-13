@@ -152,34 +152,31 @@ module ALUModel(
     assign s_imm = {{`XLEN-12{imm[19]}}, imm[19: 8]};
 
     logic `N(`XLEN) data1, data2, cmp_data;
-    logic `N(`XLEN) add_result, sub_result;
-    logic cmp, scmp, equal;
+    logic `N(`XLEN) add_result;
+    logic cmp, scmp;
 
     assign data1 = rs1_data;
     assign data2 = immv ? s_imm : rs2_data;
 
     assign cmp_data = immv ? s_imm : rs2_data;
-    assign add_result = data1 + data2;
-    assign sub_result = data1 - rs2_data;
-`ifdef RV64I
-    // assign add_result = (data1 | {{32{data1[31] & word}}, 32'b0}) +
-    //                     (data2 | {{32{data2[31] & word}}, 32'b0});
-    // assign sub_result = (data1 | {{32{data1[31] & word}}, 32'b0}) -
-    //                     (rs2_data | {{32{rs2_data[31] & word}}, 32'b0});
-`else
-    // assign add_result = data1 + data2;
-    // assign sub_result = data1 - rs2_data;
-`endif
-    assign cmp = data1 < cmp_data;
-    assign equal = data1 == cmp_data;
+    logic `N(`XLEN) add_src2;
+    logic add_cin, add_cout;
     always_comb begin
-        case({data1[`XLEN-1], cmp_data[`XLEN-1]})
-        2'b00: scmp = cmp;
-        2'b01: scmp = 0;
-        2'b10: scmp = 1;
-        2'b11: scmp = cmp;
+        case(op)
+        `INT_SUB, `INT_SLT: begin
+            add_src2 = ~data2;
+            add_cin = 1'b1;
+        end
+        default: begin
+            add_src2 = data2;
+            add_cin = 1'b0;
+        end
         endcase
     end
+    assign {add_cout, add_result} = data1 + add_src2 + add_cin;
+    assign scmp = (data1[`XLEN-1] & ~data2[`XLEN-1])
+                    | ((data1[`XLEN-1] ~^ data2[`XLEN-1]) & add_result[`XLEN-1]);
+    assign cmp = ~add_cout;
 
 
     logic padding;
@@ -199,18 +196,11 @@ module ALUModel(
 
     always_comb begin
         case(op)
-        `INT_ADD: begin
+        `INT_ADD, `INT_SUB: begin
 `ifdef RV64I
             result = word ? {{32{add_result[31]}}, add_result[31: 0]} : add_result;
 `else
             result = add_result;
-`endif
-        end
-        `INT_SUB: begin
-`ifdef RV64I
-            result = word ? {{32{sub_result[31]}}, sub_result[31: 0]} : sub_result;
-`else
-            result = sub_result;
 `endif
         end
         `INT_LUI: begin

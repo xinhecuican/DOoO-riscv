@@ -32,7 +32,7 @@ module ITLB(
     assign tlb_l2_io0.req = req_buf.req & ~flush_n;
     assign tlb_l2_io0.info = req_buf.idx;
     assign tlb_l2_io0.req_addr = req_buf.req_addr[`VADDR_SIZE-1: `TLB_OFFSET];
-    assign tlb_valid = tlb_l2_io0.dataValid & tlb_l2_io0.info_o.idx == req_buf.idx;
+    assign tlb_valid = tlb_l2_io0.dataValid & tlb_l2_io0.waddr == req_buf.req_addr[`VADDR_SIZE-1: `TLB_OFFSET];
     TLBRepeater #(.FRONT(1)) repeater0(.*, .flush(itlb_cache_io.flush), .in(tlb_l2_io0), .out(tlb_l2_io));
 
     ReplaceD1IO #(.WAY_NUM(`ITLB_SIZE)) replace_io();
@@ -188,4 +188,7 @@ endgenerate
 `endif
     assign wppn.ppn1 = tlb_l2_io0.wpn[1] ? vpn.vpn[1] : tlb_l2_io0.entry.ppn.ppn1;
     assign wppn.ppn0 = tlb_l2_io0.wpn[0] ? vpn.vpn[0] : tlb_l2_io0.entry.ppn.ppn0;
+
+    `Log(DLog::Debug, T_ITLB, tlb_l2_io0.dataValid & ~tlb_l2_io0.error,
+        $sformatf("ITLB[%d %b %b]: vaddr=%h, wpn=%b, entry=%h", replace_io.miss_way, tlb_l2_io0.exception, tlb_l2_io0.exc_static, tlb_l2_io0.waddr, tlb_l2_io0.wpn, tlb_l2_io0.entry), 1'b1, {tlb_l2_io0.waddr, 12'h0})
 endmodule
