@@ -325,7 +325,7 @@ generate
             endcase
             case(entry.tailSlot.br_type)
             POP, POP_PUSH, INDIRECT, INDIRECT_CALL: begin
-                tail_diff = 1'b1;
+                tail_diff = 1'b1; // s1没有ras和indirect，因此直接认为需要重定向
                 tail_target_diff = 1'b0;
             end
             default: begin
@@ -374,7 +374,8 @@ generate
     end
     if(REDIRECTV)begin
         assign result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
-                    ~(|predTaken) & tail_taken & (tail_diff | tail_target_diff));
+                    ~(|predTaken) & (tail_taken & (tail_diff | tail_target_diff) |
+                                    (result_i.btbEntry.tailSlot.en ^ entry.tailSlot.en)));
     end
     else begin
         assign result_o.redirect = 0;
