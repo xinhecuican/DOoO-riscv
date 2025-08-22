@@ -283,9 +283,20 @@ interface PreDecodeRedirect;
     logic `N(`PREDICTION_WIDTH) last_offset;
     logic `N(`FSQ_WIDTH) fsqIdx_pre;
     logic `N(`VADDR_SIZE) ras_addr;
+`ifdef RVC
+    logic `N(`BLOCK_INST_SIZE) is_rvc;
+`endif
 
-    modport predecode(output en, exc_en, entry_error, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, input ras_addr);
-    modport redirect(input en, exc_en, entry_error, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, output ras_addr);
+    modport predecode(output en, exc_en, entry_error, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, input ras_addr
+`ifdef RVC
+    , output is_rvc
+`endif
+    );
+    modport redirect(input en, exc_en, entry_error, direct, fsqIdx, stream, size, last_offset, br_type, fsqIdx_pre, output ras_addr
+`ifdef RVC
+    , input is_rvc
+`endif    
+);
 endinterface
 
 interface PreDecodeIBufferIO;

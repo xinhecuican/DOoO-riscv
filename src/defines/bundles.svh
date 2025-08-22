@@ -206,6 +206,9 @@ typedef struct packed {
 `ifdef RVC
     logic rvc;
 `endif
+`ifdef DIFFTEST
+    logic `N(`FSQ_WIDTH) squashIdx;
+`endif
     logic squash_front;
     logic `VADDR_BUS start_addr;
     logic `N(`PREDICTION_WIDTH) offset;
@@ -214,6 +217,15 @@ typedef struct packed {
     CondPredInfo predInfo;
     BranchType br_type;
 } SquashInfo;
+
+typedef struct packed {
+    logic pred_error;
+    FsqIdxInfo fsqInfo;
+`ifdef RVC
+    logic rvc;
+`endif
+    BranchType br_type;
+} PredErrorInfo;
 
 typedef struct packed {
     logic taken;
@@ -229,6 +241,7 @@ typedef struct packed {
     logic btb_update;
     BTBUpdateInfo btbEntry;
     PredictionMeta meta;
+    PredErrorInfo error_info;
 } BranchUpdateInfo;
 
 typedef struct packed {

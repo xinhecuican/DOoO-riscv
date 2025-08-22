@@ -7,6 +7,10 @@ module HistoryControl(
     input RedirectCtrl redirect,
     input logic squash,
     input SquashInfo squashInfo,
+`ifdef DIFFTEST
+    input logic update,
+    input BranchUpdateInfo updateInfo,
+`endif
     output BranchHistory history
 );
     logic `N(`GHIST_SIZE) ghist;
@@ -176,6 +180,45 @@ generate
     end
 endgenerate
     `Log(DLog::Debug, T_BR_HIST, squash_next, $sformatf("branch hist [%h]. %32b", pos, diff_hist))
+
+`ifdef T_DEBUG
+    logic `ARRAY(`FSQ_SIZE, `GHIST_WIDTH) diff_hist_pos;
+    logic `N(`GHIST_WIDTH) diff_pos, diff_pos_n;
+    logic `N(`SLOT_NUM) updateCond;
+    logic [1:0] updateNum;
+    BTBUpdateInfo btbEntry;
+    assign btbEntry = updateInfo.btbEntry;
+generate
+    for(genvar i=0; i<`SLOT_NUM-1; i++)begin
+        assign updateCond[i] = btbEntry.en & btbEntry.slots[i].en & updateInfo.allocSlot[i];
+    end
+    assign updateCond[`SLOT_NUM-1] = btbEntry.en & btbEntry.tailSlot.en & (btbEntry.tailSlot.br_type == CONDITION) & updateInfo.allocSlot[`SLOT_NUM-1];
+endgenerate
+    ParallelAdder #(1, 2) updateNum_encoder (updateCond, updateNum);
+    assign diff_pos_n = diff_pos + 1;
+    always_ff @(posedge clk)begin
+        if(squash)begin
+            diff_hist_pos[squashInfo.squashIdx] <= squashInfo.redirectInfo.ghistIdx;
+        end
+        else if(result.en)begin
+            diff_hist_pos[result.stream_idx] <= result.redirect_info.ghistIdx;
+        end
+        if(update)begin
+            diff_pos <= diff_pos + updateNum;
+        end
+    end
+    logic `N(`GHIST_WIDTH) update_idx1, update_idx2;
+    wire older = btbEntry.slots[0].offset < btbEntry.tailSlot.offset;
+    assign update_idx1 = ~updateCond[1] | older ? diff_pos : diff_pos_n;
+    assign update_idx2 = ~updateCond[0] | ~older ? diff_pos : diff_pos_n;
+    `Log(DLog::Debug, T_DEBUG, update & (diff_pos != diff_hist_pos[updateInfo.fsqIdx]),
+        $sformatf("history update error pos"));
+    `Log(DLog::Debug, T_DEBUG, update & updateCond[0] & updateInfo.realTaken[0] != ghist[update_idx1],
+        $sformatf("history update error[0]"));
+    `Log(DLog::Debug, T_DEBUG, update & updateCond[1] & updateInfo.realTaken[1] != ghist[update_idx2],
+        $sformatf("history update error[1]"));
+    
+`endif
 `endif
 endmodule
 

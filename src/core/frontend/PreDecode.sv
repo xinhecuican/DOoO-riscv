@@ -23,6 +23,8 @@ module PreDecode(
     logic `N(`BLOCK_INST_WIDTH) selectIdx, jumpSelectIdx, jumpSelectIdx_pre;
     logic `N(`PREDICTION_WIDTH) selectOffset;
     PreDecodeBundle selectBundle;
+    logic `N(32) selectInst;
+    logic `VADDR_BUS selectTarget;
     logic `ARRAY(`BLOCK_INST_SIZE, 32) data_next;
     logic `N($clog2(`BLOCK_INST_SIZE)+1) instNum, instNumNext;
     logic `N(`VADDR_SIZE) next_pc;
@@ -49,19 +51,24 @@ endgenerate
     logic `N(`BLOCK_INST_SIZE) rvc_en, rvc_en_n;
     logic `N(`BLOCK_INST_SIZE+1) rvc_en_compress;
     logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_WIDTH) rvc_idx_n, rvc_offset;
+    logic `ARRAY(`BLOCK_INST_SIZE, `BLOCK_INST_SIZE) rvc_idx_n_dec;
     logic `ARRAY(`BLOCK_INST_SIZE/2, `BLOCK_INST_WIDTH-1) rvc_idx_low, rvc_idx_high, rvc_idx_low_n, rvc_idx_high_n;
+    logic `N(`BLOCK_INST_SIZE) bundle_rvc;
     logic `N(`BLOCK_INST_WIDTH) rvc_num_half, rvc_num_half_n;
+    logic `ARRAY(16, 3) rvc_num_rom;
+    logic `ARRAY(`BLOCK_INST_SIZE/4, 3) rvc_num_slice;
     logic `N(`BLOCK_INST_WIDTH+1) rvc_num;
     logic `N(`PREDICTION_WIDTH) tailIdx_pre, tail_rvi_idx;
-    logic `ARRAY(`BLOCK_INST_SIZE, `VADDR_SIZE) addrs;
+    // logic `ARRAY(`BLOCK_INST_SIZE, `VADDR_SIZE) addrs;
     logic half_rvi;
     logic `N(`FSQ_SIZE) redirect_half_rvi;
     assign rvc_mask[0] = half_rvi;
-    assign addrs[0] = cache_pd_io.stream.start_addr + {~bundles[0].rvc, bundles[0].rvc, 1'b0};
+    // assign addrs[0] = cache_pd_io.stream.start_addr + {~bundles[0].rvc, bundles[0].rvc, 1'b0};
+    AdderROM #(4) adder_rom_rvc (rvc_num_rom);
 generate
     for(genvar i=1; i<`BLOCK_INST_SIZE; i++)begin
         assign rvc_mask[i] = ~rvc_mask[i-1] & ~bundles[i-1].rvc;
-        assign addrs[i] = cache_pd_io.stream.start_addr + (i<<`INST_OFFSET) + {~bundles[i].rvc, bundles[i].rvc, 1'b0};
+        // assign addrs[i] = cache_pd_io.stream.start_addr + (i<<`INST_OFFSET) + {~bundles[i].rvc, bundles[i].rvc, 1'b0};
     end
     for(genvar i=0; i<`BLOCK_INST_SIZE; i++)begin
         localparam MAX = 2 * (i + 1) < `BLOCK_INST_SIZE ? 2 * (i + 1) : `BLOCK_INST_SIZE;
@@ -69,21 +76,26 @@ generate
         logic `N(NUM) equal;
         logic `ARRAY(NUM, `BLOCK_INST_WIDTH) offset;
         logic valid;
+        Decoder #(`BLOCK_INST_SIZE) decoder_rvc_idx_n(rvc_idx_n[i], rvc_idx_n_dec[i]);
         for(genvar j=i; j<MAX; j++)begin
-            assign equal[j-i] = rvc_idx_n[j] == i;
+            assign equal[j-i] = rvc_idx_n_dec[j][i];
             assign offset[j-i] = j;
         end
         OldestSelect #(NUM, 1, `BLOCK_INST_WIDTH) select_offset (
             equal, offset, valid, rvc_offset[i]
         );
+        assign bundle_rvc[i] = bundles_next[i].rvc;
     end
     for(genvar i=0; i<`BLOCK_INST_SIZE/2; i++)begin
         assign rvc_idx_n[i] = {1'b0, rvc_idx_low_n[i]};
         assign rvc_idx_n[i+`BLOCK_INST_SIZE/2] = rvc_idx_high_n[i] + rvc_num_half_n;
     end
+    for(genvar i=0; i<`BLOCK_INST_SIZE/4; i++)begin
+        assign rvc_num_slice[i] = rvc_num_rom[rvc_en[i*4 +: 4]];
+    end
 endgenerate
     assign rvc_en = ~rvc_mask & cache_pd_io.en;
-    ParallelAdder #(1, `BLOCK_INST_SIZE) adder_rvc_en(rvc_en, rvc_num);
+    ParallelAdder #(3, `BLOCK_INST_SIZE/4) adder_rvc_en(rvc_num_slice, rvc_num);
     ParallelAdder #(1, `BLOCK_INST_SIZE/2) adder_rvc_half(rvc_en[`BLOCK_INST_SIZE/2-1: 0], rvc_num_half);
     CalValidNum #(`BLOCK_INST_SIZE/2) cal_rvc_idx_low(rvc_en[`BLOCK_INST_SIZE/2-1: 0], rvc_idx_low);
     CalValidNum #(`BLOCK_INST_SIZE/2) cal_rvc_idx_high(rvc_en[`BLOCK_INST_SIZE-1: `BLOCK_INST_SIZE/2], rvc_idx_high);
@@ -213,6 +225,9 @@ endgenerate
 
     assign selectIdx = jumpSelectIdx;
     assign selectBundle = bundles_next[selectIdx];
+    assign selectInst   = data_next[selectIdx];
+    assign selectTarget = start_addr_n + {selectIdx, {`INST_OFFSET{1'b0}}} +
+        {{(`VADDR_SIZE-21){selectInst[31]}}, selectInst[31], selectInst[19: 12], selectInst[20], selectInst[30: 21], 1'b0};
 
     // if nobranch_error is set, redirect this stream as nobranch stream and execute again
     logic nobranch_error, jump_error, entry_error, jump_unmatch;
@@ -248,10 +263,11 @@ endgenerate
             ras_addr : bundles_next[selectIdx].target) : next_pc;
     assign pd_redirect.br_type = jump_en ? bundles_next[selectIdx].br_type : DIRECT;
 `ifdef RVC
-    assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : 0;
+    assign pd_redirect.stream.rvc = jump_en ? bundles_next[selectIdx].rvc : 1'b1;
     assign pd_redirect.last_offset = jump_en ? selectIdx + shiftOffset :
                                                 tailIdx + shiftOffset;
-    assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : `BLOCK_INST_SIZE - 2;
+    assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : `BLOCK_INST_SIZE - 1;
+    assign pd_redirect.is_rvc       = bundle_rvc;
 `else
     assign pd_redirect.stream.size = jump_en ? selectOffset + shiftOffset : `BLOCK_INST_SIZE - 1;
 

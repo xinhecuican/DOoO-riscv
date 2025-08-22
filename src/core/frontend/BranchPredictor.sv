@@ -213,7 +213,9 @@ module PredictionResultGen #(
     parameter RASV=0,
     parameter REDIRECTV=0,
     parameter INDV = 1,
-    parameter BTBV = 1
+    parameter BTBV = 1,
+    parameter RAS_RED_V = 0,
+    parameter IND_RED_V = 0
 )(
     input logic `VADDR_BUS pc,
     input logic hit,
@@ -226,7 +228,7 @@ module PredictionResultGen #(
     input PredictionResult result_i,
     output PredictionResult result_o
 );
-    logic `N(`SLOT_NUM) isBr, br_takens, carry;
+    logic `N(`SLOT_NUM) isBr, br_takens, carry, all_taken, br_taken_valids, isBr_valid;
     logic `ARRAY(`SLOT_NUM, `PREDICTION_WIDTH) offsets;
     logic `ARRAY(`SLOT_NUM, `JAL_OFFSET) br_targets;
     TargetState `N(`SLOT_NUM) tar_states;
@@ -246,26 +248,31 @@ module PredictionResultGen #(
 `endif
     logic `N(`PREDICTION_WIDTH) br_size;
     logic `N(`SLOT_NUM) cond_num, cond_valid, predTaken;
-    logic older;
+    logic older, equal;
 
     assign br_takens = isBr & (prediction | carry);
 generate;
     for(genvar br=0; br<`SLOT_NUM-1; br++)begin
-        assign isBr[br] = entry.slots[br].en;
+        assign isBr[br] = hit & entry.en & entry.slots[br].en;
         assign carry[br] = entry.slots[br].carry;
         assign offsets[br] = entry.slots[br].offset;
         assign br_targets[br] = entry.slots[br].target;
         assign tar_states[br] = entry.slots[br].tar_state;
+        assign br_taken_valids[br] = br_takens[br] & ~(tail_taken & ~(older));
+        assign isBr_valid[br] = isBr[br] & ~(tail_taken & ~(older));
     end
-    assign isBr[`SLOT_NUM-1] = entry.tailSlot.en && entry.tailSlot.br_type == CONDITION;
+    assign isBr[`SLOT_NUM-1] = entry.en & entry.tailSlot.en && entry.tailSlot.br_type == CONDITION;
+    assign isBr_valid[`SLOT_NUM-1] = isBr[`SLOT_NUM-1];
     assign carry[`SLOT_NUM-1] = entry.tailSlot.carry;
     assign offsets[`SLOT_NUM-1] = entry.tailSlot.offset;
     assign br_targets[`SLOT_NUM-1] = entry.tailSlot.target[`JAL_OFFSET-1: 0];
     assign tar_states[`SLOT_NUM-1] = entry.tailSlot.tar_state;
+    assign br_taken_valids[`SLOT_NUM-1] = br_takens[`SLOT_NUM-1];
 endgenerate
     assign older = offsets[0] < offsets[1];
+    assign equal = offsets[0] == offsets[1];
     always_comb begin
-        if(br_takens[0] & (older | ~br_takens[1] & ~older))begin
+        if(br_taken_valids[0] & (older | ~br_taken_valids[1] & ~older))begin
             br_offset = br_targets[0];
             br_size = offsets[0];
             br_tar_state = tar_states[0];
@@ -281,14 +288,14 @@ endgenerate
             br_rvc = entry.tailSlot.rvc;
 `endif
         end
-        predTaken[0] = br_takens[0] & (older | ~br_takens[1] & ~older);
-        predTaken[1] = br_takens[1] & (~older | ~br_takens[0] & older);
-        cond_valid[0] = isBr[0] & ~(br_takens[1] & ~older);
-        cond_valid[1] = isBr[1] & ~(br_takens[0] & older);
-        if(isBr[0] & isBr[1] & ~(br_takens[0] & older) & ~(br_takens[1] & ~older))begin
+        predTaken[0] = br_taken_valids[0] & (older | ~br_taken_valids[1] & ~older);
+        predTaken[1] = br_taken_valids[1] & (~older | ~br_taken_valids[0] & older);
+        cond_valid[0] = isBr_valid[0] & ~(br_taken_valids[1] & ~older);
+        cond_valid[1] = isBr_valid[1] & ~(br_taken_valids[0] & older);
+        if(isBr_valid[0] & isBr_valid[1] & ~(br_taken_valids[0] & older) & ~(br_taken_valids[1] & ~older))begin
             cond_num = 2'b10;
         end
-        else if(isBr[0] | isBr[1])begin
+        else if(isBr_valid[0] | isBr_valid[1])begin
             cond_num = 2'b01;
         end
         else begin
@@ -313,7 +320,7 @@ endgenerate
                                                      pc[`VADDR_SIZE-1: `JALR_OFFSET+1];
 
 generate
-    logic tail_diff, tail_target_diff, tail_target_diff_cond;
+    logic tail_diff, tail_target_diff_cond;
     assign tail_target_diff_cond = entry.tailSlot.target != result_i.stream.target[1 +: `JALR_OFFSET] ||
         result_i.btbEntry.tailSlot.tar_state != tail_tar_state;
     if(RASV & INDV)begin
@@ -323,16 +330,29 @@ generate
             INDIRECT, INDIRECT_CALL: tail_indirect_target = ind_addr;
             default: tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
             endcase
-            case(entry.tailSlot.br_type)
-            POP, POP_PUSH, INDIRECT, INDIRECT_CALL: begin
-                tail_diff = 1'b1; // s1没有ras和indirect，因此直接认为需要重定向
-                tail_target_diff = 1'b0;
+            if(RAS_RED_V & IND_RED_V)begin
+                case(entry.tailSlot.br_type)
+                POP, POP_PUSH, INDIRECT, INDIRECT_CALL: tail_diff = 1'b1;
+                default: tail_diff = tail_target_diff_cond;
+                endcase
             end
-            default: begin
-                tail_diff = 1'b0;
-                tail_target_diff = tail_target_diff_cond;
+            else if(RAS_RED_V)begin
+                case(entry.tailSlot.br_type)
+                POP, POP_PUSH: tail_diff = 1'b1;
+                INDIRECT, INDIRECT_CALL: tail_diff = 1'b0;
+                default: tail_diff = tail_target_diff_cond;
+                endcase
             end
-            endcase
+            else if(IND_RED_V)begin
+                case(entry.tailSlot.br_type)
+                INDIRECT, INDIRECT_CALL: tail_diff = 1'b1;
+                POP, POP_PUSH: tail_diff = 1'b0;
+                default: tail_diff = tail_target_diff_cond;
+                endcase
+            end
+            else begin
+                tail_diff = tail_target_diff_cond;
+            end
         end
     end
     else if(RASV)begin
@@ -341,12 +361,10 @@ generate
             POP, POP_PUSH: begin
                 tail_indirect_target = ras_addr;
                 tail_diff = 1'b1;
-                tail_target_diff = 1'b0;
             end
             default: begin
                 tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
-                tail_diff = 1'b0;
-                tail_target_diff = tail_target_diff_cond;
+                tail_diff = tail_target_diff_cond;
             end
             endcase
         end
@@ -357,24 +375,21 @@ generate
             INDIRECT, INDIRECT_CALL: begin
                 tail_indirect_target = ind_addr;
                 tail_diff = 1'b1;
-                tail_target_diff = 1'b0;
             end
             default: begin
                 tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
-                tail_diff = 1'b0;
-                tail_target_diff = tail_target_diff_cond;
+                tail_diff = tail_target_diff_cond;
             end
             endcase
         end
     end
     else begin
         assign tail_indirect_target = {tail_target_high, entry.tailSlot.target, 1'b0};
-        assign tail_diff = 1'b0;
-        assign tail_target_diff = tail_target_diff_cond;
+        assign tail_diff = tail_target_diff_cond;
     end
     if(REDIRECTV)begin
         assign result_o.redirect = hit & ((predTaken != result_i.predTaken) | 
-                    ~(|predTaken) & (tail_taken & (tail_diff | tail_target_diff) |
+                    ~(|predTaken) & (tail_taken & tail_diff |
                                     (result_i.btbEntry.tailSlot.en ^ entry.tailSlot.en)));
     end
     else begin
@@ -382,24 +397,24 @@ generate
     end
 endgenerate
     assign tail_target = tail_taken ? tail_indirect_target : {fthOffset, {`INST_OFFSET{1'b0}}} + pc;
-    assign predict_pc = |br_takens ? br_target : tail_target;
+    assign predict_pc = |br_taken_valids ? br_target : tail_target;
 
     always_comb begin
         result_o.stream.taken = hit & ((|br_takens) | tail_taken);
         result_o.btb_hit = hit;
-        result_o.br_type = |br_takens ? CONDITION : entry.tailSlot.br_type;
+        result_o.br_type = |br_taken_valids ? CONDITION : entry.tailSlot.br_type;
         result_o.stream.size = ~hit ? result_i.stream.size : 
-                               |br_takens ? br_size : tail_size;
+                               |br_taken_valids ? br_size : tail_size;
 `ifdef RVC
         result_o.stream.rvc = ~hit ? 0 : 
-                                |br_takens ? br_rvc :
+                                |br_taken_valids ? br_rvc :
                                 tail_taken ? entry.tailSlot.rvc : entry.fth_rvc;
 `endif
         result_o.stream.target = ~hit ? result_i.stream.target : predict_pc;
-        result_o.cond_num = ~hit ? 0 : cond_num;
-        result_o.cond_valid = cond_valid;
+        result_o.cond_num = {`SLOT_NUM{hit}} & cond_num;
+        result_o.cond_valid = {`SLOT_NUM{hit}} & cond_valid;
         result_o.taken = (|br_takens) | tail_taken;
-        result_o.tail_taken = ~(|br_takens) & tail_taken;
+        result_o.tail_taken = ~(|br_taken_valids) & tail_taken;
         result_o.predTaken = predTaken;
         if(BTBV)begin
             result_o.btbEntry = ~hit ? 0 : entry;
@@ -461,7 +476,8 @@ module S2Control(
     assign entry_s2 = entry_i;
     PredictionResultGen #(
         .RASV(1),
-        .REDIRECTV(1)
+        .REDIRECTV(1),
+        .RAS_RED_V(1)
     ) result_gen (
         .pc,
         .hit(hit),
@@ -490,7 +506,8 @@ module S3Control(
         .REDIRECTV(1),
         .INDV(1),
         .BTBV(0),
-        .RASV(1)
+        .RASV(1),
+        .IND_RED_V(1)
     ) result_gen (
         .pc,
         .hit(result_i.btb_hit & result_i.en),

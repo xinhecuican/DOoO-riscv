@@ -674,3 +674,30 @@ module SyncRst(
 	assign rst_o = rst2;
 
 endmodule
+
+module AdderROM #(
+	parameter WIDTH = 4,
+	parameter ADDR_WIDTH = $clog2(WIDTH),
+	parameter LOOP_WIDTH = WIDTH ** 2
+)(
+	output logic [LOOP_WIDTH-1:0][ADDR_WIDTH:0] out
+);
+
+generate
+	for(genvar i=0; i<LOOP_WIDTH; i++)begin
+		logic [WIDTH-1:0] datai;
+		assign datai = i;
+		integer count_ones;
+		always_comb begin
+			count_ones = 0;
+			for (int j = 0; j < WIDTH; j++) begin
+				if (datai[j]) begin
+					count_ones = count_ones + 1;
+				end
+			end
+		end
+		assign out[i] = count_ones;
+	end
+endgenerate
+
+endmodule

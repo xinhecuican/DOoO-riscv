@@ -36,6 +36,10 @@ module RAS(
     RasEntry bypassEntry;
     logic commit_update;
 
+    BranchType commit_br_type;
+    PredErrorInfo error_info;
+    logic `N(`PREDICTION_WIDTH) commit_offset;
+
     function inRange(RasInflightIdx raddr);
         logic bottom, top;
         bottom = (listBottom.dir ^ raddr.dir) ^ (raddr.idx < listBottom.idx);
@@ -56,18 +60,25 @@ module RAS(
     always_comb begin
         squashType = getRasType(ras_io.squashInfo.br_type);
         lookupType = getRasType(ras_io.br_type);
-        commitType = getRasType(btbEntry.tailSlot.br_type);
-        commitValid = rasValid(btbEntry.tailSlot.br_type);
+        commitType = getRasType(commit_br_type);
+        commitValid = rasValid(commit_br_type);
     end
     assign r = ras_io.squashInfo.redirectInfo.rasInfo;
     assign btbEntry = ras_io.updateInfo.btbEntry;
+    assign error_info = ras_io.updateInfo.error_info;
+    assign commit_br_type = error_info.pred_error ? error_info.br_type : btbEntry.tailSlot.br_type;
+    assign commit_offset = error_info.pred_error ? error_info.fsqInfo.offset : btbEntry.tailSlot.offset;
+`ifdef RVC
+    logic commit_rvc;
+    assign commit_rvc = error_info.pred_error ? error_info.rvc : btbEntry.tailSlot.rvc;
+`endif
 
     assign we = ~ras_io.squash & ras_io.request & lookupType[1] |
                 ras_io.squash & squashType[1];
     assign waddr = ras_io.squash ? r.listTop.idx : ras_io.linfo.listTop.idx;
     assign raddr = ras_io.request & lookupType[0] & ~lookupType[1] ? list_p1 : top_p1;
     assign commit_raddr = ras_io.request & lookupType[0] & ~lookupType[1] ? inflightTop - 2 : inflightTop - 1;
-    assign commit_waddr = btbEntry.tailSlot.br_type == POP_PUSH ? commitTop - 1 : commitTop;
+    assign commit_waddr = commit_br_type == POP_PUSH ? commitTop - 1 : commitTop;
 
     always_ff @(posedge clk)begin
         select_commit <= ~inRange(raddr) | preTopInvalid | 
@@ -78,10 +89,10 @@ module RAS(
 
 `ifdef RVC
     assign squash_target = ras_io.squashInfo.start_addr + {ras_io.squashInfo.offset, {`INST_OFFSET{1'b0}}} + {~ras_io.squashInfo.rvc, ras_io.squashInfo.rvc, 1'b0};
-    assign commitUpdateEntry.pc = ras_io.updateInfo.start_addr + {btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} + {~btbEntry.tailSlot.rvc, btbEntry.tailSlot.rvc, 1'b0};
+    assign commitUpdateEntry.pc = ras_io.updateInfo.start_addr + {commit_offset, {`INST_OFFSET{1'b0}}} + {~commit_rvc, commit_rvc, 1'b0};
 `else
     assign squash_target = ras_io.squashInfo.start_addr + {ras_io.squashInfo.offset, {`INST_OFFSET{1'b0}}} + 4;
-    assign commitUpdateEntry.pc = ras_io.updateInfo.start_addr + {btbEntry.tailSlot.offset, {`INST_OFFSET{1'b0}}} + 4;
+    assign commitUpdateEntry.pc = ras_io.updateInfo.start_addr + {commit_offset, {`INST_OFFSET{1'b0}}} + 4;
 `endif
 
     assign updateEntry.pc = ras_io.squash ? squash_target : ras_io.target;
@@ -246,7 +257,7 @@ module RAS(
             lookup_idx[ras_io.lastStageIdx] <= inflightTop_n;
         end
     end
-    `Log(DLog::Debug, T_DEBUG, ras_io.update && (commitTop != lookup_idx[fsqIdx]),
+    `Log(DLog::Debug, T_DEBUG, ras_io.update && (commitTop != lookup_idx[ras_io.updateInfo.fsqIdx]),
     $sformatf("ras commit top mismatch"))
 `endif
 `endif

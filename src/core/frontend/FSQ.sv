@@ -38,6 +38,22 @@ module FSQ (
     logic rd_br_en;
     logic `N(`FSQ_WIDTH) rd_br_idx;
 
+
+    logic `N(`FSQ_WIDTH) exception_head, exception_head_n, exception_head_pre;
+    logic `ARRAY(`COMMIT_WIDTH, `FSQ_WIDTH) commitFsqIdx;
+    logic commit_exc_valid;
+    logic `N(`COMMIT_WIDTH) commit_older;
+    logic `N(`PREDICTION_WIDTH) pd_size;
+    logic exc_wen;
+    logic `N(`FSQ_WIDTH) exc_widx;
+`ifdef RVC
+    logic `N(`SLOT_NUM) exc_rvc_pre, exc_rvc, commit_slot_rvc;
+    logic `N(`BLOCK_INST_SIZE) is_rvc, commit_is_rvc;
+    logic commit_rd_rvc;
+    logic `N(`BLOCK_INST_SIZE) commit_offset_dec, commit_offset_sel/*verilator split_var*/;
+`endif
+    logic `N(`VADDR_SIZE) exc_waddr;
+
     assign tail_n1 = tail + 1;
     assign search_head_n1 = search_head + 1;
     assign write_tail = bpu_fsq_io.redirect ? bpu_fsq_io.prediction.stream_idx : tail;
@@ -92,6 +108,9 @@ module FSQ (
         .ready()
     );
 
+    wire pd_nobranch = pd_redirect.en & ~pd_redirect.direct;
+    wire btb_we = queue_we | pd_nobranch;
+    wire [`FSQ_WIDTH-1:0] btb_waddr = pd_nobranch ? pd_redirect.fsqIdx.idx : write_tail;
     MPRAM #(
         .WIDTH($bits(BTBUpdateInfo)),
         .DEPTH(`FSQ_SIZE),
@@ -105,9 +124,9 @@ module FSQ (
         .en(1'b1),
         .raddr(n_commit_head),
         .rdata(oldEntry),
-        .we(queue_we),
-        .waddr(write_tail),
-        .wdata(bpu_fsq_io.prediction.btbEntry),
+        .we(btb_we),
+        .waddr(btb_waddr),
+        .wdata(pd_nobranch ? 0 : bpu_fsq_io.prediction.btbEntry),
         .ready()
     );
 
@@ -183,8 +202,8 @@ endgenerate
             predictionInfos <= '{default: 0};
         end
         else begin
-            if(queue_we)begin
-                predictionInfos[write_tail] <= pd_wr_info;
+            if(btb_we)begin
+                predictionInfos[btb_waddr] <= pd_nobranch ? 0 : pd_wr_info;
             end
         end
     end
@@ -251,6 +270,7 @@ endgenerate
 
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
+        // 如果frontend redirect那么最后一个slot的类型一定不是cond
         assign pd_smallNum[i] = pd_predInfo.condValid[i] & (pd_predInfo.offsets[i] < pd_redirect.stream.size);
         assign condSmallNum[i] = redirectPredInfo.condValid[i] & (redirectPredInfo.offsets[i] < fsq_back_io.redirect.fsqInfo.offset);
     end
@@ -258,10 +278,13 @@ endgenerate
     assign redirectIsCond = fsq_back_io.redirectBr.en & fsq_back_io.redirectBr.br_type == CONDITION;
     `UNPARAM(SLOT_NUM, 2, "condSmallNum adder")
     assign condSmallNumAll = condSmallNum[0] + condSmallNum[1];
-    assign pd_smallNumAll[1] = pd_smallNum[0] & pd_smallNum[1];
-    assign pd_smallNumAll[0] = pd_smallNum[0] ^ pd_smallNum[1];
+    wire [1:0] pd_smallMask;
+    assign pd_smallMask[1] = pd_smallNum[1] & (&pd_smallNum);
+    assign pd_smallMask[0] = pd_smallNum[0];
+    assign pd_smallNumAll[1] = pd_smallMask[0] & pd_smallMask[1];
+    assign pd_smallNumAll[0] = pd_smallMask[0] ^ pd_smallMask[1];
     
-    assign pd_condInfo.condNum = pd_smallNumAll;
+    assign pd_condInfo.condNum = {`SLOT_NUM{pd_redirect.stream.taken}} & pd_smallNumAll;
     assign pd_condInfo.taken = 0;
     always_comb begin
         if(redirectIsCond)begin
@@ -305,6 +328,11 @@ endgenerate
     assign bpu_fsq_io.squashInfo.predInfo = squash_pred_info;
     assign bpu_fsq_io.squashInfo.br_type = squash_br_type;
     assign bpu_fsq_io.squashInfo.squash_front = ~squash_redirect_en & squash_pd_en;
+`ifdef DIFFTEST
+    logic `N(`FSQ_WIDTH) squashIdx_n;
+    `SIG_N(squashIdx, squashIdx_n)
+    assign bpu_fsq_io.squashInfo.squashIdx = squashIdx_n;
+`endif
     always_ff @(posedge clk)begin
         squash_redirect_en <= rd_br.en | rd_csr.en;
         squash_pd_en <= pd_redirect.en;
@@ -568,6 +596,8 @@ endgenerate
         .taken(commitWBInfo.taken),
 `ifdef RVC
         .rvc(commitWBInfo.rvc),
+        .slot_rvc(commit_slot_rvc),
+        .rd_rvc(commit_rd_rvc),
 `endif
         .predTaken(u_predInfo.condHist),
         .updateEntry(commitUpdateEntry),
@@ -579,6 +609,7 @@ endgenerate
     logic `N(`VADDR_SIZE) update_start_addr;
     logic `N(`VADDR_SIZE) update_target_pc, update_target_pc_pre;
     BTBUpdateInfo update_btb_entry, update_btb_entry_pre;
+    PredErrorInfo update_error_info_pre, update_error_info;
     logic update_indirect, btb_update;
     logic `N(`SLOT_NUM) update_real_taken;
     logic `N(`SLOT_NUM) update_alloc_slot;
@@ -592,12 +623,21 @@ endgenerate
     assign bpu_fsq_io.updateInfo.tailTaken = update_tail_taken;
     assign bpu_fsq_io.updateInfo.redirectInfo = commit_redictInfo;
     assign bpu_fsq_io.updateInfo.btb_update = btb_update;
+    assign bpu_fsq_io.updateInfo.error_info = update_error_info;
 `ifdef DIFFTEST
-    assign bpu_fsq_io.updateInfo.fsqIdx = commit_head;
+    logic `N(`FSQ_WIDTH) dbg_commit_head;
+    `SIG_N(commit_head, dbg_commit_head)
+    assign bpu_fsq_io.updateInfo.fsqIdx = dbg_commit_head;
 `endif
     assign update_target_pc_pre = pred_error ? commitWBInfo.target : commitStream.target;
 `ifdef FEAT_ITTAGE_REGION
     assign bpu_fsq_io.ittage_tag = update_target_pc_pre[`ITTAGE_OFFSET + 1 +: `ITTAGE_REGION_TAG];
+`endif
+    assign update_error_info_pre.pred_error = pred_error;
+    assign update_error_info_pre.fsqInfo = commitFsqInfo;
+    assign update_error_info_pre.br_type = commitWBInfo.br_type;
+`ifdef RVC
+    assign update_error_info_pre.rvc = commitWBInfo.rvc;
 `endif
     always_ff @(posedge clk)begin
         bpu_fsq_io.update <= commitValid;
@@ -612,6 +652,7 @@ endgenerate
                             ~(|u_predInfo.condHist) & commitStream.taken;
         update_indirect <= pred_error ? commitWBInfo.br_type == INDIRECT || commitWBInfo.br_type == INDIRECT_CALL : 
                             ~(|u_predInfo.condHist) & commitStream.taken & ((oldEntry.tailSlot.br_type == INDIRECT) | (oldEntry.tailSlot.br_type == INDIRECT_CALL));
+        update_error_info <= update_error_info_pre;
     end
     always_comb begin
         update_btb_entry = update_btb_entry_pre;
@@ -622,20 +663,36 @@ endgenerate
 `endif
     end
 
-    logic `N(`FSQ_WIDTH) exception_head, exception_head_n, exception_head_pre;
-    logic `ARRAY(`COMMIT_WIDTH, `FSQ_WIDTH) commitFsqIdx;
-    logic commit_exc_valid;
-    logic `N(`COMMIT_WIDTH) commit_older;
-    logic `N(`PREDICTION_WIDTH) pd_size;
-    logic exc_wen;
-    logic `N(`FSQ_WIDTH) exc_widx;
-    logic `N(`VADDR_SIZE) exc_waddr;
 
 generate
     for(genvar i=0; i<`COMMIT_WIDTH; i++)begin
         assign commit_older[i] = commitBus.en[i] & (commitBus.fsqInfo[i].idx != exception_head);
         assign commitFsqIdx[i] = commitBus.fsqInfo[i].idx;
     end
+`ifdef RVC
+    // 判断当前指令的前一条指令是否为rvc
+    // 只需要前面两个槽，如果是rvi指令，那么前面两个槽都被占用
+    // 则前面两个槽都不是rvc
+    for(genvar i=0; i<`SLOT_NUM; i++)begin
+        logic `N(`BLOCK_INST_SIZE) offset_dec;
+        logic `N(`BLOCK_INST_SIZE) offset_sel/*verilator split_var*/;
+        Decoder #(`BLOCK_INST_SIZE) decoder_br_offset (pd_predInfo.offsets[i], offset_dec);
+        for(genvar j=0; j<`BLOCK_INST_SIZE-2; j++)begin
+            assign offset_sel[j] = offset_dec[j+1] | offset_dec[j+2];
+        end
+        assign offset_sel[`BLOCK_INST_SIZE-2] = offset_dec[`BLOCK_INST_SIZE-1];
+        assign offset_sel[`BLOCK_INST_SIZE-1] = 1'b0;
+        wire `N(`BLOCK_INST_SIZE) rvc_mask = pd_redirect.is_rvc & offset_sel;
+        assign exc_rvc_pre[i] = |rvc_mask;
+    end
+    Decoder #(`BLOCK_INST_SIZE) decoder_commit_offset (commitFsqInfo.offset, commit_offset_dec);
+    for(genvar i=0; i<`BLOCK_INST_SIZE-2; i++)begin
+        assign commit_offset_sel[i] = commit_offset_dec[i+1] | commit_offset_dec[i+2];
+    end
+    assign commit_offset_sel[`BLOCK_INST_SIZE-2] = commit_offset_dec[`BLOCK_INST_SIZE-1];
+    assign commit_offset_sel[`BLOCK_INST_SIZE-1] = 1'b0;
+    assign commit_rd_rvc = |(commit_offset_sel & commit_is_rvc);
+`endif
 endgenerate
     OldestSelect #(`COMMIT_WIDTH, 1, `FSQ_WIDTH) select_exception_head (
         commit_older, commitFsqIdx, commit_exc_valid, exception_head_n
@@ -644,6 +701,10 @@ endgenerate
         exc_wen <= pd_redirect.exc_en;
         exc_widx <= pd_redirect.fsqIdx.idx;
         exc_waddr <= pd_redirect.stream.start_addr;
+`ifdef RVC
+        exc_rvc <= exc_rvc_pre;
+        is_rvc <= pd_redirect.is_rvc;
+`endif
         pd_size <= pd_redirect.size;
         exception_head_pre <= exception_head;
     end
@@ -683,7 +744,10 @@ endgenerate
         .ready()
     );
     MPRAM #(
-        .WIDTH(`PREDICTION_WIDTH),
+        .WIDTH(`PREDICTION_WIDTH
+        `ifdef RVC
+        +`SLOT_NUM + `BLOCK_INST_SIZE
+        `endif),
         .DEPTH(`FSQ_SIZE),
         .READ_PORT(1),
         .WRITE_PORT(1)
@@ -693,10 +757,18 @@ endgenerate
         .rst_sync(1'b0),
         .en(1'b1),
         .raddr(n_commit_head),
-        .rdata(commitSize),
+        .rdata({commitSize
+        `ifdef RVC
+        ,{commit_slot_rvc, commit_is_rvc}
+        `endif
+        }),
         .we(exc_wen),
         .waddr(exc_widx),
-        .wdata(pd_size),
+        .wdata({pd_size
+        `ifdef RVC
+        ,{exc_rvc, is_rvc}
+        `endif
+        }),
         .ready()
     );
     logic `N($clog2(`COMMIT_WIDTH)) exc_stream_idx;
@@ -842,6 +914,8 @@ module BTBEntryGen(
     input logic exception,
 `ifdef RVC
     input logic rvc,
+    input logic `N(`SLOT_NUM) slot_rvc, // 分支槽的前一条指令是否为rvc
+    input logic rd_rvc, // 分支预测错误的前一条指令是否为rvc
 `endif
     input logic `VADDR_BUS target,
     input logic `N(`SLOT_NUM) predTaken,
@@ -866,11 +940,16 @@ module BTBEntryGen(
     logic `N(`PREDICTION_WIDTH) oldestOffset;
     logic `N(`SLOT_NUM+1) oldestDecode;
     logic `N(`SLOT_NUM) taken_ext;
+    logic `N(`SLOT_NUM) entry_ens;
+    logic `N(`SLOT_NUM) predAlloc, predOldAlloc, slotAlloc;
+    logic `ARRAY(`SLOT_NUM, `SLOT_NUM) slotOldAlloc;
+    logic `N(`SLOT_NUM) allocOldest;
 generate
     for(genvar i=0; i<`SLOT_NUM-1; i++)begin
-        assign free[i] = !oldEntry.slots[i].en;
+        assign free[i] = !entry_ens[i];
         assign offsets[i] = oldEntry.slots[i].offset;
-        assign equal[i] = oldEntry.slots[i].en && oldEntry.slots[i].offset == fsqInfo.offset;
+        assign equal[i] = entry_ens[i] && oldEntry.slots[i].offset == fsqInfo.offset;
+        assign entry_ens[i] = oldEntry.slots[i].en;
     end
 endgenerate
     assign we = |equal ? equal :
@@ -880,23 +959,23 @@ endgenerate
     assign offsets[`SLOT_NUM-1] = oldEntry.tailSlot.offset;
     assign equal[`SLOT_NUM-1] = oldEntry.tailSlot.en && oldEntry.tailSlot.br_type == CONDITION &&  oldEntry.tailSlot.offset == fsqInfo.offset;
     assign offsets[`SLOT_NUM] = fsqInfo.offset;
+    assign entry_ens[`SLOT_NUM-1] = oldEntry.tailSlot.en;
     PRSelector #(`SLOT_NUM) selector_free (free, free_p);
 
     typedef struct packed {
         logic `N($clog2(`SLOT_NUM)+1) idx;
-// `ifdef RVC
-//         logic rvc;
-// `endif
+`ifdef RVC
+        logic rvc;
+`endif
     } OldestInfo;
     OldestInfo `N(`SLOT_NUM+1) selectInfos;
     OldestInfo oldestInfo;
-// `ifdef RVC
-//     for(genvar i =0; i<`SLOT_NUM-1; i++)begin
-//         assign selectInfos[i].rvc = oldEntry.slots[i].rvc;
-//     end
-//     assign selectInfos[`SLOT_NUM-1].rvc = oldEntry.tailSlot.rvc;
-//     assign selectInfos[`SLOT_NUM].rvc = rvc;
-// `endif
+`ifdef RVC
+    for(genvar i =0; i<`SLOT_NUM; i++)begin
+        assign selectInfos[i].rvc = slot_rvc[i];
+    end
+    assign selectInfos[`SLOT_NUM].rvc = rd_rvc;
+`endif
     for(genvar i=0; i<`SLOT_NUM+1; i++)begin
         assign selectInfos[i].idx = i;
     end
@@ -921,19 +1000,28 @@ endgenerate
     always_comb begin
         updateEntry.en = 1'b1;
         if(br_type != CONDITION)begin
-            updateEntry.fthAddr = fsqInfo.offset;
-
             updateEntry.slots = oldEntry.slots;
-            updateEntry.tailSlot.en = 1'b1;
-            updateEntry.tailSlot.carry = ~oldEntry.tailSlot.en;
-            updateEntry.tailSlot.br_type = br_type;
+            if(&allocOldest)begin // 如果预测错误的分支是最老的则不需要更新tailSlot
+                updateEntry.fthAddr = oldestOffset-{~oldestInfo.rvc, oldestInfo.rvc};
 `ifdef RVC
-            updateEntry.tailSlot.rvc = rvc;
-            updateEntry.fth_rvc = 0;
+                updateEntry.fth_rvc = oldestInfo.rvc;
 `endif
-            updateEntry.tailSlot.offset = fsqInfo.offset;
-            updateEntry.tailSlot.target = target[`JALR_OFFSET: 1];
-            updateEntry.tailSlot.tar_state = tailTarState;
+                updateEntry.tailSlot = oldEntry.tailSlot;
+            end
+            else begin
+                // updateEntry.fthAddr = fsqInfo.offset;
+                updateEntry.fthAddr = `BLOCK_INST_SIZE-1;
+                updateEntry.tailSlot.en = 1'b1;
+                updateEntry.tailSlot.carry = ~oldEntry.tailSlot.en;
+                updateEntry.tailSlot.br_type = br_type;
+    `ifdef RVC
+                updateEntry.tailSlot.rvc = rvc;
+                updateEntry.fth_rvc = 1'b1;
+    `endif
+                updateEntry.tailSlot.offset = fsqInfo.offset;
+                updateEntry.tailSlot.target = target[`JALR_OFFSET: 1];
+                updateEntry.tailSlot.tar_state = tailTarState;
+            end
         end
         else begin
             for(int i=0; i<`SLOT_NUM-1; i++)begin
@@ -958,9 +1046,10 @@ endgenerate
             updateEntry.tailSlot.tar_state = we[`SLOT_NUM-1] ? tarState : oldEntry.tailSlot.tar_state;
 `ifdef RVC
             updateEntry.tailSlot.rvc = we[`SLOT_NUM-1] ? rvc : oldEntry.tailSlot.rvc;
-            updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-2 : 
-                                  oldEntry.en ? oldEntry.fthAddr : `BLOCK_INST_SIZE-2;
-            updateEntry.fth_rvc = 0;
+            updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-{~oldestInfo.rvc, oldestInfo.rvc} : 
+                                  oldEntry.en ? oldEntry.fthAddr : `BLOCK_INST_SIZE-1;
+            updateEntry.fth_rvc = (~(|free)) & (~(|equal)) ? oldestInfo.rvc :
+                                  oldEntry.en ? oldEntry.fth_rvc : 1'b1;
 `else
             updateEntry.fthAddr = (~(|free)) & (~(|equal)) ? oldestOffset-1 : 
                                   oldEntry.en ? oldEntry.fthAddr : `BLOCK_INST_SIZE-1;
@@ -973,22 +1062,21 @@ endgenerate
             realTaken = predTaken;
         end
         else if(|equal)begin
-            realTaken = (equal & taken_ext) | (~equal & predTaken);
+            realTaken = (equal & taken_ext);
         end
         else if(|free)begin
-            realTaken = (free & taken_ext) | (~free & predTaken);
+            realTaken = (free_p & taken_ext);
         end
         else begin
-            realTaken = (oldest[`SLOT_NUM-1: 0] & taken_ext) | (~oldest[`SLOT_NUM-1: 0] & predTaken);
+            realTaken = (oldest[`SLOT_NUM-1: 0] & taken_ext);
         end
     end
 
-    logic `N(`SLOT_NUM) predAlloc, predOldAlloc, slotAlloc;
-    logic `ARRAY(`SLOT_NUM, `SLOT_NUM) slotOldAlloc;
 generate
     for(genvar i=0; i<`SLOT_NUM; i++)begin
-        assign predAlloc[i] = ~free[i] & ((normalOffset > offsets[i]) | equal[i]);
+        assign predAlloc[i] = ~free[i]  & (normalOffset >= offsets[i]);
         assign predOldAlloc[i] = ~free[i] & ((fsqInfo.offset > offsets[i]) | equal[i]);
+        assign allocOldest[i] = ~free[i] & (fsqInfo.offset > offsets[i]);
         for(genvar j=0; j<`SLOT_NUM; j++)begin
             if(i == j)begin
                 assign slotOldAlloc[i][j] = equal[i];
@@ -1001,20 +1089,18 @@ generate
 endgenerate
     ParallelOR #(`SLOT_NUM, `SLOT_NUM) or_slotOldAlloc (slotOldAlloc, slotAlloc);
     always_comb begin
-        if((~pred_error))begin
+        if(~pred_error | exception)begin
             allocSlot = predAlloc;
         end
-        else if(exception)begin
-            allocSlot = predOldAlloc;
-        end
         else if(|equal)begin
-            allocSlot = slotAlloc;
+            allocSlot = (br_type != CONDITION) & equal[`SLOT_NUM-1] ? 
+                        {1'b1, allocOldest[`SLOT_NUM-2:0] & {`SLOT_NUM-1{equal[`SLOT_NUM-1]}}} : predOldAlloc;
         end
         else if(|free)begin
-            allocSlot = predOldAlloc | free_p;
+            allocSlot = predOldAlloc | (br_type == CONDITION ? free_p : {1'b1, {`SLOT_NUM-1{1'b0}}});
         end
         else begin
-            allocSlot = {`SLOT_NUM{1'b1}};
+            allocSlot = predOldAlloc | (br_type == CONDITION ? we : {1'b1, {`SLOT_NUM-1{1'b0}}});
         end
     end
 
