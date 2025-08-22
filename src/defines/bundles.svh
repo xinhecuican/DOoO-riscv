@@ -219,6 +219,14 @@ typedef struct packed {
 } SquashInfo;
 
 typedef struct packed {
+    logic `N(`FSQ_WIDTH) idx;
+`ifdef RVC
+    logic `N(`PREDICTION_WIDTH) size;
+`endif
+    logic `N(`PREDICTION_WIDTH) offset;
+} FsqIdxInfo;
+
+typedef struct packed {
     logic pred_error;
     FsqIdxInfo fsqInfo;
 `ifdef RVC
@@ -243,14 +251,6 @@ typedef struct packed {
     PredictionMeta meta;
     PredErrorInfo error_info;
 } BranchUpdateInfo;
-
-typedef struct packed {
-    logic `N(`FSQ_WIDTH) idx;
-`ifdef RVC
-    logic `N(`PREDICTION_WIDTH) size;
-`endif
-    logic `N(`PREDICTION_WIDTH) offset;
-} FsqIdxInfo;
 
 typedef struct packed {
     logic `N(`FSQ_WIDTH) idx;
