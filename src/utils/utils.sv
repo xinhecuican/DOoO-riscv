@@ -197,19 +197,17 @@ endmodule
 module Sort #(
 	parameter RADIX = 2,
 	parameter WIDTH = 4,
-	parameter DATA_WIDTH = 4
+	parameter DATA_WIDTH = $clog2(RADIX)
 )(
 	input logic [RADIX-1: 0][WIDTH-1: 0] origin,
-	input logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_i,
-	output logic [RADIX-1: 0][DATA_WIDTH-1: 0] data_o
+	output logic [RADIX-1: 0][DATA_WIDTH-1: 0] order
 );
-	logic [RADIX-1: 0][WIDTH-1: 0] out;
 generate
 	case(RADIX)
-	2: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
-	4: Sort4 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
+	2: Sort2 #(WIDTH, DATA_WIDTH) sort(origin, order);
+	4: Sort4 #(WIDTH, DATA_WIDTH) sort(origin, order);
 	default: begin
-		Sort2 #(WIDTH, DATA_WIDTH) sort(origin, data_i, out, data_o);
+		Sort2 #(WIDTH, DATA_WIDTH) sort(origin, order);
 		always_comb begin
 			$display("unimpl Sort");
 		end

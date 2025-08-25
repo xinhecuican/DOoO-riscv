@@ -358,14 +358,11 @@ module Sort2 #(
 	parameter DATA_WIDTH = 4
 )(
 	input logic [1: 0][WIDTH-1: 0] origin,
-	input logic [1: 0][DATA_WIDTH-1: 0] data_i,
-	output logic [1: 0][WIDTH-1: 0] sort,
 	output logic [1: 0][DATA_WIDTH-1: 0] data_o
 );
 	logic bigger;
-	assign bigger = origin[1] < origin[0];
-	assign sort = bigger ? {origin[0], origin[1]} : origin;
-	assign data_o = bigger ? {data_i[0], data_i[1]} : data_i;
+	assign bigger = origin[0] < origin[1];
+	assign data_o = bigger ? 2'b10 : 2'b01;
 endmodule
 
 module Sort4 #(
@@ -373,16 +370,49 @@ module Sort4 #(
 	parameter DATA_WIDTH = 4
 )(
 	input logic [3: 0][WIDTH-1: 0] origin,
-	input logic [3: 0][DATA_WIDTH-1: 0] data_i,
-	output logic [3: 0][WIDTH-1: 0] sort,
 	output logic [3: 0][DATA_WIDTH-1: 0] data_o
 );
-	logic [1: 0][WIDTH-1: 0] compare1, compare2;
-	logic [1: 0][DATA_WIDTH-1: 0] data1, data2;
-	Sort2 #(WIDTH, DATA_WIDTH) sort1 (origin[3: 2], data_i[3: 2], compare1, data1);
-	Sort2 #(WIDTH, DATA_WIDTH) sort2 (origin[1: 0], data_i[1: 0], compare2, data2);
-	Sort2 #(WIDTH, DATA_WIDTH) sort3 ({compare1[1], compare2[1]}, {data1[1], data2[1]}, sort[3: 2], data_o[3: 2]);
-	Sort2 #(WIDTH, DATA_WIDTH) sort4 ({compare1[0], compare2[0]}, {data1[0], data2[0]}, sort[1: 0], data_o[1: 0]);
+	logic bigger1, bigger2, bigger3, bigger4, bigger5, bigger6;
+	assign bigger1 = origin[0] < origin[1];
+	assign bigger2 = origin[2] < origin[3];
+	assign bigger3 = origin[0] < origin[2];
+	assign bigger4 = origin[1] < origin[3];
+	assign bigger5 = origin[0] < origin[3];
+	assign bigger6 = origin[1] < origin[2];
+	always_comb begin
+		case({bigger4, bigger3, bigger2, bigger1})
+		4'b0000: data_o = bigger6 ? 8'b00_10_01_11 : 8'b00_01_10_11;
+		4'b0001: data_o = 8'b00_01_11_10;
+		4'b0010: data_o = 8'b01_00_10_11;
+		4'b0011: data_o = bigger5 ? 8'b10_00_11_01 : 8'b01_00_11_10;
+		4'b0100: data_o = 8'b00_11_01_10;
+		4'b0101: begin
+			case({bigger6, bigger5})
+			2'b00: data_o = 8'b00_10_11_01;
+			2'b01: data_o = 8'b01_10_11_00;
+			2'b10: data_o = 8'b00_11_10_01;
+			2'b11: data_o = 8'b01_11_10_00; // unexist
+			endcase
+		end
+		4'b0110: data_o = 8'b11_10_00_01; // unexist
+		4'b0111: data_o = 8'b11_10_00_01; // unexist
+		4'b1000: data_o = 8'b01_10_00_11;
+		4'b1001: data_o = 8'b00_01_11_10; // unexist
+		4'b1010: begin
+			case({bigger6, bigger5})
+			2'b00: data_o = 8'b10_00_01_11;
+			2'b01: data_o = 8'b11_00_01_10;
+			2'b10: data_o = 8'b10_01_00_11;
+			2'b11: data_o = 8'b11_01_00_10;
+			endcase
+		end
+		4'b1011: data_o = 8'b11_00_10_01;
+		4'b1100: data_o = bigger5 ? 8'b10_11_00_01 : 8'b01_11_00_10;
+		4'b1101: data_o = 8'b10_11_01_00;
+		4'b1110: data_o = 8'b11_10_00_01;
+		4'b1111: data_o = bigger6 ? 8'b00_10_01_11 : 8'b00_01_10_11;
+		endcase
+	end
 endmodule
 
 module MaskGen2(

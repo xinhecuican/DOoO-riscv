@@ -49,7 +49,7 @@ module StoreIssueQueue(
     StoreDataBankIO data_io [`STORE_ISSUE_BANK_NUM-1: 0]();
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_NUM)) order;
     logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_SIZE)) bankNum;
-    logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_NUM)) originOrder, sortOrder;
+    logic `ARRAY(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_NUM)) sortOrder;
     logic `N(`STORE_ISSUE_BANK_NUM) full, addr_bigger, data_bigger;
     logic `N(`STORE_ISSUE_BANK_NUM) addr_en_next, data_en_next;
     logic `N($clog2(`STORE_DIS_PORT)+1) disNum;
@@ -67,7 +67,6 @@ generate
         MemIssueBundle mem_issue_bundle;
         assign mem_issue_bundle = dis_store_io.data[i];
         assign bankNum[i] = addr_io[i].bankNum;
-        assign originOrder[i] = i;
 
         assign addr_io[i].en = dis_store_io.en[order[i]] & ~dis_store_io.full;
         assign addr_io[i].status = dis_store_io.status[order[i]];
@@ -111,7 +110,7 @@ generate
     end
 endgenerate
     assign dis_store_io.full = (|full) | store_io.full;
-    Sort #(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_SIZE), $clog2(`STORE_ISSUE_BANK_NUM)) sort_order (bankNum, originOrder, sortOrder); 
+    Sort #(`STORE_ISSUE_BANK_NUM, $clog2(`STORE_ISSUE_BANK_SIZE)) sort_order (bankNum, sortOrder); 
     assign store_io.dis_en = dis_store_io.en & ~(|full);
     assign store_io.dis_stall = dis_store_io.full;
     always_ff @(posedge clk)begin
