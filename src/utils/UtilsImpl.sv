@@ -395,7 +395,7 @@ module Sort4 #(
 			endcase
 		end
 		4'b0110: data_o = 8'b11_10_00_01; // unexist
-		4'b0111: data_o = 8'b11_10_00_01; // unexist
+		4'b0111: data_o = 8'b10_01_11_00;
 		4'b1000: data_o = 8'b01_10_00_11;
 		4'b1001: data_o = 8'b00_01_11_10; // unexist
 		4'b1010: begin

@@ -112,11 +112,14 @@ module BranchModel(
     assign br_target = vaddr + s_imm;
     assign branchRes.target = op == `BRANCH_JALR ? {jalr_target[`VADDR_SIZE-1: 1], 1'b0} : 
                               dir ? br_target : result;
+
+    logic `N(`VADDR_SIZE) result_addr;
 `ifdef RVC
-    assign result = vaddr + {~rvc, rvc, 1'b0};
+    assign result_addr = vaddr + {~rvc, rvc, 1'b0};
 `else
-    assign result = vaddr + 4;
+    assign result_addr = vaddr + 4;
 `endif
+    assign result = {{`XLEN-`VADDR_SIZE{result_addr[`VADDR_SIZE-1]}}, result_addr};
 
     // predict error
     // cal stream taken offset
@@ -194,6 +197,9 @@ module ALUModel(
     assign sl_data = data1 << shift;
     ShiftModel shift_model (padding, shift_data, shift, sr_data);
 
+    logic `N(`VADDR_SIZE) auipc_addr;
+    assign auipc_addr = vaddr + lui_imm;
+
     always_comb begin
         case(op)
         `INT_ADD, `INT_SUB: begin
@@ -244,7 +250,7 @@ module ALUModel(
 `endif
         end
         `INT_AUIPC: begin
-            result = vaddr + lui_imm;
+            result = {{`XLEN-`VADDR_SIZE{auipc_addr[`VADDR_SIZE-1]}}, auipc_addr};
         end
         default: result = 0;
         endcase

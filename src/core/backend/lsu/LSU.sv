@@ -197,9 +197,11 @@ module LSU(
     end
     assign fenceBus_tlb.mmu_flush = fenceBus.mmu_flush;
     assign fenceBus_tlb.mmu_flush_all = fenceBus.mmu_flush_all;
+    assign fenceBus_tlb.mmu_asid_all = fenceBus.mmu_asid_all;
     assign fenceBus_tlb.vma_vaddr = fenceBus.vma_vaddr;
     assign fenceBus_tlb.vma_asid = fenceBus.vma_asid;
 // load
+// select -> reg read -> addr cal(s1) -> dcache, tlb back(s2) -> rdata, leq(s3) -> wb(s4)
     logic `ARRAY(`LOAD_PIPELINE, `DCACHE_BYTE) lmask_pre;
     logic `ARRAY(`LOAD_PIPELINE, `STORE_PIPELINE) dis_ls_older;
     logic `N(`LOAD_PIPELINE) lmisalign;
@@ -351,16 +353,14 @@ endgenerate
     logic `N(`LOAD_PIPELINE) tlb_exception_s3;
     logic `N(`LOAD_PIPELINE) tlb_miss_s3;
     logic `N(`LOAD_PIPELINE) rhit;
+    logic `N(`LOAD_PIPELINE) fast_wakeup_s3;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        logic older;
+        logic older, older_s3;
         LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, load_issue_data[i].robIdx, older);
         assign redirect_clear_s2[i] = backendCtrl.redirect & older;
-    end
-    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
-        logic older;
-        LoopCompare #(`ROB_WIDTH) compare_older (backendCtrl.redirectIdx, leq_data[i].robIdx, older);
-        assign redirect_clear_s3[i] = backendCtrl.redirect & older;
+        LoopCompare #(`ROB_WIDTH) compare_older1 (backendCtrl.redirectIdx, leq_data[i].robIdx, older_s3);
+        assign redirect_clear_s3[i] = backendCtrl.redirect & older_s3;
     end
 endgenerate
     assign rio.req_cancel_s2 = redirect_clear_s2 | lmisalign_s2 | tlb_exception_s2 | luncache_s2 |
@@ -407,6 +407,7 @@ endgenerate
     logic `N(`LOAD_PIPELINE) redirect_clear_s4;
     logic `N(`LOAD_PIPELINE) tlb_miss_s4;
     RobIdx `N(`LOAD_PIPELINE) robIdx_s4;
+    logic `N(`LOAD_PIPELINE) fast_wakeup_s4;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
         logic older;
@@ -456,6 +457,7 @@ generate
                           & ~leq_data[i].frd_en;
 `endif
         ;
+        assign fast_wakeup_s3[i] = from_pipe & (~lsu_wb_io.datas[i].en | from_issue[i] & fast_wakeup_s4[i]);
         always_ff @(posedge clk)begin
             pipe_data.en <= from_pipe;
             pipe_data.robIdx <= leq_data[i].robIdx;
@@ -466,6 +468,7 @@ generate
             pipe_data.irq_enable <= 1;
             pipe_data.res <= ldata_shift[i];
             from_issue[i] <= from_pipe;
+            fast_wakeup_s4[i] <= fast_wakeup_s3[i];
         end
 `ifdef RVA
         if(i == 0)begin
@@ -479,9 +482,9 @@ generate
 `else
         assign lsu_wb_io.datas[i] = from_issue[i] ? pipe_data : load_queue_io.int_wbData[i];
 `endif
-        assign load_wakeup_io.en[i] = lsu_wb_io.datas[i].en;
-        assign load_wakeup_io.we[i] = lsu_wb_io.datas[i].we;
-        assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].rd;
+        assign load_wakeup_io.en[i] = from_pipe | lsu_wb_io.datas[i].en & ~fast_wakeup_s4[i];
+        assign load_wakeup_io.we[i] = lsu_wb_io.datas[i].en & ~fast_wakeup_s4[i] ? lsu_wb_io.datas[i].we : leq_data[i].we;
+        assign load_wakeup_io.rd[i] = lsu_wb_io.datas[i].en & ~fast_wakeup_s4[i] ? lsu_wb_io.datas[i].rd : leq_data[i].rd;
     end
 `ifdef RVF
     for(genvar i=0; i<`LOAD_PIPELINE; i++) begin : rdata_fwb
@@ -812,7 +815,7 @@ endgenerate
         end
     end
 
-    `PERF(load_conflict, |rio.conflict)
+    `PERF(load_conflict, |(load_en & rio.conflict))
 
 endmodule
 

@@ -312,4 +312,7 @@ endgenerate
     Encoder #(`DTLB_SIZE) encoder_replace_idx (replace_hit, replace_widx);
     Encoder #(`DTLB_SIZE) encoder_miss_idx (replace_io.miss_way, replace_miss_idx);
     assign tlb_widx = |replace_hit ? replace_widx : replace_miss_idx;
+
+    `Log(DLog::Debug, T_DTLB, tlb_l2_io0.dataValid & ~tlb_l2_io0.error & ~(|replace_hit),
+        $sformatf("DTLB[%d %b %b]: vaddr=%h, wpn=%b, entry=%h", replace_miss_idx, tlb_l2_io0.exception, tlb_l2_io0.exc_static, tlb_l2_io0.waddr, tlb_l2_io0.wpn, tlb_l2_io0.entry), 1'b1, {tlb_l2_io0.waddr, 12'h0})
 endmodule

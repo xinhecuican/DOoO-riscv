@@ -321,7 +321,7 @@ typedef struct packed {
     logic `ARRAY(`PMACFG_SIZE, `MXL) pmacfg; \
     logic `ARRAY(`PMA_SIZE, `MXL) pmaaddr; \
     assign pmacfg[0] = 'h2808; \
-    assign pmaaddr[0] = 'h01000000; \
+    assign pmaaddr[0] = 'h00800000; \
     assign pmaaddr[1] = 'h08000000;
 
 `endif

@@ -4,10 +4,10 @@
 
 `define IRQ_NUM 1
 
-`define IRQ_START           `PADDR_SIZE'h08000000
+`define IRQ_START           `PADDR_SIZE'h02000000
 `define IRQ_END             `PADDR_SIZE'h10000000
-`define CLINT_START         `PADDR_SIZE'h08000000
-`define CLINT_END           `PADDR_SIZE'h08010000
+`define CLINT_START         `PADDR_SIZE'h02000000
+`define CLINT_END           `PADDR_SIZE'h02010000
 `define PLIC_START          `PADDR_SIZE'h0c000000
 `define PLIC_END            `PADDR_SIZE'h10000000
 

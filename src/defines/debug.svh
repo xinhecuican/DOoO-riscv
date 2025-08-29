@@ -19,6 +19,7 @@
 // `define T_ICACHE
 // `define T_COMMIT
 // `define T_ITLB
+`define T_DTLB
 
 // `define REPORT_RAM
 // `define REPORT_UNPARAM

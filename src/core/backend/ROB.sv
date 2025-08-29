@@ -615,7 +615,7 @@ generate
             .coreid(0),
             .index(i),
             .valid(diff_valid[i]),
-            .pc(pc[i]),
+            .pc({{`XLEN-`VADDR_SIZE{pc[i][`VADDR_SIZE-1]}}, pc[i][`VADDR_SIZE-1: 0]}),
             .instr(diff_insts[i]),
             .robIdx({{32-`ROB_WIDTH{1'b0}}, diff_robIdx[i]}),
             .special(1'b0),
