@@ -63,9 +63,6 @@ generate
                 fmisc_wb_io.datas[i].rd <= issue_fmisc_io.status[i].rd;
                 fmisc_wb_io.datas[i].exccode <= fstatus;
                 fmisc_wb_io.datas[i].irq_enable <= 1;
-                fmisc_wakeup_io.en[i] <= issue_fmisc_io.en[i] & issue_fmisc_io.bundle[i].flt_we;
-                fmisc_wakeup_io.we[i] <= 1'b1;
-                fmisc_wakeup_io.rd[i] <= issue_fmisc_io.status[i].rd;
             end
             if(~fmisc_wb_io.datas[i+`FMISC_SIZE].en | fmisc_wb_io.valid[i+`FMISC_SIZE] |
                (backendCtrl.redirect & bigger_s2))begin
@@ -76,14 +73,82 @@ generate
                 fmisc_wb_io.datas[i+`FMISC_SIZE].rd <= issue_fmisc_io.status[i].rd;
                 fmisc_wb_io.datas[i+`FMISC_SIZE].exccode <= fstatus;
                 fmisc_wb_io.datas[i+`FMISC_SIZE].irq_enable <= 1;
-                fmisc_wakeup_io.en[i+`FMISC_SIZE] <= issue_fmisc_io.en[i] & ~issue_fmisc_io.bundle[i].flt_we;
-                fmisc_wakeup_io.we[i+`FMISC_SIZE] <= issue_fmisc_io.status[i].we;
-                fmisc_wakeup_io.rd[i+`FMISC_SIZE] <= issue_fmisc_io.status[i].rd;
             end
         end
         assign issue_fmisc_io.stall[i] = issue_fmisc_io.en[i] & 
             (issue_fmisc_io.bundle[i].flt_we & fmisc_wb_io.datas[i].en & ~fmisc_wb_io.valid[i] |
             ~issue_fmisc_io.bundle[i].flt_we & fmisc_wb_io.datas[`FMISC_SIZE+i].en & ~fmisc_wb_io.valid[`FMISC_SIZE+i]);
+
+        logic `N(2) wakeup_wb, wakeup_wb_s2;
+        logic `N(2) wakeup_we, wakeup_we_s2;
+        logic `ARRAY(2, `PREG_WIDTH) wakeup_rd, wakeup_rd_s2;
+
+
+        wire wakeup_stall_cond1 = fmisc_wb_io.datas[i].en & fmisc_wb_io.valid[i] & ~fmisc_wakeup_io.ready[i];
+        wire wakeup_stall_cond2 = fmisc_wb_io.datas[i+`FMISC_SIZE].en & fmisc_wb_io.valid[i+`FMISC_SIZE] & ~fmisc_wakeup_io.ready[i+`FMISC_SIZE];
+
+        always_ff @(posedge clk or negedge rst)begin
+            if(rst == `RST)begin
+                wakeup_wb <= 0;
+                wakeup_wb_s2 <= 0;
+            end
+            else begin
+                if(wakeup_wb_s2[0])begin
+                    wakeup_wb_s2[0] <= 1'b0;
+                end
+                else if(wakeup_stall_cond1)begin
+                    wakeup_wb_s2[0] <= wakeup_wb[0] & ~(backendCtrl.redirect & bigger);
+                end
+
+                if(wakeup_wb_s2[1])begin
+                    wakeup_wb_s2[1] <= 1'b0;
+                end
+                else if(wakeup_stall_cond2)begin
+                    wakeup_wb_s2[1] <= wakeup_wb[1] & ~(backendCtrl.redirect & bigger);
+                end
+
+                if(wakeup_stall_cond1)begin
+                    wakeup_wb[0] <= 1'b0;
+                end
+                else if(~(fmisc_wb_io.datas[i].en & ~fmisc_wb_io.valid[i]))begin
+                    wakeup_wb[0] <= issue_fmisc_io.en[i] & issue_fmisc_io.bundle[i].flt_we & ~(backendCtrl.redirect & bigger);
+                end
+
+                if(wakeup_stall_cond2)begin
+                    wakeup_wb[1] <= 1'b0;
+                end
+                else if(~(fmisc_wb_io.datas[i+`FMISC_SIZE].en & ~fmisc_wb_io.valid[i+`FMISC_SIZE]))begin
+                    wakeup_wb[1] <= issue_fmisc_io.en[i] & ~issue_fmisc_io.bundle[i].flt_we & ~(backendCtrl.redirect & bigger);
+                end
+            end
+        end
+
+        always_ff @(posedge clk)begin
+            if(~(fmisc_wb_io.datas[i].en & ~fmisc_wb_io.valid[i]))begin
+                wakeup_we[0] <= issue_fmisc_io.status[i].we;
+                wakeup_rd[0] <= issue_fmisc_io.status[i].rd;
+            end
+            if(~(fmisc_wb_io.datas[i+`FMISC_SIZE].en & ~fmisc_wb_io.valid[i+`FMISC_SIZE]))begin
+                wakeup_we[1] <= issue_fmisc_io.status[i+`FMISC_SIZE].we;
+                wakeup_rd[1] <= issue_fmisc_io.status[i+`FMISC_SIZE].rd;
+            end
+
+            if(wakeup_stall_cond1)begin
+                wakeup_we_s2[0] <= wakeup_we[0];
+                wakeup_rd_s2[0] <= wakeup_rd[0];
+            end
+            if(wakeup_stall_cond2)begin
+                wakeup_we_s2[1] <= wakeup_we[1];
+                wakeup_rd_s2[1] <= wakeup_rd[1];
+            end
+        end
+
+        assign fmisc_wakeup_io.en[i] = wakeup_wb[0] | wakeup_wb_s2[0];
+        assign fmisc_wakeup_io.we[i] = 1'b1;
+        assign fmisc_wakeup_io.rd[i] = wakeup_wb_s2[0] ? wakeup_rd_s2[0] : wakeup_rd[0];
+        assign fmisc_wakeup_io.en[i+`FMISC_SIZE] = wakeup_wb[1] | wakeup_wb_s2[1];
+        assign fmisc_wakeup_io.we[i+`FMISC_SIZE] = wakeup_wb_s2[1] ? wakeup_we_s2[1] : wakeup_we[1];
+        assign fmisc_wakeup_io.rd[i+`FMISC_SIZE] = wakeup_wb_s2[1] ? wakeup_rd_s2[1] : wakeup_rd[1];
     end
 endgenerate
 endmodule

@@ -190,6 +190,8 @@ typedef enum logic [1:0] {
 `define INT_PREG_SIZE 128
 `define FP_PREG_SIZE 128
 `define PREG_WIDTH $clog2(`INT_PREG_SIZE)
+`define CHECK_SIZE 4
+`define CHECK_WIDTH $clog2(`CHECK_SIZE)
 
 // rob
 `define ROB_SIZE 128
@@ -425,6 +427,10 @@ typedef enum logic [1:0] {
 `define L2WAY_NUM 8
 `define L2SET 512
 `define L2OFFSET `CACHELINE_SIZE
+// if local_set != l2_set then
+// local_replace_addr.l2_idx != l2_addr.idx
+// replace to l3 using l2_addr.idx
+// but we using local_replace_addr.l2_idx to write l2 cache
 `define L2SLAVE_SET 512 // slave directory set must be same as directory set num
 `define L2SLAVE_WAY 2
 `define L2PREPEND_PIPE 1

@@ -532,6 +532,7 @@ endgenerate
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s2;
     logic `N(`STORE_PIPELINE) store_en_s4, store_en_s4_unexc;
     logic `N(`STORE_PIPELINE) store_redirect_s4;
+    logic `N(`STORE_PIPELINE) store_redirect_s5;
 generate
     for(genvar i=0; i<`STORE_PIPELINE; i++)begin
         logic older;
@@ -607,6 +608,7 @@ endgenerate
     logic `N(`STORE_PIPELINE) suncache_s4;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) svaddr_s4;
     logic `ARRAY(`STORE_PIPELINE, `STORE_ISSUE_BANK_WIDTH) sissue_idx_s4;
+    RobIdx `N(`STORE_PIPELINE) store_robIdx_s5;
 `ifdef FEAT_MEMPRED
     SSITEntry `N(`STORE_PIPELINE) ssit_entry_s3, ssit_entry_s4;
 `endif
@@ -619,6 +621,10 @@ generate
         logic bigger_s4;
         LoopCompare #(`ROB_WIDTH) cmp_bigger_s4 (backendCtrl.redirectIdx, store_robIdx_s4[i], bigger_s4);
         assign store_redirect_s4[i] = backendCtrl.redirect & bigger_s4;
+
+        logic bigger_s5;
+        LoopCompare #(`ROB_WIDTH) cmp_bigger_s5 (backendCtrl.redirectIdx, store_robIdx_s5[i], bigger_s5);
+        assign store_redirect_s5[i] = backendCtrl.redirect & bigger_s5;
         always_ff @(posedge clk)begin
             store_en_s3[i] <= store_en[i] & ~store_redirect_s2[i];
             store_robIdx_s3[i] <= store_issue_data[i].robIdx;
@@ -641,6 +647,7 @@ generate
             suncache_s4[i] <= ((~store_exc_s3[i]) & suncache_s3[i]);
             svaddr_s4[i] <= svaddr_s3[i];
             sissue_idx_s4[i] <= sissue_idx_s3[i];
+            store_robIdx_s5[i] <= store_robIdx_s4[i];
 
             if(i == `STORE_PIPELINE - 1)begin
                 storeWBData[i].en <= store_en_s4_unexc[i] & ~store_redirect_s4[i] & ~suncache_s4[i] | store_queue_io.wb_req;
@@ -771,7 +778,7 @@ endgenerate
         .WIDTH(`ROB_WIDTH),
         .DATA_WIDTH(`VADDR_SIZE)
     ) select_sexc_oldest(
-        .en(sexc_valid & ~store_redirect_s4),
+        .en(sexc_valid & ~store_redirect_s5),
         .cmp(sexc_robIdx),
         .data_i(sexc_vaddr),
         .en_o(sexc_valid_o),
