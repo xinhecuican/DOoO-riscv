@@ -23,6 +23,7 @@ SYNTH_LOG = ${LOG_PATH}synth
 FOUNDRY ?= sky130
 DESIGN_CONFIG = ../../config/config.mk
 TESTBENCH = fadd_tb
+PREDEF_PATH = build/predef
 
 export CLK_FREQ_MHZ
 export SDC_FILE
@@ -75,7 +76,8 @@ endif
 DEFINES += CLK_FREQ=${CLK_FREQ_MHZ};CLK_PERIOD=${CLK_PERIOD};
 
 emu:
-	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=ON;${DEFINES}"
+	mkdir -p ${PREDEF_PATH}
+	python scripts/parseDef.py -b ${PREDEF_PATH} -p ${CONFIG} -e "DIFFTEST=ON;${DEFINES}"
 	make -C utils/difftest emu -j `nproc` $(EMU_ARGS)
 
 emu-run: emu
@@ -90,9 +92,10 @@ sbi:
 
 convert: build/${TOP}/${TOP}.v
 build/${TOP}/${TOP}.v: ${SRC}
-	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
+	mkdir -p ${PREDEF_PATH}
+	python scripts/parseDef.py -b ${PREDEF_PATH} -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
 	mkdir -p build/${TOP}
-	sv2v -v --write=build/${TOP} -I=src/defines -I=build --top=Soc ${SRC}
+	sv2v -v --write=build/${TOP} -I=src/defines -I=${PREDEF_PATH} --top=Soc ${SRC}
 
 vcs:
 	vcs -sverilog +v2k -Mupdate -Mdir=build/ -timescale=1ns/1ns -debug_access+all +warn=noUII-L -cm line+cond+fsm+branch+tgl -cm_name ${TESTBENCH} -cm_dir build/${TESTBENCH}.vdb +define+DUMP_VPD +define+COVERAGE +vpdfile+build/${TESTBENCH}.vpd -cpp g++-4.8 -cc gcc-4.8 -LDFLAGS -Wl,-no-as-needed -f testbench/${TESTBENCH}.f -top ${TESTBENCH} -o build/${TESTBENCH}
@@ -113,7 +116,8 @@ ${SYNTH_V}: scripts/gen_netlist.tcl build/${TOP}/${TOP}.v
 syn: ${SYNTH_DC_V}
 ${SYNTH_DC_V}: scripts/syn_dc.tcl ${SRC}
 	mkdir -p ${SYNTH_LOG}
-	python scripts/parseDef.py -b build/ -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
+	mkdir -p ${PREDEF_PATH}
+	python scripts/parseDef.py -b ${PREDEF_PATH} -p ${CONFIG} -e "DIFFTEST=OFF;ENABLE_LOG=OFF;${DEFINES}"
 	env CLK_FREQ=${CLK_FREQ_MHZ} FOUNDRY=${FOUNDRY} LOG_DIR=${SYNTH_LOG} SYNTH=${SYNTH_DC_V} TOP=Soc FILES="${SRC}" dc_shell -64bit -f scripts/syn_dc.tcl > ${SYNTH_LOG}/synth.log
 
 sta: scripts/sta_dc.tcl build/${TOP}.sdf
@@ -144,6 +148,7 @@ clean_emu:
 	rm -f build/emu
 	rm -f build/time.log
 	rm -rf build/annotated
+	rm -r build/predef
 
 clean:
 	make -C utils/difftest clean

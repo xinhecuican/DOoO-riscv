@@ -16,7 +16,9 @@ interface TLBIO #(
     logic `PADDR_BUS paddr;
 
     logic we;
-    logic wen;
+    logic fence_we;
+    logic fence_wen;
+    logic `N(DEPTH) fence_wvec;
     logic wexc_static;
     logic `N(ADDR_WIDTH) widx;
     TLBInfo wbInfo;
@@ -24,7 +26,7 @@ interface TLBIO #(
     logic `N(2) wpn;
     logic `N(`TLB_VPN_SIZE) waddr;
 
-    modport tlb(input req, flush, vaddr, sel, sel_tag, we, wen, wexc_static, wbInfo, wentry, wpn, widx, waddr, output miss, uncache, exception, paddr);
+    modport tlb(input req, flush, vaddr, sel, sel_tag, we, fence_we, fence_wen, fence_wvec, wexc_static, wbInfo, wentry, wpn, widx, waddr, output miss, uncache, exception, paddr);
 endinterface
 
 module TLB #(
@@ -50,10 +52,13 @@ module TLB #(
     typedef enum  { IDLE, FENCE, FENCE_END } FenceState;
     FenceState fenceState;
     logic fenceReq, fenceWe;
-    logic `N(ADDR_WIDTH) fenceIdx, widx, fenceAllIdx;
+    logic state_fence;
+    logic `N(DEPTH) fence_we_vec;
+    logic `N(ADDR_WIDTH) fenceIdx, widx, fenceAllIdx, widx_dec;
     logic `N(`VADDR_SIZE-`TLB_OFFSET) fenceVaddr;
     logic `N(`TLB_ASID) fence_asid;
     logic fence_asid_all, fence_addr_all;
+    logic `N(DEPTH) entry_exc;
 
 // lookup
     logic `N(DEPTH) hit;
@@ -109,6 +114,7 @@ generate
             assign pn_hit[i] = (&(pn_hits[i] | entrys[i].size));
         end
         assign mask_entry[i] = {entrys[i], entrys[i].size};
+        assign entry_exc[i] = entrys[i].exc;
     end
     // if(SOURCE == 2'b00)begin
     //     PEncoder #(DEPTH) encoder_hit (hit, hit_idx);
@@ -206,32 +212,38 @@ endgenerate
 generate
     if(FENCEV)begin
         assign widx = fenceWe ? fenceIdx : io.widx;
+        Decoder #(DEPTH) decoder_widx(widx, widx_dec);
+        assign fence_we_vec = {DEPTH{fenceWe}} & widx_dec;
         always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 en <= 0;
                 entrys <= '{default: 0};
             end
             else begin
-                if(fenceWe)begin
-                    en[widx] <= 1'b0;
+                if(state_fence)begin
+                    en <= en & ~fence_we_vec & ~entry_exc;
                 end
                 else if(io.we)begin
                     entrys[widx] <= wentry;
-                    en[widx] <= 1'b1;
+                    en <= en | widx_dec;
                 end
             end
         end
     end
     else begin
+        assign fence_we_vec = {DEPTH{io.fence_wen}} & widx_dec;
         always_ff @(posedge clk, negedge rst)begin
             if(rst == `RST)begin
                 en <= 0;
                 entrys <= '{default: 0};
             end
             else begin
+                if(io.fence_we)begin
+                    en <= en & ~io.fence_wvec;
+                end
                 if(io.we)begin
                     entrys[io.widx] <= wentry;
-                    en[io.widx] <= io.wen;
+                    en[io.widx] <= 1'b1;
                 end
             end
         end
@@ -272,6 +284,7 @@ generate
         end
 
         assign fenceWe = (fenceState == FENCE) & (|hit) & ~(fence_addr_all & ~hit[fenceAllIdx]);
+        assign state_fence = fenceState == FENCE;
         assign fenceIdx = fence_addr_all ? fenceAllIdx : hit_idx;
 
         always_ff @(posedge clk, negedge rst)begin

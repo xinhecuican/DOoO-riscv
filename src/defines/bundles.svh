@@ -732,4 +732,12 @@ typedef struct packed {
     logic dirty;
 } DCacheMeta;
 
+`ifdef DIFFTEST
+typedef struct packed {
+    logic en;
+    RobIdx robIdx;
+    logic `N(`PADDR_SIZE) paddr;
+} DiffLoadData;
+`endif
+
 `endif

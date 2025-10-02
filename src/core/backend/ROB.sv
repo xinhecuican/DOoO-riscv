@@ -24,6 +24,7 @@ module ROB(
 
 `ifdef DIFFTEST
     ,FsqBackendIO.backend fsq_back_io
+    ,DiffLoadData `N(`LOAD_PIPELINE) diff_load_data
 `endif
 );
 
@@ -583,6 +584,25 @@ endgenerate
     logic `ARRAY(`COMMIT_WIDTH, 5) diff_wdest;
     logic `ARRAY(`COMMIT_WIDTH, `XLEN) diff_data, diff_data_before;
     logic `ARRAY(`COMMIT_WIDTH, `ROB_WIDTH) dataRIdxNext, diff_robIdx;
+    logic `N(`ROB_SIZE) wb_load_en;
+    logic `ARRAY(`ROB_SIZE, `PADDR_SIZE) wb_lpaddr;
+    always_ff @(posedge clk or negedge rst)begin
+        if(rst == `RST)begin
+            wb_load_en <= 0;
+        end
+        else begin
+            for(int i=0; i<`FETCH_WIDTH; i++)begin
+                if(dis_en[i])begin
+                    wb_load_en[dataWIdx[i]] <= 1'b0;
+                end
+            end
+            for(int i=0; i<`LOAD_PIPELINE; i++)begin
+                if(diff_load_data[i].en)begin
+                    wb_load_en[diff_load_data[i].robIdx.idx] <= 1'b1;
+                end
+            end
+        end
+    end
     always_ff @(posedge clk)begin
         pc <= fsq_back_io.diff_pc;
         diff_valid <= commitBus.en;
@@ -603,6 +623,11 @@ endgenerate
         for(int i=0; i<`COMMIT_WIDTH; i++)begin
             diff_insts_before[i] <= insts[dataRIdx[i]];
             diff_data_before[i] <= data[dataRIdx[i]];
+        end
+        for(int i=0; i<`LOAD_PIPELINE; i++)begin
+            if(diff_load_data[i].en)begin
+                wb_lpaddr[diff_load_data[i].robIdx.idx] <= diff_load_data[i].paddr;
+            end
         end
         diff_insts <= diff_insts_before;
         diff_data <= diff_data_before;
@@ -625,6 +650,15 @@ generate
             .wen(diff_wen[i]),
             .wdest(diff_wdest[i]),
             .wdata(diff_data[i])
+        );
+        DifftestLoadEvent difftest_load_event (
+            .clock(clk),
+            .coreid(8'b0),
+            .index(i),
+            .valid(diff_valid[i] & wb_load_en[diff_robIdx[i]]),
+            .paddr({{64-`PADDR_SIZE{1'b0}}, wb_lpaddr[diff_robIdx[i]]}),
+            .opType(8'b0),
+            .fuType(8'b0)
         );
     end
 endgenerate

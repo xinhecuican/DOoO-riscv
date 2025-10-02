@@ -9,10 +9,14 @@ module SimTop(
     input  [63:0] io_logCtrl_log_level,
     input         io_perfInfo_clean,
     input         io_perfInfo_dump,
-    output        io_uart_out_valid,
-    output [7:0]  io_uart_out_ch,
-    output        io_uart_in_valid,
-    input  [7:0]  io_uart_in_ch,
+    output [63:0] uart_paddr,
+    output        uart_psel,
+    output        uart_penable,
+    output        uart_pwrite,
+    output [31:0] uart_pwdata,
+    output [3:0]  uart_pstrb,
+    input  [31:0] uart_prdata,
+    input         uart_irq,
 
     input           io_memAXI_0_aw_ready,
     output          io_memAXI_0_aw_valid,
@@ -88,6 +92,7 @@ module SimTop(
     ClintIO clint_io();
     logic `N(`IRQ_NUM) irq_source;
     logic `N(`NUM_CORE) meip, seip;
+    assign irq_source[0] = uart_irq;
 
     CPUCore core(
         .clk(clock),
@@ -310,17 +315,26 @@ module SimTop(
 // uart
 
     ApbIO uart_io();
+    assign uart_paddr = uart_io.paddr;
+    assign uart_psel = uart_io.psel;
+    assign uart_penable = uart_io.penable;
+    assign uart_pwrite = uart_io.pwrite;
+    assign uart_pwdata = uart_io.pwdata[31:0];
+    assign uart_pstrb = uart_io.pstrb;
+    assign uart_io.prdata = {32'b0, uart_prdata};
+    assign uart_io.pready = 1'b1;
+    assign uart_io.pslverr = 1'b0;
     `APB_REQ_ASSIGN(uart_req, uart_io)
     `APB_RESP_ASSIGN(uart_resp, uart_io)
-    SimUart uart(
-        .clk(clock),
-        .rst(peri_rst),
-        .apb(uart_io),
-        .io_uart_out_valid(io_uart_out_valid),
-        .io_uart_out_ch(io_uart_out_ch),
-        .io_uart_in_valid(io_uart_in_valid),
-        .io_uart_in_ch(io_uart_in_ch)
-    );
+    // SimUart uart(
+    //     .clk(clock),
+    //     .rst(peri_rst),
+    //     .apb(uart_io),
+    //     .io_uart_out_valid(io_uart_out_valid),
+    //     .io_uart_out_ch(io_uart_out_ch),
+    //     .io_uart_in_valid(io_uart_in_valid),
+    //     .io_uart_in_ch(io_uart_in_ch)
+    // );
 
 // mem
     typedef logic [`L2ID_WIDTH-1: 0] mem_id_t;

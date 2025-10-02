@@ -130,17 +130,20 @@ endgenerate
     end
 
     function logic detectFence(
+        input logic write,
         input logic `N(`CSROP_WIDTH) csrop, 
         input logic `N(12) csrid
     );
                 // sfence.vma, fence, fence.i
         return csrop[3] |
                 // mstatus, mpp need fence, usually sfence.vma followed with w satp
-               (~csrop[3] &
+               write & (~csrop[3] &
                ((csrid == `CSRID_mstatus) | (csrid == `CSRID_sstatus) |
                 (csrid == `CSRID_satp) | (csrid == `CSRID_fcsr) |
                 (csrid[11: 0] >= `CSRID_pmpcfg && csrid[11: 0] < 12'h3f0)));
     endfunction
+
+    wire csr_write = ~rdata.csrop[2] ? statush.rs1 != 0 : rdata.imm[4:0] != 0;
 
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
@@ -159,7 +162,7 @@ endgenerate
             if(wakeup_en)begin
                 trapInst <= rdata.inst;
                 fence_req.robIdx <= writeRobIdx;
-                fence_req.req <= detectFence(rdata.csrop, rdata.imm[16: 5]);
+                fence_req.req <= detectFence(csr_write, rdata.csrop, rdata.imm[16: 5]);
             end
             case(state)
             IDLE:begin

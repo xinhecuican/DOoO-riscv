@@ -47,7 +47,6 @@ generate
         assign itlb_io[i].flush = itlb_cache_io.flush;
 
         assign itlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error;
-        assign itlb_io[i].wen = 1'b1;
         assign itlb_io[i].wexc_static = tlb_l2_io0.exc_static;
         assign itlb_io[i].widx = replace_io.miss_way;
         assign itlb_io[i].wbInfo = tlb_l2_io0.info_o;

@@ -117,6 +117,7 @@ module Backend(
 
 `ifdef DIFFTEST
     DiffRAT diff_int_rat();
+    DiffLoadData `N(`LOAD_PIPELINE) diff_load_data;
 `ifdef RVF
     DiffRAT diff_fp_rat();
 `endif

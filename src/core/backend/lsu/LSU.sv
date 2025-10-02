@@ -91,6 +91,9 @@ module LSU(
     output LoadIdx lqIdx,
     output StoreIdx sqIdx,
     output logic `N(`VADDR_SIZE) exc_vaddr
+`ifdef DIFFTEST
+    ,output DiffLoadData `N(`LOAD_PIPELINE) diff_load_data
+`endif
 );
     logic `ARRAY(`LOAD_PIPELINE, `VADDR_SIZE) loadVAddr;
     logic `ARRAY(`STORE_PIPELINE, `VADDR_SIZE) storeVAddr;
@@ -509,6 +512,17 @@ generate
         assign load_wakeup_io.en[i+`LOAD_PIPELINE] = lsu_wb_io.datas[i+`LOAD_PIPELINE].en;
         assign load_wakeup_io.we[i+`LOAD_PIPELINE] = lsu_wb_io.datas[i+`LOAD_PIPELINE].we;
         assign load_wakeup_io.rd[i+`LOAD_PIPELINE] = lsu_wb_io.datas[i+`LOAD_PIPELINE].rd;
+    end
+`endif
+`ifdef DIFFTEST
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) lpaddr_s4;
+    always_ff @(posedge clk)begin
+        lpaddr_s4 <= lpaddrNext;
+    end
+    for(genvar i=0; i<`LOAD_PIPELINE; i++)begin
+        assign diff_load_data[i].en = lsu_wb_io.datas[i].en;
+        assign diff_load_data[i].robIdx = lsu_wb_io.datas[i].robIdx;
+        assign diff_load_data[i].paddr = from_issue[i] ? lpaddr_s4[i] : load_queue_io.diff_addr[i];
     end
 `endif
 endgenerate

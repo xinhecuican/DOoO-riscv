@@ -18,6 +18,9 @@ interface LoadQueueIO;
     logic `N(`LOAD_PIPELINE) frd_en;
     WBData `N(`LOAD_PIPELINE) fp_wbData;
 `endif
+`ifdef DIFFTEST
+    logic `ARRAY(`LOAD_PIPELINE, `PADDR_SIZE) diff_addr;
+`endif
     logic `N(`LOAD_PIPELINE) wb_ready;
     logic `N(`LOAD_PIPELINE) uncache_full;
 
@@ -26,6 +29,9 @@ interface LoadQueueIO;
                   output lqIdx, lq_violation, int_wbData, uncache_full
 `ifdef RVF
                 , output frd_en, fp_wbData
+`endif
+`ifdef DIFFTEST
+                , output diff_addr
 `endif
     );
 endinterface
@@ -128,6 +134,9 @@ generate
             .int_wbData(io.int_wbData[i]),
 `ifdef RVF
             .fp_wbData(io.fp_wbData[i]),
+`endif
+`ifdef DIFFTEST
+            .diff_addr(io.diff_addr[i]),
 `endif
             .tail_valid(bank_tail_valid[i]),
             .tail_full(bank_tail_full[i]),
@@ -317,6 +326,9 @@ module LoadQueueBank #(
 `ifdef RVF
     output WBData fp_wbData,
 `endif
+`ifdef DIFFTEST
+    output logic `N(`PADDR_SIZE) diff_addr,
+`endif
 
     output logic tail_valid,
     output logic tail_full,
@@ -481,6 +493,16 @@ module LoadQueueBank #(
         .wdata(refillDataShift),
         .ready()
     );
+
+`ifdef DIFFTEST
+    logic `ARRAY(BANK_SIZE, `PADDR_SIZE) diff_addrs;
+    always_ff @(posedge clk)begin
+        if(en)begin
+            diff_addrs[eqIdx] <= addr;
+        end
+        diff_addr <= diff_addrs[wbIdx];
+    end
+`endif
 
     assign wb_valid = ((|waiting_wb) | uncache_wb_valid) & ~redirect & ~redirect_n;
     always_ff @(posedge clk)begin

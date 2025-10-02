@@ -19,6 +19,7 @@ module DTLB(
     logic `ARRAY(`DTLB_SIZE, `TLB_PN) replace_pn_valid;
     VPNAddr replace_vpn `N(`DTLB_SIZE);
     logic `ARRAY(`DTLB_SIZE, `TLB_PN) replace_pn_hits;
+    logic `N(`DTLB_SIZE) replace_wexc;
     VPNAddr replace_cmp_vaddr;
     logic `N(`TLB_ASID) replace_cmp_asid;
     logic replace_cmp_g;
@@ -27,6 +28,8 @@ module DTLB(
     typedef enum  { IDLE, FENCE, FENCE_END } FenceState;
     FenceState fenceState;
     logic fenceReq, fenceWe;
+    logic state_fence;
+    logic `N(`DTLB_SIZE) fence_wvec, fenceIdx_dec;
     logic `N($clog2(`DTLB_SIZE)) fenceIdx, fenceAllIdx;
     VPNAddr fenceVaddr;
     logic `N(`TLB_ASID) fence_asid;
@@ -68,10 +71,12 @@ generate
         end
 `endif
 
-        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error | fenceWe;
-        assign ltlb_io[i].wen = ~fenceWe;
+        assign ltlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error;
+        assign ltlb_io[i].fence_we = state_fence;
+        assign ltlb_io[i].fence_wen = fenceWe;
+        assign ltlb_io[i].fence_wvec = fence_wvec;
         assign ltlb_io[i].wexc_static = tlb_l2_io0.exc_static;
-        assign ltlb_io[i].widx = fenceWe ? fenceIdx : tlb_widx;
+        assign ltlb_io[i].widx = tlb_widx;
         assign ltlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign ltlb_io[i].wentry = tlb_l2_io0.entry;
         assign ltlb_io[i].wpn = tlb_l2_io0.wpn;
@@ -94,10 +99,12 @@ generate
         assign stlb_io[i].sel = tlb_lsu_io.ssel[i];
         assign stlb_io[i].sel_tag = tlb_lsu_io.ssel_tag[i];
 
-        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error | fenceWe;
-        assign stlb_io[i].wen = ~fenceWe;
+        assign stlb_io[i].we = tlb_l2_io0.dataValid & ~tlb_l2_io0.error;
+        assign stlb_io[i].fence_we = state_fence;
+        assign stlb_io[i].fence_wen = fenceWe;
+        assign stlb_io[i].fence_wvec = fence_wvec;
         assign stlb_io[i].wexc_static = tlb_l2_io0.exc_static;
-        assign stlb_io[i].widx = fenceWe ? fenceIdx : tlb_widx;
+        assign stlb_io[i].widx = tlb_widx;
         assign stlb_io[i].wbInfo = tlb_l2_io0.info_o;
         assign stlb_io[i].wentry = tlb_l2_io0.entry;
         assign stlb_io[i].wpn = tlb_l2_io0.wpn;
@@ -237,8 +244,11 @@ endgenerate
 `endif
     end
 
+    assign state_fence = fenceState == FENCE;
     assign fenceWe = (fenceState == FENCE) & (|replace_hit) & ~(fence_addr_all & ~replace_hit[fenceAllIdx]);
     assign fenceIdx = fence_addr_all ? fenceAllIdx : replace_widx;
+    Decoder #(`DTLB_SIZE) decoder_fenceIdx(fenceIdx, fenceIdx_dec);
+    assign fence_wvec = {`DTLB_SIZE{fenceWe}} & fenceIdx_dec | replace_wexc;
 
     always_ff @(posedge clk, negedge rst)begin
         if(rst == `RST)begin
@@ -284,16 +294,18 @@ endgenerate
             replace_vpn <= '{default: 0};
             replace_en <= 0;
             replace_pn_valid <= 0;
+            replace_wexc <= 0;
         end
         else begin
-            if(fenceWe)begin
-                replace_en[fenceIdx] <= 1'b0;
+            if(state_fence)begin
+                replace_en <= replace_en & ~fence_wvec;
             end
             else if(tlb_l2_io0.dataValid & ~tlb_l2_io0.error)begin
                 replace_vpn[tlb_widx] <= tlb_l2_io0.waddr;
                 replace_en[tlb_widx] <= 1'b1;
                 replace_pn_valid[tlb_widx] <= tlb_l2_io0.wpn;
                 replace_asid[tlb_widx] <= {csr_stlb_io.asid, tlb_l2_io0.entry.g};
+                replace_wexc[tlb_widx] <= tlb_l2_io0.exc_static;
             end
         end
     end
