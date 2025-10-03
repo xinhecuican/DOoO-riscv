@@ -3,8 +3,7 @@
 module ICache(
     input logic clk,
     input logic rst,
-    FsqCacheIO.cache fsq_cache_io,
-    CachePreDecodeIO.cache cache_pd_io,
+    CtrlICacheIO.cache ctrl_icache_io,
     CacheBus.masterr axi_io,
     TlbL2IO.tlb itlb_io,
     CsrTlbIO.tlb csr_itlb_io,
@@ -21,22 +20,10 @@ module ICache(
     localparam LINE_INST_NUM = `ICACHE_LINE / `INST_BYTE;
     typedef struct packed {
         logic `N(`ICACHE_SET_WIDTH) index1, index2;
-        logic `ARRAY(2, `ICACHE_BANK) expand_en;
-
         logic `ARRAY(2, LINE_INST_NUM) expand_en_block;
         logic `N(PARTIAL_ADDR_WIDTH) start_offset;
         logic `N(2) span;
-        logic multi_tag;
-        FetchStream stream;
-        logic `N(`VADDR_SIZE) start_addr;
-        FsqIdx fsqIdx;
         logic `N(`PREDICTION_WIDTH) shiftOffset;
-`ifdef RVC
-        logic `N(`PREDICTION_WIDTH) shiftIdx;
-        logic `N(`BLOCK_INST_SIZE+1) expand_en_shift;
-`else
-        logic `N(`BLOCK_INST_SIZE) expand_en_shift;
-`endif
     } RequestBuffer;
     RequestBuffer request_buffer;
 
@@ -73,7 +60,7 @@ module ICache(
     logic `N(LINE_INST_NUM * 2) expand_en_block, start_addr_mask, end_addr_mask;
     logic `N(`BLOCK_INST_SIZE+1) expand_en_shift;
 
-    logic `N(PARTIAL_ADDR_WIDTH) end_addr, start_addr;
+    logic `N(PARTIAL_ADDR_WIDTH) start_addr;
     logic `N(`PREDICTION_WIDTH+1) stream_size, block_stream_size;
     logic `ARRAY(`ICACHE_BANK, `ICACHE_BITS) rdata `N(`ICACHE_WAY);
     logic `N(`ICACHE_SET_WIDTH) index;
@@ -86,26 +73,20 @@ module ICache(
     logic [1: 0] cache_hit, cache_miss;
     logic refill_en; // refill data to cache
     logic miss_data_en; // send miss data to ifu
-    logic abandon_lookup, abandon_idle;
     logic stall_wait;
     logic `N(`ICACHE_WAY) replace_way;
     logic cache_stall;
 
-    assign start_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: `INST_OFFSET] + fsq_cache_io.shiftOffset;
+    assign start_addr = ctrl_icache_io.vaddr[`ICACHE_LINE_WIDTH-1: `INST_OFFSET] + ctrl_icache_io.shiftOffset;
 `ifdef RVC
-    assign stream_size = fsq_cache_io.stream.size + {~fsq_cache_io.stream.rvc, fsq_cache_io.stream.rvc} + 1;
-    assign block_stream_size = fsq_cache_io.stream.size + {~fsq_cache_io.stream.rvc, fsq_cache_io.stream.rvc} - fsq_cache_io.shiftOffset;
+    ShiftMaskGen #(PARTIAL_ADDR_WIDTH, `BLOCK_INST_SIZE+1) shift_mask_gen (start_addr, expand_en_block);
+    assign span[1] = start_addr[PARTIAL_ADDR_WIDTH-1] | start_addr[PARTIAL_ADDR_WIDTH-2] |
+                     &start_addr[PARTIAL_ADDR_WIDTH-3:0];
 `else
-    assign stream_size = fsq_cache_io.stream.size + 1;
-    assign block_stream_size = fsq_cache_io.stream.size - fsq_cache_io.shiftOffset + 1;
+    ShiftMaskGen #(PARTIAL_ADDR_WIDTH, `BLOCK_INST_SIZE) shift_mask_gen (start_addr, expand_en_block);
+    assign span[1] = start_addr[PARTIAL_ADDR_WIDTH-1] | start_addr[PARTIAL_ADDR_WIDTH-2];
 `endif
-    assign end_addr = fsq_cache_io.stream.start_addr[`ICACHE_LINE_WIDTH-1: `INST_OFFSET] + stream_size;
-    assign span[1] = end_addr[PARTIAL_ADDR_WIDTH-1] & (|end_addr[PARTIAL_ADDR_WIDTH-2: 0]);
     assign span[0] = start_addr[PARTIAL_ADDR_WIDTH-1];
-    MaskGen #((`ICACHE_LINE / `INST_BYTE)*2) mask_gen_start_addr (start_addr, start_addr_mask);
-    MaskGen #((`ICACHE_LINE / `INST_BYTE)*2) mask_gen_end_addr (end_addr, end_addr_mask);
-    MaskGen #(`BLOCK_INST_SIZE+1) mask_gen_shift_en (block_stream_size, expand_en_shift); 
-    assign expand_en_block = start_addr_mask ^ end_addr_mask;
 generate
     for(genvar i=0; i<`ICACHE_BANK*2; i++)begin
         assign expand_en[i] = |expand_en_block[i*BLOCK_DELTA +: BLOCK_DELTA];
@@ -113,23 +94,20 @@ generate
 endgenerate
     assign expand_exception = {request_buffer.expand_en_block[1] & {LINE_INST_NUM{itlb_cache_io.exception[1]}},
                               request_buffer.expand_en_block[0] & {LINE_INST_NUM{itlb_cache_io.exception[0]}}};
-    assign index = fsq_cache_io.stream.start_addr`ICACHE_SET_BUS;
+    assign index = ctrl_icache_io.vaddr`ICACHE_SET_BUS;
     assign indexp1 = index + 1;
-    assign refill_en = main_state == REFILL && axi_io.r_valid && next_stream_index == 0;
-    assign abandon_lookup = fsq_cache_io.abandon &&
-                            request_buffer.fsqIdx == fsq_cache_io.abandonIdx;
-    assign abandon_idle = fsq_cache_io.abandon &&
-                          fsq_cache_io.fsqIdx == fsq_cache_io.abandonIdx;
+    assign refill_en = main_state == REFILL && axi_io.r_valid &&
+                       miss_buffer.stream_index == {`ICACHE_BANK_WIDTH{1'b1}};
 
-    assign itlb_cache_io.req = {span[1] & fsq_cache_io.en & ~fsq_cache_io.stall, ~span[0] & fsq_cache_io.en & ~fsq_cache_io.stall} & {2{fsq_cache_io.ready & ~abandon_idle}};
-    assign vtag1 = fsq_cache_io.stream.start_addr[`VADDR_SIZE-1: `TLB_OFFSET];
+    assign itlb_cache_io.req = {span[1] & ctrl_icache_io.req & ~ctrl_icache_io.stall, ~span[0] & ctrl_icache_io.req & ~ctrl_icache_io.stall} & {2{ctrl_icache_io.ready & ~ctrl_icache_io.abandonIdle}};
+    assign vtag1 = ctrl_icache_io.vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
     assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};
-    assign itlb_cache_io.flush = fsq_cache_io.flush | (main_state == LOOKUP) & abandon_lookup;
-    assign itlb_cache_io.ready = ~fsq_cache_io.stall;
+    assign itlb_cache_io.flush = ctrl_icache_io.flush | (main_state == LOOKUP) & ctrl_icache_io.abandonLookup;
+    assign itlb_cache_io.ready = ~ctrl_icache_io.stall;
     assign ptag1 = itlb_cache_io.paddr[0][`PADDR_SIZE-1: `TLB_OFFSET];
     assign ptag2 = itlb_cache_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET];
-    assign cache_stall = fsq_cache_io.stall | ((main_state == LOOKUP) & (itlb_cache_io.miss & ~(|itlb_cache_io.exception)));
+    assign cache_stall = ctrl_icache_io.stall | ((main_state == LOOKUP) & (itlb_cache_io.miss & ~(|itlb_cache_io.exception)));
 
     logic `N(`ICACHE_WAY) tagv_we;
     logic `N(`ICACHE_SET_WIDTH) tagv_index, tagv_windex;
@@ -163,7 +141,7 @@ endgenerate
     ICacheData icache_data(
         .clk,
         .rst(rst),
-        .tagv_en((fsq_cache_io.en & ~cache_stall)),
+        .tagv_en((ctrl_icache_io.req & ~cache_stall)),
         .tagv_we,
         .tagv_index,
         .tagv_windex,
@@ -219,31 +197,22 @@ endgenerate
     assign replace_way = replace_io.miss_way;
 
 
-    assign fsq_cache_io.ready = ((main_state == IDLE && ((!fsq_cache_io.stall))) ||
+    assign ctrl_icache_io.ready = ((main_state == IDLE && ((!ctrl_icache_io.stall))) ||
                                 (main_state == LOOKUP && (((!(|cache_miss) && 
                                 !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) && 
-                                !fsq_cache_io.stall) || (abandon_lookup))) ||
-                                (abandon_idle && fsq_cache_io.en))
+                                !ctrl_icache_io.stall) || (ctrl_icache_io.abandonLookup))) ||
+                                (ctrl_icache_io.abandonIdle && ctrl_icache_io.req))
 `ifdef EXT_FENCEI
                                 & ~fenceValid
 `endif
                                 ;
-    assign cache_pd_io.en = {`BLOCK_INST_SIZE+1{((main_state == LOOKUP) & 
-                            ((~((|cache_miss) | itlb_cache_io.miss)) | 
-                            (|itlb_cache_io.exception)) & ~abandon_lookup) | miss_data_en}} & 
-                            request_buffer.expand_en_shift;
-    assign cache_pd_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
-    assign cache_pd_io.stream.start_addr = request_buffer.stream.start_addr;
-    assign cache_pd_io.start_addr = request_buffer.start_addr;
-    assign cache_pd_io.fsqIdx = request_buffer.fsqIdx;
-    assign cache_pd_io.stream.taken = request_buffer.stream.taken;
-`ifdef RVC
-    assign cache_pd_io.stream.rvc = request_buffer.stream.rvc;
-    assign cache_pd_io.shiftIdx = request_buffer.shiftIdx;
-`endif
-    assign cache_pd_io.stream.size = request_buffer.stream.size;
-    assign cache_pd_io.stream.target = request_buffer.stream.target;
-    assign cache_pd_io.shiftOffset = request_buffer.shiftOffset;
+
+    assign ctrl_icache_io.dataValid = (main_state == LOOKUP) & ~ctrl_icache_io.abandonLookup &
+                                ((~((|cache_miss) | itlb_cache_io.miss)) | (|itlb_cache_io.exception)) |
+                                      miss_data_en;
+    assign ctrl_icache_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
+    assign ctrl_icache_io.stateLookup = main_state == LOOKUP;
+    assign ctrl_icache_io.stateIdle = main_state == IDLE;
     localparam BANK_IDX_SIZE = $clog2(LINE_INST_NUM)+1;
     generate;
         logic `ARRAY(LINE_INST_NUM, `INST_BITS) rdata_way1, rdata_way0;
@@ -260,7 +229,7 @@ endgenerate
                     bank_index <= bank + start_addr;
                 end
             end
-            assign cache_pd_io.data[bank] = miss_data_en ? miss_buffer.data[bank] :
+            assign ctrl_icache_io.data[bank] = miss_data_en ? miss_buffer.data[bank] :
                                             bank_index[BANK_IDX_SIZE-1] ? 
                                             rdata_way1[bank_index[BANK_IDX_SIZE-2: 0]] :
                                             rdata_way0[bank_index[BANK_IDX_SIZE-2: 0]];
@@ -283,21 +252,8 @@ endgenerate
     request_buffer.start_offset <= start_addr; \
     request_buffer.index1 <= index; \
     request_buffer.index2 <= indexp1[`ICACHE_SET_WIDTH-1: 0]; \
-    request_buffer.expand_en <= expand_en; \
-    request_buffer.expand_en_shift <= expand_en_shift; \
     request_buffer.expand_en_block <= expand_en_block; \
-    request_buffer.multi_tag <= indexp1[`ICACHE_SET_WIDTH]; \
-    request_buffer.fsqIdx <= fsq_cache_io.fsqIdx; \
-    request_buffer.stream.start_addr <= fsq_cache_io.stream.start_addr + {fsq_cache_io.shiftOffset, {`INST_OFFSET{1'b0}}}; \
-    request_buffer.start_addr <= fsq_cache_io.stream.start_addr; \
-    request_buffer.stream.size <= fsq_cache_io.stream.size - fsq_cache_io.shiftOffset; \
-    request_buffer.stream.taken <= fsq_cache_io.stream.taken; \
-    request_buffer.stream.target <= fsq_cache_io.stream.target; \
-    request_buffer.shiftOffset <= fsq_cache_io.shiftOffset; \
-`ifdef RVC \
-    request_buffer.stream.rvc <= fsq_cache_io.stream.rvc; \
-    request_buffer.shiftIdx <= fsq_cache_io.shiftIdx; \
-`endif
+    request_buffer.shiftOffset <= ctrl_icache_io.shiftOffset;
 
     logic `ARRAY(BLOCK_DELTA, `ICACHE_BANK) miss_bank_en;
     logic `ARRAY(BLOCK_DELTA, `INST_BITS) r_data_inst;
@@ -336,13 +292,17 @@ endgenerate
         else begin
             case(main_state)
             IDLE:begin
-                if(fsq_cache_io.en & ~fsq_cache_io.flush & ~fsq_cache_io.stall & ~abandon_idle)begin
+                if(ctrl_icache_io.req & ~ctrl_icache_io.flush & ~ctrl_icache_io.stall & ~ctrl_icache_io.abandonIdle
+`ifdef EXT_FENCEI
+                & ~fenceValid
+`endif
+                )begin
                     `REQ_DEF
                     main_state <= LOOKUP;
                 end
             end
             LOOKUP:begin
-                if(fsq_cache_io.flush | abandon_lookup)begin
+                if(ctrl_icache_io.flush | ctrl_icache_io.abandonLookup)begin
                     main_state <= IDLE;
                 end
                 else if(cache_stall)begin
@@ -362,7 +322,7 @@ endgenerate
                     end
                     miss_buffer.addition_paddr <= {ptag2, request_buffer.index2};
                     miss_buffer.addition_request <= (&cache_miss);
-                    miss_buffer.data <= cache_pd_io.data;
+                    miss_buffer.data <= ctrl_icache_io.data;
                     miss_buffer.stream_index <= 0;
                     if(cache_miss[1] & ~cache_miss[0] & ~request_buffer.span[0])begin
                         miss_buffer.current_index <= LINE_INST_NUM - request_buffer.start_offset;
@@ -371,7 +331,11 @@ endgenerate
                         miss_buffer.current_index <= 0;
                     end
                 end
-                else if(fsq_cache_io.en & ~abandon_idle)begin
+                else if(ctrl_icache_io.req & ~ctrl_icache_io.abandonIdle
+`ifdef EXT_FENCEI
+                & ~fenceValid
+`endif
+                )begin
                     `REQ_DEF
                 end
                 else begin
@@ -402,7 +366,7 @@ endgenerate
                 end
                 if(axi_io.r_valid && axi_io.r_last)begin
                     if(!miss_buffer.addition_request || miss_buffer.flush ||
-                        fsq_cache_io.flush)begin
+                        ctrl_icache_io.flush)begin
                         main_state <= IDLE;
                     end
                     else begin
@@ -416,19 +380,19 @@ endgenerate
             if(axi_io.r_valid & axi_io.r_last)begin
                 miss_buffer.flush <= 1'b0;
             end
-            else if(fsq_cache_io.flush && (main_state == MISS || main_state == REFILL))begin
+            else if(ctrl_icache_io.flush && (main_state == MISS || main_state == REFILL))begin
                 miss_buffer.flush <= 1'b1;
             end
-            stall_wait <= miss_data_en || fsq_cache_io.flush ? 1'b0 :
-                          fsq_cache_io.stall & main_state == REFILL ? 1'b1 : stall_wait;
+            stall_wait <= miss_data_en || ctrl_icache_io.flush ? 1'b0 :
+                          ctrl_icache_io.stall & main_state == REFILL ? 1'b1 : stall_wait;
             miss_data_en <= ((main_state == REFILL) & 
                             axi_io.r_valid & 
                             axi_io.r_last &
                             (~miss_buffer.addition_request) |
                             stall_wait) &
                             ~miss_buffer.flush &
-                            ~fsq_cache_io.flush &
-                            ~fsq_cache_io.stall;
+                            ~ctrl_icache_io.flush &
+                            ~ctrl_icache_io.stall;
         end
     end
 

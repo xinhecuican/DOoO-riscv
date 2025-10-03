@@ -187,6 +187,32 @@ interface FsqCacheIO;
     );
 endinterface
 
+interface CtrlICacheIO;
+    logic req;
+    logic ready;
+    logic abandonIdle;
+    logic abandonLookup;
+    logic stateIdle;
+    logic stateLookup;
+    logic `N(`VADDR_SIZE) vaddr;
+    logic `N(`PREDICTION_WIDTH) shiftOffset;
+    logic flush;
+    logic stall;
+
+    logic dataValid;
+    logic `N(`BLOCK_INST_SIZE) exception;
+`ifdef RVC
+    logic `ARRAY(`BLOCK_INST_SIZE+1, `INST_BITS) data;
+`else
+    logic `ARRAY(`BLOCK_INST_SIZE, `INST_BITS) data;
+`endif
+
+    modport ctrl (input ready, dataValid, data, exception, stateLookup, stateIdle,
+                  output req, abandonIdle, abandonLookup, vaddr, shiftOffset, flush, stall);
+    modport cache (output ready, dataValid, data, exception, stateLookup, stateIdle,
+                   input req, abandonIdle, abandonLookup, vaddr, shiftOffset, flush, stall);
+endinterface //CtrlICacheIO
+
 interface FsqBackendIO;
     FetchStream `N(`ALU_SIZE) streams;
     logic `ARRAY(`ALU_SIZE, `FSQ_WIDTH) fsqIdx;

@@ -17,6 +17,7 @@ module IFU (
 );
     BpuFsqIO bpu_fsq_io();
     FsqCacheIO fsq_cache_io();
+    CtrlICacheIO ctrl_icache_io();
     CachePreDecodeIO cache_pd_io();
     PreDecodeRedirect pd_redirect();
     PreDecodeIBufferIO pd_ibuffer_io();
@@ -30,6 +31,7 @@ module IFU (
     BranchPredictor branch_predictor(.*);
     FSQ fsq(.*);
     ICache icache(.*);
+    ICacheCtrl icache_ctrl(.*);
     PreDecode predecode(.*
 `ifdef FEAT_MEMPRED
                 , .ssit_en(ifu_backend_io.ssit_en),

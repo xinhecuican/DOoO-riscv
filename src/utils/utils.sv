@@ -699,3 +699,34 @@ generate
 endgenerate
 
 endmodule
+
+module ShiftMaskGen #(
+	parameter WIDTH = 4,
+	parameter NUM = 4,
+	parameter SIZE = 1 << WIDTH
+)(
+	input logic `N(WIDTH) start,
+	output logic `N(SIZE) mask
+);
+	logic `N(SIZE) start_dec;
+	logic `ARRAY(NUM, SIZE) shift_vec;
+	logic `ARRAY(SIZE, NUM) shift_vec_rev;
+	Decoder #(SIZE) decoder(start, start_dec);
+generate
+	for(genvar i=0; i<NUM; i++)begin
+		for(genvar j=0; j<SIZE; j++)begin
+			assign shift_vec_rev[j][i] = shift_vec[i][j];
+			if(j-i < 0)begin
+				assign shift_vec[i][j] = 1'b0;
+			end
+			else begin
+				assign shift_vec[i][j] = start_dec[j-i];
+			end
+		end
+	end
+	for(genvar i=0; i<SIZE; i++)begin
+		assign mask[i] = |shift_vec_rev[i];
+	end
+endgenerate
+
+endmodule
