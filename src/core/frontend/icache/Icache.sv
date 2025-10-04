@@ -99,11 +99,11 @@ endgenerate
     assign refill_en = main_state == REFILL && axi_io.r_valid &&
                        miss_buffer.stream_index == {`ICACHE_BANK_WIDTH{1'b1}};
 
-    assign itlb_cache_io.req = {span[1] & ctrl_icache_io.req & ~ctrl_icache_io.stall, ~span[0] & ctrl_icache_io.req & ~ctrl_icache_io.stall} & {2{ctrl_icache_io.ready & ~ctrl_icache_io.abandonIdle}};
+    assign itlb_cache_io.req = {span[1] & ctrl_icache_io.req & ~ctrl_icache_io.stall, ~span[0] & ctrl_icache_io.req & ~ctrl_icache_io.stall} & {2{ctrl_icache_io.ready & ~ctrl_icache_io.abandonLookup}};
     assign vtag1 = ctrl_icache_io.vaddr[`VADDR_SIZE-1: `TLB_OFFSET];
     assign vtag2 = vtag1 + indexp1[`ICACHE_SET_WIDTH];
     assign itlb_cache_io.vaddr = {{vtag2, `TLB_OFFSET'b0}, {vtag1, `TLB_OFFSET'b0}};
-    assign itlb_cache_io.flush = ctrl_icache_io.flush | (main_state == LOOKUP) & ctrl_icache_io.abandonLookup;
+    assign itlb_cache_io.flush = ctrl_icache_io.flush;
     assign itlb_cache_io.ready = ~ctrl_icache_io.stall;
     assign ptag1 = itlb_cache_io.paddr[0][`PADDR_SIZE-1: `TLB_OFFSET];
     assign ptag2 = itlb_cache_io.paddr[1][`PADDR_SIZE-1: `TLB_OFFSET];
@@ -198,18 +198,16 @@ endgenerate
 
 
     assign ctrl_icache_io.ready = ((main_state == IDLE && ((!ctrl_icache_io.stall))) ||
-                                (main_state == LOOKUP && (((!(|cache_miss) && 
-                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) && 
-                                !ctrl_icache_io.stall) || (ctrl_icache_io.abandonLookup))) ||
-                                (ctrl_icache_io.abandonIdle && ctrl_icache_io.req))
+                                (main_state == LOOKUP && !(|cache_miss) && !ctrl_icache_io.stall &&
+                                !(itlb_cache_io.miss && !(|itlb_cache_io.exception))) ||
+                                (ctrl_icache_io.abandonLookup && ctrl_icache_io.req))
 `ifdef EXT_FENCEI
                                 & ~fenceValid
 `endif
                                 ;
 
-    assign ctrl_icache_io.dataValid = (main_state == LOOKUP) & ~ctrl_icache_io.abandonLookup &
-                                ((~((|cache_miss) | itlb_cache_io.miss)) | (|itlb_cache_io.exception)) |
-                                      miss_data_en;
+    assign ctrl_icache_io.dataValid = (main_state == LOOKUP) & ((~((|cache_miss) | itlb_cache_io.miss)) |
+                                      (|itlb_cache_io.exception)) | miss_data_en;
     assign ctrl_icache_io.exception = (main_state == LOOKUP) & (expand_exception >> request_buffer.start_offset);
     assign ctrl_icache_io.stateLookup = main_state == LOOKUP;
     assign ctrl_icache_io.stateIdle = main_state == IDLE;
@@ -292,7 +290,7 @@ endgenerate
         else begin
             case(main_state)
             IDLE:begin
-                if(ctrl_icache_io.req & ~ctrl_icache_io.flush & ~ctrl_icache_io.stall & ~ctrl_icache_io.abandonIdle
+                if(ctrl_icache_io.req & ~ctrl_icache_io.flush & ~ctrl_icache_io.stall & ~ctrl_icache_io.abandonLookup
 `ifdef EXT_FENCEI
                 & ~fenceValid
 `endif
@@ -302,7 +300,7 @@ endgenerate
                 end
             end
             LOOKUP:begin
-                if(ctrl_icache_io.flush | ctrl_icache_io.abandonLookup)begin
+                if(ctrl_icache_io.flush)begin
                     main_state <= IDLE;
                 end
                 else if(cache_stall)begin
@@ -331,7 +329,7 @@ endgenerate
                         miss_buffer.current_index <= 0;
                     end
                 end
-                else if(ctrl_icache_io.req & ~ctrl_icache_io.abandonIdle
+                else if(ctrl_icache_io.req & ~ctrl_icache_io.abandonLookup
 `ifdef EXT_FENCEI
                 & ~fenceValid
 `endif

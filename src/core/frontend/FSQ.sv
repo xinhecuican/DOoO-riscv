@@ -209,6 +209,9 @@ endgenerate
     end
 
 // cache
+    logic abandonStall;
+    logic abandonStallCond;
+    logic abandonStallPass;
     assign cache_req = ((search_head != tail) | (shdir ^ tdir)) & 
                        ~pd_redirect.en  & ~fsq_back_io.redirect.en;
     always_ff @(posedge clk)begin
@@ -217,9 +220,32 @@ endgenerate
             fsq_cache_io.fsqIdx.idx <= search_head;
             fsq_cache_io.fsqIdx.dir <= directionTable[search_head];
         end
-        fsq_cache_io.abandon <= bpu_fsq_io.redirect;
-        fsq_cache_io.abandonIdx.idx <= bpu_fsq_io.prediction.stream_idx;
-        fsq_cache_io.abandonIdx.dir <= bpu_fsq_io.prediction.stream_dir;
+        if(~((abandonStall | abandonStallCond) & (fsq_cache_io.stall | ~fsq_cache_io.ready)) | abandonStallPass)begin
+            fsq_cache_io.abandon <= bpu_fsq_io.redirect;
+            fsq_cache_io.abandonIdx.idx <= bpu_fsq_io.prediction.stream_idx;
+            fsq_cache_io.abandonIdx.dir <= bpu_fsq_io.prediction.stream_dir;
+            fsq_cache_io.abandonStream <= bpu_fsq_io.prediction.stream;
+        end
+    end
+
+    assign abandonStallCond = fsq_cache_io.abandon & fsq_cache_io.abandonHit & (fsq_cache_io.stall | ~fsq_cache_io.ready);
+    assign abandonStallPass = (abandonStall | abandonStallCond) & bpu_fsq_io.redirect & 
+                            (fsq_cache_io.abandonIdx == {bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir});
+    always_ff @(posedge clk or negedge rst)begin
+        if(rst == `RST)begin
+            abandonStall <= 1'b0;
+        end
+        else if(fsq_cache_io.flush)begin
+            abandonStall <= 1'b0;
+        end
+        else begin
+            if(abandonStallCond)begin
+                abandonStall <= 1'b1;
+            end
+            else if(~fsq_cache_io.stall & fsq_cache_io.ready)begin
+                abandonStall <= 1'b0;
+            end
+        end
     end
     assign fsq_cache_io.stream = searchStream;
     assign fsq_cache_io.flush = pd_redirect.en | fsq_back_io.redirect.en;
@@ -370,7 +396,7 @@ endgenerate
     logic search_bigger, search_eq, search_abandon;
     LoopCompare #(`FSQ_WIDTH) cmp_redirect_search({bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir}, {search_head, shdir}, search_bigger);
     assign search_eq = {bpu_fsq_io.prediction.stream_idx, bpu_fsq_io.prediction.stream_dir} == {search_head, shdir};
-    assign search_abandon = search_bigger | search_eq;
+    assign search_abandon = search_bigger;
     always_ff @(posedge clk or negedge rst)begin
         if(rst == `RST)begin
             search_head <= 0;
@@ -393,7 +419,7 @@ endgenerate
                 end
             end
             else if(bpu_fsq_io.redirect & search_abandon)begin
-                search_head <= bpu_fsq_io.prediction.stream_idx;
+                search_head <= bpu_fsq_redirect_n1;
             end
             else if(cache_req_ok & cache_req) begin
                 search_head <= search_head_n1;
@@ -455,7 +481,7 @@ endgenerate
                 end
             end
             else if(bpu_fsq_io.redirect & search_abandon)begin
-                shdir <= bpu_fsq_io.prediction.stream_dir;
+                shdir <= bpu_fsq_io.prediction.stream_idx[`FSQ_WIDTH-1] & ~bpu_fsq_redirect_n1[`FSQ_WIDTH-1] ? ~bpu_fsq_io.prediction.stream_dir : bpu_fsq_io.prediction.stream_dir;
             end
             else if(cache_req_ok & cache_req)begin
                 shdir <= search_head[`FSQ_WIDTH-1] & ~search_head_n1[`FSQ_WIDTH-1] ? ~shdir : shdir;

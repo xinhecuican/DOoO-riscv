@@ -166,6 +166,8 @@ interface FsqCacheIO;
     logic en;
     logic abandon; // cancel request at idle and lookup state
     FsqIdx abandonIdx;
+    FetchStream abandonStream;
+    logic abandonHit;
     logic ready;
     FsqIdx fsqIdx;
     logic flush;
@@ -175,12 +177,12 @@ interface FsqCacheIO;
     logic `N(`PREDICTION_WIDTH) shiftIdx;
 `endif
 
-    modport fsq (input ready, output en, stream, fsqIdx, abandon, abandonIdx, flush, stall, shiftOffset
+    modport fsq (input ready, abandonHit, output en, stream, fsqIdx, abandon, abandonIdx, abandonStream, flush, stall, shiftOffset
 `ifdef RVC
     , shiftIdx
 `endif
     );
-    modport cache (output ready, input en, stream,fsqIdx, abandon, abandonIdx, flush, stall, shiftOffset
+    modport cache (output ready, abandonHit, input en, stream,fsqIdx, abandon, abandonIdx, abandonStream, flush, stall, shiftOffset
 `ifdef RVC
     , shiftIdx
 `endif
