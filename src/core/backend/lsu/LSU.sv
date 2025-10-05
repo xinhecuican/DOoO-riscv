@@ -104,6 +104,12 @@ module LSU(
     logic sc_buffer_empty;
     logic sc_queue_empty;
     
+    logic `N(`LOAD_PIPELINE) wb_pipeline_en;
+    RobIdx `N(`LOAD_PIPELINE) lrobIdx_n;
+    logic `N(`LOAD_PIPELINE) lwe_n;
+    logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) lrd_n;
+    logic `ARRAY(`LOAD_PIPELINE, `XLEN) ldata_n, ldata_shift;
+    logic `ARRAY(`LOAD_PIPELINE, `EXC_WIDTH) lexccode;
     logic `N(`LOAD_PIPELINE) from_issue;
 
     LoadUnitIO load_io();
@@ -400,7 +406,7 @@ endgenerate
     assign load_queue_io.rmask = (store_queue_fwd.mask | commit_queue_fwd.mask);
     assign load_queue_io.rdata = rdata;
     assign load_queue_io.miss = ~rhit & ~rdata_valid & ~lmisalign_s3 & ~tlb_exception_s3;
-    assign load_queue_io.wb_ready = ~leq_valid;
+    assign load_queue_io.wb_ready = ~wb_pipeline_en;
     assign load_queue_io.uncache = luncache_s3;
 
     // reply slow
@@ -442,12 +448,6 @@ generate
 endgenerate
     
     // wb
-    logic `N(`LOAD_PIPELINE) wb_pipeline_en;
-    RobIdx `N(`LOAD_PIPELINE) lrobIdx_n;
-    logic `N(`LOAD_PIPELINE) lwe_n;
-    logic `ARRAY(`LOAD_PIPELINE, `PREG_WIDTH) lrd_n;
-    logic `ARRAY(`LOAD_PIPELINE, `XLEN) ldata_n, ldata_shift;
-    logic `ARRAY(`LOAD_PIPELINE, `EXC_WIDTH) lexccode;
 generate
     for(genvar i=0; i<`LOAD_PIPELINE; i++)begin : rdata_wb
         WBData pipe_data;

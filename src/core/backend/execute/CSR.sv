@@ -474,6 +474,18 @@ endgenerate                                                             \
                 mie[9] <= wdata_s2[9];
                 mie[13] <= wdata_s2[13];
             end
+            if(wen_o[stval_id])begin
+                stval <= wdata_s2;
+            end
+            if(wen_o[mtval_id])begin
+                mtval <= wdata_s2;
+            end
+            if(wen_o[scause_id])begin
+                scause <= wdata_s2;
+            end
+            if(wen_o[mcause_id])begin
+                mcause <= wdata_s2;
+            end
             if(redirect.en & ~ret_valid)begin
                 if(edelege_valid)begin
                     mstatus.spp <= mode;

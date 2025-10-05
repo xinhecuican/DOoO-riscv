@@ -177,9 +177,6 @@ module AmoQueue(
                 else if(tlb_valid)begin
                     tlb_ready <= 1'b1;
                 end
-                else if(backendCtrl.redirect & ~tlb_ready)begin
-                    tlb_req <= 1'b1;
-                end
 
                 if(store_flush & flush_end)begin
                     store_flush <= 1'b0;

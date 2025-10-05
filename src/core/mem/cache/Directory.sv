@@ -54,6 +54,7 @@ module LocalDirectory #(
     logic `N(WAY) tag_hits, wway_dec;
     logic en_n;
     logic `N(`PADDR_SIZE) raddr_n;
+    logic `N(SET_WIDTH) addr;
 
     always_ff @(posedge clk)begin
         raddr_n <= mshr_slave_io.raddr;
@@ -61,6 +62,7 @@ module LocalDirectory #(
     end
 
 
+    assign addr = mshr_slave_io.request ? mshr_slave_io.raddr[OFFSET_WIDTH +: SET_WIDTH] : mshr_slave_io.waddr;
     ReplaceIO #(.DEPTH(SET), .WAY_NUM(WAY)) replace_io();
     Replace #(
         .DEPTH(SET),
@@ -70,12 +72,10 @@ module LocalDirectory #(
     assign replace_io.hit_en = select_hit & en_n | mshr_slave_io.we & ~mshr_slave_io.request;
     assign replace_io.hit_invalid = mshr_slave_io.we & ~mshr_slave_io.request & ~(|mshr_slave_io.wdata[TAG_WIDTH+1 +: SLAVE_NUM]);
     assign replace_io.hit_way = mshr_slave_io.we & ~mshr_slave_io.request ? wway_dec : tag_hits;
-    assign replace_io.hit_index = raddr_n[OFFSET_WIDTH +: SET_WIDTH];
+    assign replace_io.hit_index = mshr_slave_io.we & ~mshr_slave_io.request ? mshr_slave_io.waddr : raddr_n[OFFSET_WIDTH +: SET_WIDTH];
 
 generate
     for(genvar i=0; i<WAY; i++)begin
-        logic `N(SET_WIDTH) addr;
-        assign addr = mshr_slave_io.request ? mshr_slave_io.raddr[OFFSET_WIDTH +: SET_WIDTH] : mshr_slave_io.waddr;
         SPRAM #(
             .WIDTH(ENTRY_SIZE),
             .DEPTH(SET),
