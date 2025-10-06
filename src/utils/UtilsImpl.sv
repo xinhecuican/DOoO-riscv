@@ -625,3 +625,77 @@ module Arbiter3 #(
 	assign data_o = valid[2] ? data[2] :
 					valid[1] ? data[1] : data[0];
 endmodule
+
+module Mux2 #(
+	parameter WIDTH=4
+)(
+	input logic [1:0] sel,
+	input logic [1:0][WIDTH-1:0] in,
+	input logic [WIDTH-1:0] default_value,
+	output logic [WIDTH-1:0] out
+);
+	always_comb begin
+		case(sel)
+		2'b01: out = in[0];
+		2'b10: out = in[1];
+		default: out = default_value;
+		endcase
+	end
+endmodule
+
+module Mux3 #(
+	parameter WIDTH=4
+)(
+	input logic [2:0] sel,
+	input logic [2:0][WIDTH-1:0] in,
+	input logic [WIDTH-1:0] default_value,
+	output logic [WIDTH-1:0] out
+);
+	always_comb begin
+		case(sel)
+		3'b001: out = in[0];
+		3'b010: out = in[1];
+		3'b100: out = in[2];
+		default: out = default_value;
+		endcase
+	end
+endmodule
+
+module Mux4 #(
+	parameter WIDTH=4
+)(
+	input logic [3:0] sel,
+	input logic [3:0][WIDTH-1:0] in,
+	input logic [WIDTH-1:0] default_value,
+	output logic [WIDTH-1:0] out
+);
+	always_comb begin
+		case(sel)
+		4'b0001: out = in[0];
+		4'b0010: out = in[1];
+		4'b0100: out = in[2];
+		4'b1000: out = in[3];
+		default: out = default_value;
+		endcase
+	end
+endmodule
+
+module Mux5 #(
+	parameter WIDTH=4
+)(
+	input logic [4:0] sel,
+	input logic [4:0][WIDTH-1:0] in,
+	input logic [WIDTH-1:0] default_value,
+	output logic [WIDTH-1:0] out
+);
+	always_comb begin
+		case(sel)
+		5'b00001: out = in[0];
+		5'b00010: out = in[1];
+		5'b00100: out = in[2];
+		5'b01000: out = in[3];
+		5'b10000: out = in[4];
+		default: out = default_value;
+		endcase
+	end
+endmodule

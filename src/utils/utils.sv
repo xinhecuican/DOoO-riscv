@@ -730,3 +730,24 @@ generate
 endgenerate
 
 endmodule
+
+module Mux #(
+	parameter NUM = 2,
+	parameter WIDTH = 4
+)(
+	input logic [NUM-1:0] sel,
+	input logic [NUM-1:0][WIDTH-1:0] in,
+	input logic [WIDTH-1:0] default_value,
+	output logic [WIDTH-1:0] out
+);
+
+generate
+	case(NUM)
+	2: Mux2 #(WIDTH) mux (sel, in, default_value, out);
+	3: Mux3 #(WIDTH) mux (sel, in, default_value, out);
+	4: Mux4 #(WIDTH) mux (sel, in, default_value, out);
+	5: Mux5 #(WIDTH) mux (sel, in, default_value, out);
+	endcase
+endgenerate
+
+endmodule

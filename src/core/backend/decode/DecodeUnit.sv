@@ -724,6 +724,23 @@ module DecodeUnit(
 
 `endif
 
+`ifdef ZBA
+    logic sh1add, sh2add, sh3add;
+    logic `N(2) shaddamt;
+    assign sh1add = opreg & funct3_2 & funct7_16;
+    assign sh2add = opreg & funct3_4 & funct7_16;
+    assign sh3add = opreg & funct3_6 & funct7_16;
+    assign shaddamt = funct3[2:1];
+`ifdef RV64I
+    logic adduw, sh1adduw, sh2adduw, sh3adduw, slliuw;
+    assign adduw = opreg32 & funct3_0 & funct7_4;
+    assign sh1adduw = opreg32 & funct3_2 & funct7_16;
+    assign sh2adduw = opreg32 & funct3_4 & funct7_16;
+    assign sh3adduw = opreg32 & funct3_6 & funct7_16;
+    assign slliuw = opimm32 & funct3_1 & ~inst[31] & ~inst[30] & ~inst[29] & ~inst[28] & inst[27] & ~inst[26];
+`endif
+`endif
+
     assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & ~jal & ~jalr &
                      ~lb & ~lh & ~lw & ~lbu & ~lhu & ~sb & ~sh & ~sw & ~auipc & ~lui &
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
@@ -772,6 +789,12 @@ module DecodeUnit(
                      & ~addiw & ~slliw & ~srliw & ~sraiw & ~addw & ~subw & ~sllw & ~srlw & ~sraw
                      & ~lwu & ~ld & ~sd
 `endif
+`ifdef ZBA
+                     & ~sh1add & ~sh2add & ~sh3add
+`ifdef RV64I
+                     & ~adduw & ~sh1adduw & ~sh2adduw & ~sh3adduw & ~slliuw
+`endif
+`endif
                      ;
 
     always_comb begin
@@ -794,6 +817,18 @@ module DecodeUnit(
         info.intop[2] = info.intop[2];
         info.intop[1] = info.intop[1] | subw;
         info.intop[0] = info.intop[0] | srliw | srlw | sraiw | sraw;
+`endif
+`ifdef ZBA
+        info.intop[3] = info.intop[3];
+        info.intop[2] = info.intop[2] | sh1add | sh2add | sh3add;
+        info.intop[1] = info.intop[1] | sh1add | sh2add | sh3add;
+        info.intop[0] = info.intop[0] | sh1add | sh2add | sh3add;
+`ifdef RV64I
+        info.intop[3] = info.intop[3] | slliuw;
+        info.intop[2] = info.intop[2] | sh1adduw | sh2adduw | sh3adduw;
+        info.intop[1] = info.intop[1] | sh1adduw | sh2adduw | sh3adduw;
+        info.intop[0] = info.intop[0] | sh1adduw | sh2adduw | sh3adduw;
+`endif
 `endif
     end
 
@@ -869,6 +904,9 @@ module DecodeUnit(
 `endif
 `ifdef RV64I
                     | srliw | srlw | lwu
+`ifdef ZBA
+                    | slliuw;
+`endif
 `endif
     ;
     logic [`DEC_IMM_WIDTH-1: 0] store_imm;
@@ -887,20 +925,65 @@ module DecodeUnit(
 `endif
 `ifdef RV64I
     | addiw | slliw | srliw | sraiw
+`ifdef ZBA
+    | slliuw
+`endif
 `endif
     ;
 
-
-    assign info.imm = beq | bne | blt | bge | bgeu | bltu ? branch_imm :
-                      store
-`ifdef RVF
-                      | storefp 
-`endif
-                                ? store_imm : 
+    logic store_imm_cond, branch_imm_cond;
+    assign store_imm_cond = store
+                            `ifdef RVF
+                            | storefp
+                            `endif
+                            ;
+    assign branch_imm_cond = beq | bne | blt | bge | bgeu | bltu;
 `ifdef RVC
-                     ~(inst[1] & inst[0]) ? cimm :
+    logic cimm_cond;
+    assign cimm_cond = ~(inst[1] & inst[0]);
 `endif
-                                lui_imm;
+`ifdef ZBA
+    logic zba_cond;
+    logic `N(`DEC_IMM_WIDTH) zba_imm;
+    assign zba_cond = sh1add | sh2add | sh3add
+`ifdef RV64I
+                    | sh1adduw | sh2adduw | sh3adduw;
+`endif
+    assign zba_imm = {{`DEC_IMM_WIDTH-2{1'b0}}, shaddamt};
+`endif
+
+    Mux #(2
+`ifdef RVC
+    +1
+`endif
+`ifdef ZBA
+    +1
+`endif
+    , `DEC_IMM_WIDTH
+    ) mux_imm (
+        {
+`ifdef ZBA
+            zba_cond,
+`endif
+`ifdef RVC
+            cimm_cond,
+`endif
+            store_imm_cond,
+            branch_imm_cond
+        },
+        {
+`ifdef ZBA
+            zba_imm,
+`endif
+`ifdef RVC
+            cimm,
+`endif
+            store_imm,
+            branch_imm
+        },
+        lui_imm,
+        info.imm
+    );
 
 
     assign info.intv = (lui | opimm |
@@ -918,6 +1001,12 @@ module DecodeUnit(
 `endif
 `ifdef RV64I
     | opimm32 | addw | subw | sllw | srlw | sraw
+`endif
+`ifdef ZBA
+    | sh1add | sh2add | sh3add
+`ifdef RV64I
+    | adduw | sh1adduw | sh2adduw | sh3adduw | slliuw
+`endif
 `endif
     ) & ~ipf & ~iam;
     assign info.branchv = (branch | jal | jalr
@@ -1006,6 +1095,9 @@ module DecodeUnit(
     | caddiw | caddw | csubw
 `endif
     ;
+`ifdef ZBA
+    assign info.srcword = adduw | sh1adduw | sh2adduw | sh3adduw | slliuw;
+`endif
 `endif
 
 

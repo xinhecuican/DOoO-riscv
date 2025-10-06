@@ -15,6 +15,9 @@ module ALU(
         .uext(io.bundle.uext),
 `ifdef RV64I
         .word(io.bundle.word),
+`ifdef ZBA
+        .srcword(io.bundle.srcword),
+`endif
 `endif
         .imm(io.bundle.imm),
         .rs1_data(io.rs1_data),
@@ -141,6 +144,9 @@ module ALUModel(
     input logic uext,
 `ifdef RV64I
     input logic word,
+`ifdef ZBA
+    input logic srcword,
+`endif
 `endif
     input logic `N(`DEC_IMM_WIDTH) imm,
     input logic `N(`XLEN) rs1_data,
@@ -158,11 +164,17 @@ module ALUModel(
     logic `N(`XLEN) add_result;
     logic cmp, scmp;
 
-    assign data1 = rs1_data;
+    assign data1 = 
+`ifdef RV64I
+`ifdef ZBA
+                    srcword ? {32'b0, rs1_data[31: 0]} :
+`endif
+`endif
+                    rs1_data;
     assign data2 = immv ? s_imm : rs2_data;
 
     assign cmp_data = immv ? s_imm : rs2_data;
-    logic `N(`XLEN) add_src2;
+    logic `N(`XLEN) add_src1, add_src2;
     logic add_cin, add_cout;
     always_comb begin
         case(op)
@@ -176,7 +188,22 @@ module ALUModel(
         end
         endcase
     end
-    assign {add_cout, add_result} = data1 + add_src2 + add_cin;
+    always_comb begin
+        case(op)
+`ifdef ZBA
+        `INT_SHADD: begin
+            case(imm[1:0])
+            2'b01: add_src1 = {data1[`XLEN-2:0], 1'b0};
+            2'b10: add_src1 = {data1[`XLEN-3:0], 2'b0};
+            2'b11: add_src1 = {data1[`XLEN-4:0], 3'b0};
+            default: add_src1 = data1;
+            endcase
+        end
+`endif
+        default: add_src1 = data1;
+        endcase
+    end
+    assign {add_cout, add_result} = add_src1 + add_src2 + add_cin;
     assign scmp = (data1[`XLEN-1] & ~data2[`XLEN-1])
                     | ((data1[`XLEN-1] ~^ data2[`XLEN-1]) & add_result[`XLEN-1]);
     assign cmp = ~add_cout;
@@ -202,7 +229,7 @@ module ALUModel(
 
     always_comb begin
         case(op)
-        `INT_ADD, `INT_SUB: begin
+        `INT_ADD, `INT_SUB, `INT_SHADD: begin
 `ifdef RV64I
             result = word ? {{32{add_result[31]}}, add_result[31: 0]} : add_result;
 `else

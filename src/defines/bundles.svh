@@ -309,6 +309,9 @@ typedef struct packed {
 `endif
 `ifdef RV64I
     logic word;
+`ifdef ZBA
+    logic srcword;
+`endif
 `endif
 `ifdef RVD
     logic db;
@@ -366,6 +369,9 @@ typedef struct packed {
 `endif
 `ifdef RV64I
     logic word;
+`ifdef ZBA
+    logic srcword;
+`endif
 `endif
     logic `N(`INTOP_WIDTH) intop;
     logic `N(`BRANCHOP_WIDTH) branchop;

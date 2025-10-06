@@ -59,6 +59,12 @@ rv64d=(
 )
 rv64d_prefix="utils/riscv-tests/isa/rv64ud-p-"
 
+rv64zba=(
+    "add_uw" "sh1add" "sh1add_uw" "sh2add" "sh2add_uw"
+    "sh3add" "sh3add_uw" "slli_uw"
+)
+rv64zba_prefix="utils/riscv-tests/isa/rv64uzba-p-"
+
 benchmarks=(
     "median" "memcpy" "multiply" "qsort" "rsort" "towers" "spmv"
     "mt-matmul" "mt-memcpy" "mm" "coremark"
@@ -78,7 +84,7 @@ if [[ " ${args[@]} " =~ " all " ]]; then
     if [[ " ${args[@]}" =~ " rv32 " ]]; then
         args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
     else
-        args=("rv64i" "rv64m" "rv64s" "rv64a" "rv64f" "rv64d" "benchmarks")
+        args=("rv64i" "rv64m" "rv64s" "rv64a" "rv64f" "rv64d" "rv64zba" "benchmarks")
     fi
 fi
 
@@ -137,6 +143,11 @@ for arg in "${args[@]}"; do
         rv64d)
             for test in "${rv64d[@]}"; do
                 selected_tests+=("${test}:${rv64d_prefix}${test}.bin")
+            done
+            ;;
+        rv64zba)
+            for test in "${rv64zba[@]}"; do
+                selected_tests+=("${test}:${rv64zba_prefix}${test}.bin")
             done
             ;;
         benchmarks)

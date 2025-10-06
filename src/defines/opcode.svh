@@ -21,6 +21,7 @@
 `define INT_SR      `INTOP_WIDTH'b1001
 `define INT_AUIPC   `INTOP_WIDTH'b1100
 `define INT_FENCE   `INTOP_WIDTH'b0011
+`define INT_SHADD   `INTOP_WIDTH'b0111
 
 // memop
 
