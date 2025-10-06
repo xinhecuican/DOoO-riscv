@@ -24,7 +24,7 @@ module ROB(
 
 `ifdef DIFFTEST
     ,FsqBackendIO.backend fsq_back_io
-    ,DiffLoadData `N(`LOAD_PIPELINE) diff_load_data
+    ,input DiffLoadData `N(`LOAD_PIPELINE) diff_load_data
 `endif
 );
 
