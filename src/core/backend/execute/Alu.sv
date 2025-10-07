@@ -178,7 +178,11 @@ module ALUModel(
     logic add_cin, add_cout;
     always_comb begin
         case(op)
-        `INT_SUB, `INT_SLT: begin
+        `INT_SUB, `INT_SLT
+`ifdef ZBB
+        , `INT_MAX, `INT_MIN
+`endif
+        : begin
             add_src2 = ~data2;
             add_cin = 1'b1;
         end
@@ -192,7 +196,7 @@ module ALUModel(
         case(op)
 `ifdef ZBA
         `INT_SHADD: begin
-            case(imm[1:0])
+            case(imm[2:1])
             2'b01: add_src1 = {data1[`XLEN-2:0], 1'b0};
             2'b10: add_src1 = {data1[`XLEN-3:0], 2'b0};
             2'b11: add_src1 = {data1[`XLEN-4:0], 3'b0};
@@ -227,6 +231,62 @@ module ALUModel(
     logic `N(`VADDR_SIZE) auipc_addr;
     assign auipc_addr = vaddr + lui_imm;
 
+    logic `N(`XLEN) xor_result;
+    assign xor_result = rs1_data ^ rs2_data;
+
+`ifdef ZBB
+    logic `N(`XLEN) clz_data;
+    logic `N($clog2(`XLEN)) clz_result, ctz_result;
+    logic `N(`XLEN) cz_result;
+    logic clz_empty, ctz_empty;
+    assign clz_data = {rs1_data[`XLEN-1:32]
+    `ifdef RV64I
+     & {32{~word}}
+     `endif
+     , rs1_data[31:0]};
+    lzc #(`XLEN, 1) clz_data1(data1, clz_result, clz_empty);
+    lzc #(`XLEN) ctz_data1(data1, ctz_result, ctz_empty);
+    always_comb begin
+        case({imm[8], ctz_empty, clz_empty})
+        3'b100: cz_result = ctz_result;
+        3'b111, 3'b011: cz_result = 
+                                    `ifdef RV64I
+                                    word ? 'd32 : 'd64
+                                    `else
+                                    'd32
+                                    `endif
+                                    ;
+        default: cz_result = {{`XLEN-$clog2(`XLEN){1'b0}}, (clz_result
+                            `ifdef RV64I
+                            - {word, 5'b0}
+                            `endif
+                            )};
+        endcase
+    end
+
+    logic `N(`XLEN) cpop_result;
+    logic `ARRAY(16, 3) add_rom;
+    logic `ARRAY(`XLEN/4, 3) cpop_add_part;
+
+    AdderROM #(4) cpop_adder_rom(add_rom);
+generate
+    for(genvar i=0; i<`XLEN; i+=4)begin
+        assign cpop_add_part[i/4] = add_rom[rs1_data[i +: 4]];
+    end
+endgenerate
+`ifdef RV64I
+    logic `N(6) cpop_add_low, cpop_add_high;
+    logic `N(7) cpop_add_result;
+    ParallelAdder #(3, 8) parallel_adder_low (cpop_add_part[7:0], cpop_add_low);
+    ParallelAdder #(3, 8) parallel_adder_high (cpop_add_part[15:8], cpop_add_high);
+    assign cpop_add_result = cpop_add_low + cpop_add_high;
+    assign cpop_result = word ? {57'b0, cpop_add_low} : {57'b0, cpop_add_result};
+`else
+    ParallelAdder #(3, 8) parallel_cpop_adder (cpop_add_part, cpop_result[5:0]);
+    assign cpop_result[63:6] = 58'b0;
+`endif
+`endif
+
     always_comb begin
         case(op)
         `INT_ADD, `INT_SUB, `INT_SHADD: begin
@@ -236,9 +296,7 @@ module ALUModel(
             result = add_result;
 `endif
         end
-        `INT_LUI: begin
-            result = lui_imm;
-        end
+        `INT_LUI: result = lui_imm;
         `INT_SLT: begin
             // A   B   s u
             // 001 111 0 1
@@ -253,15 +311,14 @@ module ALUModel(
                 result = scmp;
             end
         end
-        `INT_OR: begin
-            result = data1 | data2;
-        end
-        `INT_XOR: begin
-            result = data1 ^ data2;
-        end
-        `INT_AND: begin
-            result = data1 & data2;
-        end
+        `INT_OR: result = data1 | data2;
+        `INT_XOR:  result = xor_result;
+        `INT_AND: result = data1 & data2;
+`ifdef ZBB
+        `INT_ORN: result = rs1_data | (~rs2_data);
+        `INT_ANDN: result = rs1_data & (~rs2_data);
+        `INT_XNOR: result = ~xor_result;
+`endif
         `INT_SL: begin
 `ifdef RV64I
             result = word ? {{32{sl_data[31]}}, sl_data[31: 0]} : sl_data;
@@ -276,9 +333,34 @@ module ALUModel(
             result = sr_data;
 `endif
         end
-        `INT_AUIPC: begin
-            result = {{`XLEN-`VADDR_SIZE{auipc_addr[`VADDR_SIZE-1]}}, auipc_addr};
+        `INT_AUIPC: result = {{`XLEN-`VADDR_SIZE{auipc_addr[`VADDR_SIZE-1]}}, auipc_addr};
+`ifdef ZBB
+        `INT_CLZ: result = cz_result;
+        `INT_CPOP: result = cpop_result;
+        `INT_MAX: begin
+            if (uext) begin
+                result = cmp ? rs2_data : rs1_data;
+            end
+            else begin
+                result = scmp ? rs2_data : rs1_data;
+            end
         end
+        `INT_MIN: begin
+            if (uext) begin
+                result = cmp ? rs1_data : rs2_data;
+            end
+            else begin
+                result = scmp ? rs1_data : rs2_data;
+            end
+        end
+        `INT_SEXT: begin
+            if (~imm[8]) result = {{`XLEN-8{rs1_data[7]}}, rs1_data[7:0]};
+            else result = {{`XLEN-16{rs1_data[15]}}, rs1_data[15:0]};
+        end
+        `INT_ZEXT: begin
+            result = {{`XLEN-16{1'b0}}, rs1_data[15:0]};
+        end
+`endif
         default: result = 0;
         endcase
     end

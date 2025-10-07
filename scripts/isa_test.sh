@@ -65,6 +65,13 @@ rv64zba=(
 )
 rv64zba_prefix="utils/riscv-tests/isa/rv64uzba-p-"
 
+rv64zbb=(
+    "andn" "orn" "xnor" "clz" "clzw" "ctz" "ctzw"
+    "cpop" "cpopw" "max" "maxu" "min" "minu"
+    "sext_b" "sext_h" "zext_h"
+)
+rv64zbb_prefix="utils/riscv-tests/isa/rv64uzbb-p-"
+
 benchmarks=(
     "median" "memcpy" "multiply" "qsort" "rsort" "towers" "spmv"
     "mt-matmul" "mt-memcpy" "mm" "coremark"
@@ -148,6 +155,11 @@ for arg in "${args[@]}"; do
         rv64zba)
             for test in "${rv64zba[@]}"; do
                 selected_tests+=("${test}:${rv64zba_prefix}${test}.bin")
+            done
+            ;;
+        rv64zbb)
+            for test in "${rv64zbb[@]}"; do
+                selected_tests+=("${test}:${rv64zbb_prefix}${test}.bin")
             done
             ;;
         benchmarks)

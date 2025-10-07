@@ -17,9 +17,9 @@ module DecodeUnit(
 
     logic funct7_0, funct7_1, funct7_2, funct7_4, funct7_5, funct7_8, funct7_9, funct7_12, 
     funct7_13, funct7_16, funct7_17, funct7_21, funct7_32, funct7_33, funct7_44,
-    funct7_45, funct7_20, funct7_80, funct7_81, funct7_96, funct7_97, funct7_104,
+    funct7_45, funct7_48, funct7_20, funct7_80, funct7_81, funct7_96, funct7_97, funct7_104,
     funct7_105, funct7_112, funct7_113, funct7_120, funct7_121;
-    logic rs2_0, rs2_1, rs2_2, rs2_3, rs2_5;
+    logic rs2_0, rs2_1, rs2_2, rs2_3, rs2_4, rs2_5;
     logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
     logic ebreak_all;
     assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
@@ -39,6 +39,7 @@ module DecodeUnit(
     assign funct7_33 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_44 = ~funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_45 = ~funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
+    assign funct7_48 = ~funct7[6] & funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_80 = funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_81 = funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_96 = funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
@@ -61,6 +62,7 @@ module DecodeUnit(
     assign rs2_1 = ~inst[24] & ~inst[23] & ~inst[22] & ~inst[21] & inst[20];
     assign rs2_2 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & ~inst[20];
     assign rs2_3 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & inst[20];
+    assign rs2_4 = ~inst[24] & ~inst[23] & inst[22] & ~inst[21] & ~inst[20];
     assign rs2_5 = ~inst[24] & ~inst[23] & inst[22] & ~inst[21] & inst[20];
 
     logic lui, auipc, jal, jalr, branch, load, store, miscmem, opimm, opreg, opsystem, unknown;
@@ -741,6 +743,31 @@ module DecodeUnit(
 `endif
 `endif
 
+`ifdef ZBB
+    logic andn, orn, _xnor, clz, ctz, cpop, max, maxu, min, minu, sextb, sexth, zexth;
+    assign andn = opreg & funct3_7 & funct7_32;
+    assign orn = opreg & funct3_6 & funct7_32;
+    assign _xnor = opreg & funct3_4 & funct7_32;
+    assign clz = opimm & funct3_1 & funct7_48 & rs2_0;
+    assign ctz = opimm & funct3_1 & funct7_48 & rs2_1;
+    assign cpop = opimm & funct3_1 & funct7_48 & rs2_2;
+    assign max = opreg & funct3_6 & funct7_5;
+    assign maxu = opreg & funct3_7 & funct7_5;
+    assign min = opreg & funct3_4 & funct7_5;
+    assign minu = opreg & funct3_5 & funct7_5;
+    assign sextb = opimm & funct3_1 & funct7_48 & rs2_4;
+    assign sexth = opimm & funct3_1 & funct7_48 & rs2_5;
+`ifdef RV64I
+    logic clzw, ctzw, cpopw;
+    assign clzw = opimm32 & funct3_1 & funct7_48 & rs2_0;
+    assign ctzw = opimm32 & funct3_1 & funct7_48 & rs2_1;
+    assign cpopw = opimm32 & funct3_1 & funct7_48 & rs2_2;
+    assign zexth = opreg32 & funct3_4 & funct7_4 & rs2_0;
+`else
+    assign zexth = opreg & funct3_4 & funct7_4 & rs2_0;
+`endif
+`endif
+
     assign unknown = ~beq & ~bne & ~blt & ~bge & ~bltu & ~bgeu & ~jal & ~jalr &
                      ~lb & ~lh & ~lw & ~lbu & ~lhu & ~sb & ~sh & ~sw & ~auipc & ~lui &
                      ~addi & ~slti & ~sltiu & ~xori & ~ori & ~andi & ~slli & ~srli & ~srai & 
@@ -795,9 +822,17 @@ module DecodeUnit(
                      & ~adduw & ~sh1adduw & ~sh2adduw & ~sh3adduw & ~slliuw
 `endif
 `endif
+`ifdef ZBB
+                     & ~andn & ~orn & ~_xnor & ~clz & ~ctz & ~cpop & ~max & ~maxu & ~min & ~minu
+                     & ~sextb & ~sexth & ~zexth
+`ifdef RV64I
+                     & ~clzw & ~ctzw & ~cpopw
+`endif
+`endif
                      ;
 
     always_comb begin
+        info.intop[4] = 1'b0;
         info.intop[3] = slli | srli | srai | sll | srl | sra | auipc | sub;
         info.intop[2] = xori | ori | andi | _xor | _or | _and | auipc;
         info.intop[1] = slti | sltiu | slt | sltu | ori | _or | sub;
@@ -819,15 +854,23 @@ module DecodeUnit(
         info.intop[0] = info.intop[0] | srliw | srlw | sraiw | sraw;
 `endif
 `ifdef ZBA
-        info.intop[3] = info.intop[3];
-        info.intop[2] = info.intop[2] | sh1add | sh2add | sh3add;
-        info.intop[1] = info.intop[1] | sh1add | sh2add | sh3add;
-        info.intop[0] = info.intop[0] | sh1add | sh2add | sh3add;
+        info.intop[4] = info.intop[4] | sh1add | sh2add | sh3add;
 `ifdef RV64I
+        info.intop[4] = info.intop[4] | sh1adduw | sh2adduw | sh3adduw;
         info.intop[3] = info.intop[3] | slliuw;
-        info.intop[2] = info.intop[2] | sh1adduw | sh2adduw | sh3adduw;
-        info.intop[1] = info.intop[1] | sh1adduw | sh2adduw | sh3adduw;
-        info.intop[0] = info.intop[0] | sh1adduw | sh2adduw | sh3adduw;
+`endif
+`endif
+`ifdef ZBB
+        info.intop[4] = info.intop[4] | andn | orn | _xnor | clz | ctz | cpop | max | maxu | min | minu
+                        | sextb | sexth | zexth;
+        info.intop[3] = info.intop[3] | clz | ctz | cpop | sextb | sexth | zexth;
+        info.intop[2] = info.intop[2] | _xnor | cpop | max | maxu | min | minu;
+        info.intop[1] = info.intop[1] | orn | max | maxu | sextb | sexth;
+        info.intop[0] = info.intop[0] | andn | min | minu | zexth;
+`ifdef RV64I
+        info.intop[4] = info.intop[4] | clzw | ctzw | cpopw;
+        info.intop[3] = info.intop[3] | clzw | ctzw | cpopw;
+        info.intop[2] = info.intop[2] | cpopw;
 `endif
 `endif
     end
@@ -905,8 +948,11 @@ module DecodeUnit(
 `ifdef RV64I
                     | srliw | srlw | lwu
 `ifdef ZBA
-                    | slliuw;
+                    | slliuw
 `endif
+`endif
+`ifdef ZBB
+                    | maxu | minu
 `endif
     ;
     logic [`DEC_IMM_WIDTH-1: 0] store_imm;
@@ -942,29 +988,14 @@ module DecodeUnit(
     logic cimm_cond;
     assign cimm_cond = ~(inst[1] & inst[0]);
 `endif
-`ifdef ZBA
-    logic zba_cond;
-    logic `N(`DEC_IMM_WIDTH) zba_imm;
-    assign zba_cond = sh1add | sh2add | sh3add
-`ifdef RV64I
-                    | sh1adduw | sh2adduw | sh3adduw;
-`endif
-    assign zba_imm = {{`DEC_IMM_WIDTH-2{1'b0}}, shaddamt};
-`endif
 
     Mux #(2
 `ifdef RVC
     +1
 `endif
-`ifdef ZBA
-    +1
-`endif
     , `DEC_IMM_WIDTH
     ) mux_imm (
         {
-`ifdef ZBA
-            zba_cond,
-`endif
 `ifdef RVC
             cimm_cond,
 `endif
@@ -972,9 +1003,6 @@ module DecodeUnit(
             branch_imm_cond
         },
         {
-`ifdef ZBA
-            zba_imm,
-`endif
 `ifdef RVC
             cimm,
 `endif
@@ -1006,6 +1034,12 @@ module DecodeUnit(
     | sh1add | sh2add | sh3add
 `ifdef RV64I
     | adduw | sh1adduw | sh2adduw | sh3adduw | slliuw
+`endif
+`endif
+`ifdef ZBB
+    | andn | orn | _xnor | clz | ctz | cpop | max | maxu | min | minu | sextb | sexth | zexth
+`ifdef RV64I
+    | clzw | ctzw | cpopw
 `endif
 `endif
     ) & ~ipf & ~iam;
@@ -1093,6 +1127,9 @@ module DecodeUnit(
 `endif
 `ifdef RVC
     | caddiw | caddw | csubw
+`endif
+`ifdef ZBB
+    | clzw | ctzw | cpopw
 `endif
     ;
 `ifdef ZBA
