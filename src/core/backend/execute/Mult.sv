@@ -35,7 +35,7 @@ module MultUnit(
     assign sext2 = multop == `MULT_MUL ||
                    multop == `MULT_MULH;
     
-    assign valid_s0 = en & ~multop[2];
+    assign valid_s0 = en & ~multop[2] & ~multop[3];
     assign selh_s0 = multop == `MULT_MULH ||
                      multop == `MULT_MULHSU ||
                      multop == `MULT_MULHU;
@@ -43,7 +43,7 @@ module MultUnit(
     assign d1 = {{2{sext1 & rs1_data[`XLEN-1]}}, rs1_data};
     assign d2 = {{2{sext2 & rs2_data[`XLEN-1]}}, rs2_data};
 
-    assign wakeup_en = valid_s0;
+    assign wakeup_en = en & ~multop[2];
     assign wakeup_we = status_s0.we;
     assign wakeup_rd = status_s0.rd;
 
@@ -73,17 +73,17 @@ module MultUnit(
     // localparam S7 = S6_ALL / 3; // 0 1
     // localparam S7_ALL = (S7 * 2 + S6_ALL % 3); // 2 3
 
+    `ST_REG(2, 0, 1)
+    `ST_REG(5, 1, 2)
 generate
 // stage1
     logic `N(NUM/2) c0;
     assign c0 = n;
     `CSA_DEF(0, 1)
     `CSA_DEF(1, 2)
-    `ST_REG(2, 0, 1)
     `CSAN_DEF(2, 3)
     `CSA_DEF(3, 4)
     `CSA_DEF(4, 5)
-    `ST_REG(5, 1, 2)
     `CSAN_DEF(5, 6)
 `ifdef RV64I
 
@@ -98,9 +98,27 @@ generate
     end
 `endif
 endgenerate
+
+`ifdef ZBC
+    logic valid_clmul_s0, valid_clmul_s1, valid_clmul_s2;
+    logic `N(`XLEN) clmul_res;
+    wire clmulh = multop == `MULT_CLMULH;
+    wire clmulr = multop == `MULT_CLMULR;
+    assign valid_clmul_s0 = en & multop[3];
+    always_ff @(posedge clk)begin
+        valid_clmul_s1 <= valid_clmul_s0 & (~backendCtrl.redirect | bigger0);
+        valid_clmul_s2 <= valid_clmul_s1 & (~backendCtrl.redirect | bigger1);
+    end
+    CLMULModel clmul_model(clk, rs1_data, rs2_data, clmulh, clmulr, clmul_res);
+`endif
+
     logic bigger;
     LoopCompare #(`ROB_WIDTH) cmp_bigger (status_s2.robIdx, backendCtrl.redirectIdx, bigger);
-    assign wbData.en = valid_s2 & (~backendCtrl.redirect | bigger);
+    assign wbData.en = (valid_s2
+                    `ifdef ZBC
+                      | valid_clmul_s2
+                    `endif
+    ) & (~backendCtrl.redirect | bigger);
     assign wbData.we = status_s2.we;
     assign wbData.rd = status_s2.rd;
     assign wbData.robIdx = status_s2.robIdx;
@@ -123,10 +141,18 @@ endgenerate
     
 `ifdef RV32I
     assign result = transpose[0] + transpose[1] + c6[HNUM-2];
-    assign wbData.res = selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];
+    assign wbData.res = 
+                    `ifdef ZBC
+                        valid_clmul_s2 ? clmul_res :
+                    `endif
+                        selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];
 `elsif RV64I
     assign result = transpose[0] + transpose[1] + c8[HNUM-2];
-    assign wbData.res = word_s2 ? {{32{result[31]}}, result[31: 0]} :
+    assign wbData.res = 
+                        `ifdef ZBC
+                        valid_clmul_s2 ? clmul_res :
+                        `endif
+                        word_s2 ? {{32{result[31]}}, result[31: 0]} :
                         selh_s2 ? result[`XLEN*2-1: `XLEN] : result[`XLEN-1: 0];
 `endif
 
@@ -268,4 +294,55 @@ xor x2(sum,x,cin);
 and a1(y,a,b);
 and a2(z,x,cin);
 or  o1(cout,y,z);
+endmodule
+
+module CLMULModel(
+    input logic clk,
+    input logic `N(`XLEN) data1,
+    input logic `N(`XLEN) data2,
+    input logic high,
+    input logic reverse,
+    output logic `N(`XLEN) result
+);
+
+    logic `ARRAY(`XLEN, `XLEN*2) mul0;
+    logic `ARRAY(`XLEN/2, `XLEN*2) mul1;
+    logic `ARRAY(`XLEN/4, `XLEN*2) mul2;
+    logic `ARRAY(`XLEN/8, `XLEN*2) mul3;
+    logic `ARRAY(`XLEN/8, `XLEN*2) mul3_r;
+    logic `N(`XLEN*2) mul_res;
+    logic high_r, reverse_r;
+
+generate
+    for(genvar i=0; i<`XLEN; i++)begin
+        if(i == 0)begin
+            assign mul0[i] = {{`XLEN{1'b0}}, data1} & {`XLEN*2{data2[i]}};
+        end
+        else begin
+            assign mul0[i] = {data1, {i{1'b0}}} & {`XLEN*2{data2[i]}};
+        end
+    end
+    for(genvar i=0; i<`XLEN/2; i++)begin
+        assign mul1[i] = mul0[i*2] ^ mul0[i*2+1];
+    end
+    for(genvar i=0; i<`XLEN/4; i++)begin
+        assign mul2[i] = mul1[i*2] ^ mul1[i*2+1];
+    end
+    for(genvar i=0; i<`XLEN/8; i++)begin
+        assign mul3[i] = mul2[i*2] ^ mul2[i*2+1];
+    end
+endgenerate
+    always_ff @(posedge clk)begin
+        mul3_r <= mul3;
+        high_r <= high;
+        reverse_r <= reverse;
+    end
+    ParallelXOR #(`XLEN*2, `XLEN/8) parallel_xor (mul3_r, mul_res);
+    always_ff @(posedge clk) begin
+        case({high_r, reverse_r})
+        2'b10: result <= mul_res[`XLEN*2-1:`XLEN];
+        2'b01: result <= mul_res[`XLEN*2-2:`XLEN-1];
+        default: result <= mul_res[`XLEN-1:0];
+        endcase
+    end
 endmodule

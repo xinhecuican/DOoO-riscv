@@ -309,7 +309,7 @@ typedef struct packed {
 `endif
 `ifdef RV64I
     logic word;
-`ifdef ZBA
+`ifdef RVB
     logic srcword;
 `endif
 `endif
@@ -369,7 +369,7 @@ typedef struct packed {
 `endif
 `ifdef RV64I
     logic word;
-`ifdef ZBA
+`ifdef RVB
     logic srcword;
 `endif
 `endif

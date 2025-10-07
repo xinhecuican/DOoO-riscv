@@ -68,9 +68,20 @@ rv64zba_prefix="utils/riscv-tests/isa/rv64uzba-p-"
 rv64zbb=(
     "andn" "orn" "xnor" "clz" "clzw" "ctz" "ctzw"
     "cpop" "cpopw" "max" "maxu" "min" "minu"
-    "sext_b" "sext_h" "zext_h"
+    "sext_b" "sext_h" "zext_h" "rol" "rolw" "ror"
+    "rori" "roriw" "rorw" "orc_b" "rev8"
 )
 rv64zbb_prefix="utils/riscv-tests/isa/rv64uzbb-p-"
+
+rv64zbc=(
+    "clmul" "clmulh" "clmulr"
+)
+rv64zbc_prefix="utils/riscv-tests/isa/rv64uzbc-p-"
+
+rv64zbs=(
+    "bclr" "bclri" "bext" "bexti" "binv" "binvi" "bset" "bseti"
+)
+rv64zbs_prefix="utils/riscv-tests/isa/rv64uzbs-p-"
 
 benchmarks=(
     "median" "memcpy" "multiply" "qsort" "rsort" "towers" "spmv"
@@ -91,7 +102,8 @@ if [[ " ${args[@]} " =~ " all " ]]; then
     if [[ " ${args[@]}" =~ " rv32 " ]]; then
         args=("rv32i" "rv32m" "rv32s" "rv32a" "rv32f" "benchmarks")
     else
-        args=("rv64i" "rv64m" "rv64s" "rv64a" "rv64f" "rv64d" "rv64zba" "benchmarks")
+        args=("rv64i" "rv64m" "rv64s" "rv64a" "rv64f" "rv64d" 
+            "rv64zba" "rv64zbb" "rv64zbc" "rv64zbs" "benchmarks")
     fi
 fi
 
@@ -160,6 +172,16 @@ for arg in "${args[@]}"; do
         rv64zbb)
             for test in "${rv64zbb[@]}"; do
                 selected_tests+=("${test}:${rv64zbb_prefix}${test}.bin")
+            done
+            ;;
+        rv64zbc)
+            for test in "${rv64zbc[@]}"; do
+                selected_tests+=("${test}:${rv64zbc_prefix}${test}.bin")
+            done
+            ;;
+        rv64zbs)
+            for test in "${rv64zbs[@]}"; do
+                selected_tests+=("${test}:${rv64zbs_prefix}${test}.bin")
             done
             ;;
         benchmarks)

@@ -15,7 +15,7 @@ module ALU(
         .uext(io.bundle.uext),
 `ifdef RV64I
         .word(io.bundle.word),
-`ifdef ZBA
+`ifdef RVB
         .srcword(io.bundle.srcword),
 `endif
 `endif
@@ -144,7 +144,7 @@ module ALUModel(
     input logic uext,
 `ifdef RV64I
     input logic word,
-`ifdef ZBA
+`ifdef RVB
     input logic srcword,
 `endif
 `endif
@@ -166,7 +166,7 @@ module ALUModel(
 
     assign data1 = 
 `ifdef RV64I
-`ifdef ZBA
+`ifdef RVB
                     srcword ? {32'b0, rs1_data[31: 0]} :
 `endif
 `endif
@@ -214,25 +214,41 @@ module ALUModel(
 
 
     logic padding;
-    logic `N($clog2(`XLEN)) shift;
+    logic `N($clog2(`XLEN)) sramt, slamt, shamt;
     logic `N(`XLEN) sr_data, shift_data, sl_data;
+`ifdef ZBB
+    logic `N($clog2(`XLEN)) shift_remain;
 `ifdef RV64I
-    assign padding = (word ? rs1_data[31] : rs1_data[`XLEN-1]) & ~uext;
-    assign shift = {data2[$clog2(`XLEN)-1] & ~word, data2[$clog2(`XLEN)-2: 0]};
-    assign shift_data = word ? {{32{data1[31] & ~uext}}, data1[31: 0]} : data1;
+    assign shift_remain = {~word, word, 5'b0} - {data2[$clog2(`XLEN)-1] & ~word, data2[$clog2(`XLEN)-2: 0]};
 `else
-    assign padding = rs1_data[`XLEN-1] & ~uext;
-    assign shift = data2[$clog2(`XLEN)-1: 0];
-    assign shift_data = data1;
+    assign shift_remain = 6'b100000 - data2[$clog2(`XLEN)-1:0];
 `endif
-    assign sl_data = data1 << shift;
-    ShiftModel shift_model (padding, shift_data, shift, sr_data);
+`endif
+
+    always_comb begin
+        padding = rs1_data[`XLEN-1] & ~uext;
+        shamt = data2[$clog2(`XLEN)-1: 0];
+        shift_data = data1;
+`ifdef RV64I
+        padding = word ? rs1_data[31] & ~uext : padding;
+        shamt = {data2[$clog2(`XLEN)-1] & ~word, data2[$clog2(`XLEN)-2: 0]};
+        shift_data = word ? {{32{data1[31] & ~uext}}, data1[31: 0]} : data1;
+`endif
+        sramt = shamt;
+        slamt = shamt;
+`ifdef ZBB
+        if (op == `INT_ROL) sramt = shift_remain;
+        if (op == `INT_ROR) slamt = shift_remain;
+`endif
+    end
+    assign sl_data = data1 << slamt;
+    ShiftModel shift_model (padding, shift_data, sramt, sr_data);
 
     logic `N(`VADDR_SIZE) auipc_addr;
     assign auipc_addr = vaddr + lui_imm;
 
     logic `N(`XLEN) xor_result;
-    assign xor_result = rs1_data ^ rs2_data;
+    assign xor_result = data1 ^ data2;
 
 `ifdef ZBB
     logic `N(`XLEN) clz_data;
@@ -285,6 +301,35 @@ endgenerate
     ParallelAdder #(3, 8) parallel_cpop_adder (cpop_add_part, cpop_result[5:0]);
     assign cpop_result[63:6] = 58'b0;
 `endif
+
+    logic `N(`XLEN) ro_result;
+
+    always_comb begin
+        ro_result = sl_data | sr_data;
+`ifdef RV64I
+        if(word) ro_result = {{32{ro_result[31]}}, ro_result[31:0]};
+`endif
+    end
+
+    logic `N(`XLEN) orc_result;
+generate
+    for(genvar i=0; i<`XLEN; i+=8)begin
+        assign orc_result[i +: 8] = {8{|rs1_data[i +: 8]}};
+    end
+endgenerate
+
+    logic `N(`XLEN) rev8_result;
+generate
+    for(genvar i=0; i<`XLEN; i+=8)begin
+        assign rev8_result[i +: 8] = rs1_data[`XLEN-1-i -: 8];
+    end
+endgenerate
+
+`endif
+
+`ifdef ZBS
+    logic `N(`XLEN) index_dec;
+    Decoder #(`XLEN) decoder_index (data2[$clog2(`XLEN)-1:0], index_dec);
 `endif
 
     always_comb begin
@@ -314,11 +359,6 @@ endgenerate
         `INT_OR: result = data1 | data2;
         `INT_XOR:  result = xor_result;
         `INT_AND: result = data1 & data2;
-`ifdef ZBB
-        `INT_ORN: result = rs1_data | (~rs2_data);
-        `INT_ANDN: result = rs1_data & (~rs2_data);
-        `INT_XNOR: result = ~xor_result;
-`endif
         `INT_SL: begin
 `ifdef RV64I
             result = word ? {{32{sl_data[31]}}, sl_data[31: 0]} : sl_data;
@@ -335,6 +375,12 @@ endgenerate
         end
         `INT_AUIPC: result = {{`XLEN-`VADDR_SIZE{auipc_addr[`VADDR_SIZE-1]}}, auipc_addr};
 `ifdef ZBB
+        `INT_ORN: result = rs1_data | (~rs2_data);
+        `INT_ANDN: result = rs1_data & (~rs2_data);
+        `INT_XNOR: result = ~xor_result;
+        `INT_ROL, `INT_ROR: result = ro_result;
+        `INT_ORC: result = orc_result;
+        `INT_REV8: result = rev8_result;
         `INT_CLZ: result = cz_result;
         `INT_CPOP: result = cpop_result;
         `INT_MAX: begin
@@ -360,6 +406,12 @@ endgenerate
         `INT_ZEXT: begin
             result = {{`XLEN-16{1'b0}}, rs1_data[15:0]};
         end
+`endif
+`ifdef ZBS
+        `INT_BCLR: result = rs1_data & ~index_dec;
+        `INT_BEXT: result = sr_data[0];
+        `INT_BINV: result = rs1_data ^ index_dec;
+        `INT_BSET: result = rs1_data | index_dec;
 `endif
         default: result = 0;
         endcase

@@ -8,8 +8,11 @@
 `define RVF
 `define RVD
 `define RVC
+`define RVB
 `define ZBA
 `define ZBB
+`define ZBC
+`define ZBS
 // `define DIFFTEST
 
 `define EXT_FENCEI

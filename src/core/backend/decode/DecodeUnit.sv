@@ -16,10 +16,10 @@ module DecodeUnit(
     assign funct7 = inst[31: 25];
 
     logic funct7_0, funct7_1, funct7_2, funct7_4, funct7_5, funct7_8, funct7_9, funct7_12, 
-    funct7_13, funct7_16, funct7_17, funct7_21, funct7_32, funct7_33, funct7_44,
-    funct7_45, funct7_48, funct7_20, funct7_80, funct7_81, funct7_96, funct7_97, funct7_104,
+    funct7_13, funct7_16, funct7_17, funct7_21, funct7_32, funct7_33, funct7_36, funct7_44,
+    funct7_45, funct7_48, funct7_52, funct7_53, funct7_20, funct7_80, funct7_81, funct7_96, funct7_97, funct7_104,
     funct7_105, funct7_112, funct7_113, funct7_120, funct7_121;
-    logic rs2_0, rs2_1, rs2_2, rs2_3, rs2_4, rs2_5;
+    logic rs2_0, rs2_1, rs2_2, rs2_3, rs2_4, rs2_5, rs2_7, rs2_24;
     logic funct3_0, funct3_1, funct3_2, funct3_3, funct3_4, funct3_5, funct3_6, funct3_7;
     logic ebreak_all;
     assign funct7_0 = ~funct7[6] & ~funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
@@ -37,9 +37,12 @@ module DecodeUnit(
     assign funct7_21 = ~funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_32 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_33 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
+    assign funct7_36 = ~funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_44 = ~funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_45 = ~funct7[6] & funct7[5] & ~funct7[4] & funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_48 = ~funct7[6] & funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_52 = ~funct7[6] & funct7[5] & funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & ~funct7[0];
+    assign funct7_53 = ~funct7[6] & funct7[5] & funct7[4] & ~funct7[3] & funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_80 = funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
     assign funct7_81 = funct7[6] & ~funct7[5] & funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & funct7[0];
     assign funct7_96 = funct7[6] & funct7[5] & ~funct7[4] & ~funct7[3] & ~funct7[2] & ~funct7[1] & ~funct7[0];
@@ -64,6 +67,8 @@ module DecodeUnit(
     assign rs2_3 = ~inst[24] & ~inst[23] & ~inst[22] & inst[21] & inst[20];
     assign rs2_4 = ~inst[24] & ~inst[23] & inst[22] & ~inst[21] & ~inst[20];
     assign rs2_5 = ~inst[24] & ~inst[23] & inst[22] & ~inst[21] & inst[20];
+    assign rs2_7 = ~inst[24] & ~inst[23] & inst[22] & inst[21] & inst[20];
+    assign rs2_24 = inst[24] & inst[23] & ~inst[22] & ~inst[21] & ~inst[20];
 
     logic lui, auipc, jal, jalr, branch, load, store, miscmem, opimm, opreg, opsystem, unknown;
     assign lui = ~op[4] & op[3] & op[2] & ~op[1] & op[0] & inst[1] & inst[0];
@@ -482,7 +487,6 @@ module DecodeUnit(
     assign divu = mult & funct3_5;
     assign rem = mult & funct3_6;
     assign remu = mult & funct3_7;
-    assign info.multop = funct3;
 `ifdef RV64I
     logic multw, mulw, divw, divuw, remw, remuw;
     assign multw = ~op[4] & op[3] & op[2] & op[1] & ~op[0] & inst[1] & inst[0] & funct7_1;
@@ -745,6 +749,7 @@ module DecodeUnit(
 
 `ifdef ZBB
     logic andn, orn, _xnor, clz, ctz, cpop, max, maxu, min, minu, sextb, sexth, zexth;
+    logic rol, ror, rori, orc, rev8;
     assign andn = opreg & funct3_7 & funct7_32;
     assign orn = opreg & funct3_6 & funct7_32;
     assign _xnor = opreg & funct3_4 & funct7_32;
@@ -757,14 +762,51 @@ module DecodeUnit(
     assign minu = opreg & funct3_5 & funct7_5;
     assign sextb = opimm & funct3_1 & funct7_48 & rs2_4;
     assign sexth = opimm & funct3_1 & funct7_48 & rs2_5;
+    assign rol = opreg & funct3_1 & funct7_48;
+    assign ror = opreg & funct3_5 & funct7_48;
+    assign orc = opimm & funct3_5 & funct7_20 & rs2_7;
 `ifdef RV64I
     logic clzw, ctzw, cpopw;
+    logic rolw, roriw, rorw;
     assign clzw = opimm32 & funct3_1 & funct7_48 & rs2_0;
     assign ctzw = opimm32 & funct3_1 & funct7_48 & rs2_1;
     assign cpopw = opimm32 & funct3_1 & funct7_48 & rs2_2;
     assign zexth = opreg32 & funct3_4 & funct7_4 & rs2_0;
+    assign rolw = opreg32 & funct3_1 & funct7_48;
+    assign rorw = opreg32 & funct3_5 & funct7_48;
+    assign roriw = opimm32 & funct3_5 & funct7_48;
+    assign rev8 = opimm & funct3_5 & funct7_53 & rs2_24;
+    assign rori = opimm & funct3_5 & ~inst[31] & inst[30] & inst[29] & ~inst[28] & ~inst[27] & ~inst[26];
 `else
     assign zexth = opreg & funct3_4 & funct7_4 & rs2_0;
+    assign rev8 = opimm & funct3_5 & funct7_52 & rs2_24;
+    assign rori = opimm & funct3_5 & funct7_48;
+`endif
+`endif
+
+`ifdef ZBC
+    logic clmul, clmulh, clmulr;
+    assign clmul = opreg & funct3_1 & funct7_5;
+    assign clmulh = opreg & funct3_3 & funct7_5;
+    assign clmulr = opreg & funct3_2 & funct7_5;
+`endif
+
+`ifdef ZBS
+    logic bclr, bclri, bext, bexti, binv, binvi, bset, bseti;
+    assign bclr = opreg & funct3_1 & funct7_36;
+    assign bext = opreg & funct3_5 & funct7_36;
+    assign binv = opreg & funct3_1 & funct7_52;
+    assign bset = opreg & funct3_1 & funct7_20;
+`ifdef RV64I
+    assign bclri = opimm & funct3_1 & ~inst[31] & inst[30] & ~inst[29] & ~inst[28] & inst[27] & ~inst[26];
+    assign bexti = opimm & funct3_5 & ~inst[31] & inst[30] & ~inst[29] & ~inst[28] & inst[27] & ~inst[26];
+    assign binvi = opimm & funct3_1 & ~inst[31] & inst[30] & inst[29] & ~inst[28] & inst[27] & ~inst[26];
+    assign bseti = opimm & funct3_1 & ~inst[31] & ~inst[30] & inst[29] & ~inst[28] & inst[27] & ~inst[26];
+`else
+    assign bclri = opimm & funct3_1 & funct7_36;
+    assign bexti = opimm & funct3_5 & funct7_36;
+    assign binvi = opimm & funct3_1 & funct7_52;
+    assign bseti = opimm & funct3_1 & funct7_20;
 `endif
 `endif
 
@@ -824,10 +866,16 @@ module DecodeUnit(
 `endif
 `ifdef ZBB
                      & ~andn & ~orn & ~_xnor & ~clz & ~ctz & ~cpop & ~max & ~maxu & ~min & ~minu
-                     & ~sextb & ~sexth & ~zexth
+                     & ~sextb & ~sexth & ~zexth & ~rol & ~ror & ~rori & ~orc & ~rev8
 `ifdef RV64I
-                     & ~clzw & ~ctzw & ~cpopw
+                     & ~clzw & ~ctzw & ~cpopw & ~rolw & ~rorw & ~roriw
 `endif
+`endif
+`ifdef ZBC
+                     & ~clmul & ~clmulh & ~clmulr
+`endif
+`ifdef ZBS
+                     & ~bclr & ~bclri & ~bext & ~bexti & ~binv & ~binvi & ~bset & ~bseti
 `endif
                      ;
 
@@ -853,6 +901,7 @@ module DecodeUnit(
         info.intop[1] = info.intop[1] | subw;
         info.intop[0] = info.intop[0] | srliw | srlw | sraiw | sraw;
 `endif
+
 `ifdef ZBA
         info.intop[4] = info.intop[4] | sh1add | sh2add | sh3add;
 `ifdef RV64I
@@ -860,18 +909,29 @@ module DecodeUnit(
         info.intop[3] = info.intop[3] | slliuw;
 `endif
 `endif
+
 `ifdef ZBB
         info.intop[4] = info.intop[4] | andn | orn | _xnor | clz | ctz | cpop | max | maxu | min | minu
-                        | sextb | sexth | zexth;
-        info.intop[3] = info.intop[3] | clz | ctz | cpop | sextb | sexth | zexth;
-        info.intop[2] = info.intop[2] | _xnor | cpop | max | maxu | min | minu;
-        info.intop[1] = info.intop[1] | orn | max | maxu | sextb | sexth;
-        info.intop[0] = info.intop[0] | andn | min | minu | zexth;
+                        | sextb | sexth | zexth | orc;
+        info.intop[3] = info.intop[3] | clz | ctz | cpop | sextb | sexth | zexth | rol | rev8;
+        info.intop[2] = info.intop[2] | _xnor | cpop | max | maxu | min | minu | rol | ror | rori;
+        info.intop[1] = info.intop[1] | orn | max | maxu | sextb | sexth | rol | ror | rori | orc | rev8;
+        info.intop[0] = info.intop[0] | andn | min | minu | zexth | ror | rori | orc | rev8;
 `ifdef RV64I
         info.intop[4] = info.intop[4] | clzw | ctzw | cpopw;
-        info.intop[3] = info.intop[3] | clzw | ctzw | cpopw;
-        info.intop[2] = info.intop[2] | cpopw;
+        info.intop[3] = info.intop[3] | clzw | ctzw | cpopw | rolw;
+        info.intop[2] = info.intop[2] | cpopw | rolw | rorw | roriw;
+        info.intop[1] = info.intop[1] | rolw | rorw | roriw;
+        info.intop[0] = info.intop[0] | rorw | roriw;
 `endif
+`endif
+
+`ifdef ZBS
+        info.intop[4] = info.intop[4] | bext | bexti | binv | binvi | bset | bseti;
+        info.intop[3] = info.intop[3] | bclr | bclri | binv | binvi | bset | bseti;
+        info.intop[2] = info.intop[2] | bclr | bclri | bext | bexti | bset | bseti;
+        info.intop[1] = info.intop[1] | bclr | bclri | bext | bexti | binv | binvi;
+        info.intop[0] = info.intop[0] | bclr | bclri | bext | bexti | binv | binvi | bset | bseti;
 `endif
     end
 
@@ -918,6 +978,15 @@ module DecodeUnit(
 `endif
     end
 
+`ifdef RVM
+    always_comb begin
+        info.multop = {1'b0, funct3};
+`ifdef ZBC
+        info.multop[3] = clmul | clmulh | clmulr;
+`endif
+    end
+`endif
+
 
     assign info.csrop[3] = sfence_vma | fence
 `ifdef EXT_FENCEI
@@ -952,7 +1021,10 @@ module DecodeUnit(
 `endif
 `endif
 `ifdef ZBB
-                    | maxu | minu
+                    | maxu | minu | ror | rori | rol
+`ifdef RV64I
+                    | rorw | roriw | rolw
+`endif
 `endif
     ;
     logic [`DEC_IMM_WIDTH-1: 0] store_imm;
@@ -974,6 +1046,15 @@ module DecodeUnit(
 `ifdef ZBA
     | slliuw
 `endif
+`endif
+`ifdef ZBB
+    | rori
+`ifdef RV64I
+    | roriw
+`endif
+`endif
+`ifdef ZBS
+    | bclri | binvi | bseti | bexti
 `endif
     ;
 
@@ -1038,9 +1119,13 @@ module DecodeUnit(
 `endif
 `ifdef ZBB
     | andn | orn | _xnor | clz | ctz | cpop | max | maxu | min | minu | sextb | sexth | zexth
+    | rol | ror | rori | orc | rev8
 `ifdef RV64I
-    | clzw | ctzw | cpopw
+    | clzw | ctzw | cpopw | rolw | rorw | roriw
 `endif
+`endif
+`ifdef ZBS
+    | bclr | bclri | bext | bexti | binv | binvi | bset | bseti
 `endif
     ) & ~ipf & ~iam;
     assign info.branchv = (branch | jal | jalr
@@ -1086,6 +1171,9 @@ module DecodeUnit(
 `ifdef RV64I
         | multw
 `endif
+`ifdef ZBC
+        | clmul | clmulh | clmulr
+`endif
     ) & ~ipf & ~iam;
 `endif
 `ifdef RVA
@@ -1129,10 +1217,10 @@ module DecodeUnit(
     | caddiw | caddw | csubw
 `endif
 `ifdef ZBB
-    | clzw | ctzw | cpopw
+    | clzw | ctzw | cpopw | rolw | rorw | roriw
 `endif
     ;
-`ifdef ZBA
+`ifdef RVB
     assign info.srcword = adduw | sh1adduw | sh2adduw | sh3adduw | slliuw;
 `endif
 `endif

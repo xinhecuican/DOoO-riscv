@@ -109,7 +109,7 @@ generate
 `endif
 `ifdef RV64I
                         , word: di.word
-`ifdef ZBA
+`ifdef RVB
                         , srcword: di.srcword
 `endif
 `endif

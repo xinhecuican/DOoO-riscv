@@ -140,6 +140,9 @@ typedef struct packed {
 `ifdef RVC \
         c: 1'b1, \
 `endif \
+`ifdef RVB \
+        b: 1'b1, \
+`endif \
         i: 1'b1, \
         s: 1'b1, \
         u: 1'b1, \
